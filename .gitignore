@@ -1,2 +1,24 @@
 node_modules
-.env
+
+# env — .env.example is the only one that ships
+.env*
+!.env.example
+
+# runtime artifacts
+*.log
+*.tar.gz
+pixie.db
+pixie.db-journal
+pixie.db-wal
+pixie.db-shm
+
+# scratch database from one-off probes — same real content as pixie.db
+probe.db
+probe.db-journal
+probe.db-wal
+probe.db-shm
+
+# exported session transcripts: full conversation logs, including query output
+# with Slack user IDs and message text
+claudepixie.txt
+*.transcript.txt

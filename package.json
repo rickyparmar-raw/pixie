@@ -4,8 +4,9 @@
   "description": "Slack bot that answers #pixl-help questions from the Pixl FAQ and docs",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "test": "node --test lib/*.test.js"
+    "start": "bun index.js",
+    "ask": "bun index.js --ask",
+    "test": "bun test"
   },
   "keywords": [],
   "author": "",

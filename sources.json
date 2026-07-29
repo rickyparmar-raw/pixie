@@ -12,6 +12,6 @@
   {
     "name": "Quick Links",
     "type": "json-faq",
-    "url": "file:///home/wizrizz/Desktop/pixl-plan/Pixl/apps/pixie/quick-links.json"
+    "url": "file://./quick-links.json"
   }
 ]
