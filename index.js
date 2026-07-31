@@ -7,8 +7,26 @@ const handlers = require("./lib/handlers");
 const commands = require("./lib/commands");
 const guides = require("./lib/guides");
 const respond = require("./lib/respond");
+const warm = require("./lib/warm");
+const report = require("./lib/report");
+const web = require("./lib/web/serve");
 const db = require("./lib/db");
 const log = require("./lib/log");
+
+// Measured: the first request after an idle stretch costs ~2000ms against
+// ~1250ms warm — a TLS handshake pixie pays for because a help channel is quiet
+// between questions, which is exactly when the socket gets dropped. GET /models
+// returns 200 and costs no tokens; it exists here only to hold the connection
+// open so the next real question doesn't pay for one.
+const KEEPALIVE_INTERVAL_MS = 60 * 1000;
+
+function startKeepAlive() {
+  return setInterval(() => {
+    fetch(`${config.answer.baseUrl}/models`, {
+      headers: { Authorization: `Bearer ${config.answer.apiKey}` },
+    }).catch((e) => log.debug("keepalive", `ping failed: ${e.message}`));
+  }, KEEPALIVE_INTERVAL_MS);
+}
 
 async function startBot() {
   validate({ needsSlack: true });
@@ -33,8 +51,24 @@ async function startBot() {
     log.error("bolt", error.message);
   });
 
-  knowledge.refreshCorpus().catch((e) => log.error("knowledge", "initial corpus build failed:", e.message));
+  // The warmer answers the FAQ once the corpus is actually loaded — starting it
+  // first would have it asking questions against an empty knowledge base.
+  knowledge
+    .refreshCorpus()
+    .then(() => warm.start())
+    .catch((e) => log.error("knowledge", "initial corpus build failed:", e.message));
   knowledge.startAutoRefresh(config.refreshIntervalMin);
+  startKeepAlive();
+  // Judges the unclassified gap backlog on a slow loop, and posts the weekly
+  // report once it's due. Both are background work — see lib/report.js.
+  report.start(app.client);
+
+  // Web console: starts if SLACK_CLIENT_ID is set, silently skipped otherwise.
+  const webServer = web.start();
+  if (webServer) {
+    const api = require("./lib/web/api");
+    api.setSlackClient(app.client);
+  }
 
   await app.start();
   // Mention detection compares against this, so it has to be resolved before

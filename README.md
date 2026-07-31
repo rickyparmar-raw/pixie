@@ -38,21 +38,90 @@ would cost a network round-trip.
 Pasted code or a stack trace routes to a debug-oriented prompt instead of the doc lookup;
 uploaded images go to the vision model.
 
-Repeat questions are served from a local answer cache, so the common asks
-("whats the deadline", "where do i play") cost nothing after the first time.
+The answer is **streamed**: pixie posts a `_thinking..._` placeholder and rewrites it in
+place as the words arrive, at most one edit per 800ms. The first text lands around 2s
+instead of the ~4.9s it used to take to show anything at all — the model's own time to
+first token is ~1.5s and everything after that used to be dead air.
+
+In the auto-reply channel, where nobody addressed pixie, a second small model call decides
+whether anyone was actually asking. It runs **alongside** the answer rather than in front
+of it, and nothing is posted until it agrees — so the judgement is unchanged and only the
+waiting is gone.
 
 Every message is answered at most once — the dedupe claim is an atomic SQLite insert, so
 a redelivered event or an overlapping `message`/`app_mention` pair can't double-post.
 
+### Pixie gets faster the more it's asked
+
+A question pixie has answered before costs **no model call at all** — one Slack post, about
+400ms, against ~2.4s for a fresh one. The interesting part is how many questions end up in
+that state.
+
+The key is a sorted set of the meaningful words, so "whats the deadline", "when is the
+deadline" and "deadline?" are one entry rather than three, and contractions reduce the same
+way as the words they contract. Anything with conversation context in the prompt is never
+cached: that answer was shaped by one specific thread.
+
+Three things then make the cache accumulate rather than reset:
+
+- **It counts what gets asked.** Every hit bumps `ask_count`, which is the only record of
+  which questions actually matter.
+- **It refreshes instead of forgetting.** The cache used to be swept wholesale every six
+  hours, so freshness and forgetting were the same action and a question asked at 9am was a
+  full model call again by 4pm. Now an entry past six hours is still served while
+  `lib/warm.js` regenerates it in the background, most-asked first. An entry is only dropped
+  once nobody has asked that phrasing for a week.
+- **It starts out knowing the FAQ.** On boot the warmer answers every question in the
+  Q/A sources — 16 of them — so a fresh deployment is already fast on the canonical asks
+  instead of learning each one through a slow first ask. It takes about 35s, spaced out, in
+  the background.
+
+The one exception is the program timeline, whose answers carry a live countdown ("august 18
+— in 21 days"). Those are never served stale: past six hours they fall through to a real
+lookup, because yesterday's copy isn't just old, it's wrong.
+
+`/pixie-stats` and the App Home tab report how many answers pixie knows cold, what share of
+replies needed no thinking, and which questions get asked most.
+
 ### Feedback and docs gaps
 
-Every question the docs *can't* answer is logged. `/pixie-gaps` ranks them by how many
-people asked, which turns real confusion into a concrete docs to-do list. Reacting
+Every question the docs *can't* answer is logged — but a miss is a much weaker claim than
+"the docs should cover this". The live log had an outage, somebody's broken laptop and a
+half-typed fragment sitting next to the genuine gaps, so the list read as noise and nobody
+worked through it.
+
+Each missed question is now judged once, in the background, into one of three kinds:
+
+| Kind | Meaning | Example from the real log |
+|---|---|---|
+| `docs` | a real question the documentation should answer | "who are pixl orgs" |
+| `transient` | true when asked, useless as documentation | "my pfp is bugged sometimes" |
+| `noise` | never something the docs could answer | "even sp[aces failed me" |
+
+`/pixie-gaps` shows only the `docs` ones, which is what it always claimed to be. Judged
+against the real 91-row backlog, that's 8 genuine gaps out of 91. The judge fails closed:
+an error or an unreadable verdict leaves the row unjudged and off the list, rather than
+guessing it on. Reacting
 :thumbs-up:/:nono: on a pixie answer records a vote, and `/pixie-stats` shows the answer
-rate, cache hit rate and median latency.
+rate, cache hit rate and median latency. The `first_token` metric records how long each
+reply took to start appearing, as distinct from how long it took to finish.
 
 In `#pixl-help`, an unanswerable question also gets reacted with
 `PIXIE_ESCALATE_REACTION` — the marker helpers (and Pixorpheus's ticket flow) look for.
+
+### The weekly report
+
+A list nobody reads doesn't move anything, so pixie posts one every Monday at 09:00 to
+`PIXIE_REPORT_CHANNEL` (defaulting to `SLACK_HELP_CHANNEL`). `/pixie-report` prints the same
+report on demand, and `/pixie-report last` gives the previous week.
+
+It covers what the docs should answer and don't, one line for how much was filtered out as
+not-a-docs-problem, and what went well — coverage against the week before, how many answers
+pixie now knows cold, feedback, and time to first word. The "already posted" marker lives in
+the `metrics` table, which the sweeper never touches, so a restart can't double-post.
+
+With neither `PIXIE_REPORT_CHANNEL` nor `SLACK_HELP_CHANNEL` set, the scheduled post stays
+off and the command still works.
 
 ### Teaching pixie
 
@@ -84,6 +153,7 @@ Approving or forgetting clears the answer cache, so the new answer takes effect 
 | `/pixie-sources` | anyone | What's loaded and when it last refreshed |
 | `/pixie-stats` | anyone | Answer rate, cache hits, feedback, latency |
 | `/pixie-gaps` | helpers | Top questions the docs didn't cover |
+| `/pixie-report` | helpers | The weekly report now — add `last` for the previous week |
 | `/pixie-teach` | helpers | Teach an answer directly |
 | `/pixie-pending` | helpers | Captured answers awaiting review |
 | `/pixie-approve <n>` | helpers | Start using a captured answer |
@@ -152,11 +222,24 @@ In the `#pixl` channel (the first entry in `SLACK_FAQ_CHANNELS`) pixie replies t
 questions without needing an `@`-mention. A cheap two-tier setup keeps that from being
 spammy:
 
+0. **Local pre-filter** (`couldNeedHelp`) — free regexes that drop the obvious chat before
+   anything reaches a model. Historically 94% of classifications came back `CASUAL_CHAT`,
+   so this is what stops most messages costing anything at all.
 1. **Intent classifier** (`lib/intent.js`) — one small call that labels the message
    `HELP_NEEDED` or `CASUAL_CHAT`. It only sees the message, never the corpus, and is
    capped at 20 tokens.
-2. **Grounded answer** (`lib/answer.js`) — the full corpus call, which only runs for
-   `HELP_NEEDED`.
+2. **Grounded answer** (`lib/answer.js`) — the full corpus call.
+
+Steps 1 and 2 run **concurrently**, not in sequence. The classifier used to finish before
+the answer call started, which put its ~1700ms in front of every reply; now the answer is
+already being generated while the verdict lands, and `lib/respond.js` holds the streamed
+text back until the classifier agrees someone was asking. A `CASUAL_CHAT` verdict means
+nothing was ever posted — not even a placeholder.
+
+Folding the classifier into the answer call as a third output case was tried and reverted.
+With the corpus in the same context the model conflates "nobody asked" with "the docs don't
+cover it": across three trials, 6 of 15 genuine questions were silenced, including "how do
+i submit my project" in two of them. Keeping it as its own corpus-free call is the point.
 
 Replies to: "when does pixl end bro", "how do i join", "whats the deadline".
 Stays silent for: "yo i love pixl", "gg everyone", "just shipped my project".
@@ -187,9 +270,10 @@ silent fallbacks at answer time.
 | `PIXIE_VISION_BASE_URL` | no | Vision endpoint base. Falls back to `OPENCODE_BASE_URL`, then Zen |
 | `PIXIE_VISION_MODEL` | no | Default `kr/claude-sonnet-4.5` |
 | `PIXIE_ADMIN_USER_IDS` | no | Comma-separated user IDs allowed to teach/approve. Unset = nobody |
-| `PIXIE_FEEDBACK_REACTIONS` | no | Comma-separated emojis to seed on answers, default `sparkling_heart`. Must be names pixie counts (`UP_REACTIONS`/`DOWN_REACTIONS` in `lib/handlers.js`); empty disables seeding |
+| `PIXIE_FEEDBACK_REACTIONS` | no | Comma-separated emojis to pre-place on pixie's own answers. **Empty by default** — pixie doesn't react to itself. Set e.g. `sparkling_heart` to turn seeding on; names must be ones pixie counts (`UP_REACTIONS`/`DOWN_REACTIONS` in `lib/handlers.js`) |
 | `REFRESH_INTERVAL_MIN` | no | How often to re-fetch docs, in minutes (default `30`) |
 | `PIXIE_ESCALATE_REACTION` | no | Emoji to flag unanswerable help-channel questions with. Unset disables |
+| `PIXIE_REPORT_CHANNEL` | no | Where the weekly report is posted. Defaults to `SLACK_HELP_CHANNEL`; unset with no help channel disables the scheduled post (`/pixie-report` still works) |
 | `PIXIE_DEBUG` | no | Set to `1` for per-message debug logging (off by default) |
 | `PIXIE_DB_PATH` | no | SQLite file, default `./pixie.db` |
 
@@ -211,15 +295,18 @@ Pixie needs its own Slack app (separate from Pixorpheus), running in **Socket Mo
 1. Create a new app at [api.slack.com/apps](https://api.slack.com/apps).
 2. **OAuth scopes:** `chat:write`, `channels:history`, `groups:history`, `channels:join`,
    `app_mentions:read`, `reactions:read`, `reactions:write`, `commands`, `im:history`,
-   `im:write`, `files:read`, `users:read`.
+   `im:write`, `channels:read`, `groups:read`, `files:read`.
    Slash commands to register: `/pixie`, `/pixie-sources`, `/pixie-stats`, `/pixie-gaps`,
-   `/pixie-teach`, `/pixie-pending`, `/pixie-approve`, `/pixie-forget`, `/pixie-reload`.
+   `/pixie-teach`, `/pixie-pending`, `/pixie-approve`, `/pixie-forget`, `/pixie-reload`,
+   `/pixie-report`.
 3. **Socket Mode:** enable it, generate an App-Level Token with the `connections:write` scope (`xapp-...`).
 4. **Event subscriptions:** enable events, subscribe to `message.channels`, `message.groups`,
    `message.im`, `app_mention`, `reaction_added`, `reaction_removed`, `app_home_opened`,
    and `member_joined_channel`. No Request URL needed once Socket Mode is on.
-5. **Slash commands:** create the nine listed in step 2. With Socket Mode they need no
-   Request URL.
+5. **Slash commands:** create the ten listed in step 2 — Slash Commands → *Create New
+   Command*, one per name. Registering them in code only tells pixie what to listen for;
+   until they exist in the Slack app itself, typing one does nothing. With Socket Mode on
+   there is no Request URL field to fill in.
 6. **App Home:** enable the Home tab and the Messages tab (with "allow users to send
    Slash commands and messages") so DMs reach pixie.
 7. **Interactivity:** turn on *Interactivity & Shortcuts*. Socket Mode delivers it with no
@@ -260,7 +347,9 @@ elsewhere — systemd runs with no login shell, so both must be absolute paths.
 Thread context, user history, dedupe, the answer cache, feedback and docs gaps live in a
 single SQLite file (`pixie.db`, gitignored). It's created on first run; delete it to reset.
 Because dedupe is persisted, a restart or redeploy can't make pixie re-answer messages it
-already replied to.
+already replied to — and because the answer cache is persisted too, a restart doesn't undo
+what pixie has learned to answer instantly. Deleting the file makes it slow again until the
+warmer has run.
 
 ### Offline test mode
 
@@ -282,7 +371,8 @@ bun test
 ```
 
 Covers config validation and base-URL precedence, corpus parsing and link preservation,
-chunking and retrieval ranking, model-reply parsing, mention/thread routing, the answer cache,
+chunking and retrieval ranking, model-reply parsing, SSE parsing and stream retry rules,
+mention/thread routing, the answer cache and its retention rules, the background warmer,
 guide detection and progression, capture judging, the App Home review actions, retry
 classification, and the SQLite layer (dedupe, caps, gap grouping, feedback).
 

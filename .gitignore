@@ -22,3 +22,8 @@ probe.db-shm
 # with Slack user IDs and message text
 claudepixie.txt
 *.transcript.txt
+
+# local AI-tool config — machine-specific permission allowlists, not project code
+.claude/
+.commandcode/
+.openclaude/
