@@ -1,0 +1,23 @@
+node_modules
+.git
+
+# Secrets never enter the image — Railway injects env vars at runtime.
+.env
+.env.*
+!.env.example
+
+# Local state. The deployed DB lives on the Railway volume; baking a copy in
+# would ship real Slack message text and get shadowed by the mount anyway.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+*.tar.gz
+
+# Local tooling and transcripts
+.claude
+.commandcode
+.openclaude
+claudepixie.txt
+*.transcript.txt
