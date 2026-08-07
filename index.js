@@ -22,8 +22,9 @@ const KEEPALIVE_INTERVAL_MS = 60 * 1000;
 
 function startKeepAlive() {
   return setInterval(() => {
+    const key = config.zenApiKeys?.[0] || (typeof config.answer.apiKey === "function" ? config.answer.apiKey() : config.answer.apiKey);
     fetch(`${config.answer.baseUrl}/models`, {
-      headers: { Authorization: `Bearer ${config.answer.apiKey}` },
+      headers: { Authorization: `Bearer ${key}` },
     }).catch((e) => log.debug("keepalive", `ping failed: ${e.message}`));
   }, KEEPALIVE_INTERVAL_MS);
 }
