@@ -21,3 +21,6 @@ node_modules
 .openclaude
 claudepixie.txt
 *.transcript.txt
+
+# Untracked, not part of the repo — not built into the image either.
+graphify-out
