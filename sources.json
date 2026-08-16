@@ -5,11 +5,6 @@
     "url": "https://raw.githubusercontent.com/ridit-jangra/Pixl/main/apps/landing/app/%5Blang%5D/dictionaries/en.json"
   },
   {
-    "name": "Pixl Docs",
-    "type": "url",
-    "url": "https://pixl.hackclub.com/docs/welcome/"
-  },
-  {
     "name": "Quick Links",
     "type": "json-faq",
     "url": "file://./quick-links.json"
