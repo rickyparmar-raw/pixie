@@ -1,5 +1,4 @@
 node_modules/
-**/node_modules/
 .git/
 docs/
 .pixie-bot-tmp/
