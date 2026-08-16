@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pixie Control Room</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="scanlines"></div>
+
+  <header id="hud" class="hud-strip">
+    <div class="hud-item">
+      <span class="hud-label">COVERAGE</span>
+      <span class="hud-value" id="hud-coverage">--</span>
+      <span class="hud-delta" id="hud-coverage-delta"></span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">ANSWERED</span>
+      <span class="hud-value" id="hud-answered">--</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">SILENT</span>
+      <span class="hud-value" id="hud-silent">--</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">KNOWN COLD</span>
+      <span class="hud-value" id="hud-cold">--</span>
+      <span class="hud-sub" id="hud-instant"></span>
+    </div>
+    <div class="hud-item queue-hud">
+      <span class="hud-label">QUEUE</span>
+      <span class="hud-value badge" id="hud-queue">--</span>
+    </div>
+    <div class="hud-item">
+      <span class="hud-label">CORPUS</span>
+      <span class="hud-value" id="hud-corpus">--</span>
+    </div>
+    <div class="hud-item">
+      <span class="socket-dot" id="socket-dot" title="connected"></span>
+    </div>
+    <div class="hud-item hud-right">
+      <button class="btn-hud" onclick="location.href='/auth/logout'">logout</button>
+    </div>
+  </header>
+
+  <main class="bento">
+    <!-- Left column: 2fr -->
+    <section class="panel playground" id="panel-playground">
+      <h2 class="panel-title">Ask Pixie <span class="title-sub">— glass box</span></h2>
+      <div class="playground-input">
+        <input type="text" id="ask-input" placeholder="Type a question..." autofocus>
+        <button id="ask-btn" class="btn">Ask</button>
+      </div>
+      <div class="playground-result" id="ask-result">
+        <div class="ask-placeholder">Ask anything — see what pixie would say, and why.</div>
+      </div>
+      <div class="playground-trace" id="ask-trace"></div>
+    </section>
+
+    <section class="panel" id="panel-queue">
+      <h2 class="panel-title">Queue <span class="title-sub" id="queue-count"></span></h2>
+      <div class="queue-hint">j/k move · a approve · d drop · e edit · u undo</div>
+      <div class="queue-list" id="queue-list"></div>
+    </section>
+
+    <!-- Right column: 1fr -->
+    <section class="panel" id="panel-feed">
+      <h2 class="panel-title">Live Feed</h2>
+      <div class="feed-list" id="feed-list"></div>
+    </section>
+
+    <section class="panel" id="panel-gaps">
+      <h2 class="panel-title">Gaps <span class="title-sub">— triage</span></h2>
+      <div class="gaps-tabs">
+        <button class="tab active" data-tab="docs">DOCS</button>
+        <button class="tab" data-tab="transient">TRANSIENT</button>
+        <button class="tab" data-tab="noise">NOISE</button>
+        <button class="tab" data-tab="unjudged">UNJUDGED</button>
+      </div>
+      <div class="gaps-content" id="gaps-content"></div>
+    </section>
+
+    <section class="panel" id="panel-silence">
+      <h2 class="panel-title">Silence Log</h2>
+      <div class="silence-breakdown" id="silence-breakdown"></div>
+    </section>
+
+    <section class="panel" id="panel-knowledge">
+      <h2 class="panel-title">Knowledge <button class="btn btn-small" id="refresh-corpus">Refresh</button></h2>
+      <div class="knowledge-info" id="knowledge-info"></div>
+    </section>
+
+    <section class="panel" id="panel-cache">
+      <h2 class="panel-title">Cache</h2>
+      <div class="cache-list" id="cache-list"></div>
+    </section>
+
+    <section class="panel" id="panel-report">
+      <h2 class="panel-title">Weekly Report <button class="btn btn-small" id="post-report">Post now</button></h2>
+      <div class="report-content" id="report-content"></div>
+    </section>
+  </main>
+
+  <!-- Queue edit modal -->
+  <div class="modal-overlay" id="edit-modal">
+    <div class="modal">
+      <h3>Edit before approve</h3>
+      <label>Question</label>
+      <input type="text" id="edit-question">
+      <label>Answer</label>
+      <textarea id="edit-answer" rows="4"></textarea>
+      <div class="modal-actions">
+        <button class="btn" id="edit-save">Save & Approve</button>
+        <button class="btn btn-ghost" id="edit-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

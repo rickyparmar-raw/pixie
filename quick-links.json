@@ -1,0 +1,30 @@
+{
+  "faq": {
+    "items": [
+      {
+        "question": "Where can I play Pixl?",
+        "answer": "You can play Pixl at https://pixl.hackclub.com/ — that's where you join the game world!"
+      },
+      {
+        "question": "What's the game URL?",
+        "answer": "The game is at https://pixl.hackclub.com/"
+      },
+      {
+        "question": "Where is the Pixl GitHub repo?",
+        "answer": "The Pixl repo is at https://github.com/hackclub/pixl — check it out if you want to see the code or contribute!"
+      },
+      {
+        "question": "What's the Pixl repo link?",
+        "answer": "https://github.com/hackclub/pixl"
+      },
+      {
+        "question": "Who is Ricky?",
+        "answer": "Ricky is my creator! He built me to help answer questions and support the Pixl community."
+      },
+      {
+        "question": "Who created pixie?",
+        "answer": "Ricky created me! He's the one who brought me to life to help out around here."
+      }
+    ]
+  }
+}

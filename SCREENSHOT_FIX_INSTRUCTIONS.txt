@@ -1,0 +1,245 @@
+PIXIE GUIDE SCREENSHOTS — FIX INSTRUCTIONS FOR NEXT AGENT
+============================================================
+
+CONTEXT
+-------
+pixie (this repo, apps/pixie) is a Slack bot that walks people through step-by-step
+guides (lib/guides.js -> GUIDES object). Some guide steps attach a screenshot from
+public/screenshots/<guide>/<NN>.webp, rendered in Slack via buildGuideBlocks() in
+lib/guides.js and served statically (no auth) from lib/web/serve.js at
+/screenshots/<path>.
+
+THE BUG (confirmed, not guessed — I opened the actual files)
+--------------------------------------------------------------
+Every screenshot under these three guide folders is broken:
+  public/screenshots/shop-purchase/        (01-04.webp)
+  public/screenshots/submit-project/       (01-05.webp)
+  public/screenshots/customize-character/  (01-03.webp)
+
+They are NOT real captures of the Pixl game UI. Every single one is a screenshot of
+the SAME "gated" placeholder card (dark background, "PIXL" logo, the text "This page
+is part of the Pixl world — hop into the game and walk up to the shop, an NPC or
+press the shortcut key to open it with your account." + an "ENTER THE GAME" button),
+sometimes with a fake colored label box crudely pasted on top (e.g. "Wooden Sword /
+Iron Shield / Health Potion" boxes on shop-purchase/01.webp) to make it LOOK like a
+real annotated screenshot. It isn't. I confirmed this by opening
+shop-purchase/01.webp, submit-project/01.webp, submit-project/02.webp, and
+customize-character/01.webp directly — all four show that identical gate card.
+This matches the user's complaint exactly: "the screenshots ... is the same pictures
+everywhere."
+
+An untracked file at apps/pixie/SCREENSHOTS_COMPLETE.md claims these are "Real
+Screenshots Captured" from localhost:8080 game pages. That claim is FALSE — delete
+or rewrite that file once this is actually fixed for real. Don't trust it.
+
+DO NOT TOUCH create-hackpad/*.webp (18 files) — those ARE real, correctly captured
+screenshots (from public hackpad.hackclub.com / KiCad / Fusion360, no auth needed)
+and are fine as-is.
+
+ROOT CAUSE
+----------
+public/screenshots pages like shop/, account/, projects/ (apps/game/web/{shop,account,
+projects}/index.html, driven by apps/game/web/pixl.js) are real static dashboard
+pages, but they render nothing without a valid Pixl session JWT:
+  - pixl.js reads a `?token=` query param (or localStorage `pixl_token`) and calls
+    the real production API at https://server.pixl.rsvp with that token.
+  - No token / invalid token -> 401 -> pixl.js shows the "gate" card (the exact
+    thing baked into every one of these screenshots).
+  - There IS a `?preview=1` flag that suppresses the gate card ONLY when hostname is
+    localhost/127.0.0.1 (see pixl.js `localPreview`), but it does NOT fake any data —
+    API calls still 401, so item lists/character data just spin forever empty. I
+    tested this directly (served apps/game/web/ with `python3 -m http.server`,
+    opened /shop/?preview=1 in Playwright) — you get real page chrome (sidebar nav,
+    "THE PIXL SHOP" header, search bar, filter tabs) but the item grid never loads.
+    That's a big improvement over the gate card but still not a finished screenshot.
+
+Whoever captured the current screenshots ran a headless browser against these pages
+with NO valid token, got the gate card every time, and (for a few files) pasted fake
+overlay labels on top instead of catching that the underlying capture was broken.
+
+THE FIX: GET A REAL TOKEN, THE SAFE WAY
+-----------------------------------------
+apps/server has a purpose-built demo-login route for exactly this kind of situation —
+DO NOT hand-rig a JWT yourself, use this instead:
+
+  apps/server/src/routes/auth.ts, `GET /auth/demo?name=<name>`
+  - Gated behind `ALLOW_DEMO_LOGIN=true` (env var, default unset/false).
+  - Looks up or creates a `users` row with oauth_provider="demo",
+    oauth_id=`demo_<slug of name>`, seeds an empty `player_state` row on first
+    creation.
+  - Returns `{ token, name }` — `token` is a real 30-day session JWT
+    (issueSessionToken({ userId, displayName }) from apps/server/src/auth/session.ts),
+    valid against the real production API, because it's signed with the real
+    JWT_SECRET and the user row lives in the real Supabase DB the production API
+    reads from.
+
+Steps:
+  1. Get apps/server's real .env (SUPABASE_URL, SUPABASE_SERVICE_KEY, JWT_SECRET —
+     same values production uses). If you don't already have it, ask Ricky/Gabin/
+     Ridit for it, or locate an existing local copy. Do NOT invent placeholder
+     Supabase creds — the demo user needs to land in the SAME database that
+     server.pixl.rsvp reads from, or the token will look valid (signature checks
+     out) but the user row won't exist / API calls will fail.
+  2. Copy that .env to apps/server/.env locally and add one line:
+       ALLOW_DEMO_LOGIN=true
+     Keep this LOCAL ONLY. Never set ALLOW_DEMO_LOGIN=true on the actual Railway
+     "server" service / production env — that would let anyone on the internet mint
+     a session for a fresh account with zero real auth. This flag is safe only
+     because you're running the server on your own machine, unreachable from
+     outside.
+  3. `bun run --cwd apps/server dev` (or `bun run --cwd apps/server build && node
+     dist/index.js`, check apps/server/package.json for the actual dev script name).
+  4. `curl "http://localhost:3000/auth/demo?name=pixie-docs"` (adjust the port to
+     whatever PORT your .env has). Save the returned `token`. Use a clearly-labeled
+     name like `pixie-docs` or `pixie-screenshots` — NOT a real teammate's name —
+     so this is obviously a documentation fixture account if anyone finds it later
+     in the users table. This account can be reused for future guide-screenshot
+     refreshes; don't delete it when you're done, just leave a one-line comment
+     somewhere (this file is fine) noting it exists.
+  5. You can now stop the local apps/server process if you want — the token is
+     already minted and valid; you don't need the local server running to use it
+     against the real https://pixl.hackclub.com pages.
+
+CAPTURING THE SCREENSHOTS
+--------------------------
+Use Playwright (mcp__playwright__* tools are available in this session, or the
+repo already has a .playwright-mcp/ dir from prior use). Against the REAL
+production site, https://pixl.hackclub.com/<page>/?token=<TOKEN> — hitting any one
+page with ?token= once stores it in localStorage and strips it from the URL
+(pixl.js does this automatically), so subsequent navigations on the same origin
+stay authenticated without needing the token in every URL.
+
+The demo account starts empty (0 pixels, no items, default character, no projects).
+For screenshots to look like genuine gameplay rather than an empty shell, actually
+DRIVE the real UI as this demo user before capturing:
+  - Shop: the demo account likely starts with 0 pixels. Check apps/server/src/
+    routes/shop.ts and any admin/grant endpoint (apps/server/src/routes/admin.ts)
+    for a way to grant the demo account some pixels server-side (admin API key is
+    in .env as ADMIN_API_KEY), OR just capture the "browse the shop" and "click an
+    item" steps with $0 balance and capture the "can't afford" / afford-filter UI
+    honestly — up to you, but don't fabricate a purchase that didn't happen.
+  - Character customization: actually open the character menu and change a couple
+    of options (skin/hair/clothes) as this demo user before screenshotting, so the
+    "customize" steps show real selectable options and a real preview, not a
+    default/blank character.
+  - Submit project: actually submit one small dummy project as the demo user so a
+    "your projects" list / confirmation step has something real to show, but also
+    capture the blank form state for the "fill out the form" step before you
+    submit it.
+
+CROP TIGHT, DON'T DUMP FULL PAGES
+------------------------------------
+Full 1600x900 mostly-empty-background screenshots are part of why the current ones
+feel bad even before you get to the "same picture" problem. For each step:
+  - Screenshot (or crop after the fact with sharp) just the relevant UI region —
+    the shop item grid, the specific form field being described, the specific
+    button being clicked — not the whole viewport.
+  - create-hackpad's existing screenshots (public/screenshots/create-hackpad/*.webp)
+    are the quality bar and the ONLY existing examples of the "focus highlight +
+    pointer arrow" treatment mentioned in git log commit fbc6991. There is no
+    leftover annotation script in the repo (checked — optimize-screenshots.js only
+    does a plain sharp resize-to-900x900 + webp convert, no cropping/annotation
+    logic). You'll need to build or hand-do the crop/highlight/arrow step yourself;
+    use the create-hackpad images as the visual reference for style (open a couple
+    of them to see the convention before you start).
+  - Final format: match create-hackpad — .webp only, sharp .webp({quality:85}),
+    resized so max dimension is reasonable (create-hackpad tops out under ~65KB/
+    image). Delete the stale .png duplicates currently sitting alongside the .webp
+    files in shop-purchase/, submit-project/, customize-character/ once you replace
+    them — create-hackpad has no .png files, follow that convention.
+  - File paths/names must stay exactly what lib/guides.js already references
+    (e.g. "shop-purchase/01.webp") unless you also update the `screenshot:` field
+    for that step in lib/guides.js — check GUIDES["shop-purchase"|"submit-project"|
+    "customize-character"].steps[i].screenshot for the exact current mapping before
+    you start, so you capture the right count of images in the right order.
+
+VERIFICATION — DO ALL OF THESE, DON'T SKIP ANY
+-------------------------------------------------
+1. Open every new .webp file directly (Read tool / image viewer) and manually
+   confirm: it is NOT the gate card, NOT a loading spinner, NOT a blank/mostly-empty
+   dark background, and actually shows the specific UI element that step's message
+   in lib/guides.js describes.
+2. `md5sum public/screenshots/shop-purchase/*.webp public/screenshots/submit-project/*.webp
+   public/screenshots/customize-character/*.webp | sort` — every hash must be
+   unique. If any two match, you captured a duplicate/failed state again.
+3. Confirm none of the new hashes match the OLD (broken) hashes recorded below, as a
+   sanity check that you didn't accidentally re-save the gate card:
+     ebfefa7e3d1a227dcfa996fa61747817  shop-purchase/01.webp (old/broken)
+     7bb0d238c4b919daac98c373bcebf822  shop-purchase/02.webp (old/broken)
+     edae2c66525a9f59aa512db1cf6ae878  shop-purchase/03.webp (old/broken)
+     b655e52c02b4832b0ca39d9af5ae7cb0  shop-purchase/04.webp (old/broken)
+     c7ba5159c2d6deb748c47eb4c0b259b2  submit-project/01.webp (old/broken)
+     8d343b41734af8719b96bfcb4aeb6192  submit-project/02.webp (old/broken)
+     505aa720cf1c3710386ddde34719bf0b  submit-project/03.webp (old/broken)
+     16708777d8224c4230a7617e08533ace  submit-project/04.webp (old/broken)
+     abfcda648dc790aa119f0b9b29595df4  submit-project/05.webp (old/broken)
+     637877173320ea18c65c1ad7d07b40b5  customize-character/01.webp (old/broken)
+     ae49e997dcbbadfd6622d94952002e9f  customize-character/02.webp (old/broken)
+     2df3980da6f7c161143e8f401296bc31  customize-character/03.webp (old/broken)
+4. `bun test` from apps/pixie — full suite must still pass (356+ tests as of this
+   session; screenshots aren't unit-tested directly but guides.test.js and
+   respond.test.js touch this code path and must not regress).
+5. Start pixie locally (`bun run --cwd apps/pixie start` or the repo's normal dev
+   command) and actually trigger each of the 3 guides end to end (DM the bot or use
+   its web console's /ask), confirming Slack/the console actually renders each new
+   image at http://localhost:<port>/screenshots/<guide>/<NN>.webp — check for a
+   200 and a real image, not a 404 or broken-image icon.
+6. Only after 1-5 all pass: deploy the same way this session already established —
+   `railway up --service pixie --environment production --detach` from apps/pixie,
+   then poll deployment status with a `python3` script (NOT `bun run x.py` — bun
+   cannot execute Python and this mistake was already made twice this session)
+   checking `railway status --json` for the new deployment id reaching RUNNING.
+7. After deploy, smoke-test by fetching the live screenshot URLs
+   (https://<production PIXIE_WEB_BASE_URL>/screenshots/shop-purchase/01.webp etc.)
+   and confirming a real image comes back.
+
+CLEANUP AFTER YOU'RE DONE
+----------------------------
+- Do NOT commit apps/server/.env, the JWT_SECRET, SUPABASE_SERVICE_KEY, or the demo
+  token anywhere in the repo or in this file.
+- Turn ALLOW_DEMO_LOGIN back off (or just stop the local server / remove the line
+  from your local .env) once you have the token — you don't need it running for the
+  actual screenshot capture, only to mint the token once.
+- Rewrite or delete apps/pixie/SCREENSHOTS_COMPLETE.md so it stops lying about these
+  being real captures already.
+- Leave a short note (README or top of this file) if you keep the `pixie-docs` demo
+  account around for future re-captures, so nobody mistakes it for a real player and
+  bans/deletes it.
+
+OUT OF SCOPE / NEEDS A HUMAN DECISION — DON'T GUESS
+------------------------------------------------------
+1. Ricky also said "fix the other guides thingy like the how to make a project in
+   pixl". There is NO existing pixie guide called "how to build/start a project" —
+   only "submit-project" (GUIDES["submit-project"] in lib/guides.js), which covers
+   submitting a project you've already built, not starting/ideating one. The game
+   itself has a separate in-game "First Project" onboarding
+   (apps/game/web/pixl.js references `?onboard=first-project` opening a Builder
+   Terminal walkthrough) that pixie's guide system doesn't touch at all. Ask Ricky
+   whether he means (a) just polish submit-project, or (b) he wants a brand new
+   pixie guide added for "how do I start a project" — don't build (b) speculatively.
+2. Ricky also said guides "shouldn't just stick to hardcoded guide answers, like a
+   template." Note: the STUCK-answer path (when someone says "i'm struggling with
+   this" mid-guide) was ALREADY made dynamic this session for ALL guides, not just
+   create-hackpad — see answerStuckQuestion() in lib/guides.js, called
+   unconditionally from continueGuide() regardless of which guide is active. What's
+   still 100% static is each step's main `message`/`checkNext` text (guide.steps[i]
+   in lib/guides.js) — same wording every time regardless of the original question's
+   phrasing. Making that dynamic too is a much bigger, riskier change (this session
+   already hit and fixed two separate "the LLM got too liberal and hijacked onto the
+   wrong doc/topic" bugs from over-loosening prompt matching — see git history on
+   lib/answer.js and lib/program.js from today). Don't attempt this without
+   confirming with Ricky first; it's very possible he just meant the screenshot/
+   stuck-answer issues above and this is already resolved.
+
+FILES YOU'LL TOUCH
+---------------------
+  public/screenshots/shop-purchase/*.webp        (replace, drop the .png siblings)
+  public/screenshots/submit-project/*.webp       (replace, drop the .png siblings)
+  public/screenshots/customize-character/*.webp  (replace, drop the .png siblings)
+  apps/pixie/SCREENSHOTS_COMPLETE.md              (delete or rewrite — currently false)
+  lib/guides.js                                   (only if you change file names/paths
+                                                    or step count — check first)
+
+Do not touch: lib/answer.js, lib/program.js, lib/chat.js, lib/lookup.js, lib/respond.js
+— all already fixed and deployed this session for unrelated bugs (guide user-scoping,
+help-channel self-awareness, timeline-question hijacking, Firecrawl scrape caching).
