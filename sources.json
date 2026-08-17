@@ -1,10 +1,5 @@
 [
   {
-    "name": "Pixl FAQ",
-    "type": "json-faq",
-    "url": "https://raw.githubusercontent.com/ridit-jangra/Pixl/main/apps/landing/app/%5Blang%5D/dictionaries/en.json"
-  },
-  {
     "name": "Quick Links",
     "type": "json-faq",
     "url": "file://./quick-links.json"
