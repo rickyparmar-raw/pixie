@@ -1,9 +1,11 @@
-node_modules/
-.git/
-docs/
-.pixie-bot-tmp/
+node_modules
+.git
+docs
+.pixie-bot-tmp
 *.log
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
-pixie-wizard/
+pixie-wizard
+**/node_modules
+**/pixie-wizard
