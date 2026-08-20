@@ -7,3 +7,7 @@ docs
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+pixie.db
+pixie.db-shm
+pixie.db-wal
+pixie-backup-*.tar.gz
