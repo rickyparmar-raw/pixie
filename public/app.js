@@ -500,6 +500,176 @@ document.getElementById("post-report")?.addEventListener("click", async () => {
   }
 });
 
+/* ----------------------------------------------------- programs -- */
+
+async function loadPrograms() {
+  const data = await api("/api/programs");
+  if (!data || data.error) return;
+  const grid = document.getElementById("programs-grid");
+  if (!grid) return;
+
+  if (data.length === 0) {
+    grid.innerHTML = `<div style="color:rgba(244,241,232,0.5);font-size:0.85rem">No programs registered. Click "+ Add Program" to register one.</div>`;
+    return;
+  }
+
+  let html = "";
+  for (const prog of data) {
+    const postureClass = prog.posture === "active" ? "active" : "passive";
+    const helpChan = prog.helpChannel || "none";
+    const chans = (prog.channels || []).join(", ") || "none";
+    const helperGrp = prog.helperGroup || "none";
+
+    html += `
+      <div class="program-card">
+        <div class="program-card-header">
+          <span class="program-name">${esc(prog.name)}</span>
+          <span class="posture-badge ${postureClass}">${esc(prog.posture || "active")}</span>
+        </div>
+        <div class="program-details">
+          <div><strong>ID:</strong> <code>${esc(prog.id)}</code></div>
+          <div><strong>Help Channel:</strong> <code>${esc(helpChan)}</code></div>
+          <div><strong>Channels:</strong> <code>${esc(chans)}</code></div>
+          <div><strong>Helper Group:</strong> <code>${esc(helperGrp)}</code></div>
+        </div>
+        <div class="program-card-actions">
+          <button class="btn btn-small" onclick="window.togglePosture('${escJs(prog.id)}', '${escJs(prog.posture)}')">
+            Set ${prog.posture === "active" ? "Passive" : "Active"}
+          </button>
+          <button class="btn btn-small btn-ghost" onclick="window.deleteProgram('${escJs(prog.id)}')">Delete</button>
+        </div>
+      </div>
+    `;
+  }
+
+  grid.innerHTML = html;
+}
+
+window.togglePosture = async (id, currentPosture) => {
+  const newPosture = currentPosture === "active" ? "passive" : "active";
+  await api(`/api/programs/${id}/posture`, {
+    method: "PATCH",
+    body: JSON.stringify({ posture: newPosture }),
+  });
+  loadPrograms();
+};
+
+window.deleteProgram = async (id) => {
+  if (!confirm(`Delete program '${id}'?`)) return;
+  await api(`/api/programs/${id}`, { method: "DELETE" });
+  loadPrograms();
+};
+
+document.getElementById("btn-add-program")?.addEventListener("click", () => {
+  document.getElementById("program-modal").classList.add("open");
+});
+
+document.getElementById("prog-cancel")?.addEventListener("click", () => {
+  document.getElementById("program-modal").classList.remove("open");
+});
+
+document.getElementById("prog-save")?.addEventListener("click", async () => {
+  const id = document.getElementById("prog-id").value.trim();
+  const name = document.getElementById("prog-name").value.trim();
+  const posture = document.getElementById("prog-posture").value;
+  const helpChannel = document.getElementById("prog-help-channel").value.trim();
+  const channelsRaw = document.getElementById("prog-channels").value.trim();
+  const helperGroup = document.getElementById("prog-helper-group").value.trim();
+
+  if (!id || !name) {
+    alert("Program ID and Name are required!");
+    return;
+  }
+
+  const channels = channelsRaw ? channelsRaw.split(",").map((s) => s.trim()).filter(Boolean) : [];
+
+  await api("/api/programs", {
+    method: "POST",
+    body: JSON.stringify({ id, name, posture, helpChannel, channels, helperGroup }),
+  });
+
+  document.getElementById("program-modal").classList.remove("open");
+  loadPrograms();
+});
+
+/* ------------------------------------------------------ tickets -- */
+
+let activeTicketTab = "all";
+
+async function loadTickets() {
+  const url = activeTicketTab === "all" ? "/api/tickets" : `/api/tickets?status=${activeTicketTab}`;
+  const data = await api(url);
+  if (!data || data.error) return;
+
+  const countEl = document.getElementById("tickets-count");
+  if (countEl) countEl.textContent = `(${data.length})`;
+
+  const list = document.getElementById("tickets-list");
+  if (!list) return;
+
+  if (data.length === 0) {
+    list.innerHTML = `<div style="color:rgba(244,241,232,0.5);font-size:0.85rem">No tickets in this status.</div>`;
+    return;
+  }
+
+  let html = "";
+  for (const t of data) {
+    const statusClass = t.status || "open";
+    const assigneeStr = t.assignee_id ? ` • Claimed by ${t.assignee_id}` : "";
+    const createdStr = new Date(t.created_at).toLocaleString();
+
+    let actionBtns = "";
+    if (t.status === "open") {
+      actionBtns = `
+        <button class="btn btn-small" onclick="window.updateTicket(${t.id}, 'claimed')">Claim</button>
+        <button class="btn btn-small" onclick="window.updateTicket(${t.id}, 'resolved')">Resolve</button>
+        <button class="btn btn-small btn-ghost" onclick="window.updateTicket(${t.id}, 'closed')">Close</button>
+      `;
+    } else if (t.status === "claimed") {
+      actionBtns = `
+        <button class="btn btn-small btn-ghost" onclick="window.updateTicket(${t.id}, 'unclaim')">Unclaim</button>
+        <button class="btn btn-small" onclick="window.updateTicket(${t.id}, 'resolved')">Resolve</button>
+        <button class="btn btn-small btn-ghost" onclick="window.updateTicket(${t.id}, 'closed')">Close</button>
+      `;
+    } else {
+      actionBtns = `
+        <button class="btn btn-small" onclick="window.updateTicket(${t.id}, 'reopen')">Reopen</button>
+      `;
+    }
+
+    html += `
+      <div class="ticket-card">
+        <div class="ticket-header">
+          <span class="ticket-title">[${esc(t.program_id)}] Ticket #${t.id}</span>
+          <span class="ticket-badge ${statusClass}">${esc(t.status)}</span>
+        </div>
+        <div class="ticket-question">${esc(t.question)}</div>
+        <div class="ticket-meta">Requested by ${esc(t.requester_id)} in channel ${esc(t.channel)} • ${createdStr}${assigneeStr}</div>
+        <div class="ticket-actions">${actionBtns}</div>
+      </div>
+    `;
+  }
+
+  list.innerHTML = html;
+}
+
+window.updateTicket = async (id, status) => {
+  await api(`/api/tickets/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  loadTickets();
+};
+
+document.querySelectorAll("[data-ttab]").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    document.querySelectorAll("[data-ttab]").forEach((b) => b.classList.remove("active"));
+    e.target.classList.add("active");
+    activeTicketTab = e.target.dataset.ttab;
+    loadTickets();
+  });
+});
+
 /* ------------------------------------------------------- init -- */
 
 function esc(s) {
@@ -529,6 +699,8 @@ document.addEventListener("click", (e) => {
 
 function init() {
   connectSSE();
+  loadPrograms();
+  loadTickets();
   loadQueue();
   loadGaps();
   loadSilence();

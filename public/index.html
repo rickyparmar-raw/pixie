@@ -45,6 +45,25 @@
   </header>
 
   <main class="bento">
+    <!-- Programs Fleet Control -->
+    <section class="panel" id="panel-programs">
+      <h2 class="panel-title">Programs Fleet <button class="btn btn-small" id="btn-add-program">+ Add Program</button></h2>
+      <div class="programs-grid" id="programs-grid"></div>
+    </section>
+
+    <!-- Tickets Handoff Board -->
+    <section class="panel" id="panel-tickets">
+      <h2 class="panel-title">Escalation Tickets <span class="title-sub" id="tickets-count"></span></h2>
+      <div class="tickets-tabs">
+        <button class="tab active" data-ttab="all">ALL</button>
+        <button class="tab" data-ttab="open">OPEN</button>
+        <button class="tab" data-ttab="claimed">CLAIMED</button>
+        <button class="tab" data-ttab="resolved">RESOLVED</button>
+        <button class="tab" data-ttab="closed">CLOSED</button>
+      </div>
+      <div class="tickets-list" id="tickets-list"></div>
+    </section>
+
     <!-- Left column: 2fr -->
     <section class="panel playground" id="panel-playground">
       <h2 class="panel-title">Ask Pixie <span class="title-sub">— glass box</span></h2>
@@ -113,6 +132,30 @@
       <div class="modal-actions">
         <button class="btn" id="edit-save">Save & Approve</button>
         <button class="btn btn-ghost" id="edit-cancel">Cancel</button>
+      </div>
+    </div>
+  <!-- Program modal -->
+  <div class="modal-overlay" id="program-modal">
+    <div class="modal">
+      <h3 id="program-modal-title">Add New Program</h3>
+      <label>Program ID (slug)</label>
+      <input type="text" id="prog-id" placeholder="e.g. sprig">
+      <label>Program Name</label>
+      <input type="text" id="prog-name" placeholder="e.g. Sprig Game Console">
+      <label>Posture</label>
+      <select id="prog-posture">
+        <option value="active">active (Auto-reply & Auto-ticket)</option>
+        <option value="passive">passive (DM/Mention only, no unprompted escalation)</option>
+      </select>
+      <label>Help Channel ID</label>
+      <input type="text" id="prog-help-channel" placeholder="e.g. C08SPRIGHELP">
+      <label>Active Channels (comma separated IDs)</label>
+      <input type="text" id="prog-channels" placeholder="e.g. C08SPRIGHELP, C08SPRIGDISC">
+      <label>Helper Group ID</label>
+      <input type="text" id="prog-helper-group" placeholder="e.g. S08SPRIGHELPERS">
+      <div class="modal-actions">
+        <button class="btn" id="prog-save">Save Program</button>
+        <button class="btn btn-ghost" id="prog-cancel">Cancel</button>
       </div>
     </div>
   </div>

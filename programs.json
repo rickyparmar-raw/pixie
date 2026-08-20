@@ -1,0 +1,55 @@
+[
+  {
+    "id": "pixl",
+    "name": "Pixl",
+    "posture": "passive",
+    "scope": "program",
+    "helpChannel": "C0B6STY9G5N",
+    "channels": [
+      "C0B6STY9G5N",
+      "C0B5P4N0WHH",
+      "C0BK4F6STFZ"
+    ],
+    "sources": [
+      {
+        "name": "Pixl Docs",
+        "type": "github-dir",
+        "url": "https://api.github.com/repos/hackclub/pixl/contents/docs",
+        "siteUrl": "https://pixl.hackclub.com/docs"
+      },
+      {
+        "name": "Quick Links",
+        "type": "json-faq",
+        "url": "file://./quick-links.json"
+      }
+    ],
+    "milestones": [
+      {
+        "name": "Pixl official release",
+        "date": "2026-08-18",
+        "note": "This is the official launch date. Any other date you may have seen for the launch is wrong.",
+        "questions": [
+          "When is Pixl launching?",
+          "When does Pixl come out?",
+          "What is the release date?",
+          "When is the launch date of Pixl?",
+          "Is Pixl released yet?",
+          "Is Pixl out?",
+          "Has Pixl launched?",
+          "Has Pixl been released?",
+          "Has Pixl come out yet?",
+          "When does Pixl drop?",
+          "Is Pixl live?"
+        ]
+      }
+    ],
+    "guides": [
+      "submit-ysws-guidelines"
+    ],
+    "links": {
+      "docs": "https://pixl.hackclub.com/docs",
+      "site": "https://pixl.hackclub.com",
+      "repo": "https://github.com/hackclub/pixl"
+    }
+  }
+]
