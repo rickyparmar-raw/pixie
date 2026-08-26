@@ -22,7 +22,7 @@
   "20": "auth.js",
   "21": "retrieve.js",
   "22": "answer.js",
-  "23": "log.js",
+  "23": "reply.js",
   "24": "Test Questions for Intent Classifier",
   "25": "deploy",
   "26": "index.js",
@@ -39,7 +39,7 @@
   "37": "Screenshot Replacement Checklist",
   "38": "generate_screenshots.js",
   "39": "optimize-screenshot.js",
-  "40": "firecrawl.js",
+  "40": "log.js",
   "41": "context.js",
   "42": "probe.js",
   "43": "optimize-screenshots.js",
@@ -51,5 +51,10 @@
   "49": "config",
   "50": "learn.test.js",
   "51": "context.test.js",
-  "52": "rateLimit.js"
+  "52": "rateLimit.js",
+  "53": "llm.js",
+  "54": "vision.js",
+  "55": "teachThread.js",
+  "56": "guides.test.js",
+  "57": "teachThread.test.js"
 }
