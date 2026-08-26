@@ -130,13 +130,13 @@
     "semantic_hash": ""
   },
   "lib/knowledge.js": {
-    "mtime": 1787731253.5571241,
-    "ast_hash": "ae148df5e9ba6aad33ccef8f68cd5f0c",
+    "mtime": 1787733581.5423663,
+    "ast_hash": "2d8218b7fc3d16840e045e8468fa6923",
     "semantic_hash": ""
   },
   "lib/knowledge.test.js": {
-    "mtime": 1787731268.279573,
-    "ast_hash": "8e5c0977ef4bb8c43d7778bcfb4f8cbc",
+    "mtime": 1787733562.4094489,
+    "ast_hash": "c107bbf4d08cebeab1233b36f65706f3",
     "semantic_hash": ""
   },
   "lib/learn.js": {
@@ -230,8 +230,8 @@
     "semantic_hash": ""
   },
   "lib/retrieve.js": {
-    "mtime": 1787209034.1766331,
-    "ast_hash": "076fa7bca614fd7fbc17609afec6a606",
+    "mtime": 1787733581.541537,
+    "ast_hash": "30cf3f9f354c161bf23d51f14c5976f4",
     "semantic_hash": ""
   },
   "lib/retrieve.test.js": {
@@ -655,13 +655,13 @@
     "semantic_hash": ""
   },
   "lib/shop.js": {
-    "mtime": 1787732173.7249386,
-    "ast_hash": "b4f937822d89cab00e48c62b9e41c9d3",
+    "mtime": 1787733548.8881972,
+    "ast_hash": "432c52baf8b0f0b047ea865eb6de0401",
     "semantic_hash": ""
   },
   "lib/shop.test.js": {
-    "mtime": 1787732146.6725366,
-    "ast_hash": "9cdb01d8a1fd7fc20462027ba914a792",
+    "mtime": 1787733548.8988657,
+    "ast_hash": "e0bd52ad90899e8a9b392c01f5b4f7c5",
     "semantic_hash": ""
   },
   "lib/reply.test.js": {

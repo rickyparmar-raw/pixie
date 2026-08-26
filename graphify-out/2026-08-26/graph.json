@@ -2948,7 +2948,7 @@
       "_origin": "ast",
       "id": "lib_firecrawl",
       "community": 40,
-      "community_name": "firecrawl.js",
+      "community_name": "log.js",
       "norm_label": "firecrawl.js"
     },
     {
@@ -2959,7 +2959,7 @@
       "_origin": "ast",
       "id": "lib_firecrawl_axios",
       "community": 40,
-      "community_name": "firecrawl.js",
+      "community_name": "log.js",
       "norm_label": "axios"
     },
     {
@@ -2970,7 +2970,7 @@
       "_origin": "ast",
       "id": "lib_firecrawl_config",
       "community": 40,
-      "community_name": "firecrawl.js",
+      "community_name": "log.js",
       "norm_label": "{ config }"
     },
     {
@@ -2981,7 +2981,7 @@
       "_origin": "ast",
       "id": "lib_firecrawl_log",
       "community": 40,
-      "community_name": "firecrawl.js",
+      "community_name": "log.js",
       "norm_label": "log"
     },
     {
@@ -2992,7 +2992,7 @@
       "_origin": "ast",
       "id": "lib_firecrawl_getapikey",
       "community": 40,
-      "community_name": "firecrawl.js",
+      "community_name": "log.js",
       "norm_label": "getapikey()"
     },
     {
@@ -3003,7 +3003,7 @@
       "_origin": "ast",
       "id": "lib_firecrawl_scrapecache",
       "community": 40,
-      "community_name": "firecrawl.js",
+      "community_name": "log.js",
       "norm_label": "scrapecache"
     },
     {
@@ -3014,7 +3014,7 @@
       "_origin": "ast",
       "id": "lib_firecrawl_scrapeurl",
       "community": 40,
-      "community_name": "firecrawl.js",
+      "community_name": "log.js",
       "norm_label": "scrapeurl()"
     },
     {
@@ -3025,7 +3025,7 @@
       "_origin": "ast",
       "id": "lib_firecrawl_clearscrapecache",
       "community": 40,
-      "community_name": "firecrawl.js",
+      "community_name": "log.js",
       "norm_label": "clearscrapecache()"
     },
     {
@@ -3036,7 +3036,7 @@
       "_origin": "ast",
       "id": "lib_firecrawl_searchweb",
       "community": 40,
-      "community_name": "firecrawl.js",
+      "community_name": "log.js",
       "norm_label": "searchweb()"
     },
     {
@@ -3475,8 +3475,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_guides_test",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 56,
+      "community_name": "guides.test.js",
       "norm_label": "guides.test.js"
     },
     {
@@ -3486,8 +3486,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "lib_guides_test_test_before_after",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 56,
+      "community_name": "guides.test.js",
       "norm_label": "{ test, before, after }"
     },
     {
@@ -3497,8 +3497,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_guides_test_assert",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 56,
+      "community_name": "guides.test.js",
       "norm_label": "assert"
     },
     {
@@ -3508,8 +3508,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_guides_test_db",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 56,
+      "community_name": "guides.test.js",
       "norm_label": "db"
     },
     {
@@ -3519,8 +3519,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_guides_test_llm",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 56,
+      "community_name": "guides.test.js",
       "norm_label": "llm"
     },
     {
@@ -3530,8 +3530,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "lib_guides_test_guides",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 56,
+      "community_name": "guides.test.js",
       "norm_label": "guides"
     },
     {
@@ -4976,10 +4976,21 @@
       "norm_label": "getindex()"
     },
     {
+      "label": "excludedSources()",
+      "file_type": "code",
+      "source_file": "lib/knowledge.js",
+      "source_location": "L495",
+      "_origin": "ast",
+      "id": "lib_knowledge_excludedsources",
+      "community": 7,
+      "community_name": "knowledge.js",
+      "norm_label": "excludedsources()"
+    },
+    {
       "label": "getContext()",
       "file_type": "code",
       "source_file": "lib/knowledge.js",
-      "source_location": "L490",
+      "source_location": "L504",
       "_origin": "ast",
       "id": "lib_knowledge_getcontext",
       "community": 7,
@@ -4990,7 +5001,7 @@
       "label": "refreshCorpus()",
       "file_type": "code",
       "source_file": "lib/knowledge.js",
-      "source_location": "L505",
+      "source_location": "L520",
       "_origin": "ast",
       "id": "lib_knowledge_refreshcorpus",
       "community": 7,
@@ -5001,7 +5012,7 @@
       "label": "startAutoRefresh()",
       "file_type": "code",
       "source_file": "lib/knowledge.js",
-      "source_location": "L524",
+      "source_location": "L539",
       "_origin": "ast",
       "id": "lib_knowledge_startautorefresh",
       "community": 7,
@@ -5012,7 +5023,7 @@
       "label": "lastBuiltAt()",
       "file_type": "code",
       "source_file": "lib/knowledge.js",
-      "source_location": "L553",
+      "source_location": "L569",
       "_origin": "ast",
       "id": "lib_knowledge_lastbuiltat",
       "community": 7,
@@ -5554,8 +5565,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_llm",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "llm.js"
     },
     {
@@ -5565,8 +5576,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_llm_axios",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "axios"
     },
     {
@@ -5576,8 +5587,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_llm_https",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "https"
     },
     {
@@ -5587,8 +5598,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_llm_log",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "log"
     },
     {
@@ -5598,8 +5609,8 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "lib_llm_keepaliveagent",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "keepaliveagent"
     },
     {
@@ -5609,8 +5620,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "lib_llm_isretryablestatus",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "isretryablestatus()"
     },
     {
@@ -5620,8 +5631,8 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "lib_llm_isretryableerror",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "isretryableerror()"
     },
     {
@@ -5631,8 +5642,8 @@
       "source_location": "L33",
       "_origin": "ast",
       "id": "lib_llm_backoffms",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "backoffms()"
     },
     {
@@ -5642,8 +5653,8 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "lib_llm_sleep",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "sleep()"
     },
     {
@@ -5653,8 +5664,8 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "lib_llm_thinkingfor",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "thinkingfor()"
     },
     {
@@ -5664,8 +5675,8 @@
       "source_location": "L61",
       "_origin": "ast",
       "id": "lib_llm_requestcompletion",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "requestcompletion()"
     },
     {
@@ -5675,8 +5686,8 @@
       "source_location": "L110",
       "_origin": "ast",
       "id": "lib_llm_completeattempts",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "completeattempts()"
     },
     {
@@ -5686,8 +5697,8 @@
       "source_location": "L151",
       "_origin": "ast",
       "id": "lib_llm_describeerror",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "describeerror()"
     },
     {
@@ -5697,8 +5708,8 @@
       "source_location": "L160",
       "_origin": "ast",
       "id": "lib_llm_complete",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "complete()"
     },
     {
@@ -5708,8 +5719,8 @@
       "source_location": "L186",
       "_origin": "ast",
       "id": "lib_llm_parsessechunk",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "parsessechunk()"
     },
     {
@@ -5719,8 +5730,8 @@
       "source_location": "L212",
       "_origin": "ast",
       "id": "lib_llm_streamcompletion",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "streamcompletion()"
     },
     {
@@ -5730,8 +5741,8 @@
       "source_location": "L288",
       "_origin": "ast",
       "id": "lib_llm_streamattempts",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "streamattempts()"
     },
     {
@@ -5741,8 +5752,8 @@
       "source_location": "L321",
       "_origin": "ast",
       "id": "lib_llm_completestream",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 53,
+      "community_name": "llm.js",
       "norm_label": "completestream()"
     },
     {
@@ -5895,7 +5906,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_log",
-      "community": 23,
+      "community": 40,
       "community_name": "log.js",
       "norm_label": "log.js"
     },
@@ -5906,7 +5917,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_log_config",
-      "community": 23,
+      "community": 40,
       "community_name": "log.js",
       "norm_label": "{ config }"
     },
@@ -5917,7 +5928,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_log_subscribers",
-      "community": 23,
+      "community": 40,
       "community_name": "log.js",
       "norm_label": "subscribers"
     },
@@ -5928,7 +5939,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "lib_log_subscribe",
-      "community": 23,
+      "community": 40,
       "community_name": "log.js",
       "norm_label": "subscribe()"
     },
@@ -5939,7 +5950,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "lib_log_notify",
-      "community": 23,
+      "community": 40,
       "community_name": "log.js",
       "norm_label": "notify()"
     },
@@ -5950,7 +5961,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "lib_log_format",
-      "community": 23,
+      "community": 40,
       "community_name": "log.js",
       "norm_label": "format()"
     },
@@ -5961,7 +5972,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "lib_log_debug",
-      "community": 23,
+      "community": 40,
       "community_name": "log.js",
       "norm_label": "debug()"
     },
@@ -5972,7 +5983,7 @@
       "source_location": "L32",
       "_origin": "ast",
       "id": "lib_log_info",
-      "community": 23,
+      "community": 40,
       "community_name": "log.js",
       "norm_label": "info()"
     },
@@ -5983,7 +5994,7 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "lib_log_warn",
-      "community": 23,
+      "community": 40,
       "community_name": "log.js",
       "norm_label": "warn()"
     },
@@ -5994,7 +6005,7 @@
       "source_location": "L42",
       "_origin": "ast",
       "id": "lib_log_error",
-      "community": 23,
+      "community": 40,
       "community_name": "log.js",
       "norm_label": "error()"
     },
@@ -6203,8 +6214,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_lookup_test",
-      "community": 18,
-      "community_name": "programs.js",
+      "community": 4,
+      "community_name": "lookup.js",
       "norm_label": "lookup.test.js"
     },
     {
@@ -6214,8 +6225,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_lookup_test_test",
-      "community": 18,
-      "community_name": "programs.js",
+      "community": 4,
+      "community_name": "lookup.js",
       "norm_label": "{ test }"
     },
     {
@@ -6225,8 +6236,8 @@
       "source_location": "L2",
       "_origin": "ast",
       "id": "lib_lookup_test_assert",
-      "community": 18,
-      "community_name": "programs.js",
+      "community": 4,
+      "community_name": "lookup.js",
       "norm_label": "assert"
     },
     {
@@ -6236,8 +6247,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "lib_lookup_test_db",
-      "community": 18,
-      "community_name": "programs.js",
+      "community": 4,
+      "community_name": "lookup.js",
       "norm_label": "db"
     },
     {
@@ -6247,8 +6258,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_lookup_test_lookup",
-      "community": 18,
-      "community_name": "programs.js",
+      "community": 4,
+      "community_name": "lookup.js",
       "norm_label": "lookup"
     },
     {
@@ -6258,8 +6269,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_lookup_test_programs",
-      "community": 18,
-      "community_name": "programs.js",
+      "community": 4,
+      "community_name": "lookup.js",
       "norm_label": "programs"
     },
     {
@@ -6269,8 +6280,8 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "lib_lookup_test_prog",
-      "community": 18,
-      "community_name": "programs.js",
+      "community": 4,
+      "community_name": "lookup.js",
       "norm_label": "prog"
     },
     {
@@ -7106,7 +7117,7 @@
       "_origin": "ast",
       "id": "lib_reply",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "reply.js"
     },
     {
@@ -7117,7 +7128,7 @@
       "_origin": "ast",
       "id": "lib_reply_knowledge",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "knowledge"
     },
     {
@@ -7128,7 +7139,7 @@
       "_origin": "ast",
       "id": "lib_reply_log",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "log"
     },
     {
@@ -7139,7 +7150,7 @@
       "_origin": "ast",
       "id": "lib_reply_config",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "{ config }"
     },
     {
@@ -7150,7 +7161,7 @@
       "_origin": "ast",
       "id": "lib_reply_programs",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "programs"
     },
     {
@@ -7161,7 +7172,7 @@
       "_origin": "ast",
       "id": "lib_reply_dedash",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "dedash()"
     },
     {
@@ -7172,7 +7183,7 @@
       "_origin": "ast",
       "id": "lib_reply_plaindashes",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "plaindashes()"
     },
     {
@@ -7183,7 +7194,7 @@
       "_origin": "ast",
       "id": "lib_reply_plaindashesinblocks",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "plaindashesinblocks()"
     },
     {
@@ -7194,7 +7205,7 @@
       "_origin": "ast",
       "id": "lib_reply_sourcelinefor",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "sourcelinefor()"
     },
     {
@@ -7205,7 +7216,7 @@
       "_origin": "ast",
       "id": "lib_reply_blocksfor",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "blocksfor()"
     },
     {
@@ -7216,7 +7227,7 @@
       "_origin": "ast",
       "id": "lib_reply_postthinking",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "postthinking()"
     },
     {
@@ -7227,7 +7238,7 @@
       "_origin": "ast",
       "id": "lib_reply_makestreamwriter",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "makestreamwriter()"
     },
     {
@@ -7238,7 +7249,7 @@
       "_origin": "ast",
       "id": "lib_reply_finalize",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "finalize()"
     },
     {
@@ -7249,7 +7260,7 @@
       "_origin": "ast",
       "id": "lib_reply_discardplaceholder",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "discardplaceholder()"
     },
     {
@@ -7260,7 +7271,7 @@
       "_origin": "ast",
       "id": "lib_reply_flagforhumans",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "flagforhumans()"
     },
     {
@@ -7271,7 +7282,7 @@
       "_origin": "ast",
       "id": "lib_reply_seedfeedbackreactions",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "seedfeedbackreactions()"
     },
     {
@@ -7282,7 +7293,7 @@
       "_origin": "ast",
       "id": "lib_reply_test",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "reply.test.js"
     },
     {
@@ -7293,7 +7304,7 @@
       "_origin": "ast",
       "id": "lib_reply_test_test",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "{ test }"
     },
     {
@@ -7304,7 +7315,7 @@
       "_origin": "ast",
       "id": "lib_reply_test_assert",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "assert"
     },
     {
@@ -7315,7 +7326,7 @@
       "_origin": "ast",
       "id": "lib_reply_test_reply",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "reply"
     },
     {
@@ -7326,7 +7337,7 @@
       "_origin": "ast",
       "id": "lib_reply_test_fakeclient",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "fakeclient()"
     },
     {
@@ -8400,7 +8411,7 @@
       "label": "selectContext()",
       "file_type": "code",
       "source_file": "lib/retrieve.js",
-      "source_location": "L211",
+      "source_location": "L216",
       "_origin": "ast",
       "id": "lib_retrieve_selectcontext",
       "community": 21,
@@ -8752,7 +8763,7 @@
       "label": "lastMentionedItems()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L250",
+      "source_location": "L254",
       "_origin": "ast",
       "id": "lib_shop_lastmentioneditems",
       "community": 10,
@@ -8760,10 +8771,21 @@
       "norm_label": "lastmentioneditems()"
     },
     {
+      "label": "asksAboutPrice()",
+      "file_type": "code",
+      "source_file": "lib/shop.js",
+      "source_location": "L281",
+      "_origin": "ast",
+      "id": "lib_shop_asksaboutprice",
+      "community": 10,
+      "community_name": "shop.js",
+      "norm_label": "asksaboutprice()"
+    },
+    {
       "label": "isShopQuestion()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L264",
+      "source_location": "L290",
       "_origin": "ast",
       "id": "lib_shop_isshopquestion",
       "community": 10,
@@ -8774,7 +8796,7 @@
       "label": "fmtPx()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L273",
+      "source_location": "L296",
       "_origin": "ast",
       "id": "lib_shop_fmtpx",
       "community": 10,
@@ -8785,7 +8807,7 @@
       "label": "fmtHours()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L277",
+      "source_location": "L300",
       "_origin": "ast",
       "id": "lib_shop_fmthours",
       "community": 10,
@@ -8796,7 +8818,7 @@
       "label": "fmtUsd()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L282",
+      "source_location": "L305",
       "_origin": "ast",
       "id": "lib_shop_fmtusd",
       "community": 10,
@@ -8807,7 +8829,7 @@
       "label": "priceLine()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L291",
+      "source_location": "L314",
       "_origin": "ast",
       "id": "lib_shop_priceline",
       "community": 10,
@@ -8818,7 +8840,7 @@
       "label": "rangeLine()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L304",
+      "source_location": "L327",
       "_origin": "ast",
       "id": "lib_shop_rangeline",
       "community": 10,
@@ -8829,7 +8851,7 @@
       "label": "tierLine()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L312",
+      "source_location": "L335",
       "_origin": "ast",
       "id": "lib_shop_tierline",
       "community": 10,
@@ -8840,7 +8862,7 @@
       "label": "directAnswer()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L325",
+      "source_location": "L348",
       "_origin": "ast",
       "id": "lib_shop_directanswer",
       "community": 10,
@@ -8851,7 +8873,7 @@
       "label": "corpusText()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L406",
+      "source_location": "L439",
       "_origin": "ast",
       "id": "lib_shop_corpustext",
       "community": 10,
@@ -8862,7 +8884,7 @@
       "label": "snapshot",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L443",
+      "source_location": "L476",
       "_origin": "ast",
       "id": "lib_shop_snapshot",
       "community": 10,
@@ -8873,7 +8895,7 @@
       "label": "current()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L450",
+      "source_location": "L483",
       "_origin": "ast",
       "id": "lib_shop_current",
       "community": 10,
@@ -8884,7 +8906,7 @@
       "label": "restoreFromDisk()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L458",
+      "source_location": "L491",
       "_origin": "ast",
       "id": "lib_shop_restorefromdisk",
       "community": 10,
@@ -8895,7 +8917,7 @@
       "label": "refresh()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L477",
+      "source_location": "L510",
       "_origin": "ast",
       "id": "lib_shop_refresh",
       "community": 10,
@@ -8906,7 +8928,7 @@
       "label": "refreshText()",
       "file_type": "code",
       "source_file": "lib/shop.js",
-      "source_location": "L501",
+      "source_location": "L534",
       "_origin": "ast",
       "id": "lib_shop_refreshtext",
       "community": 10,
@@ -9063,8 +9085,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_teachthread",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 55,
+      "community_name": "teachThread.js",
       "norm_label": "teachthread.js"
     },
     {
@@ -9074,8 +9096,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "lib_teachthread_config",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 55,
+      "community_name": "teachThread.js",
       "norm_label": "{ config }"
     },
     {
@@ -9085,8 +9107,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "lib_teachthread_llm",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 55,
+      "community_name": "teachThread.js",
       "norm_label": "llm"
     },
     {
@@ -9096,8 +9118,8 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "lib_teachthread_learn",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 55,
+      "community_name": "teachThread.js",
       "norm_label": "learn"
     },
     {
@@ -9107,8 +9129,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "lib_teachthread_max_tokens",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 55,
+      "community_name": "teachThread.js",
       "norm_label": "{ max_tokens }"
     },
     {
@@ -9118,8 +9140,8 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "lib_teachthread_system_prompt",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 55,
+      "community_name": "teachThread.js",
       "norm_label": "system_prompt"
     },
     {
@@ -9129,8 +9151,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "lib_teachthread_buildtranscript",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 55,
+      "community_name": "teachThread.js",
       "norm_label": "buildtranscript()"
     },
     {
@@ -9140,8 +9162,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "lib_teachthread_summarizethread",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 55,
+      "community_name": "teachThread.js",
       "norm_label": "summarizethread()"
     },
     {
@@ -9151,8 +9173,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_teachthread_test",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 57,
+      "community_name": "teachThread.test.js",
       "norm_label": "teachthread.test.js"
     },
     {
@@ -9162,8 +9184,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "lib_teachthread_test_test_before_after",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 57,
+      "community_name": "teachThread.test.js",
       "norm_label": "{ test, before, after }"
     },
     {
@@ -9173,8 +9195,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_teachthread_test_assert",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 57,
+      "community_name": "teachThread.test.js",
       "norm_label": "assert"
     },
     {
@@ -9184,8 +9206,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_teachthread_test_llm",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 57,
+      "community_name": "teachThread.test.js",
       "norm_label": "llm"
     },
     {
@@ -9195,8 +9217,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_teachthread_test_teachthread",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 57,
+      "community_name": "teachThread.test.js",
       "norm_label": "teachthread"
     },
     {
@@ -9206,8 +9228,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "lib_teachthread_test_stubclient",
-      "community": 5,
-      "community_name": "learn.js",
+      "community": 57,
+      "community_name": "teachThread.test.js",
       "norm_label": "stubclient()"
     },
     {
@@ -9229,7 +9251,7 @@
       "_origin": "ast",
       "id": "lib_tickets",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "tickets.js"
     },
     {
@@ -9240,7 +9262,7 @@
       "_origin": "ast",
       "id": "lib_tickets_db",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "db"
     },
     {
@@ -9251,7 +9273,7 @@
       "_origin": "ast",
       "id": "lib_tickets_reply",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "reply"
     },
     {
@@ -9262,7 +9284,7 @@
       "_origin": "ast",
       "id": "lib_tickets_log",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "log"
     },
     {
@@ -9273,7 +9295,7 @@
       "_origin": "ast",
       "id": "lib_tickets_config",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "{ config }"
     },
     {
@@ -9284,7 +9306,7 @@
       "_origin": "ast",
       "id": "lib_tickets_programs",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "programs"
     },
     {
@@ -9295,7 +9317,7 @@
       "_origin": "ast",
       "id": "lib_tickets_buildticketcardblocks",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "buildticketcardblocks()"
     },
     {
@@ -9306,7 +9328,7 @@
       "_origin": "ast",
       "id": "lib_tickets_escalateticket",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "escalateticket()"
     },
     {
@@ -9317,7 +9339,7 @@
       "_origin": "ast",
       "id": "lib_tickets_registeractions",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "registeractions()"
     },
     {
@@ -9328,7 +9350,7 @@
       "_origin": "ast",
       "id": "lib_tickets_test",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "tickets.test.js"
     },
     {
@@ -9339,7 +9361,7 @@
       "_origin": "ast",
       "id": "lib_tickets_test_test_before",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "{ test, before }"
     },
     {
@@ -9350,7 +9372,7 @@
       "_origin": "ast",
       "id": "lib_tickets_test_assert",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "assert"
     },
     {
@@ -9361,7 +9383,7 @@
       "_origin": "ast",
       "id": "lib_tickets_test_db",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "db"
     },
     {
@@ -9372,7 +9394,7 @@
       "_origin": "ast",
       "id": "lib_tickets_test_tickets",
       "community": 23,
-      "community_name": "log.js",
+      "community_name": "reply.js",
       "norm_label": "tickets"
     },
     {
@@ -9382,8 +9404,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_vision",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 54,
+      "community_name": "vision.js",
       "norm_label": "vision.js"
     },
     {
@@ -9393,8 +9415,8 @@
       "source_location": "L2",
       "_origin": "ast",
       "id": "lib_vision_axios",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 54,
+      "community_name": "vision.js",
       "norm_label": "axios"
     },
     {
@@ -9404,8 +9426,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "lib_vision_config",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 54,
+      "community_name": "vision.js",
       "norm_label": "{ config }"
     },
     {
@@ -9415,8 +9437,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_vision_complete",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 54,
+      "community_name": "vision.js",
       "norm_label": "{ complete }"
     },
     {
@@ -9426,8 +9448,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_vision_normalizeemoji",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 54,
+      "community_name": "vision.js",
       "norm_label": "{ normalizeemoji }"
     },
     {
@@ -9437,8 +9459,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_vision_log",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 54,
+      "community_name": "vision.js",
       "norm_label": "log"
     },
     {
@@ -9448,8 +9470,8 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "lib_vision_fetchslackimageasdatauri",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 54,
+      "community_name": "vision.js",
       "norm_label": "fetchslackimageasdatauri()"
     },
     {
@@ -9459,8 +9481,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "lib_vision_visionsystemprompt",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 54,
+      "community_name": "vision.js",
       "norm_label": "visionsystemprompt()"
     },
     {
@@ -9470,8 +9492,8 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "lib_vision_analyzeimage",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 54,
+      "community_name": "vision.js",
       "norm_label": "analyzeimage()"
     },
     {
@@ -22854,7 +22876,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L537",
+      "source_location": "L552",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -22932,7 +22954,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L539",
+      "source_location": "L554",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -22944,7 +22966,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L538",
+      "source_location": "L553",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -22956,7 +22978,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L542",
+      "source_location": "L557",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -22968,7 +22990,19 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L547",
+      "source_location": "L568",
+      "weight": 1.0,
+      "_origin": "ast",
+      "context": "collection",
+      "source": "lib_knowledge",
+      "target": "lib_knowledge_excludedsources",
+      "confidence_score": 0.5
+    },
+    {
+      "relation": "indirect_call",
+      "confidence": "INFERRED",
+      "source_file": "lib/knowledge.js",
+      "source_location": "L562",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -22980,7 +23014,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L541",
+      "source_location": "L556",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23003,7 +23037,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L552",
+      "source_location": "L567",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23015,7 +23049,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L546",
+      "source_location": "L561",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23027,7 +23061,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L545",
+      "source_location": "L560",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23039,7 +23073,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L548",
+      "source_location": "L563",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23051,7 +23085,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L550",
+      "source_location": "L565",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23063,7 +23097,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L549",
+      "source_location": "L564",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23075,7 +23109,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L553",
+      "source_location": "L569",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_knowledge",
@@ -23097,7 +23131,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L532",
+      "source_location": "L547",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23120,7 +23154,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L540",
+      "source_location": "L555",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23143,7 +23177,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L535",
+      "source_location": "L550",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23166,7 +23200,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L543",
+      "source_location": "L558",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23178,7 +23212,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L544",
+      "source_location": "L559",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23190,7 +23224,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L536",
+      "source_location": "L551",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23257,7 +23291,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L551",
+      "source_location": "L566",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23269,7 +23303,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L534",
+      "source_location": "L549",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23281,7 +23315,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L533",
+      "source_location": "L548",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -23341,7 +23375,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "lib/knowledge.test.js",
-      "source_location": "L242",
+      "source_location": "L265",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_knowledge_test",
@@ -23485,7 +23519,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L506",
+      "source_location": "L521",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_knowledge_refreshcorpus",
@@ -23713,7 +23747,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L511",
+      "source_location": "L526",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_knowledge_refreshcorpus",
@@ -23737,7 +23771,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L512",
+      "source_location": "L527",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_knowledge_refreshcorpus",
@@ -23761,7 +23795,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L494",
+      "source_location": "L508",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_knowledge_getcontext",
@@ -23785,7 +23819,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L496",
+      "source_location": "L510",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_knowledge_getcontext",
@@ -23821,7 +23855,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L491",
+      "source_location": "L505",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_knowledge_getcontext",
@@ -23833,7 +23867,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L495",
+      "source_location": "L509",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_knowledge_getcontext",
@@ -23845,7 +23879,19 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/knowledge.js",
-      "source_location": "L527",
+      "source_location": "L512",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_knowledge_getcontext",
+      "target": "lib_knowledge_excludedsources",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/knowledge.js",
+      "source_location": "L542",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_knowledge_startautorefresh",
@@ -23890,7 +23936,7 @@
       "context": "import",
       "confidence": "EXTRACTED",
       "source_file": "lib/knowledge.test.js",
-      "source_location": "L243",
+      "source_location": "L266",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_knowledge_test",
@@ -29466,7 +29512,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/retrieve.js",
-      "source_location": "L237",
+      "source_location": "L245",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29478,7 +29524,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/retrieve.js",
-      "source_location": "L235",
+      "source_location": "L243",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29490,7 +29536,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/retrieve.js",
-      "source_location": "L236",
+      "source_location": "L244",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29502,7 +29548,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/retrieve.js",
-      "source_location": "L234",
+      "source_location": "L242",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29525,7 +29571,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/retrieve.js",
-      "source_location": "L238",
+      "source_location": "L246",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29537,7 +29583,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/retrieve.js",
-      "source_location": "L239",
+      "source_location": "L247",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29549,7 +29595,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/retrieve.js",
-      "source_location": "L240",
+      "source_location": "L248",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29572,7 +29618,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/retrieve.js",
-      "source_location": "L233",
+      "source_location": "L241",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29657,7 +29703,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/retrieve.js",
-      "source_location": "L214",
+      "source_location": "L222",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_retrieve_selectcontext",
@@ -29764,6 +29810,18 @@
       "confidence_score": 1.0
     },
     {
+      "relation": "indirect_call",
+      "confidence": "INFERRED",
+      "source_file": "lib/shop.js",
+      "source_location": "L557",
+      "weight": 1.0,
+      "_origin": "ast",
+      "context": "collection",
+      "source": "lib_shop",
+      "target": "lib_shop_asksaboutprice",
+      "confidence_score": 0.5
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
@@ -29778,7 +29836,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L530",
+      "source_location": "L564",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29790,7 +29848,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L531",
+      "source_location": "L565",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29813,7 +29871,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L529",
+      "source_location": "L563",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29825,7 +29883,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L522",
+      "source_location": "L555",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29837,7 +29895,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L277",
+      "source_location": "L300",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop",
@@ -29848,7 +29906,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L273",
+      "source_location": "L296",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop",
@@ -29859,7 +29917,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L282",
+      "source_location": "L305",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop",
@@ -29870,7 +29928,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L520",
+      "source_location": "L553",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29882,7 +29940,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L519",
+      "source_location": "L552",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29894,7 +29952,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L524",
+      "source_location": "L558",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29906,7 +29964,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L523",
+      "source_location": "L556",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29918,7 +29976,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L527",
+      "source_location": "L561",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29930,7 +29988,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L528",
+      "source_location": "L562",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29953,7 +30011,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L525",
+      "source_location": "L559",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29987,7 +30045,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L521",
+      "source_location": "L554",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -29999,7 +30057,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L517",
+      "source_location": "L550",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -30011,7 +30069,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L291",
+      "source_location": "L314",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop",
@@ -30022,7 +30080,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L526",
+      "source_location": "L560",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -30034,7 +30092,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L518",
+      "source_location": "L551",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -30046,7 +30104,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L304",
+      "source_location": "L327",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop",
@@ -30057,7 +30115,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L532",
+      "source_location": "L566",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -30069,7 +30127,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L533",
+      "source_location": "L567",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -30081,7 +30139,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L516",
+      "source_location": "L549",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -30093,7 +30151,7 @@
       "relation": "indirect_call",
       "confidence": "INFERRED",
       "source_file": "lib/shop.js",
-      "source_location": "L534",
+      "source_location": "L568",
       "weight": 1.0,
       "_origin": "ast",
       "context": "collection",
@@ -30105,7 +30163,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L443",
+      "source_location": "L476",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop",
@@ -30127,7 +30185,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L312",
+      "source_location": "L335",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop",
@@ -30185,7 +30243,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L377",
+      "source_location": "L410",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_directanswer",
@@ -30209,7 +30267,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L315",
+      "source_location": "L338",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_tierline",
@@ -30245,7 +30303,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L316",
+      "source_location": "L339",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_tierline",
@@ -30257,7 +30315,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L433",
+      "source_location": "L466",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_corpustext",
@@ -30269,7 +30327,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L305",
+      "source_location": "L328",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_rangeline",
@@ -30281,7 +30339,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L313",
+      "source_location": "L336",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_tierline",
@@ -30293,7 +30351,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L334",
+      "source_location": "L357",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_directanswer",
@@ -30389,7 +30447,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L427",
+      "source_location": "L460",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_corpustext",
@@ -30401,7 +30459,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L356",
+      "source_location": "L389",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_directanswer",
@@ -30425,7 +30483,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L298",
+      "source_location": "L321",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_priceline",
@@ -30437,7 +30495,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L430",
+      "source_location": "L463",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_corpustext",
@@ -30449,7 +30507,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L384",
+      "source_location": "L417",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_directanswer",
@@ -30461,7 +30519,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L292",
+      "source_location": "L315",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_priceline",
@@ -30473,7 +30531,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L431",
+      "source_location": "L464",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_corpustext",
@@ -30485,7 +30543,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L356",
+      "source_location": "L389",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_directanswer",
@@ -30497,7 +30555,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L295",
+      "source_location": "L318",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_priceline",
@@ -30533,7 +30591,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L335",
+      "source_location": "L358",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_directanswer",
@@ -30545,7 +30603,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L253",
+      "source_location": "L261",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_lastmentioneditems",
@@ -30557,7 +30615,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L343",
+      "source_location": "L363",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_directanswer",
@@ -30569,7 +30627,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L348",
+      "source_location": "L373",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_directanswer",
@@ -30581,11 +30639,11 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L344",
+      "source_location": "L258",
       "weight": 1.0,
       "_origin": "ast",
-      "source": "lib_shop_directanswer",
-      "target": "lib_shop_isshopquestion",
+      "source": "lib_shop_lastmentioneditems",
+      "target": "lib_shop_asksaboutprice",
       "confidence_score": 1.0
     },
     {
@@ -30593,119 +30651,35 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L416",
+      "source_location": "L360",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_shop_directanswer",
+      "target": "lib_shop_asksaboutprice",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/shop.js",
+      "source_location": "L291",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_shop_isshopquestion",
+      "target": "lib_shop_asksaboutprice",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/shop.js",
+      "source_location": "L449",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_corpustext",
       "target": "lib_shop_fmtpx",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "lib/shop.js",
-      "source_location": "L356",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "lib_shop_directanswer",
-      "target": "lib_shop_fmtpx",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "lib/shop.js",
-      "source_location": "L293",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "lib_shop_priceline",
-      "target": "lib_shop_fmtpx",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "lib/shop.js",
-      "source_location": "L316",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "lib_shop_tierline",
-      "target": "lib_shop_fmtpx",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "lib/shop.js",
-      "source_location": "L435",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "lib_shop_corpustext",
-      "target": "lib_shop_fmthours",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "lib/shop.js",
-      "source_location": "L307",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "lib_shop_rangeline",
-      "target": "lib_shop_fmthours",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "lib/shop.js",
-      "source_location": "L316",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "lib_shop_tierline",
-      "target": "lib_shop_fmthours",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "lib/shop.js",
-      "source_location": "L416",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "lib_shop_corpustext",
-      "target": "lib_shop_fmtusd",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "lib/shop.js",
-      "source_location": "L307",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "lib_shop_rangeline",
-      "target": "lib_shop_fmtusd",
-      "confidence_score": 1.0
-    },
-    {
-      "relation": "calls",
-      "context": "call",
-      "confidence": "EXTRACTED",
-      "source_file": "lib/shop.js",
-      "source_location": "L383",
-      "weight": 1.0,
-      "_origin": "ast",
-      "source": "lib_shop_directanswer",
-      "target": "lib_shop_priceline",
       "confidence_score": 1.0
     },
     {
@@ -30717,6 +30691,114 @@
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_directanswer",
+      "target": "lib_shop_fmtpx",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/shop.js",
+      "source_location": "L316",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_shop_priceline",
+      "target": "lib_shop_fmtpx",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/shop.js",
+      "source_location": "L339",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_shop_tierline",
+      "target": "lib_shop_fmtpx",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/shop.js",
+      "source_location": "L468",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_shop_corpustext",
+      "target": "lib_shop_fmthours",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/shop.js",
+      "source_location": "L330",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_shop_rangeline",
+      "target": "lib_shop_fmthours",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/shop.js",
+      "source_location": "L339",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_shop_tierline",
+      "target": "lib_shop_fmthours",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/shop.js",
+      "source_location": "L449",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_shop_corpustext",
+      "target": "lib_shop_fmtusd",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/shop.js",
+      "source_location": "L330",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_shop_rangeline",
+      "target": "lib_shop_fmtusd",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/shop.js",
+      "source_location": "L416",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_shop_directanswer",
+      "target": "lib_shop_priceline",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "lib/shop.js",
+      "source_location": "L422",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "lib_shop_directanswer",
       "target": "lib_shop_rangeline",
       "confidence_score": 1.0
     },
@@ -30725,7 +30807,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L387",
+      "source_location": "L420",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_directanswer",
@@ -30737,7 +30819,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L503",
+      "source_location": "L536",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_refreshtext",
@@ -30749,7 +30831,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L453",
+      "source_location": "L486",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_current",
@@ -30761,7 +30843,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L505",
+      "source_location": "L538",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_refreshtext",
@@ -30773,7 +30855,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "lib/shop.js",
-      "source_location": "L503",
+      "source_location": "L536",
       "weight": 1.0,
       "_origin": "ast",
       "source": "lib_shop_refreshtext",
@@ -35452,5 +35534,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "504fe0503f990b147795c2b3bfe7e819bd4faaf3"
+  "built_at_commit": "ed0b4f15e021fcb117ec1cb1920a0ecd9b63487c"
 }

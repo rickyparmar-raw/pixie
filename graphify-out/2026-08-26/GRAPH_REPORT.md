@@ -1,16 +1,16 @@
 # Graph Report - pixie  (2026-08-26)
 
 ## Corpus Check
-- 87 files · ~155,961 words
+- 87 files · ~157,064 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1137 nodes · 1967 edges · 53 communities (51 shown, 2 thin omitted)
-- Extraction: 80% EXTRACTED · 20% INFERRED · 0% AMBIGUOUS · INFERRED: 403 edges (avg confidence: 0.5)
+- 1139 nodes · 1972 edges · 58 communities (56 shown, 2 thin omitted)
+- Extraction: 79% EXTRACTED · 21% INFERRED · 0% AMBIGUOUS · INFERRED: 405 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `504fe050`
+- Built from commit: `ed0b4f15`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -38,7 +38,7 @@
 - auth.js
 - retrieve.js
 - answer.js
-- log.js
+- reply.js
 - Test Questions for Intent Classifier
 - deploy
 - index.js
@@ -55,7 +55,7 @@
 - Screenshot Replacement Checklist
 - generate_screenshots.js
 - optimize-screenshot.js
-- firecrawl.js
+- log.js
 - context.js
 - probe.js
 - optimize-screenshots.js
@@ -67,6 +67,11 @@
 - learn.test.js
 - context.test.js
 - rateLimit.js
+- llm.js
+- vision.js
+- teachThread.js
+- guides.test.js
+- teachThread.test.js
 
 ## God Nodes (most connected - your core abstractions)
 1. `handle()` - 61 edges
@@ -89,13 +94,13 @@
   index.js → lib/config.js
 - `streamCompletion()` --indirect_call--> `delta()`  [INFERRED]
   lib/llm.js → lib/report.js
-- `looksLikeHelpRequest()` --calls--> `looksLikeCode()`  [EXTRACTED]
-  lib/intent.js → lib/answer.js
+- `analyzeImage()` --calls--> `normalizeEmoji()`  [EXTRACTED]
+  lib/vision.js → lib/answer.js
 
 ## Import Cycles
 - None detected.
 
-## Communities (53 total, 2 thin omitted)
+## Communities (58 total, 2 thin omitted)
 
 ### Community 0 - "llm.test.js"
 Cohesion: 0.17
@@ -114,12 +119,12 @@ Cohesion: 0.07
 Nodes (45): { config }, context, db, DOWN_REACTIONS, findImage(), guides, handleImage(), isDirectMessage() (+37 more)
 
 ### Community 4 - "lookup.js"
-Cohesion: 0.07
-Nodes (35): answer, answerOrChat(), cache, cacheHit(), dateFallback(), db, firecrawl, idOf() (+27 more)
+Cohesion: 0.06
+Nodes (41): answer, answerOrChat(), cache, cacheHit(), dateFallback(), db, firecrawl, idOf() (+33 more)
 
 ### Community 5 - "learn.js"
-Cohesion: 0.07
-Nodes (26): approve(), cache, captureFromReply(), { config }, db, forget(), forgetByStatus(), forgetRange() (+18 more)
+Cohesion: 0.13
+Nodes (15): approve(), cache, captureFromReply(), { config }, db, forget(), forgetByStatus(), forgetRange() (+7 more)
 
 ### Community 6 - "api.js"
 Cohesion: 0.06
@@ -127,7 +132,7 @@ Nodes (8): cache, { coverageStats, relativeTime }, db, knowledge, learn, { probe
 
 ### Community 7 - "knowledge.js"
 Cohesion: 0.08
-Nodes (40): annotateHeadingAnchors(), APP_ROOT, axios, buildCorpus(), cache, corpusBuiltOnMap, corpusCacheMap, docSlugFromFilename() (+32 more)
+Nodes (41): annotateHeadingAnchors(), APP_ROOT, axios, buildCorpus(), cache, corpusBuiltOnMap, corpusCacheMap, docSlugFromFilename() (+33 more)
 
 ### Community 8 - "guides.js"
 Cohesion: 0.11
@@ -139,7 +144,7 @@ Nodes (21): cachedCount(), cacheRow(), crypto, db, get(), getCachedAnswer(), isV
 
 ### Community 10 - "shop.js"
 Cohesion: 0.10
-Nodes (41): ALIASES, applyAliases(), axios, corpusText(), current(), DEFAULT_ECONOMY, directAnswer(), findItems() (+33 more)
+Nodes (42): ALIASES, applyAliases(), asksAboutPrice(), axios, corpusText(), current(), DEFAULT_ECONOMY, directAnswer() (+34 more)
 
 ### Community 11 - "serve.js"
 Cohesion: 0.12
@@ -170,8 +175,8 @@ Cohesion: 0.08
 Nodes (25): axios, dotenv, author, dependencies, axios, dotenv, sharp, @slack/bolt (+17 more)
 
 ### Community 18 - "programs.js"
-Cohesion: 0.08
-Nodes (36): assert, db, lookup, PROG, programs, { test }, addChannelToProgram(), all() (+28 more)
+Cohesion: 0.10
+Nodes (30): addChannelToProgram(), all(), { config }, db, forChannel(), fs, get(), helpChannelName() (+22 more)
 
 ### Community 19 - "program.js"
 Cohesion: 0.15
@@ -186,12 +191,12 @@ Cohesion: 0.15
 Nodes (16): buildIndex(), chunkSection(), chunkSections(), foldPlural(), log, score(), selectChunks(), selectContext() (+8 more)
 
 ### Community 22 - "answer.js"
-Cohesion: 0.06
-Nodes (65): answerOrChatPrompt(), answerRequest(), { config }, getAnswerOrChat(), getAnswerOrChatStream(), getGroundedAnswer(), helpChannelRef(), linkifyHelpChannel() (+57 more)
+Cohesion: 0.11
+Nodes (35): answerOrChatPrompt(), answerRequest(), { config }, getAnswerOrChat(), getAnswerOrChatStream(), getGroundedAnswer(), helpChannelRef(), linkifyHelpChannel() (+27 more)
 
-### Community 23 - "log.js"
-Cohesion: 0.06
-Nodes (32): { config }, debug(), error(), format(), info(), notify(), subscribers, warn() (+24 more)
+### Community 23 - "reply.js"
+Cohesion: 0.07
+Nodes (24): { config }, dedash(), finalize(), knowledge, log, makeStreamWriter(), plainDashes(), plainDashesInBlocks() (+16 more)
 
 ### Community 24 - "Test Questions for Intent Classifier"
 Cohesion: 0.18
@@ -257,9 +262,9 @@ Nodes (7): { firefox }, fs, main(), path, saveWebp(), SCREENSHOTS_DIR, sharp
 Cohesion: 0.25
 Nodes (7): args, fs, outputDir, outputDirOnly, outputPath, path, sharp
 
-### Community 40 - "firecrawl.js"
-Cohesion: 0.28
-Nodes (7): axios, { config }, getApiKey(), log, scrapeCache, scrapeUrl(), searchWeb()
+### Community 40 - "log.js"
+Cohesion: 0.16
+Nodes (15): axios, { config }, getApiKey(), log, scrapeCache, scrapeUrl(), searchWeb(), { config } (+7 more)
 
 ### Community 41 - "context.js"
 Cohesion: 0.20
@@ -297,6 +302,26 @@ Nodes (6): assert, { config }, db, learn, llm, { test, before, after }
 Cohesion: 0.40
 Nodes (4): assert, context, db, { test }
 
+### Community 53 - "llm.js"
+Cohesion: 0.22
+Nodes (17): axios, backoffMs(), complete(), completeAttempts(), completeStream(), describeError(), https, isRetryableError() (+9 more)
+
+### Community 54 - "vision.js"
+Cohesion: 0.28
+Nodes (8): analyzeImage(), axios, { complete }, { config }, fetchSlackImageAsDataUri(), log, { normalizeEmoji }, visionSystemPrompt()
+
+### Community 55 - "teachThread.js"
+Cohesion: 0.29
+Nodes (7): buildTranscript(), { config }, learn, llm, { MAX_TOKENS }, summarizeThread(), SYSTEM_PROMPT
+
+### Community 56 - "guides.test.js"
+Cohesion: 0.33
+Nodes (5): assert, db, guides, llm, { test, before, after }
+
+### Community 57 - "teachThread.test.js"
+Cohesion: 0.33
+Nodes (4): assert, llm, teachThread, { test, before, after }
+
 ## Knowledge Gaps
 - **484 isolated node(s):** `$schema`, `builder`, `dockerfilePath`, `startCommand`, `restartPolicyType` (+479 more)
   These have ≤1 connection - possible missing edges or undocumented components.
@@ -305,8 +330,8 @@ Nodes (4): assert, context, db, { test }
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `config` connect `config` to `commands.js`, `handlers.js`, `learn.js`, `api.js`, `guides.js`, `report.js`, `config.js`, `programs.js`, `answer.js`, `log.js`, `index.js`, `respond.js`, `respond.test.js`, `home.test.js`, `commands.test.js`, `handlers.test.js`, `firecrawl.js`, `stats.js`, `answer.test.js`, `learn.test.js`?**
-  _High betweenness centrality (0.032) - this node is a cross-community bridge._
+- **Why does `config` connect `config` to `commands.js`, `handlers.js`, `learn.js`, `api.js`, `guides.js`, `report.js`, `config.js`, `programs.js`, `answer.js`, `reply.js`, `index.js`, `respond.js`, `respond.test.js`, `home.test.js`, `commands.test.js`, `handlers.test.js`, `log.js`, `stats.js`, `answer.test.js`, `learn.test.js`, `vision.js`, `teachThread.js`?**
+  _High betweenness centrality (0.031) - this node is a cross-community bridge._
 - **Why does `isAdmin()` connect `home.js` to `commands.js`, `auth.js`, `config.js`?**
   _High betweenness centrality (0.002) - this node is a cross-community bridge._
 - **Why does `relativeTime()` connect `relativeTime` to `commands.js`, `api.js`, `stats.js`, `report.js`, `home.js`?**

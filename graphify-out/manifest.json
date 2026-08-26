@@ -655,13 +655,13 @@
     "semantic_hash": ""
   },
   "lib/shop.js": {
-    "mtime": 1787733548.8881972,
-    "ast_hash": "432c52baf8b0f0b047ea865eb6de0401",
+    "mtime": 1787733965.5696335,
+    "ast_hash": "911de16aa6f45430c107b4588b3d3610",
     "semantic_hash": ""
   },
   "lib/shop.test.js": {
-    "mtime": 1787733548.8988657,
-    "ast_hash": "e0bd52ad90899e8a9b392c01f5b4f7c5",
+    "mtime": 1787733965.5716908,
+    "ast_hash": "5d42dd09d64f0c537c982be4d0682008",
     "semantic_hash": ""
   },
   "lib/reply.test.js": {
