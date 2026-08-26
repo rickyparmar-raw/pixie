@@ -590,6 +590,178 @@ document.getElementById("prog-save")?.addEventListener("click", async () => {
 
   document.getElementById("program-modal").classList.remove("open");
   loadPrograms();
+  loadChannels();
+});
+
+/* ----------------------------------------------------- channels matrix -- */
+
+let allChannelsData = [];
+let channelSearchQuery = "";
+
+async function loadChannels() {
+  const data = await api("/api/channels");
+  if (!data || data.error) return;
+  allChannelsData = data;
+  renderChannels();
+  populateProgramSelect();
+}
+
+function populateProgramSelect() {
+  const sel = document.getElementById("chan-prog-select");
+  if (!sel) return;
+  const progs = Array.from(new Set(allChannelsData.map((c) => c.programId || "pixl")));
+  if (!progs.includes("pixl")) progs.unshift("pixl");
+  sel.innerHTML = progs
+    .map((p) => `<option value="${esc(p)}">${esc(p)}</option>`)
+    .join("");
+}
+
+function renderChannels() {
+  const grid = document.getElementById("channels-grid");
+  const countEl = document.getElementById("channels-count");
+  if (!grid) return;
+
+  const filtered = allChannelsData.filter((ch) => {
+    if (!channelSearchQuery) return true;
+    const q = channelSearchQuery.toLowerCase();
+    return (
+      (ch.channelId || "").toLowerCase().includes(q) ||
+      (ch.programName || "").toLowerCase().includes(q) ||
+      (ch.programId || "").toLowerCase().includes(q) ||
+      (ch.posture || "").toLowerCase().includes(q) ||
+      (ch.type || "").toLowerCase().includes(q)
+    );
+  });
+
+  if (countEl) countEl.textContent = `(${filtered.length})`;
+
+  if (filtered.length === 0) {
+    grid.innerHTML = `<div style="color:rgba(244,241,232,0.5);font-size:0.85rem">No channels matching "${esc(channelSearchQuery)}". Click "+ Add Channel" to configure one.</div>`;
+    return;
+  }
+
+  let html = "";
+  for (const ch of filtered) {
+    const isTicketDest = ch.isTicketDestination || ch.isHelpChannel;
+    const posture = ch.posture || "active";
+
+    html += `
+      <div class="channel-card">
+        <div class="channel-card-top">
+          <span class="channel-tag">#<code>${esc(ch.channelId)}</code></span>
+          <span class="channel-prog-badge">[${esc(ch.programName || ch.programId)}]</span>
+        </div>
+
+        <div class="channel-badges-row">
+          ${isTicketDest ? `<span class="badge-ticket-dest">🎫 Ticket Cards Destination</span>` : ""}
+          ${ch.isHelpChannel ? `<span class="badge-help-room">🆘 Primary Help Channel</span>` : ""}
+        </div>
+
+        <div class="channel-control-section">
+          <div class="control-label">💬 Reply in this channel:</div>
+          <div class="toggle-button-group">
+            <button class="toggle-option-btn ${posture === 'active' ? 'active-active' : ''}" 
+                    title="Pixie answers relevant questions automatically"
+                    onclick="window.setChannelPosture('${escJs(ch.channelId)}', '${escJs(ch.programId)}', 'active')">
+              🟢 Active
+            </button>
+            <button class="toggle-option-btn ${posture === 'passive' ? 'active-passive' : ''}" 
+                    title="Pixie only answers when @mentioned or pinged"
+                    onclick="window.setChannelPosture('${escJs(ch.channelId)}', '${escJs(ch.programId)}', 'passive')">
+              🟡 Mention Only
+            </button>
+            <button class="toggle-option-btn ${posture === 'muted' ? 'active-muted' : ''}" 
+                    title="Pixie stays completely silent in this channel"
+                    onclick="window.setChannelPosture('${escJs(ch.channelId)}', '${escJs(ch.programId)}', 'muted')">
+              🔴 Muted
+            </button>
+          </div>
+        </div>
+
+        <div class="channel-card-footer">
+          <div>
+            <span><b>${ch.msgCount || 0}</b> msgs</span> · 
+            <span><b>${ch.ticketCount || 0}</b> tickets</span>
+          </div>
+          <div class="channel-footer-actions">
+            ${!isTicketDest ? `<button class="btn btn-small" title="Make this channel the escalation card target" onclick="window.setTicketDest('${escJs(ch.channelId)}', '${escJs(ch.programId)}')">Set Ticket Target</button>` : ''}
+            <button class="btn btn-small btn-ghost" onclick="window.removeChannel('${escJs(ch.channelId)}', '${escJs(ch.programId)}')">Remove</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  grid.innerHTML = html;
+}
+
+window.setChannelPosture = async (channelId, programId, posture) => {
+  await api("/api/channels/toggle", {
+    method: "POST",
+    body: JSON.stringify({ channelId, programId, field: "posture", value: posture }),
+  });
+  loadChannels();
+  loadPrograms();
+};
+
+window.setTicketDest = async (channelId, programId) => {
+  await api("/api/channels/toggle", {
+    method: "POST",
+    body: JSON.stringify({ channelId, programId, field: "ticketDestination", value: true }),
+  });
+  loadChannels();
+  loadPrograms();
+};
+
+window.removeChannel = async (channelId, programId) => {
+  if (!confirm(`Remove channel #${channelId} from ${programId}?`)) return;
+  await api(`/api/channels/${programId}/${channelId}`, { method: "DELETE" });
+  loadChannels();
+  loadPrograms();
+};
+
+document.getElementById("channel-search-input")?.addEventListener("input", (e) => {
+  channelSearchQuery = (e.target.value || "").trim();
+  renderChannels();
+});
+
+document.getElementById("btn-add-channel")?.addEventListener("click", () => {
+  populateProgramSelect();
+  document.getElementById("channel-modal").classList.add("open");
+});
+
+document.getElementById("chan-cancel")?.addEventListener("click", () => {
+  document.getElementById("channel-modal").classList.remove("open");
+});
+
+document.getElementById("chan-save")?.addEventListener("click", async () => {
+  const channelId = document.getElementById("chan-id").value.trim();
+  const programId = document.getElementById("chan-prog-select").value;
+  const posture = document.getElementById("chan-posture").value;
+  const isTicketDest = document.getElementById("chan-is-ticket-dest").checked;
+  const isHelp = document.getElementById("chan-is-help").checked;
+
+  if (!channelId) {
+    alert("Channel ID is required!");
+    return;
+  }
+
+  await api("/api/channels", {
+    method: "POST",
+    body: JSON.stringify({ channelId, programId, isHelp: isHelp || isTicketDest }),
+  });
+
+  if (posture !== "active") {
+    await api("/api/channels/toggle", {
+      method: "POST",
+      body: JSON.stringify({ channelId, programId, field: "posture", value: posture }),
+    });
+  }
+
+  document.getElementById("channel-modal").classList.remove("open");
+  document.getElementById("chan-id").value = "";
+  loadChannels();
+  loadPrograms();
 });
 
 /* ------------------------------------------------------ tickets -- */
@@ -699,6 +871,7 @@ document.addEventListener("click", (e) => {
 
 function init() {
   connectSSE();
+  loadChannels();
   loadPrograms();
   loadTickets();
   loadQueue();

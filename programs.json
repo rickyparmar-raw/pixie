@@ -18,6 +18,12 @@
         "siteUrl": "https://pixl.hackclub.com/docs"
       },
       {
+        "name": "Pixl Shop",
+        "type": "pixl-shop",
+        "url": "https://server.pixl.hackclub.com/api/shop/items",
+        "siteUrl": "https://pixl.hackclub.com/shop"
+      },
+      {
         "name": "Quick Links",
         "type": "json-faq",
         "url": "file://./quick-links.json"
@@ -44,7 +50,9 @@
       }
     ],
     "guides": [
-      "submit-ysws-guidelines"
+      "submit-ysws-guidelines",
+      "create-hackpad",
+      "create-devboard"
     ],
     "links": {
       "docs": "https://pixl.hackclub.com/docs",

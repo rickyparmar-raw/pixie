@@ -45,6 +45,23 @@
   </header>
 
   <main class="bento">
+    <!-- Channel Control Center Matrix -->
+    <section class="panel" id="panel-channels">
+      <div class="channels-header-row">
+        <div>
+          <h2 class="panel-title">Channel Control Matrix <span class="title-sub" id="channels-count"></span></h2>
+          <div style="font-size:0.75rem;color:rgba(244,241,232,0.5);margin-top:2px;">Manage where Pixie auto-replies, sits in passive/mention-only mode, or routes support ticket cards</div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <div class="channels-search-bar">
+            <input type="text" id="channel-search-input" placeholder="Filter channels by ID, name, or role...">
+          </div>
+          <button class="btn btn-small" id="btn-add-channel">+ Add Channel</button>
+        </div>
+      </div>
+      <div class="channels-grid" id="channels-grid"></div>
+    </section>
+
     <!-- Programs Fleet Control -->
     <section class="panel" id="panel-programs">
       <h2 class="panel-title">Programs Fleet <button class="btn btn-small" id="btn-add-program">+ Add Program</button></h2>
@@ -134,6 +151,37 @@
         <button class="btn btn-ghost" id="edit-cancel">Cancel</button>
       </div>
     </div>
+  </div>
+
+  <!-- Channel modal -->
+  <div class="modal-overlay" id="channel-modal">
+    <div class="modal">
+      <h3 id="channel-modal-title">Add Channel to Control Center</h3>
+      <label>Slack Channel ID (e.g. C0B6STY9G5N)</label>
+      <input type="text" id="chan-id" placeholder="e.g. C0B6STY9G5N">
+      <label>Program / Scope</label>
+      <select id="chan-prog-select"></select>
+      <label>Initial Posture</label>
+      <select id="chan-posture">
+        <option value="active">🟢 Active (Auto-Reply to Questions)</option>
+        <option value="passive">🟡 Passive (Mention & DM Only)</option>
+        <option value="muted">🔴 Muted (Silent)</option>
+      </select>
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="chan-is-ticket-dest"> <span>🎫 Set as ticket card escalation destination</span>
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+          <input type="checkbox" id="chan-is-help"> <span>🆘 Set as primary help channel</span>
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="chan-save">Save Channel</button>
+        <button class="btn btn-ghost" id="chan-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Program modal -->
   <div class="modal-overlay" id="program-modal">
     <div class="modal">

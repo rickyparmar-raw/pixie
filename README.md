@@ -296,9 +296,9 @@ Pixie needs its own Slack app (separate from Pixorpheus), running in **Socket Mo
 2. **OAuth scopes:** `chat:write`, `channels:history`, `groups:history`, `channels:join`,
    `app_mentions:read`, `reactions:read`, `reactions:write`, `commands`, `im:history`,
    `im:write`, `channels:read`, `groups:read`, `files:read`.
-   Slash commands to register: `/pixie`, `/pixie-sources`, `/pixie-stats`, `/pixie-gaps`,
-   `/pixie-teach`, `/pixie-pending`, `/pixie-approve`, `/pixie-forget`, `/pixie-reload`,
-   `/pixie-report`.
+    Slash commands to register: `/pixie`, `/pixie-guide`, `/guide`, `/pixie-sources`, `/pixie-stats`, `/pixie-gaps`,
+    `/pixie-teach`, `/pixie-pending`, `/pixie-approve`, `/pixie-forget`, `/pixie-reload`,
+    `/pixie-report`, `/pixie-program`.
 3. **Socket Mode:** enable it, generate an App-Level Token with the `connections:write` scope (`xapp-...`).
 4. **Event subscriptions:** enable events, subscribe to `message.channels`, `message.groups`,
    `message.im`, `app_mention`, `reaction_added`, `reaction_removed`, `app_home_opened`,
