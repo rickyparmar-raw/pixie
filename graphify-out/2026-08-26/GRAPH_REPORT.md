@@ -1,16 +1,16 @@
 # Graph Report - pixie  (2026-08-26)
 
 ## Corpus Check
-- 87 files · ~157,064 words
+- 87 files · ~157,694 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1139 nodes · 1972 edges · 58 communities (56 shown, 2 thin omitted)
+- 1139 nodes · 1973 edges · 58 communities (56 shown, 2 thin omitted)
 - Extraction: 79% EXTRACTED · 21% INFERRED · 0% AMBIGUOUS · INFERRED: 405 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `ed0b4f15`
+- Built from commit: `3f4ca31d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -143,8 +143,8 @@ Cohesion: 0.10
 Nodes (21): cachedCount(), cacheRow(), crypto, db, get(), getCachedAnswer(), isVolatile(), keyFor() (+13 more)
 
 ### Community 10 - "shop.js"
-Cohesion: 0.10
-Nodes (42): ALIASES, applyAliases(), asksAboutPrice(), axios, corpusText(), current(), DEFAULT_ECONOMY, directAnswer() (+34 more)
+Cohesion: 0.13
+Nodes (37): ALIASES, applyAliases(), asksAboutPrice(), axios, corpusText(), current(), DEFAULT_ECONOMY, directAnswer() (+29 more)
 
 ### Community 11 - "serve.js"
 Cohesion: 0.12
@@ -187,8 +187,8 @@ Cohesion: 0.15
 Nodes (15): crypto, getSession(), handleCallback(), { isAdmin }, log, parseCookies(), requireAdmin(), requireSession() (+7 more)
 
 ### Community 21 - "retrieve.js"
-Cohesion: 0.15
-Nodes (16): buildIndex(), chunkSection(), chunkSections(), foldPlural(), log, score(), selectChunks(), selectContext() (+8 more)
+Cohesion: 0.11
+Nodes (21): buildIndex(), chunkSection(), chunkSections(), foldPlural(), log, score(), selectChunks(), selectContext() (+13 more)
 
 ### Community 22 - "answer.js"
 Cohesion: 0.11

@@ -1,16 +1,16 @@
 # Graph Report - pixie  (2026-08-26)
 
 ## Corpus Check
-- 87 files · ~157,694 words
+- 87 files · ~158,756 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1139 nodes · 1973 edges · 58 communities (56 shown, 2 thin omitted)
-- Extraction: 79% EXTRACTED · 21% INFERRED · 0% AMBIGUOUS · INFERRED: 405 edges (avg confidence: 0.5)
+- 1141 nodes · 1985 edges · 54 communities (52 shown, 2 thin omitted)
+- Extraction: 80% EXTRACTED · 20% INFERRED · 0% AMBIGUOUS · INFERRED: 406 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3f4ca31d`
+- Built from commit: `7876e42a`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -67,40 +67,36 @@
 - learn.test.js
 - context.test.js
 - rateLimit.js
-- llm.js
-- vision.js
 - teachThread.js
-- guides.test.js
-- teachThread.test.js
 
 ## God Nodes (most connected - your core abstractions)
 1. `handle()` - 61 edges
 2. `now()` - 33 edges
 3. `config` - 29 edges
 4. `register()` - 18 edges
-5. `api()` - 15 edges
-6. `directAnswer()` - 14 edges
+5. `directAnswer()` - 16 edges
+6. `api()` - 15 edges
 7. `relativeTime()` - 13 edges
 8. `esc()` - 13 edges
 9. `init()` - 11 edges
 10. `isAdmin()` - 10 edges
 
 ## Surprising Connections (you probably didn't know these)
-- `startBot()` --calls--> `resolveBotUserId()`  [EXTRACTED]
-  index.js → lib/config.js
 - `startBot()` --calls--> `validate()`  [EXTRACTED]
   index.js → lib/config.js
 - `runAskCli()` --calls--> `validate()`  [EXTRACTED]
   index.js → lib/config.js
+- `startBot()` --calls--> `resolveBotUserId()`  [EXTRACTED]
+  index.js → lib/config.js
 - `streamCompletion()` --indirect_call--> `delta()`  [INFERRED]
   lib/llm.js → lib/report.js
-- `analyzeImage()` --calls--> `normalizeEmoji()`  [EXTRACTED]
-  lib/vision.js → lib/answer.js
+- `looksLikeHelpRequest()` --calls--> `looksLikeCode()`  [EXTRACTED]
+  lib/intent.js → lib/answer.js
 
 ## Import Cycles
 - None detected.
 
-## Communities (58 total, 2 thin omitted)
+## Communities (54 total, 2 thin omitted)
 
 ### Community 0 - "llm.test.js"
 Cohesion: 0.17
@@ -144,7 +140,7 @@ Nodes (21): cachedCount(), cacheRow(), crypto, db, get(), getCachedAnswer(), isV
 
 ### Community 10 - "shop.js"
 Cohesion: 0.13
-Nodes (37): ALIASES, applyAliases(), asksAboutPrice(), axios, corpusText(), current(), DEFAULT_ECONOMY, directAnswer() (+29 more)
+Nodes (39): ALIASES, amountAnswer(), applyAliases(), asksAboutPrice(), axios, corpusText(), current(), DEFAULT_ECONOMY (+31 more)
 
 ### Community 11 - "serve.js"
 Cohesion: 0.12
@@ -160,7 +156,7 @@ Nodes (41): answer, answeredFrom(), classifyGaps(), collect(), { config }, { cov
 
 ### Community 14 - "config.js"
 Cohesion: 0.10
-Nodes (24): adminUserIds, collectHcaiKeys(), collectZenKeys(), coolingUntil, faqChannels, hcaiApiKeys, hcaiCoolingUntil, intentBaseUrl (+16 more)
+Nodes (26): adminUserIds, collectHcaiKeys(), collectZenKeys(), coolingUntil, faqChannels, hcaiApiKeys, hcaiCoolingUntil, intentBaseUrl (+18 more)
 
 ### Community 15 - "Visual Tutorial System for Pixie"
 Cohesion: 0.07
@@ -191,8 +187,8 @@ Cohesion: 0.11
 Nodes (21): buildIndex(), chunkSection(), chunkSections(), foldPlural(), log, score(), selectChunks(), selectContext() (+13 more)
 
 ### Community 22 - "answer.js"
-Cohesion: 0.11
-Nodes (35): answerOrChatPrompt(), answerRequest(), { config }, getAnswerOrChat(), getAnswerOrChatStream(), getGroundedAnswer(), helpChannelRef(), linkifyHelpChannel() (+27 more)
+Cohesion: 0.06
+Nodes (65): answerOrChatPrompt(), answerRequest(), { config }, getAnswerOrChat(), getAnswerOrChatStream(), getGroundedAnswer(), helpChannelRef(), linkifyHelpChannel() (+57 more)
 
 ### Community 23 - "reply.js"
 Cohesion: 0.07
@@ -207,8 +203,8 @@ Cohesion: 0.20
 Nodes (9): build, builder, dockerfilePath, deploy, numReplicas, restartPolicyMaxRetries, restartPolicyType, startCommand (+1 more)
 
 ### Community 26 - "index.js"
-Cohesion: 0.14
-Nodes (19): { App }, commands, { config, validate, resolveBotUserId }, db, guides, handlers, knowledge, log (+11 more)
+Cohesion: 0.15
+Nodes (17): { App }, commands, { config, validate, resolveBotUserId }, db, guides, handlers, knowledge, log (+9 more)
 
 ### Community 27 - "deploy"
 Cohesion: 0.20
@@ -302,25 +298,9 @@ Nodes (6): assert, { config }, db, learn, llm, { test, before, after }
 Cohesion: 0.40
 Nodes (4): assert, context, db, { test }
 
-### Community 53 - "llm.js"
-Cohesion: 0.22
-Nodes (17): axios, backoffMs(), complete(), completeAttempts(), completeStream(), describeError(), https, isRetryableError() (+9 more)
-
-### Community 54 - "vision.js"
-Cohesion: 0.28
-Nodes (8): analyzeImage(), axios, { complete }, { config }, fetchSlackImageAsDataUri(), log, { normalizeEmoji }, visionSystemPrompt()
-
 ### Community 55 - "teachThread.js"
-Cohesion: 0.29
-Nodes (7): buildTranscript(), { config }, learn, llm, { MAX_TOKENS }, summarizeThread(), SYSTEM_PROMPT
-
-### Community 56 - "guides.test.js"
-Cohesion: 0.33
-Nodes (5): assert, db, guides, llm, { test, before, after }
-
-### Community 57 - "teachThread.test.js"
-Cohesion: 0.33
-Nodes (4): assert, llm, teachThread, { test, before, after }
+Cohesion: 0.15
+Nodes (11): buildTranscript(), { config }, learn, llm, { MAX_TOKENS }, summarizeThread(), SYSTEM_PROMPT, assert (+3 more)
 
 ## Knowledge Gaps
 - **484 isolated node(s):** `$schema`, `builder`, `dockerfilePath`, `startCommand`, `restartPolicyType` (+479 more)
@@ -330,11 +310,11 @@ Nodes (4): assert, llm, teachThread, { test, before, after }
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `config` connect `config` to `commands.js`, `handlers.js`, `learn.js`, `api.js`, `guides.js`, `report.js`, `config.js`, `programs.js`, `answer.js`, `reply.js`, `index.js`, `respond.js`, `respond.test.js`, `home.test.js`, `commands.test.js`, `handlers.test.js`, `log.js`, `stats.js`, `answer.test.js`, `learn.test.js`, `vision.js`, `teachThread.js`?**
-  _High betweenness centrality (0.031) - this node is a cross-community bridge._
-- **Why does `isAdmin()` connect `home.js` to `commands.js`, `auth.js`, `config.js`?**
+- **Why does `config` connect `config` to `commands.js`, `handlers.js`, `learn.js`, `api.js`, `guides.js`, `report.js`, `config.js`, `programs.js`, `answer.js`, `reply.js`, `index.js`, `respond.js`, `respond.test.js`, `home.test.js`, `commands.test.js`, `handlers.test.js`, `log.js`, `stats.js`, `answer.test.js`, `learn.test.js`, `teachThread.js`?**
+  _High betweenness centrality (0.032) - this node is a cross-community bridge._
+- **Why does `complete()` connect `answer.js` to `handlers.js`?**
   _High betweenness centrality (0.002) - this node is a cross-community bridge._
-- **Why does `relativeTime()` connect `relativeTime` to `commands.js`, `api.js`, `stats.js`, `report.js`, `home.js`?**
+- **Why does `isAdmin()` connect `home.js` to `commands.js`, `auth.js`, `config.js`?**
   _High betweenness centrality (0.002) - this node is a cross-community bridge._
 - **Are the 15 inferred relationships involving `register()` (e.g. with `commands.js` and `approveCommand()`) actually correct?**
   _`register()` has 15 INFERRED edges - model-reasoned connections that need verification._
