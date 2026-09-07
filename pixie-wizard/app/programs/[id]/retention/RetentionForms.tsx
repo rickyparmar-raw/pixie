@@ -9,8 +9,7 @@ const initialState: ActionState = { error: null };
 
 const FIELDS: Array<[string, string, number]> = [
   ["contextDays", "Short-term context", 30],
-  ["ticketsDays", "Tickets + timeline", 180],
-  ["notesDays", "Internal notes", 180],
+  ["ticketsDays", "Tickets + timeline + notes", 180],
   ["tracesDays", "AI traces/gaps", 30],
   ["analyticsDays", "Analytics", 365],
   ["auditDays", "Audit (min 365, platform floor)", 365],

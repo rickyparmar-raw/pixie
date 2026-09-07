@@ -21,7 +21,9 @@ sees it). If Core is unreachable, programs still activate locally and sync
 
 Program pages (`/programs/[id]`) hold settings, sources, the ticket queue,
 ticket detail (claim/assign/resolve/reopen/snooze/duplicate, reply-as-program,
-internal notes, timeline), and the audit trail.
+internal notes, timeline, copilot drafts, macro send), knowledge review,
+FAQ gaps, macros, helpers + expertise, analytics, incidents, audit, and
+retention (policy + confirmed sweep).
 
 ## Legacy dedicated path
 
@@ -31,11 +33,18 @@ sweep (`sweepTrials.ts` — hosted rows suspend the tenant and never reach
 Railway deletion). The dedicated onboarding steps remain behind the legacy
 path in `/wizard`. Do not delete Railway pool code until migration is proven.
 
+## Trial lifecycle
+
+Dedicated trials: 14-day expiry → pause (7-day reclaim) → delete with secret
+scrub. Hosted trials never touch Railway: expiry suspends the tenant,
+reclaim archives it. The sweeper branches on `deployment_mode`, proven by
+tests asserting zero Railway calls for hosted rows.
+
 ## Database
 
 Supabase schema in `supabase/schema.sql`, migrations in
 `supabase/migrations/` (001 fleet config, 002 hosted programs, 003 trial
-deployment mode). `hosted_programs` + `hosted_program_channels` carry
+deployment mode, 004 deny-by-default RLS backstop). `hosted_programs` + `hosted_program_channels` carry
 workspace identity in every uniqueness boundary; channel claims are atomic
 (`UNIQUE(workspace, channel)`), so double-submit Activate collapses and
 channel hijacking fails with the owning program named.

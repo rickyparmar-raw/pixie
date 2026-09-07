@@ -31,6 +31,19 @@ programs keep serving Slack even while Wizard is down. The Wizard talks to
 Core over the token-authenticated `/internal/v1/*` API (`PIXIE_INTERNAL_TOKEN`,
 server-side only).
 
+## Support flow
+
+A help-channel question becomes a ticket: grounded answer when the docs cover
+it (with citations), human escalation with a branded thread acknowledgement
+otherwise. Helpers claim/assign/resolve/reopen/snooze/mark-duplicate from
+Slack cards or the Wizard workspace, reply as the program identity, keep
+internal notes, and use copilot drafts that never auto-send. Resolved tickets
+can be proposed as verified knowledge (approved facts re-enter the corpus);
+recurring misses cluster into FAQ gaps with approval-gated drafts. Sensitive
+categories (money, safety, …) skip the AI entirely. See `MIGRATION.md` for
+dedicated→shared moves, `DEPLOYMENT.md` for operations, `SECURITY.md` for the
+threat model.
+
 The rest of this file is how the internals work, and is worth reading when you want to change behaviour rather than just deploy it.
 
 ## How it works
