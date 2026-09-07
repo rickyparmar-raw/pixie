@@ -77,6 +77,54 @@ export async function coreTicketNote(ticketId: number, payload: Record<string, u
   return body;
 }
 
+export async function coreKnowledgeCandidates(programId: string, status = "candidate"): Promise<unknown[]> {
+  const { status: code, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/knowledge/candidates?status=${encodeURIComponent(status)}`);
+  if (code !== 200) throw new Error((body as { error?: string })?.error || `candidates lookup failed (${code})`);
+  return body as unknown[];
+}
+
+export async function coreKnowledgePropose(programId: string, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/knowledge/candidates`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `candidate proposal failed (${status})`);
+  return body;
+}
+
+export async function coreKnowledgeReview(candidateId: number, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/knowledge/candidates/${candidateId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `candidate review failed (${status})`);
+  return body;
+}
+
+export async function coreGapClusters(programId: string): Promise<{ clusters: unknown[] }> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/gaps/clusters`);
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `gap clusters failed (${status})`);
+  return body as { clusters: unknown[] };
+}
+
+export async function coreFaqPropose(programId: string, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/gaps/clusters`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `FAQ proposal failed (${status})`);
+  return body;
+}
+
+export async function coreCopilot(action: string, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/copilot/${action}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `copilot ${action} failed (${status})`);
+  return body;
+}
+
 export interface CoreChannel {
   id: string;
   name: string;

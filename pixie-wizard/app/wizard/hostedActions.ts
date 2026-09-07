@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { creatorEligible, programSlugFor, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
 import { getHostedProgram, updateHostedProgram, logHostedAudit } from "@/lib/hostedPrograms";
-import { syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote } from "@/lib/pixieCore";
+import { syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot } from "@/lib/pixieCore";
 import type { ActionState } from "@/app/wizard/actions";
 import type { DocSource } from "@/lib/types";
 
@@ -281,5 +281,94 @@ export async function hostedTicketNote(_prev: ActionState, formData: FormData): 
     return { error: err instanceof Error ? err.message : "Note failed." };
   }
   revalidatePath(`/programs/${programId}/tickets/${ticketId}`);
+  return { error: null };
+}
+
+// Helper copilot passthrough. Returns copilot data (draft/summary/verdicts)
+// for client-side display — never sends anything to Slack.
+export async function hostedCopilot(input: {
+  programId: string;
+  ticketId?: number;
+  action: "draft" | "improve" | "summarize" | "factcheck" | "similar" | "ask";
+  question?: string;
+  text?: string;
+  threadTs?: string;
+}): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  const session = await getSession();
+  if (!session?.slackId) return { ok: false, error: "Link your Slack account to use copilot." };
+  try {
+    const data = await coreCopilot(input.action, {
+      programId: input.programId,
+      actorId: session.slackId,
+      ticketId: input.ticketId,
+      question: input.question,
+      text: input.text,
+      threadTs: input.threadTs,
+    });
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Copilot failed." };
+  }
+}
+
+// Knowledge review: propose from a resolved ticket, approve/edit/reject a
+// candidate, propose an FAQ draft from a gap cluster. Approval is the only
+// path into the corpus.
+export async function hostedKnowledgePropose(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await getSession();
+  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const ticketId = Number(formData.get("ticketId") ?? "");
+  if (!programId || !ticketId) return { error: "Pick a resolved ticket first." };
+  try {
+    const { coreKnowledgePropose } = await import("@/lib/pixieCore");
+    await coreKnowledgePropose(programId, { actorId: session.slackId, ticketId });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Proposal failed." };
+  }
+  revalidatePath(`/programs/${programId}/knowledge`);
+  return { error: null };
+}
+
+export async function hostedCandidateReview(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await getSession();
+  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const candidateId = Number(formData.get("candidateId") ?? "");
+  const reviewAction = String(formData.get("reviewAction") ?? "");
+  if (!programId || !candidateId || !["approve", "reject"].includes(reviewAction)) {
+    return { error: "Missing review fields." };
+  }
+  try {
+    const { coreKnowledgeReview } = await import("@/lib/pixieCore");
+    await coreKnowledgeReview(candidateId, {
+      actorId: session.slackId,
+      action: reviewAction,
+      edits: {
+        question: String(formData.get("editQuestion") ?? "").trim() || undefined,
+        answer: String(formData.get("editAnswer") ?? "").trim() || undefined,
+        category: String(formData.get("editCategory") ?? "").trim() || undefined,
+      },
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Review failed." };
+  }
+  revalidatePath(`/programs/${programId}/knowledge`);
+  return { error: null };
+}
+
+export async function hostedFaqPropose(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await getSession();
+  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const question = String(formData.get("faqQuestion") ?? "").trim();
+  if (!programId || !question) return { error: "Missing FAQ question." };
+  try {
+    const { coreFaqPropose } = await import("@/lib/pixieCore");
+    await coreFaqPropose(programId, { actorId: session.slackId, question });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "FAQ proposal failed." };
+  }
+  revalidatePath(`/programs/${programId}/gaps`);
   return { error: null };
 }

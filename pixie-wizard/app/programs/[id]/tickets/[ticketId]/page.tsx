@@ -4,6 +4,7 @@ import { getSession } from "@/lib/session";
 import { getHostedProgram } from "@/lib/hostedPrograms";
 import { coreTicketDetail } from "@/lib/pixieCore";
 import { TicketActions } from "./TicketActions";
+import { CopilotPanel } from "./CopilotPanel";
 
 interface TicketDetail {
   ticket: {
@@ -75,6 +76,10 @@ export default async function TicketPage({
 
       <div className="mt-6">
         <TicketActions programId={id} ticketId={ticket.id} />
+      </div>
+
+      <div className="mt-6">
+        <CopilotPanel programId={id} ticketId={ticket.id} question={ticket.question} threadTs={ticket.thread_ts} />
       </div>
 
       <div className="mt-6 rounded-lg border border-line bg-panel p-6">

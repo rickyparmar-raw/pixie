@@ -23,6 +23,11 @@ export interface SupabaseFake {
   tables: Record<string, Row[]>;
 }
 
+export interface QueryResult {
+  data: Row | null;
+  error?: { code: string; message?: string };
+}
+
 export interface QueryBuilder {
   select: (...args: unknown[]) => QueryBuilder;
   insert: (values: unknown) => QueryBuilder;
@@ -32,9 +37,9 @@ export interface QueryBuilder {
   in: (col: string, values: unknown[]) => QueryBuilder;
   order: (...args: unknown[]) => QueryBuilder;
   limit: (...args: unknown[]) => QueryBuilder;
-  maybeSingle: () => Promise<{ data: Row | null; error?: { code: string } }>;
-  single: () => Promise<{ data: Row | null; error?: { code: string; message: string } }>;
-  then?: unknown;
+  maybeSingle: () => Promise<QueryResult>;
+  single: () => Promise<QueryResult>;
+  then: (resolve: (v: QueryResult) => void) => Promise<QueryResult>;
 }
 
 export function createSupabaseFake(seed: Record<string, Row[]> = {}): SupabaseFake {
@@ -135,7 +140,7 @@ export function createSupabaseFake(seed: Record<string, Row[]> = {}): SupabaseFa
           return { data: found };
         },
         // postgrest-js builders are thenable: bare `await insert(...)` executes.
-        then: (resolve: (v: { data: null; error?: { code: string } }) => void) => {
+        then: (resolve: (v: QueryResult) => void) => {
           if (pendingInsert) resolve(runInsert());
           else if (pendingUpdate) resolve(runUpdate());
           else if (isDelete) resolve(runDelete());
