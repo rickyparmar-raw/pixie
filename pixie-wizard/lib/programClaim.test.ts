@@ -90,3 +90,63 @@ test("findChannelConflicts discovers taken channels before claim", async () => {
   expect(noConflict).toBeNull();
 });
 
+/* -------------------------------------------------------------------------- */
+/* Concurrency: the pre-check alone is not the guarantee — a real unique      */
+/* constraint at the DB layer is. These prove the constraint exists and that  */
+/* the application code correctly surfaces a genuine race rather than        */
+/* silently reporting {ok: true} for a channel it lost.                      */
+/* -------------------------------------------------------------------------- */
+
+test("the database itself rejects a duplicate (workspace_id, channel_id) row — not just the application pre-check", async () => {
+  const { query } = await import("./db");
+  const { insertHostedProgram: insert } = await import("./programClaim");
+  await insert({ id: "race-a", workspaceId: "T_RACE", programName: "Race A", ownerHcaId: "H1", ownerSlackId: null });
+  await insert({ id: "race-b", workspaceId: "T_RACE", programName: "Race B", ownerHcaId: "H2", ownerSlackId: null });
+
+  // Bypass claimHostedChannels' own guard entirely — insert directly, the way
+  // a second concurrent transaction would land after this one already
+  // committed. If this only worked because of the application-level
+  // pre-check, it would succeed here too. It must not.
+  await query(
+    `insert into hosted_program_channels (workspace_id, channel_id, program_id, kind) values ($1, $2, $3, 'help')`,
+    ["T_RACE", "C-race", "race-a"],
+  );
+  await expect(
+    query(
+      `insert into hosted_program_channels (workspace_id, channel_id, program_id, kind) values ($1, $2, $3, 'help')`,
+      ["T_RACE", "C-race", "race-b"],
+    ),
+  ).rejects.toMatchObject({ code: "23505" });
+});
+
+test("two truly concurrent claimHostedChannels calls for the same channel: exactly one wins, the loser reports the real owner", async () => {
+  const { insertHostedProgram: insert, claimHostedChannels: claim } = await import("./programClaim");
+  await insert({ id: "race-c", workspaceId: "T_RACE2", programName: "Race C", ownerHcaId: "H1", ownerSlackId: null });
+  await insert({ id: "race-d", workspaceId: "T_RACE2", programName: "Race D", ownerHcaId: "H2", ownerSlackId: null });
+
+  // Fired together (no await between them) so both start their pre-check
+  // pass before either has inserted anything — the scenario the pre-check
+  // alone cannot resolve, and only the database's own constraint can.
+  const [resC, resD] = await Promise.all([
+    claim({ workspaceId: "T_RACE2", programId: "race-c", channels: [{ id: "C-race2", kind: "help" }], claimedByHcaId: "H1" }),
+    claim({ workspaceId: "T_RACE2", programId: "race-d", channels: [{ id: "C-race2", kind: "help" }], claimedByHcaId: "H2" }),
+  ]);
+
+  const results = [resC, resD];
+  const winners = results.filter((r) => r.ok);
+  const losers = results.filter((r) => !r.ok) as Array<{ ok: false; conflictChannel: string; ownerProgramId: string | null }>;
+
+  expect(winners).toHaveLength(1);
+  expect(losers).toHaveLength(1);
+  expect(losers[0].conflictChannel).toBe("C-race2");
+  // The loser must report whoever actually holds the channel now — not null,
+  // not itself, and not a stale pre-check snapshot.
+  const { query } = await import("./db");
+  const { rows } = await query<{ program_id: string }>(
+    `select program_id from hosted_program_channels where workspace_id = $1 and channel_id = $2`,
+    ["T_RACE2", "C-race2"],
+  );
+  expect(rows).toHaveLength(1);
+  expect(losers[0].ownerProgramId).toBe(rows[0].program_id);
+});
+
