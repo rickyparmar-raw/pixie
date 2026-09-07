@@ -1,6 +1,37 @@
 # Pixie
 
-A Slack bot that answers questions grounded in the Pixl FAQ and docs, across whichever channels it's configured to watch (e.g. `#pixl-help`, `#pixl`). It's a separate app from [Pixorpheus](../pixorpheus) — pixie only answers questions from documentation; it does not touch tickets, claiming, or resolving. Both bots can run in the same channel at once.
+A Slack bot that answers questions grounded in your program's own docs and FAQ, across whichever channels it's configured to watch. It only answers from documentation — it doesn't touch tickets, claiming, or resolving, so it can share a channel with a ticket bot.
+
+Pixie runs the same way for any program: one deployment reads its whole identity — name, commands, channels, docs, dates — from configuration. Nothing in this repo needs editing to make it your bot.
+
+**→ [SELF-HOST.md](./SELF-HOST.md) — fork it and run your own, about twenty minutes.**
+
+## Deployment modes
+
+**HOSTED_SHARED (default for new programs).** One central Pixie process and one
+shared `@Pixie` Slack app serve many programs. A new program is *configuration*,
+not a deployment: pick help/organizer channels in Pixie Wizard, tune behavior,
+activate — no Slack app, no `xoxb`/`xapp` tokens, no model keys, no Railway
+project. Channel → program resolution keys on workspace + channel, caches and
+knowledge are strictly tenant-isolated, and support replies send under each
+program's support identity (falling back to plain Pixie when Slack rejects
+customization).
+
+**DEDICATED_LEGACY.** Existing Wizard-provisioned isolated instances keep
+working unchanged: own container, own Slack app, own SQLite file. Use
+`PIXIE_PROGRAMS_JSON` as before.
+
+**SELF_HOSTED.** Fork and deploy yourself per SELF-HOST.md; same engine, your
+infrastructure.
+
+Hosted authoritative state lives in the control plane (Wizard/Supabase);
+Pixie-local SQLite keeps ephemeral cache, source-cache fallback, and
+short-term thread context, plus last-synced program config — so configured
+programs keep serving Slack even while Wizard is down. The Wizard talks to
+Core over the token-authenticated `/internal/v1/*` API (`PIXIE_INTERNAL_TOKEN`,
+server-side only).
+
+The rest of this file is how the internals work, and is worth reading when you want to change behaviour rather than just deploy it.
 
 ## How it works
 
@@ -147,9 +178,15 @@ Approving or forgetting clears the answer cache, so the new answer takes effect 
 
 ## Slash commands
 
+Command names come from `PIXIE_BOT_SLUG`, so the table below is what the default
+deployment gets. Set the slug to `sol` and every command becomes `/sol-…`. The
+listeners and the Slack manifest are generated from the same value
+(`lib/brand.js`, `scripts/manifest.js`), which is what stops them drifting apart.
+
 | Command | Who | Description |
 |---|---|---|
 | `/pixie [question]` | anyone | Private answer — help without cluttering the channel |
+| `/pixie-guide [name]` | anyone | Interactive step-by-step walkthrough guides |
 | `/pixie-sources` | anyone | What's loaded and when it last refreshed |
 | `/pixie-stats` | anyone | Answer rate, cache hits, feedback, latency |
 | `/pixie-gaps` | helpers | Top questions the docs didn't cover |
@@ -159,6 +196,7 @@ Approving or forgetting clears the answer cache, so the new answer takes effect 
 | `/pixie-approve <n>` | helpers | Start using a captured answer |
 | `/pixie-forget <target>` | helpers | Drop answer(s) by id (`<n>`), range (`<from>-<to>`), `pending`, or `all` |
 | `/pixie-reload` | helpers | Re-fetch the docs and clear the cache, no restart |
+| `/pixie-program` | helpers | Manage program channels and posture |
 
 "helpers" means a user ID listed in `PIXIE_ADMIN_USER_IDS`. With that unset the helper
 commands refuse everyone — they change what pixie tells people, so they fail closed.
@@ -194,9 +232,9 @@ a date that isn't listed, so an unconfigured file means it declines rather than 
 
 ## Knowledge base — adding docs
 
-Everything pixie knows lives in [`sources.json`](./sources.json). Each entry is fetched fresh on startup and every `REFRESH_INTERVAL_MIN` minutes (default 30). If a source fails to fetch, pixie keeps serving the last version it successfully loaded instead of dropping it.
+What the bot knows comes from its program registry. Set `PIXIE_PROGRAMS_JSON` and it's read from there (see [SELF-HOST.md](./SELF-HOST.md)); leave it unset and it falls back to [`programs.json`](./programs.json), then to [`sources.json`](./sources.json) for a single-program deployment. Each source is fetched fresh on startup and every `REFRESH_INTERVAL_MIN` minutes (default 30). If a source fails to fetch, pixie keeps serving the last version it successfully loaded, from the volume, instead of dropping it.
 
-To add a new doc, add an entry:
+A source entry:
 
 ```json
 { "name": "Getting Started Guide", "type": "gdoc", "url": "https://docs.google.com/document/d/<id>/export?format=txt" }
@@ -206,9 +244,13 @@ Supported `type`s:
 
 | Type | What it expects | Notes |
 |---|---|---|
-| `json-faq` | A URL to the landing site's dictionary JSON | Extracts `faq.items[].question` / `.answer` |
+| `json-faq` | Question/answer pairs | Either a `url` returning `faq.items[]`, or inline `content` — an array of `{question, answer}`, or the same wrapped in `{faq:{items}}` |
 | `gdoc` | A public Google Doc export URL (`.../export?format=txt`) | Doc must be shared as "anyone with the link can view" |
-| `url` | Any web page or raw text/markdown URL | HTML is stripped to plain text |
+| `url` | Any web page or raw text/markdown URL | HTML is stripped to plain text; subpages on the same origin are followed |
+| `github-dir` | A GitHub contents API directory of markdown | Add `siteUrl` to read the rendered pages instead — repo markdown often carries unfilled `{{placeholders}}` |
+| `text` | Inline prose in `content` | For rules and notes that live nowhere else |
+
+Inline `content` is what makes one shared image serve any program: a FAQ typed into configuration travels with it, needing no file in the repo and no URL to fetch.
 
 No embeddings or vector DB — the whole corpus is small enough to pass straight into the model's context, which keeps answers exact and avoids retrieval mismatches. If the corpus grows large enough that this stops being cheap, that's the point to revisit.
 
@@ -252,23 +294,24 @@ a general search box in a busy channel.
 
 Every variable is read and validated once at startup by [`lib/config.js`](./lib/config.js) —
 a missing required value fails fast with a list of what's absent, rather than degrading into
-silent fallbacks at answer time.
+silent fallbacks at answer time. [`.env.example`](./.env.example) is the annotated version of
+this table.
 
 | Variable | Required | Description |
 |---|---|---|
-| `SLACK_BOT_TOKEN` | yes | Bot token for pixie's own Slack app (`xoxb-...`) |
+| `SLACK_BOT_TOKEN` | yes | Bot token for the bot's own Slack app (`xoxb-...`) |
 | `SLACK_APP_TOKEN` | yes | App-level token for Socket Mode (`xapp-...`) |
-| `SLACK_HELP_CHANNEL` | yes | Channel ID that always responds to every top-level message (e.g. `#pixl-help`) |
-| `SLACK_FAQ_CHANNELS` | yes | Comma-separated channel IDs. The **first** entry is the auto-reply channel (`#pixl`) |
-| `OPENCODE_API_KEY` | yes | API key for [OpenCode Zen](https://opencode.ai/zen) |
-| `PIXIE_ANSWER_BASE_URL` | no | Answer endpoint base, default `https://opencode.ai/zen/v1` |
-| `PIXIE_MODEL` | no | Answer model, default `deepseek-v4-flash-free` |
-| `INTENT_CLASSIFIER_API_KEY` | no | Key for the intent classifier. Falls back to `OPENCODE_API_KEY` |
-| `INTENT_CLASSIFIER_BASE_URL` | no | Default `https://opencode.ai/zen/v1` |
-| `INTENT_CLASSIFIER_MODEL` | no | Default `deepseek-v4-flash-free` |
-| `VISION_API_KEY` | no | Key for image analysis. Falls back to `OPENCODE_API_KEY` |
-| `PIXIE_VISION_BASE_URL` | no | Vision endpoint base. Falls back to `OPENCODE_BASE_URL`, then Zen |
-| `PIXIE_VISION_MODEL` | no | Default `kr/claude-sonnet-4.5` |
+| `SLACK_HELP_CHANNEL` | yes | Channel ID that always responds to every top-level message |
+| `SLACK_FAQ_CHANNELS` | yes | Comma-separated channel IDs. The **first** entry is the auto-reply channel |
+| `HCAI_API_KEY` | yes | Single API key for [Hack Club AI](https://ai.hackclub.com/) |
+| `PIXIE_BOT_NAME` | no | What the bot calls itself. Default `pixie` |
+| `PIXIE_BOT_SLUG` | no | Command prefix — `sol` gives `/sol`, `/sol-teach`. Defaults to the name, else `pixie`. Must be unique in the workspace |
+| `PIXIE_PROGRAMS_JSON` | no | The whole program registry as JSON: channels, sources, posture, scope, guides, milestones. Overrides `programs.json` entirely — see [SELF-HOST.md](./SELF-HOST.md) |
+| `HCAI_MODEL` | no | Default HCAI model, used by normal answers |
+| `HCAI_PING_MODEL` | no | HCAI model for mentions and DMs |
+| `HCAI_HELP_MODEL` | no | HCAI model for help-channel answers |
+| `HCAI_INTENT_MODEL` | no | HCAI model for intent classification |
+| `HCAI_VISION_MODEL` | no | HCAI vision model, default `xiaomi/mimo-v2-omni` |
 | `PIXIE_ADMIN_USER_IDS` | no | Comma-separated user IDs allowed to teach/approve. Unset = nobody |
 | `PIXIE_FEEDBACK_REACTIONS` | no | Comma-separated emojis to pre-place on pixie's own answers. **Empty by default** — pixie doesn't react to itself. Set e.g. `sparkling_heart` to turn seeding on; names must be ones pixie counts (`UP_REACTIONS`/`DOWN_REACTIONS` in `lib/handlers.js`) |
 | `REFRESH_INTERVAL_MIN` | no | How often to re-fetch docs, in minutes (default `30`) |
@@ -277,42 +320,46 @@ silent fallbacks at answer time.
 | `PIXIE_DEBUG` | no | Set to `1` for per-message debug logging (off by default) |
 | `PIXIE_DB_PATH` | no | SQLite file, default `./pixie.db` |
 
-Each of the three call sites has its **own** base URL, so pointing vision at a local proxy
-can't silently retarget doc answers. Answers default to Zen and only move if
-`PIXIE_ANSWER_BASE_URL` is set explicitly, since `PIXIE_MODEL` names a Zen model — a
-self-hosted endpoint has to actually serve that model. `OPENCODE_BASE_URL` is still
-honoured as the vision fallback, which is the meaning it had in practice.
-
-Pixie calls OpenCode Zen's OpenAI-compatible `/chat/completions` endpoint, which is what
-`deepseek-v4-flash-free` (and most non-Claude Zen models) use. Claude models on Zen are
-served from a separate `/messages` (Anthropic format) endpoint instead — switching
-`PIXIE_MODEL` to a Claude model requires also changing `lib/answer.js` to call that endpoint.
+Every model call uses Hack Club AI's OpenAI-compatible `/chat/completions` endpoint and
+the single `HCAI_API_KEY`. The optional `HCAI_*_MODEL` variables choose models by task;
+they never select a different provider or API key.
 
 ## Slack App Setup
 
-Pixie needs its own Slack app (separate from Pixorpheus), running in **Socket Mode** — no public URL, tunnel, or deployment required for events to reach it.
+The bot needs its own Slack app, running in **Socket Mode** — no public URL, tunnel, or deployment required for events to reach it.
+
+The fast way is the generated manifest, which gets every scope, event, command name and toggle below right in one paste:
+
+```sh
+PIXIE_BOT_NAME="Sol" PIXIE_BOT_SLUG=sol bun run manifest
+```
+
+Then [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From a manifest** → paste. Install, then take the bot token from *OAuth & Permissions* and generate an app-level token with `connections:write` under *Basic Information*.
+
+Command names in the manifest come from `PIXIE_BOT_SLUG`, the same value the listeners use, so the two cannot disagree. `lib/manifest.test.js` asserts that.
+
+<details>
+<summary>Doing it by hand instead</summary>
 
 1. Create a new app at [api.slack.com/apps](https://api.slack.com/apps).
 2. **OAuth scopes:** `chat:write`, `channels:history`, `groups:history`, `channels:join`,
    `app_mentions:read`, `reactions:read`, `reactions:write`, `commands`, `im:history`,
    `im:write`, `channels:read`, `groups:read`, `files:read`.
-    Slash commands to register: `/pixie`, `/pixie-guide`, `/guide`, `/pixie-sources`, `/pixie-stats`, `/pixie-gaps`,
-    `/pixie-teach`, `/pixie-pending`, `/pixie-approve`, `/pixie-forget`, `/pixie-reload`,
-    `/pixie-report`, `/pixie-program`.
 3. **Socket Mode:** enable it, generate an App-Level Token with the `connections:write` scope (`xapp-...`).
 4. **Event subscriptions:** enable events, subscribe to `message.channels`, `message.groups`,
    `message.im`, `app_mention`, `reaction_added`, `reaction_removed`, `app_home_opened`,
    and `member_joined_channel`. No Request URL needed once Socket Mode is on.
-5. **Slash commands:** create the ten listed in step 2 — Slash Commands → *Create New
-   Command*, one per name. Registering them in code only tells pixie what to listen for;
-   until they exist in the Slack app itself, typing one does nothing. With Socket Mode on
-   there is no Request URL field to fill in.
+5. **Slash commands:** create every command from the table above, one per name, using your own
+   slug. Registering them in code only tells the bot what to listen for; until they exist in the
+   Slack app itself, typing one does nothing. With Socket Mode on there is no Request URL field.
 6. **App Home:** enable the Home tab and the Messages tab (with "allow users to send
-   Slash commands and messages") so DMs reach pixie.
+   Slash commands and messages") so DMs reach the bot.
 7. **Interactivity:** turn on *Interactivity & Shortcuts*. Socket Mode delivers it with no
    Request URL, but the toggle itself must be on or the Approve/Drop buttons on the Home tab
    will do nothing when clicked.
-8. Install the app to the workspace. With `channels:join`, pixie can self-join any public channel listed in `SLACK_FAQ_CHANNELS` via the `conversations.join` API — no manual `/invite` needed for public channels (private channels still need a manual invite).
+8. Install the app to the workspace. With `channels:join`, the bot self-joins any public channel listed in `SLACK_FAQ_CHANNELS` via `conversations.join` — no manual `/invite` needed for public channels (private channels still need one).
+
+</details>
 9. Copy the bot token (`xoxb-...`) and app-level token (`xapp-...`) into `.env`.
 
 ## Running
@@ -361,7 +408,7 @@ bun index.js --ask "how do i join pixl?"
 
 This builds the corpus from `sources.json` and prints the answer — doc-grounded,
 conversational, or the fallback — directly to the console. Requires only
-`OPENCODE_API_KEY`, no Slack tokens, so it's useful for checking new docs or auth before
+`HCAI_API_KEY`, no Slack tokens, so it's useful for checking new docs or auth before
 deploying.
 
 ## Tests

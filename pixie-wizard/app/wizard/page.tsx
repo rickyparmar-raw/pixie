@@ -1,8 +1,11 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { getOrCreateDraftTrial, stepForTrial } from "@/lib/trials";
+import { listHostedProgramsForOwner } from "@/lib/hostedPrograms";
 import { decryptSecret } from "@/lib/crypto";
 import { listPublicChannels } from "@/lib/slackApi";
+import { coreSlackChannels, coreConfigured } from "@/lib/pixieCore";
 import { ProgramInfoStep } from "./_components/ProgramInfoStep";
 import { LlmKeyStep } from "./_components/LlmKeyStep";
 import { SourcesStep } from "./_components/SourcesStep";
@@ -11,15 +14,45 @@ import { ChannelPickerStep } from "./_components/ChannelPickerStep";
 import { ReviewStep } from "./_components/ReviewStep";
 import { DeployingStep } from "./_components/DeployingStep";
 import { SettingsView } from "./_components/SettingsView";
+import { HostedSetupView } from "./_components/HostedSetupView";
 
 const HCAI_BASE_URL = "https://ai.hackclub.com/proxy/v1";
 const DEFAULT_HCAI_MODEL = "openrouter/free";
 
-export default async function WizardPage() {
+export default async function WizardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ mode?: string }>;
+}) {
   const session = await getSession();
   if (!session) redirect("/");
 
-  const trial = await getOrCreateDraftTrial(session);
+  const { mode } = await searchParams;
+
+  // Hosted shared path: configure a tenant on the already-running Pixie Core.
+  // No Slack app, no tokens, no Railway. Legacy dedicated provisioning stays
+  // on the default path below.
+  if (mode === "hosted") {
+    let channels: { id: string; name: string; isMember: boolean }[] = [];
+    let coreLive = false;
+    if (coreConfigured()) {
+      try {
+        const res = await coreSlackChannels();
+        if (res.ok) {
+          channels = res.channels;
+          coreLive = true;
+        }
+      } catch {
+        coreLive = false;
+      }
+    }
+    return <HostedSetupView channels={channels} coreLive={coreLive} />;
+  }
+
+  const [trial, hosted] = await Promise.all([
+    getOrCreateDraftTrial(session),
+    listHostedProgramsForOwner(session.hcaId).catch(() => []),
+  ]);
 
   if (trial.status === "provisioning") {
     return <DeployingStep initialStatus={trial.last_deploy_status ?? "QUEUED"} />;
@@ -78,7 +111,41 @@ export default async function WizardPage() {
 
   const step = stepForTrial(trial);
 
-  if (step === 1) return <ProgramInfoStep />;
+  // Fresh draft + existing hosted programs: surface both paths without
+  // disturbing the legacy trial flow. Hosted is the default recommendation.
+  if (step === 1) {
+    return (
+      <>
+        <main className="mx-auto max-w-xl px-6 pt-16">
+          <div className="rounded-lg border border-mint/40 bg-mint/5 p-5">
+            <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">recommended · live in seconds</p>
+            <h2 className="font-heading mt-2 text-lg text-text">Hosted Pixie — shared @Pixie, no setup</h2>
+            <p className="mt-1 text-sm text-text-muted">No Slack app, no tokens, no Railway, no AI keys. Just channels and docs.</p>
+            {hosted.length > 0 && (
+              <ul className="mt-3 space-y-1 text-sm">
+                {hosted.map((p) => (
+                  <li key={p.id}>
+                    <Link href={`/programs/${p.id}`} className="text-text underline">→ {p.program_name}</Link>
+                    <span className="text-text-muted"> · {p.status} · sync {p.core_sync_state}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <Link href="/wizard?mode=hosted" className="mt-4 inline-block rounded-md bg-mint px-4 py-2 font-heading text-sm text-ink">
+              Connect with hosted Pixie →
+            </Link>
+          </div>
+          <details className="mt-4 text-sm text-text-muted">
+            <summary className="cursor-pointer underline">Need your own container instead? Legacy dedicated path</summary>
+            <p className="mt-2">The steps below provision an isolated Railway deployment with its own Slack app. Keep this only if you must self-host.</p>
+          </details>
+        </main>
+        <div className="-mt-8">
+          <ProgramInfoStep />
+        </div>
+      </>
+    );
+  }
   if (step === 2) return <LlmKeyStep />;
   if (step === 3) return <SourcesStep />;
 

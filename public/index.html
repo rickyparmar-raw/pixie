@@ -157,8 +157,9 @@
   <div class="modal-overlay" id="channel-modal">
     <div class="modal">
       <h3 id="channel-modal-title">Add Channel to Control Center</h3>
-      <label>Slack Channel ID (e.g. C0B6STY9G5N)</label>
-      <input type="text" id="chan-id" placeholder="e.g. C0B6STY9G5N">
+      <label>Slack Channel (search by name, or paste a raw ID)</label>
+      <input type="text" id="chan-id" list="slack-channel-list" placeholder="#general or C0B6STY9G5N">
+      <datalist id="slack-channel-list"></datalist>
       <label>Program / Scope</label>
       <select id="chan-prog-select"></select>
       <label>Initial Posture</label>
@@ -196,7 +197,7 @@
         <option value="passive">passive (DM/Mention only, no unprompted escalation)</option>
       </select>
       <label>Help Channel ID</label>
-      <input type="text" id="prog-help-channel" placeholder="e.g. C08SPRIGHELP">
+      <input type="text" id="prog-help-channel" list="slack-channel-list" placeholder="#sprig-help or C08SPRIGHELP">
       <label>Active Channels (comma separated IDs)</label>
       <input type="text" id="prog-channels" placeholder="e.g. C08SPRIGHELP, C08SPRIGDISC">
       <label>Helper Group ID</label>

@@ -6,6 +6,12 @@
   "scripts": {
     "start": "bun index.js",
     "ask": "bun index.js --ask",
+    "manifest": "bun scripts/manifest.cjs",
+    "migrate:check": "bun scripts/migrate-railway.mjs --check",
+    "migrate:write": "bun scripts/migrate-railway.mjs --write",
+    "migrate:dump": "bun scripts/migrate-railway.mjs --dump-expected",
+    "smoke": "node scripts/smoke-test.js",
+    "test:diff": "node scripts/test-diff.mjs",
     "test": "bun test"
   },
   "keywords": [],

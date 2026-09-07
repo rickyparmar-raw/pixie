@@ -119,6 +119,11 @@ export interface PixieTrialRow {
   created_at: string;
   expires_at: string | null;
 
+  // Deployment provider split (migration 003). Absent on pre-migration rows,
+  // which are dedicated legacy by definition.
+  deployment_mode?: DeploymentMode;
+  hosted_program_id?: string | null;
+
   last_deploy_at: string | null;
   last_deploy_status: string | null;
 
@@ -152,5 +157,49 @@ export interface TrialEventRow {
   trial_id: string;
   event_type: string;
   detail: Record<string, unknown> | null;
+  created_at: string;
+}
+
+// Deployment modes. Hosted programs are configuration on the shared Core —
+// no Railway project, no per-program Slack app, no tokens. Dedicated rows
+// keep the legacy isolated-container path until migration is proven safe.
+export type DeploymentMode = "hosted_shared" | "dedicated_legacy" | "self_hosted";
+
+export type HostedProgramStatus = "active" | "suspended" | "archived";
+
+export interface HostedProgramRow {
+  id: string;
+  workspace_id: string;
+  program_name: string;
+  support_name: string | null;
+  icon_url: string | null;
+  owner_hca_id: string;
+  owner_slack_id: string | null;
+  deployment_mode: DeploymentMode;
+  status: HostedProgramStatus;
+  ai_answers: boolean;
+  tickets_enabled: boolean;
+  auto_escalate: boolean;
+  posture: "active" | "passive" | "muted";
+  scope: "any" | "program";
+  sensitive_categories: string[];
+  sources: DocSource[];
+  guides: string[];
+  milestones: Milestone[];
+  settings: Record<string, unknown>;
+  core_sync_state: "pending" | "synced" | "failed";
+  core_sync_error: string | null;
+  core_synced_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HostedProgramChannel {
+  workspace_id: string;
+  channel_id: string;
+  channel_name?: string | null;
+  program_id: string;
+  kind: "help" | "organizer" | "discussion" | "announcement";
+  claimed_by_hca_id: string | null;
   created_at: string;
 }

@@ -76,6 +76,21 @@ async function startBot() {
   // the first message is handled in earnest.
   const botUserId = await resolveBotUserId(app.client);
   log.info("bot", `connected via Socket Mode as ${botUserId}`);
+
+  // Automatically join all configured public program channels
+  try {
+    const programs = require("./lib/programs");
+    const channelList = programs.getChannelsList();
+    for (const item of channelList) {
+      if (item.channelId && item.channelId.startsWith("C")) {
+        await app.client.conversations.join({ channel: item.channelId }).catch((e) => {
+          log.debug("bot", `could not auto-join channel ${item.channelId}: ${e.message}`);
+        });
+      }
+    }
+  } catch (e) {
+    log.debug("bot", `auto-join error: ${e.message}`);
+  }
 }
 
 // Offline test mode: `bun index.js --ask "how do i join pixl?"` builds the

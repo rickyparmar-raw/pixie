@@ -28,6 +28,12 @@ const TRIAL_DAYS = 14;
 export async function provisionTrial(trialId: string): Promise<void> {
   const trial = await getTrialById(trialId);
   if (!trial) throw new Error(`No trial ${trialId}`);
+  // Dedicated provider only: hosted programs activate as configuration and
+  // must never provision a Railway project. See lib/deployment.ts.
+  const mode = (trial as { deployment_mode?: string }).deployment_mode ?? "dedicated_legacy";
+  if (mode === "hosted_shared") {
+    throw new Error(`Trial ${trialId} is hosted_shared: use program activation, not Railway provisioning`);
+  }
   if (trial.status !== "awaiting_slack_credentials") {
     throw new Error(`Trial ${trialId} is not ready to provision (status: ${trial.status})`);
   }

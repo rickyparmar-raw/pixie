@@ -1,0 +1,31 @@
+[
+  {
+    "id": "live",
+    "name": "Live",
+    "posture": "active",
+    "scope": "program",
+    "helpChannel": "C_LIVE_HELP",
+    "channels": ["C_LIVE_MAIN", "C_LIVE_HELP"],
+    "sources": [
+      {
+        "name": "Live",
+        "type": "url",
+        "url": "https://live.hackclub.com/",
+        "siteUrl": "https://live.hackclub.com/"
+      },
+      {
+        "name": "Live Shop",
+        "type": "live-shop",
+        "url": "https://live.hackclub.com/shop",
+        "siteUrl": "https://live.hackclub.com/shop",
+        "minutesPerApprovedHour": 20
+      }
+    ],
+    "milestones": [],
+    "guides": ["start-live"],
+    "links": {
+      "site": "https://live.hackclub.com/",
+      "shop": "https://live.hackclub.com/shop"
+    }
+  }
+]

@@ -5,6 +5,8 @@ import {
   updateTrial,
   logTrialEvent,
 } from "@/lib/trials";
+import { db } from "@/lib/supabase";
+import { sweeperScopeFor } from "@/lib/deployment";
 import { getPoolAccountToken, releasePoolAccount } from "@/lib/railwayPool";
 import { pauseService, deleteProject, type ProvisionedService } from "@/lib/railway";
 import { notifyTrial } from "@/lib/notify";
@@ -29,11 +31,41 @@ function railwayTarget(trial: PixieTrialRow): ProvisionedService | null {
   };
 }
 
+// Hosted shared trials never touch Railway: expiry suspends the tenant row
+// (shared Core stops answering for it) and reclaim archives it. Deleting the
+// central service or wiping unrelated programs here would be catastrophic —
+// the dedicated pipeline below is unreachable for these rows by construction.
+async function suspendExpiredHostedTrials(now: Date, result: SweepResult): Promise<void> {
+  const trials = (await findExpiredActiveTrials(now)).filter(
+    (t) => sweeperScopeFor((t as PixieTrialRow & { deployment_mode?: string }).deployment_mode) === "hosted",
+  );
+  for (const trial of trials) {
+    try {
+      const row = trial as PixieTrialRow & { hosted_program_id?: string | null };
+      if (row.hosted_program_id) {
+        await db.from("hosted_programs").update({ status: "suspended", updated_at: now.toISOString() }).eq("id", row.hosted_program_id);
+      }
+      await updateTrial(trial.id, { status: "paused", paused_at: now.toISOString() });
+      await logTrialEvent(trial.id, "hosted_trial_suspended", { reason: "expired" });
+      await notifyTrial(
+        trial,
+        "Your hosted Pixie program is suspended",
+        `Your trial for ${trial.program_name} has ended and shared Pixie access is now suspended. Reach out if you'd like to keep it running.`,
+      );
+      result.paused++;
+    } catch (err) {
+      result.errors.push(`suspend ${trial.id}: ${err instanceof Error ? err.message : err}`);
+    }
+  }
+}
+
 // Per plan §4: pause (not delete) at expiry, with a 7-day reclaim window
 // before hard delete. One bug in the sweep or one slow-to-react owner
 // shouldn't be able to destroy a trial's data outright.
 async function pauseExpiredTrials(now: Date, result: SweepResult): Promise<void> {
-  const trials = await findExpiredActiveTrials(now);
+  const trials = (await findExpiredActiveTrials(now)).filter(
+    (t) => sweeperScopeFor((t as PixieTrialRow & { deployment_mode?: string }).deployment_mode) !== "hosted",
+  );
   for (const trial of trials) {
     try {
       const target = railwayTarget(trial);
@@ -60,7 +92,9 @@ async function pauseExpiredTrials(now: Date, result: SweepResult): Promise<void>
 }
 
 async function deleteReclaimedTrials(now: Date, result: SweepResult): Promise<void> {
-  const trials = await findReclaimableTrials(now);
+  const trials = (await findReclaimableTrials(now)).filter(
+    (t) => sweeperScopeFor((t as PixieTrialRow & { deployment_mode?: string }).deployment_mode) !== "hosted",
+  );
   for (const trial of trials) {
     try {
       const target = railwayTarget(trial);
@@ -103,6 +137,7 @@ async function warnExpiringTrials(now: Date, result: SweepResult): Promise<void>
 
 export async function sweepTrials(now: Date = new Date()): Promise<SweepResult> {
   const result: SweepResult = { paused: 0, deleted: 0, warned: 0, errors: [] };
+  await suspendExpiredHostedTrials(now, result);
   await pauseExpiredTrials(now, result);
   await deleteReclaimedTrials(now, result);
   await warnExpiringTrials(now, result);

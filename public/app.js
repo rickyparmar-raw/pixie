@@ -572,7 +572,7 @@ document.getElementById("prog-save")?.addEventListener("click", async () => {
   const id = document.getElementById("prog-id").value.trim();
   const name = document.getElementById("prog-name").value.trim();
   const posture = document.getElementById("prog-posture").value;
-  const helpChannel = document.getElementById("prog-help-channel").value.trim();
+  const helpChannel = resolveChannelId(document.getElementById("prog-help-channel").value);
   const channelsRaw = document.getElementById("prog-channels").value.trim();
   const helperGroup = document.getElementById("prog-helper-group").value.trim();
 
@@ -735,7 +735,7 @@ document.getElementById("chan-cancel")?.addEventListener("click", () => {
 });
 
 document.getElementById("chan-save")?.addEventListener("click", async () => {
-  const channelId = document.getElementById("chan-id").value.trim();
+  const channelId = resolveChannelId(document.getElementById("chan-id").value);
   const programId = document.getElementById("chan-prog-select").value;
   const posture = document.getElementById("chan-posture").value;
   const isTicketDest = document.getElementById("chan-is-ticket-dest").checked;
@@ -767,6 +767,33 @@ document.getElementById("chan-save")?.addEventListener("click", async () => {
 /* ------------------------------------------------------ tickets -- */
 
 let activeTicketTab = "all";
+
+/* ------------------------------------------------ slack channel picker -- */
+
+let slackChannelOptions = [];
+
+async function loadSlackChannels() {
+  try {
+    const data = await api("/api/slack/channels");
+    if (!data || !data.ok) return;
+    slackChannelOptions = data.channels;
+    const datalist = document.getElementById("slack-channel-list");
+    if (datalist) {
+      datalist.innerHTML = data.channels
+        .map((c) => `<option value="${esc(c.id)}">#${esc(c.name)}</option>`)
+        .join("");
+    }
+  } catch (_) {}
+}
+
+// Accept "#name", "name", or a raw C-id; return the canonical channel ID.
+function resolveChannelId(raw) {
+  const v = (raw || "").trim();
+  if (/^C[0-9A-Z]+$/i.test(v)) return v.toUpperCase();
+  const name = v.startsWith("#") ? v.slice(1).toLowerCase() : v.toLowerCase();
+  const hit = slackChannelOptions.find((c) => c.name.toLowerCase() === name);
+  return hit ? hit.id : v;
+}
 
 async function loadTickets() {
   const url = activeTicketTab === "all" ? "/api/tickets" : `/api/tickets?status=${activeTicketTab}`;
@@ -880,6 +907,7 @@ function init() {
   loadKnowledge();
   loadCache();
   loadReport();
+  loadSlackChannels();
 }
 
 init();

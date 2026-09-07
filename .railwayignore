@@ -13,3 +13,5 @@ pixie.db
 pixie.db-shm
 pixie.db-wal
 pixie-backup-*.tar.gz
+.env*
+.fuse_hidden*
