@@ -20,6 +20,20 @@ export async function listHostedProgramsForOwner(ownerHcaId: string): Promise<Ho
   return (data as HostedProgramRow[]) ?? [];
 }
 
+// Reconciliation queue: anything not confirmed synced to Core, whether it
+// never got a first attempt (pending) or its last attempt errored (failed).
+// Ordered oldest-first so a backlog drains in the order programs went stale,
+// not newest-first where a noisy recent failure could starve an old one.
+export async function listHostedProgramsPendingSync(): Promise<HostedProgramRow[]> {
+  const { data, error } = await db
+    .from("hosted_programs")
+    .select("*")
+    .neq("core_sync_state", "synced")
+    .order("updated_at", { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data as HostedProgramRow[]) ?? [];
+}
+
 export async function updateHostedProgram(id: string, patch: Partial<HostedProgramRow>): Promise<HostedProgramRow> {
   const { data, error } = await db
     .from("hosted_programs")

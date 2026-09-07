@@ -7,13 +7,14 @@ type Row = Record<string, unknown>;
 
 interface Filter {
   col: string;
-  op: "eq" | "in";
+  op: "eq" | "neq" | "in";
   value: unknown;
 }
 
 function matches(row: Row, filters: Filter[]): boolean {
   return filters.every((f) => {
     if (f.op === "eq") return row[f.col] === f.value;
+    if (f.op === "neq") return row[f.col] !== f.value;
     return Array.isArray(f.value) && (f.value as unknown[]).includes(row[f.col]);
   });
 }
@@ -34,6 +35,7 @@ export interface QueryBuilder {
   update: (values: unknown) => QueryBuilder;
   delete: () => QueryBuilder;
   eq: (col: string, value: unknown) => QueryBuilder;
+  neq: (col: string, value: unknown) => QueryBuilder;
   in: (col: string, values: unknown[]) => QueryBuilder;
   order: (...args: unknown[]) => QueryBuilder;
   limit: (...args: unknown[]) => QueryBuilder;
@@ -118,6 +120,10 @@ export function createSupabaseFake(seed: Record<string, Row[]> = {}): SupabaseFa
           filters.push({ col, op: "eq", value });
           return builder;
         },
+        neq: (col: string, value: unknown) => {
+          filters.push({ col, op: "neq", value });
+          return builder;
+        },
         in: (col: string, values: unknown[]) => {
           filters.push({ col, op: "in", value: values });
           return builder;
@@ -126,7 +132,13 @@ export function createSupabaseFake(seed: Record<string, Row[]> = {}): SupabaseFa
         limit: () => builder,
         maybeSingle: async () => {
           if (pendingInsert) return runInsert();
-          if (pendingUpdate) return runUpdate();
+          // Real postgrest-js .update().select().maybeSingle() returns the
+          // post-update row, not the {data: null} runUpdate() itself returns —
+          // that shape is only right for an update with no .select() chained.
+          if (pendingUpdate) {
+            runUpdate();
+            return { data: rowsOf(table).find((r) => matches(r, filters)) ?? null };
+          }
           if (isDelete) return runDelete();
           return { data: rowsOf(table).find((r) => matches(r, filters)) ?? null };
         },
@@ -138,16 +150,22 @@ export function createSupabaseFake(seed: Record<string, Row[]> = {}): SupabaseFa
             Object.assign(res.data as Row, { created_at: row.created_at, updated_at: row.updated_at });
             return { data: row };
           }
+          // Same fix as maybeSingle() above: apply the update before reading
+          // the row back, so .update(...).select().single() actually reflects
+          // what was just written instead of the pre-update snapshot.
+          if (pendingUpdate) runUpdate();
           const found = rowsOf(table).find((r) => matches(r, filters)) ?? null;
           if (!found) return { data: null, error: { code: "PGRST116", message: "no rows" } };
           return { data: found };
         },
-        // postgrest-js builders are thenable: bare `await insert(...)` executes.
-        then: (resolve: (v: QueryResult) => void) => {
+        // postgrest-js builders are thenable: bare `await insert(...)` executes,
+        // and a bare multi-row `await select().eq(...)` (no .single()/.maybeSingle())
+        // resolves with every matching row — real postgrest-js does the same.
+        then: (resolve: (v: { data: Row[] | Row | null; error?: unknown }) => void) => {
           if (pendingInsert) resolve(runInsert());
           else if (pendingUpdate) resolve(runUpdate());
           else if (isDelete) resolve(runDelete());
-          else resolve({ data: null });
+          else resolve({ data: rowsOf(table).filter((r) => matches(r, filters)) });
           return Promise.resolve({ data: null });
         },
       } as QueryBuilder;
