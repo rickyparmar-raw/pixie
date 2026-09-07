@@ -25,11 +25,10 @@ test("creator eligibility follows the allowlist, defaulting open", () => {
 });
 
 import { mock } from "bun:test";
-import { createSupabaseFake } from "./supabaseFake";
+import { createTestDb } from "./pgTestDb";
 import { insertHostedProgram, claimHostedChannels } from "./programClaim";
 
-// Same shared factory as sweepTrials.test.ts: identical shape, no clobbering.
-mock.module("@/lib/supabase", () => createSupabaseFake());
+mock.module("@/lib/db", () => createTestDb());
 
 test("insertHostedProgram rejects a live duplicate slug (double-submit collapses)", async () => {
   await insertHostedProgram({ id: "hwy", workspaceId: "T1", programName: "Highway", ownerHcaId: "H1", ownerSlackId: "U1" });

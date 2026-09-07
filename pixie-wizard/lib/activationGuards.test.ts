@@ -1,10 +1,10 @@
 import { test, expect } from "bun:test";
 import { mock } from "bun:test";
-import { createSupabaseFake } from "./supabaseFake";
+import { createTestDb } from "./pgTestDb";
 import { validateActivationGuards, isValidSlackChannelId } from "./activationGuards";
 import { insertHostedProgram, claimHostedChannels } from "./programClaim";
 
-mock.module("@/lib/supabase", () => createSupabaseFake());
+mock.module("@/lib/db", () => createTestDb());
 
 const validSources = [{ type: "url" as const, url: "https://docs.example.com/api" }];
 

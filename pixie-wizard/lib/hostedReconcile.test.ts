@@ -1,5 +1,5 @@
 import { test, expect, mock } from "bun:test";
-import { createSupabaseFake } from "./supabaseFake";
+import { createTestDb } from "./pgTestDb";
 
 // Each test re-registers its own fresh fake: mock.module patches the module
 // registry for the whole process, and this reconciler intentionally scans
@@ -9,7 +9,7 @@ import { createSupabaseFake } from "./supabaseFake";
 // real per-test transaction rollback would.
 
 test("reconciles pending programs and marks them synced", async () => {
-  mock.module("@/lib/supabase", () => createSupabaseFake());
+  mock.module("@/lib/db", () => createTestDb());
   let coreLive = true;
   const synced: string[] = [];
   mock.module("@/lib/pixieCore", () => ({
@@ -39,7 +39,7 @@ test("reconciles pending programs and marks them synced", async () => {
 });
 
 test("a program already synced is left alone — no redundant Core calls", async () => {
-  mock.module("@/lib/supabase", () => createSupabaseFake());
+  mock.module("@/lib/db", () => createTestDb());
   const calls: string[] = [];
   mock.module("@/lib/pixieCore", () => ({
     coreConfigured: () => true,
@@ -63,7 +63,7 @@ test("a program already synced is left alone — no redundant Core calls", async
 });
 
 test("Core still down: program stays pending/failed, no throw, error recorded", async () => {
-  mock.module("@/lib/supabase", () => createSupabaseFake());
+  mock.module("@/lib/db", () => createTestDb());
   mock.module("@/lib/pixieCore", () => ({
     coreConfigured: () => true,
     syncProgramToCore: async () => ({ ok: false, error: "core unreachable" }),
@@ -88,7 +88,7 @@ test("Core still down: program stays pending/failed, no throw, error recorded", 
 });
 
 test("re-running reconcile after Core recovers is idempotent — flips to synced, no duplicate side effects", async () => {
-  mock.module("@/lib/supabase", () => createSupabaseFake());
+  mock.module("@/lib/db", () => createTestDb());
   let coreUp = false;
   const calls: string[] = [];
   mock.module("@/lib/pixieCore", () => ({
@@ -119,7 +119,7 @@ test("re-running reconcile after Core recovers is idempotent — flips to synced
 });
 
 test("skips the whole batch when Core is not configured at all", async () => {
-  mock.module("@/lib/supabase", () => createSupabaseFake());
+  mock.module("@/lib/db", () => createTestDb());
   mock.module("@/lib/pixieCore", () => ({
     coreConfigured: () => false,
     syncProgramToCore: async () => {

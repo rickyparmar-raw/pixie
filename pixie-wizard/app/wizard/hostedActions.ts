@@ -6,6 +6,7 @@ import { getSession } from "@/lib/session";
 import { creatorEligible, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
 import { sourceUrlProblem } from "@/lib/sourceUrls";
 import { getHostedProgram, updateHostedProgram, logHostedAudit, addHostedHelper } from "@/lib/hostedPrograms";
+import { query } from "@/lib/db";
 import { syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot, coreChannelMembership, coreConfigured, coreHelpersSync } from "@/lib/pixieCore";
 import { validateActivationGuards } from "@/lib/activationGuards";
 import type { ActionState } from "@/lib/types";
@@ -147,8 +148,7 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
     claimedByHcaId: session.hcaId,
   });
   if (!claim.ok) {
-    const { db } = await import("@/lib/supabase");
-    await db.from("hosted_programs").delete().eq("id", slug).eq("workspace_id", CENTRAL_WORKSPACE);
+    await query(`delete from hosted_programs where id = $1 and workspace_id = $2`, [slug, CENTRAL_WORKSPACE]);
     return { error: `Channel <#${claim.conflictChannel}> is already owned by another program. Pick a different channel and activate again.` };
   }
 
@@ -674,14 +674,18 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
     ],
   });
   if (!sync.ok) {
-    const { db } = await import("@/lib/supabase");
-    await db.from("hosted_program_channels").delete().eq("workspace_id", program.workspace_id).eq("channel_id", rawNew).eq("program_id", programId);
+    await query(
+      `delete from hosted_program_channels where workspace_id = $1 and channel_id = $2 and program_id = $3`,
+      [program.workspace_id, rawNew, programId],
+    );
     return { error: sync.error ?? "Core sync failed — routing unchanged." };
   }
 
   if (oldHelp) {
-    const { db } = await import("@/lib/supabase");
-    await db.from("hosted_program_channels").delete().eq("workspace_id", program.workspace_id).eq("channel_id", oldHelp.channel_id).eq("program_id", programId);
+    await query(
+      `delete from hosted_program_channels where workspace_id = $1 and channel_id = $2 and program_id = $3`,
+      [program.workspace_id, oldHelp.channel_id, programId],
+    );
   }
   const { logHostedAudit } = await import("@/lib/hostedPrograms");
   await logHostedAudit({

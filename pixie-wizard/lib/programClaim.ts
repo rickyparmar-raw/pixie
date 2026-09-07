@@ -9,7 +9,7 @@
 // A logged-in user therefore cannot hijack an arbitrary help channel: the
 // claim either wins atomically or reports its owner.
 
-import { db } from "@/lib/supabase";
+import { query, withTransaction, isUniqueViolation } from "@/lib/db";
 import { isAllowed, type WizardSession } from "@/lib/session";
 import { slugify } from "@/lib/slackManifest";
 import type { HostedProgramRow } from "@/lib/types";
@@ -53,14 +53,13 @@ export async function findChannelConflicts(
   channelIds: string[],
 ): Promise<{ conflictChannel: string; ownerProgramId: string } | null> {
   for (const id of channelIds) {
-    const { data: owner } = await db
-      .from("hosted_program_channels")
-      .select("program_id")
-      .eq("workspace_id", workspaceId)
-      .eq("channel_id", id)
-      .maybeSingle();
-    if (owner && (owner as { program_id: string }).program_id !== programId) {
-      return { conflictChannel: id, ownerProgramId: (owner as { program_id: string }).program_id };
+    const { rows } = await query<{ program_id: string }>(
+      `select program_id from hosted_program_channels where workspace_id = $1 and channel_id = $2`,
+      [workspaceId, id],
+    );
+    const owner = rows[0];
+    if (owner && owner.program_id !== programId) {
+      return { conflictChannel: id, ownerProgramId: owner.program_id };
     }
   }
   return null;
@@ -76,71 +75,97 @@ export async function insertHostedProgram(input: {
   ownerHcaId: string;
   ownerSlackId: string | null;
 }): Promise<HostedProgramRow> {
-  const { data, error } = await db
-    .from("hosted_programs")
-    .insert({
-      id: input.id,
-      workspace_id: input.workspaceId,
-      program_name: input.programName,
-      program_description: input.programDescription ?? null,
-      owner_hca_id: input.ownerHcaId,
-      owner_slack_id: input.ownerSlackId,
-      deployment_mode: "hosted_shared",
-      status: "active",
-      settings: input.programDescription ? { description: input.programDescription } : {},
-    })
-    .select("*")
-    .single();
-  if (error) {
-    if (error.code === "23505") throw new Error("That program is already active — it was created by your double-click.");
-    throw new Error(error.message);
+  const settings = input.programDescription ? { description: input.programDescription } : {};
+  try {
+    const { rows } = await query<HostedProgramRow>(
+      `insert into hosted_programs
+         (id, workspace_id, program_name, program_description, owner_hca_id, owner_slack_id, deployment_mode, status, settings)
+       values ($1, $2, $3, $4, $5, $6, 'hosted_shared', 'active', $7)
+       returning *`,
+      [
+        input.id,
+        input.workspaceId,
+        input.programName,
+        input.programDescription ?? null,
+        input.ownerHcaId,
+        input.ownerSlackId,
+        JSON.stringify(settings),
+      ],
+    );
+    return rows[0];
+  } catch (err) {
+    if (isUniqueViolation(err)) throw new Error("That program is already active — it was created by your double-click.");
+    throw err;
   }
-  return data as HostedProgramRow;
 }
 
-// Claims every channel inside one attempt: on the first conflict the rows
-// already inserted for this program are removed so a retry starts clean.
+// Claims every channel inside one attempt, inside one DB transaction: on the
+// first conflict the whole transaction rolls back, so nothing partial is
+// ever left behind for a retry to trip over. The unique (workspace_id,
+// channel_id) primary key is still the real atomic guard against a
+// concurrent claim racing this one — the pre-check just gives a friendlier
+// error than a raw constraint violation when there's no race at all.
 export async function claimHostedChannels(input: {
   workspaceId: string;
   programId: string;
   channels: ChannelClaim[];
   claimedByHcaId: string;
 }): Promise<{ ok: true } | { ok: false; conflictChannel: string; ownerProgramId: string | null }> {
-  const claimed: string[] = [];
-  for (const ch of input.channels) {
-    const { data: owner } = await db
-      .from("hosted_program_channels")
-      .select("program_id")
-      .eq("workspace_id", input.workspaceId)
-      .eq("channel_id", ch.id)
-      .maybeSingle();
-    if (owner && (owner as { program_id: string }).program_id !== input.programId) {
-      await db.from("hosted_program_channels").delete().eq("workspace_id", input.workspaceId).in("channel_id", claimed).eq("program_id", input.programId);
-      return { ok: false, conflictChannel: ch.id, ownerProgramId: (owner as { program_id: string }).program_id };
-    }
-    if (!owner) {
-      const { error } = await db.from("hosted_program_channels").insert({
-        workspace_id: input.workspaceId,
-        channel_id: ch.id,
-        program_id: input.programId,
-        kind: ch.kind,
-        claimed_by_hca_id: input.claimedByHcaId,
-      });
-      if (error) {
-        if (error.code === "23505") {
-          await db.from("hosted_program_channels").delete().eq("workspace_id", input.workspaceId).in("channel_id", claimed).eq("program_id", input.programId);
-          const { data: winner } = await db
-            .from("hosted_program_channels")
-            .select("program_id")
-            .eq("workspace_id", input.workspaceId)
-            .eq("channel_id", ch.id)
-            .maybeSingle();
-          return { ok: false, conflictChannel: ch.id, ownerProgramId: (winner as { program_id: string } | null)?.program_id ?? null };
+  try {
+    return await withTransaction(async (client) => {
+      // Pass 1: check every channel for a conflict before writing anything —
+      // fails clean with zero side effects on the common "you picked a
+      // channel someone else already claimed" path, no rollback required.
+      // Channels this same program already owns (re-claiming on a settings
+      // save, say) are noted so pass 2 skips them instead of re-inserting.
+      const alreadyMine = new Set<string>();
+      for (const ch of input.channels) {
+        const existing = await client.query<{ program_id: string }>(
+          `select program_id from hosted_program_channels where workspace_id = $1 and channel_id = $2`,
+          [input.workspaceId, ch.id],
+        );
+        const owner = existing.rows[0];
+        if (owner && owner.program_id !== input.programId) {
+          return { ok: false, conflictChannel: ch.id, ownerProgramId: owner.program_id };
         }
-        throw new Error(error.message);
+        if (owner) alreadyMine.add(ch.id);
       }
-      claimed.push(ch.id);
+      // Pass 2: nothing conflicted as of pass 1, so claim whatever isn't
+      // already ours. A truly concurrent activation squeezing a claim in
+      // between pass 1 and here still can't corrupt anything — the unique
+      // (workspace_id, channel_id) primary key rejects the insert, this
+      // whole transaction rolls back, and the catch below reports the real
+      // winner.
+      for (const ch of input.channels) {
+        if (alreadyMine.has(ch.id)) continue;
+        // Deliberately no ON CONFLICT here: a real conflict at this point
+        // means a concurrent request won the race after pass 1 checked —
+        // that must throw (unique_violation), not be silently swallowed,
+        // or this would report {ok: true} for a channel it never actually
+        // claimed.
+        await client.query(
+          `insert into hosted_program_channels (workspace_id, channel_id, program_id, kind, claimed_by_hca_id)
+           values ($1, $2, $3, $4, $5)`,
+          [input.workspaceId, ch.id, input.programId, ch.kind, input.claimedByHcaId],
+        );
+      }
+      return { ok: true };
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      // Lost a real race to a concurrent claim on the same channel — find out
+      // who actually won it so the caller can report a useful owner.
+      const winner = await Promise.all(
+        input.channels.map((ch) =>
+          query<{ program_id: string }>(
+            `select program_id from hosted_program_channels where workspace_id = $1 and channel_id = $2 and program_id <> $3`,
+            [input.workspaceId, ch.id, input.programId],
+          ).then((r) => (r.rows[0] ? { id: ch.id, owner: r.rows[0].program_id } : null)),
+        ),
+      );
+      const conflict = winner.find((w) => w !== null);
+      return { ok: false, conflictChannel: conflict?.id ?? "", ownerProgramId: conflict?.owner ?? null };
     }
+    throw err;
   }
-  return { ok: true };
 }

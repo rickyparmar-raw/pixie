@@ -7,8 +7,8 @@
 // such request so a network failure turns into a thrown error instead of
 // an infinite hang.
 //
-// This lives in its own module (not lib/supabase.ts) because several test
-// files replace "@/lib/supabase" wholesale via bun's `mock.module`, which
+// This lives in its own module (not lib/db.ts) because several test files
+// replace "@/lib/db" wholesale via bun's `mock.module`, which
 // patches the module registry for the whole test run — any other import of
 // that same resolved path (including this file's own tests) would get the
 // fake module instead of the real exports.
