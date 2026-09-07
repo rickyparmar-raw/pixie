@@ -1,0 +1,42 @@
+{
+  "id": "pixie-sandbox",
+  "name": "Pixie Sandbox",
+  "supportName": "Sandbox Help",
+  "workspaceId": "TO_BE_CONFIRMED_FROM_SLACK",
+  "deploymentMode": "hosted_shared",
+  "posture": "active",
+  "scope": "program",
+  "aiAnswers": true,
+  "ticketsEnabled": true,
+  "autoEscalate": true,
+  "autoAssign": false,
+  "shadowMode": false,
+  "supportActive": true,
+  "sensitiveCategories": ["refund", "clawback"],
+  "helpChannel": "C0C04LB6VA5",
+  "channels": ["C0C04LB6VA5"],
+  "organizerChannel": null,
+  "guides": ["submit-ysws-guidelines"],
+  "milestones": [{ "name": "Sandbox program ends", "date": "2026-12-31", "note": "staging fixture date" }],
+  "sources": [
+    {
+      "name": "Sandbox FAQ",
+      "type": "json-faq",
+      "content": [
+        {
+          "question": "When does this sandbox program end?",
+          "answer": "The sandbox program ends on December 31, 2026."
+        },
+        {
+          "question": "How do I join the sandbox program?",
+          "answer": "Ask in #pixie-sandbox and a helper will add you."
+        }
+      ]
+    },
+    {
+      "name": "Sandbox Rules",
+      "type": "text",
+      "content": "The sandbox is a staging area for testing Pixie. Real YSWS deadlines do not apply here. Questions about refunds are always escalated to a human."
+    }
+  ]
+}
