@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { hostedChannelsUpdate } from "@/app/wizard/hostedActions";
-import type { ActionState } from "@/app/wizard/actions";
+import type { ActionState } from "@/lib/types";
 import { inputClass, labelClass } from "@/app/wizard/_components/formStyles";
 import type { CoreChannel } from "@/lib/pixieCore";
 

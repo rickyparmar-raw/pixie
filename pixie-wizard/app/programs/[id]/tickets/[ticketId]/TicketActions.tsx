@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { hostedTicketAction, hostedTicketReply, hostedTicketNote } from "@/app/wizard/hostedActions";
-import type { ActionState } from "@/app/wizard/actions";
+import type { ActionState } from "@/lib/types";
 import { SubmitButton } from "@/app/wizard/_components/SubmitButton";
 import { inputClass, labelClass } from "@/app/wizard/_components/formStyles";
 

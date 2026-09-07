@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { activateHostedProgram } from "@/app/wizard/hostedActions";
-import type { ActionState } from "@/app/wizard/actions";
+import type { ActionState } from "@/lib/types";
 import { SubmitButton } from "./SubmitButton";
 import type { CoreChannel } from "@/lib/pixieCore";
 

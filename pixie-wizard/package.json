@@ -7,8 +7,7 @@
     "build": "next build",
     "start": "next start -p 4901",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
-    "pool:add": "bun run scripts/add-pool-account.ts"
+    "test": "bun test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",

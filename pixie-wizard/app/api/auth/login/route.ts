@@ -18,7 +18,10 @@ export async function GET() {
   url.searchParams.set("client_id", process.env.HCA_CLIENT_ID ?? "");
   url.searchParams.set("redirect_uri", `${process.env.BASE_URL}/api/auth/callback`);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", "openid profile slack_id");
+  // callback route requires identity.primary_email to authenticate at all —
+  // without the "email" scope here, HCA never returns one and every login
+  // fails with ?error=denied regardless of how valid the credentials are.
+  url.searchParams.set("scope", "openid email profile slack_id");
   url.searchParams.set("state", state);
   return NextResponse.redirect(url.toString());
 }

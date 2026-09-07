@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { hostedKnowledgePropose, hostedCandidateReview, hostedFaqPropose } from "@/app/wizard/hostedActions";
-import type { ActionState } from "@/app/wizard/actions";
+import type { ActionState } from "@/lib/types";
 import { inputClass } from "@/app/wizard/_components/formStyles";
 
 const initialState: ActionState = { error: null };

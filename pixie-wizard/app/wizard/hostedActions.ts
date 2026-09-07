@@ -8,7 +8,7 @@ import { sourceUrlProblem } from "@/lib/sourceUrls";
 import { getHostedProgram, updateHostedProgram, logHostedAudit, addHostedHelper } from "@/lib/hostedPrograms";
 import { syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot, coreChannelMembership, coreConfigured, coreHelpersSync } from "@/lib/pixieCore";
 import { validateActivationGuards } from "@/lib/activationGuards";
-import type { ActionState } from "@/app/wizard/actions";
+import type { ActionState } from "@/lib/types";
 import type { DocSource } from "@/lib/types";
 
 const CENTRAL_WORKSPACE = (process.env.PIXIE_WORKSPACE_ID || "default").trim() || "default";
