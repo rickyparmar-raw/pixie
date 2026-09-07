@@ -1,5 +1,7 @@
-import { test, expect, mock, beforeEach } from "bun:test";
+import { test, expect, mock, beforeEach, afterEach } from "bun:test";
 import type { PixieTrialRow } from "./types";
+import { installRailwayStub, type RailwayStub } from "./railwayFetchStub";
+import { createSupabaseFake } from "./supabaseFake";
 
 function fixtureTrial(overrides: Partial<PixieTrialRow> = {}): PixieTrialRow {
   return {
@@ -62,28 +64,29 @@ const poolMock = {
   PoolExhaustedError: class PoolExhaustedError extends Error {},
 };
 
-const railwayMock = {
-  pauseService: mock(async () => {}),
-  deleteProject: mock(async () => {}),
-  createProjectAndService: mock(async () => ({ projectId: "p1", environmentId: "e1", serviceId: "s1" })),
-  setVariables: mock(async () => {}),
-  triggerDeploy: mock(async () => {}),
-  latestDeploymentStatus: mock(async () => null as { id: string; status: string } | null),
-  isTerminalDeploymentStatus: (status: string) => ["SUCCESS", "FAILED", "CRASHED", "REMOVED"].includes(status),
-};
-
 const notifyMock = {
   notifyTrial: mock(async () => {}),
 };
 
+// Only paths with NO real-module consumers in any test file are mocked here.
+// @/lib/railway must never be mock.module'd (railway.test.ts needs the real
+// module; bun applies mocks process-wide). Railway HTTP is scripted per-test
+// through railwayFetchStub. Same rule kept @/lib/crypto out of mocks.
 mock.module("@/lib/trials", () => trialsMock);
 mock.module("@/lib/railwayPool", () => poolMock);
-mock.module("@/lib/railway", () => railwayMock);
 mock.module("@/lib/notify", () => notifyMock);
+mock.module("@/lib/supabase", () => createSupabaseFake());
 
 const { sweepTrials } = await import("./sweepTrials");
 
+afterEach(() => {
+  railway?.restore();
+});
+
+let railway: RailwayStub;
+
 beforeEach(() => {
+  railway = installRailwayStub();
   trialsMock.findExpiredActiveTrials.mockReset();
   trialsMock.findExpiredActiveTrials.mockImplementation(async () => []);
   trialsMock.findReclaimableTrials.mockReset();
@@ -94,10 +97,6 @@ beforeEach(() => {
   trialsMock.logTrialEvent.mockClear();
   poolMock.getPoolAccountToken.mockClear();
   poolMock.releasePoolAccount.mockClear();
-  railwayMock.pauseService.mockReset();
-  railwayMock.pauseService.mockImplementation(async () => {});
-  railwayMock.deleteProject.mockReset();
-  railwayMock.deleteProject.mockImplementation(async () => {});
   notifyMock.notifyTrial.mockClear();
 });
 
@@ -107,7 +106,9 @@ test("an expired active trial gets paused on Railway and flipped to paused with 
 
   const result = await sweepTrials(now);
 
-  expect(railwayMock.pauseService).toHaveBeenCalledTimes(1);
+  const pauses = railway.callsOf("serviceInstanceUpdate");
+  expect(pauses).toHaveLength(1);
+  expect((pauses[0].variables.input as { sleepApplication: boolean }).sleepApplication).toBe(true);
   expect(notifyMock.notifyTrial).toHaveBeenCalledTimes(1);
   const patch = trialsMock.updateTrial.mock.calls[0]?.[1] as Partial<PixieTrialRow>;
   expect(patch.status).toBe("paused");
@@ -124,7 +125,7 @@ test("a trial missing Railway ids still gets paused in the DB without crashing t
 
   const result = await sweepTrials();
 
-  expect(railwayMock.pauseService).not.toHaveBeenCalled();
+  expect(railway.callsOf("serviceInstanceUpdate")).toHaveLength(0);
   expect(result.paused).toBe(1);
 });
 
@@ -133,9 +134,7 @@ test("one trial failing to pause doesn't stop the rest of the sweep", async () =
     fixtureTrial({ id: "trial-bad" }),
     fixtureTrial({ id: "trial-ok" }),
   ]);
-  railwayMock.pauseService.mockImplementation(async () => {
-    throw new Error("Railway unreachable");
-  });
+  railway.failOn("serviceInstanceUpdate", "Railway unreachable");
 
   const result = await sweepTrials();
 
@@ -149,7 +148,9 @@ test("a paused trial past its reclaim deadline is deleted from Railway and scrub
 
   const result = await sweepTrials();
 
-  expect(railwayMock.deleteProject).toHaveBeenCalledWith("rw-token", "p1");
+  const deletes = railway.callsOf("projectDelete");
+  expect(deletes).toHaveLength(1);
+  expect(deletes[0].variables).toMatchObject({ id: "p1" });
   expect(poolMock.releasePoolAccount).toHaveBeenCalledWith("pool-1");
   const patch = trialsMock.updateTrial.mock.calls[0]?.[1] as Partial<PixieTrialRow>;
   expect(patch.status).toBe("deleted");
@@ -173,4 +174,30 @@ test("a trial nearing expiry gets a heads-up notice and expiry_notified_at is st
 test("an empty pool across all three buckets is a clean no-op", async () => {
   const result = await sweepTrials();
   expect(result).toEqual({ paused: 0, deleted: 0, warned: 0, errors: [] });
+});
+
+test("an expired HOSTED trial suspends the tenant and never calls Railway", async () => {
+  const now = new Date("2026-02-01T00:00:00Z");
+  trialsMock.findExpiredActiveTrials.mockImplementation(async () => [
+    fixtureTrial({ id: "trial-hosted", deployment_mode: "hosted_shared", hosted_program_id: "hwy" }),
+  ]);
+
+  const result = await sweepTrials(now);
+
+  expect(railway.calls).toEqual([]);
+  const patch = trialsMock.updateTrial.mock.calls[0]?.[1] as Partial<PixieTrialRow>;
+  expect(patch.status).toBe("paused");
+  expect(result.paused).toBe(1);
+  expect(result.errors).toEqual([]);
+});
+
+test("a HOSTED trial past reclaim is never deleted from Railway", async () => {
+  trialsMock.findReclaimableTrials.mockImplementation(async () => [
+    fixtureTrial({ id: "trial-hosted-gone", status: "paused", deployment_mode: "hosted_shared", hosted_program_id: "hwy" }),
+  ]);
+
+  const result = await sweepTrials();
+
+  expect(railway.calls).toEqual([]);
+  expect(result.deleted).toBe(0);
 });
