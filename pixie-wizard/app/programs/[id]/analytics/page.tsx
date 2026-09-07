@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/session";
-import { getHostedProgram } from "@/lib/hostedPrograms";
+import { requireProgramMembership } from "@/lib/programAccess";
 import { coreAnalytics } from "@/lib/pixieCore";
 
 function ms(v: unknown): string {
@@ -14,11 +12,7 @@ function ms(v: unknown): string {
 
 export default async function AnalyticsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getSession();
-  if (!session) redirect("/");
-
-  const program = await getHostedProgram(id);
-  if (!program || program.owner_hca_id !== session.hcaId) redirect("/wizard");
+  const { program } = await requireProgramMembership(id);
 
   let a: Record<string, unknown> | null = null;
   let loadError: string | null = null;

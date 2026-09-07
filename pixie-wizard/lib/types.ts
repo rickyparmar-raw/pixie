@@ -19,6 +19,11 @@ export interface DocSource {
   url?: string;
   siteUrl?: string;
   content?: unknown;
+  // Explicit opt-in only — a source with no `public` field (every existing
+  // one, since the onboarding form doesn't set it yet) is private by
+  // default. The public program profile only ever counts/lists sources
+  // where this is exactly `true`.
+  public?: boolean;
 }
 
 export interface Milestone {
@@ -79,6 +84,36 @@ export interface HostedProgramHelper {
   helper_source: "creator" | "organizer_channel" | "usergroup" | "manual";
   role: "helper" | "organizer" | "owner";
   active: boolean;
+  visible_on_profile: boolean;
   added_at: string;
   removed_at?: string | null;
+}
+
+// A caller's relationship to a program — drives both the directory's badge
+// and every management route's authorization check. "public" is the only
+// non-member value; everyone else is some flavor of member.
+export type ProgramRelationship = "owner" | "admin" | "helper" | "public";
+
+// Safe projection for anyone who is NOT a member of the program. Every field
+// here is deliberately public-appropriate — see lib/programAccess.ts's
+// getPublicProgramProfile(), which is the only place allowed to construct
+// one of these. Never add a field here without checking it against the
+// "never expose" list that request called out (tickets, requester info,
+// notes, private channels, learned facts, macros, audit, retention,
+// analytics, settings, raw internal IDs).
+export interface PublicProgramProfile {
+  id: string;
+  programName: string;
+  description: string | null;
+  supportName: string | null;
+  iconUrl: string | null;
+  status: HostedProgramStatus;
+  // The DB projection only ever returns the raw channel id — resolving it to
+  // a human "#channel-name" needs a live Core Slack lookup, which is a
+  // presentation concern the page does separately (best-effort; falls back
+  // to the id itself if Core is unreachable). Keeping that out of this
+  // function keeps the DB projection pure and independently testable.
+  publicHelpChannelId: string | null;
+  publicSourceCount: number;
+  roster: Array<{ role: "owner" | "organizer" | "helper" }>;
 }

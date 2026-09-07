@@ -1,16 +1,10 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/session";
-import { getHostedProgram } from "@/lib/hostedPrograms";
+import { requireProgramMembership } from "@/lib/programAccess";
 import { IncidentDetailSection } from "../page";
 
 export default async function IncidentDetailPage({ params }: { params: Promise<{ id: string; incidentId: string }> }) {
   const { id, incidentId } = await params;
-  const session = await getSession();
-  if (!session) redirect("/");
-
-  const program = await getHostedProgram(id);
-  if (!program || program.owner_hca_id !== session.hcaId) redirect("/wizard");
+  await requireProgramMembership(id);
 
   return (
     <main className="max-w-none px-0 py-0">

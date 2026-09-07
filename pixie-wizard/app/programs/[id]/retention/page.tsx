@@ -1,17 +1,11 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/session";
-import { getHostedProgram } from "@/lib/hostedPrograms";
+import { requireProgramMembership } from "@/lib/programAccess";
 import { coreRetentionPreview } from "@/lib/pixieCore";
 import { RetentionPolicyForm, RetentionSweepForm } from "./RetentionForms";
 
 export default async function RetentionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getSession();
-  if (!session) redirect("/");
-
-  const program = await getHostedProgram(id);
-  if (!program || program.owner_hca_id !== session.hcaId) redirect("/wizard");
+  const { program } = await requireProgramMembership(id);
 
   let preview: Record<string, unknown> | null = null;
   let loadError: string | null = null;

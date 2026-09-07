@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/session";
-import { getHostedProgram } from "@/lib/hostedPrograms";
+import { requireProgramMembership } from "@/lib/programAccess";
 import { coreKnowledgeCandidates } from "@/lib/pixieCore";
 import { ProposeTicketForm, CandidateCard } from "./ReviewForms";
 
@@ -18,11 +16,7 @@ interface Candidate {
 
 export default async function KnowledgePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getSession();
-  if (!session) redirect("/");
-
-  const program = await getHostedProgram(id);
-  if (!program || program.owner_hca_id !== session.hcaId) redirect("/wizard");
+  const { program } = await requireProgramMembership(id);
 
   let candidates: Candidate[] = [];
   let loadError: string | null = null;

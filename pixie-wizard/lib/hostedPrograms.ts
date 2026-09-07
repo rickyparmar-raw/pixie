@@ -3,7 +3,7 @@
 // never touch Railway, Slack tokens, or model keys — hosted programs have
 // none.
 import { query } from "@/lib/db";
-import type { HostedProgramRow, HostedProgramChannel, HostedProgramHelper } from "@/lib/types";
+import type { HostedProgramRow, HostedProgramChannel, HostedProgramHelper, PublicProgramProfile } from "@/lib/types";
 
 // jsonb columns: node-postgres auto-parses them back into JS values on read,
 // but writes need an explicit JSON string — it does not serialize objects/
@@ -23,6 +23,68 @@ export async function listHostedProgramsForOwner(ownerHcaId: string): Promise<Ho
     [ownerHcaId],
   );
   return rows;
+}
+
+// Program directory: every active program, regardless of who owns it.
+// Membership only gates *management*, not discoverability — see
+// lib/programAccess.ts, which is what turns this full row into either the
+// real dashboard (members) or a safe public projection (everyone else).
+// This function itself is still full-row and MUST NOT be sent to a client
+// component directly.
+export async function listActiveHostedPrograms(): Promise<HostedProgramRow[]> {
+  const { rows } = await query<HostedProgramRow>(
+    `select * from hosted_programs where status = 'active' order by program_name asc`,
+  );
+  return rows;
+}
+
+// The only sanctioned way to get program data safe for a non-member to see.
+// A literal column allowlist in the SELECT — not a full-row fetch with
+// fields hidden afterward — so a future column added to hosted_programs
+// (say, a new internal setting) is private by default instead of leaking
+// the moment someone forgets to strip it client-side.
+export async function getPublicProgramProfile(id: string): Promise<PublicProgramProfile | null> {
+  const { rows } = await query<{
+    id: string;
+    program_name: string;
+    program_description: string | null;
+    support_name: string | null;
+    icon_url: string | null;
+    status: HostedProgramRow["status"];
+    sources: HostedProgramRow["sources"];
+  }>(
+    `select id, program_name, program_description, support_name, icon_url, status, sources
+     from hosted_programs where id = $1 and status = 'active'`,
+    [id],
+  );
+  const row = rows[0];
+  if (!row) return null;
+
+  const helpChannel = await query<{ channel_id: string }>(
+    `select channel_id from hosted_program_channels where program_id = $1 and kind = 'help' limit 1`,
+    [id],
+  );
+
+  const roster = await query<{ role: "owner" | "organizer" | "helper" }>(
+    `select role from hosted_program_helpers
+     where program_id = $1 and active = true and visible_on_profile = true
+     order by role`,
+    [id],
+  );
+
+  const publicSources = Array.isArray(row.sources) ? row.sources.filter((s) => s.public === true) : [];
+
+  return {
+    id: row.id,
+    programName: row.program_name,
+    description: row.program_description ?? null,
+    supportName: row.support_name,
+    iconUrl: row.icon_url,
+    status: row.status,
+    publicHelpChannelId: helpChannel.rows[0]?.channel_id ?? null,
+    publicSourceCount: publicSources.length,
+    roster: roster.rows,
+  };
 }
 
 // Reconciliation queue: anything not confirmed synced to Core, whether it

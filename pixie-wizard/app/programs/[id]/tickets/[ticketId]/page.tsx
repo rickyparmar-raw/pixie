@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/session";
-import { getHostedProgram } from "@/lib/hostedPrograms";
+import { requireProgramMembership } from "@/lib/programAccess";
 import { coreTicketDetail } from "@/lib/pixieCore";
 import { TicketActions } from "./TicketActions";
 import { CopilotPanel } from "./CopilotPanel";
@@ -36,11 +34,7 @@ export default async function TicketPage({
   params: Promise<{ id: string; ticketId: string }>;
 }) {
   const { id, ticketId } = await params;
-  const session = await getSession();
-  if (!session) redirect("/");
-
-  const program = await getHostedProgram(id);
-  if (!program || program.owner_hca_id !== session.hcaId) redirect("/wizard");
+  const { program } = await requireProgramMembership(id);
 
   let detail: TicketDetail | null = null;
   let loadError: string | null = null;

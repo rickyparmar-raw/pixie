@@ -1,9 +1,11 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/session";
-import { getHostedProgram, listHostedChannels, listHostedAudit } from "@/lib/hostedPrograms";
+import { getHostedProgram, listHostedChannels, listHostedAudit, getPublicProgramProfile } from "@/lib/hostedPrograms";
+import { relationshipFor } from "@/lib/programAccess";
 import { ProgramSettingsForms } from "./ProgramSettingsForms";
 import { ChannelChangeForm } from "./ChannelChangeForm";
+import { PublicProfile } from "./PublicProfile";
 import { coreAnalytics, coreSlackChannels } from "@/lib/pixieCore";
 import { PageHeader, SectionCard, MetricCard, StatusBadge } from "@/app/_components/DashboardShell";
 
@@ -13,8 +15,28 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
   if (!session) redirect("/");
 
   const program = await getHostedProgram(id);
-  if (!program) redirect("/wizard");
-  if (program.owner_hca_id !== session.hcaId) redirect("/wizard");
+  if (!program) redirect("/programs");
+
+  const relationship = await relationshipFor(program, session);
+
+  // Non-member: safe read-only profile. getPublicProgramProfile() is a
+  // column-allowlisted projection — there is no admin `program` object in
+  // scope here to accidentally pass through.
+  if (relationship === "public") {
+    const profile = await getPublicProgramProfile(id);
+    if (!profile) redirect("/programs");
+    let helpChannelDisplay: string | null = null;
+    if (profile.publicHelpChannelId) {
+      try {
+        const res = await coreSlackChannels();
+        const match = res.ok ? res.channels.find((c) => c.id === profile.publicHelpChannelId) : null;
+        helpChannelDisplay = match ? `#${match.name}` : profile.publicHelpChannelId;
+      } catch {
+        helpChannelDisplay = profile.publicHelpChannelId;
+      }
+    }
+    return <PublicProfile profile={profile} helpChannelDisplay={helpChannelDisplay} />;
+  }
 
   const [channels, audit] = await Promise.all([listHostedChannels(id), listHostedAudit(id, 20)]);
   let coreChannels: { id: string; name: string; isMember: boolean }[] = [];

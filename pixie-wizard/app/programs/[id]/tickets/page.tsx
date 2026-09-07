@@ -1,7 +1,5 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/session";
-import { getHostedProgram } from "@/lib/hostedPrograms";
+import { requireProgramMembership } from "@/lib/programAccess";
 import { coreTicketSearch } from "@/lib/pixieCore";
 
 interface TicketRow {
@@ -35,11 +33,7 @@ export default async function TicketsPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const session = await getSession();
-  if (!session) redirect("/");
-
-  const program = await getHostedProgram(id);
-  if (!program || program.owner_hca_id !== session.hcaId) redirect("/wizard");
+  const { program } = await requireProgramMembership(id);
 
   const page = Math.max(Number(query.page) || 1, 1);
   const limit = 20;

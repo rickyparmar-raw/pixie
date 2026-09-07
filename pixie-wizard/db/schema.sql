@@ -83,6 +83,10 @@ create table if not exists hosted_program_helpers (
   role text not null default 'helper'
     check (role in ('helper', 'organizer', 'owner')),
   active boolean not null default true,
+  -- Lets an owner hide an individual helper from the public program profile
+  -- roster without touching their actual permissions — a display choice,
+  -- not an authorization one.
+  visible_on_profile boolean not null default true,
   added_at timestamptz not null default now(),
   removed_at timestamptz,
   primary key (program_id, slack_user_id)
