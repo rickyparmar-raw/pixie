@@ -11,6 +11,7 @@ const HOSTED_FILES = [
   "app/wizard/_components/HostedSetupView.tsx",
   "lib/programClaim.ts",
   "lib/deployment.ts",
+  "lib/activationGuards.ts",
 ];
 
 const FORBIDDEN_IDENTIFIERS = [

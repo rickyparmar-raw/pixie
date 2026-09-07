@@ -33,7 +33,7 @@ export default async function KnowledgePage({ params }: { params: Promise<{ id: 
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
+    <main className="max-w-none px-0 py-0">
       <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · knowledge review</p>
       <h1 className="font-heading mt-3 text-2xl text-text">Verified memory</h1>
       <p className="mt-2 text-sm text-text-muted">Resolved tickets become answers only after you approve them here. Nothing enters the corpus unreviewed.</p>

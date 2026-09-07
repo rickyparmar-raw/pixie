@@ -61,6 +61,9 @@ export function createSupabaseFake(seed: Record<string, Row[]> = {}): SupabaseFa
         (r) => r.workspace_id === row.workspace_id && r.id === row.id && (r.status ?? "active") === "active",
       );
     }
+    if (table === "hosted_program_helpers") {
+      return rowsOf(table).some((r) => r.program_id === row.program_id && r.slack_user_id === row.slack_user_id);
+    }
     return false;
   }
 

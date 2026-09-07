@@ -27,6 +27,12 @@
         "name": "Quick Links",
         "type": "json-faq",
         "url": "file://./quick-links.json"
+      },
+      {
+        "name": "YSWS Submission Guidelines",
+        "type": "text",
+        "url": "file://./data/ysws-submission-guidelines.md",
+        "siteUrl": "https://hackclub.gitbook.io/ysws-project-submission-guidelines"
       }
     ],
     "milestones": [
@@ -61,4 +67,3 @@
     }
   }
 ]
-

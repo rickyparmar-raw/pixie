@@ -27,8 +27,43 @@ export function programSlugFor(name: string): string {
   return slug;
 }
 
+export function validateOrDeriveSlug(name: string, customSlug?: string | null): string {
+  if (customSlug && customSlug.trim()) {
+    const raw = customSlug.trim();
+    if (!/^[a-z0-9][a-z0-9-]{1,60}[a-z0-9]$/.test(raw)) {
+      throw new Error("Custom slug must be 3-62 characters, lowercase alphanumeric and hyphens (e.g. 'my-program').");
+    }
+    return raw;
+  }
+  const slug = slugify(name);
+  if (!/^[a-z0-9][a-z0-9-]{1,60}[a-z0-9]$/.test(slug)) {
+    throw new Error("Program name must produce a 3-62 char lowercase slug (alphanumeric and hyphens).");
+  }
+  return slug;
+}
+
 export function creatorEligible(session: WizardSession): boolean {
   return isAllowed({ hcaId: session.hcaId, email: session.email });
+}
+
+// Check for channel claims by other programs before attempting activation.
+export async function findChannelConflicts(
+  workspaceId: string,
+  programId: string,
+  channelIds: string[],
+): Promise<{ conflictChannel: string; ownerProgramId: string } | null> {
+  for (const id of channelIds) {
+    const { data: owner } = await db
+      .from("hosted_program_channels")
+      .select("program_id")
+      .eq("workspace_id", workspaceId)
+      .eq("channel_id", id)
+      .maybeSingle();
+    if (owner && (owner as { program_id: string }).program_id !== programId) {
+      return { conflictChannel: id, ownerProgramId: (owner as { program_id: string }).program_id };
+    }
+  }
+  return null;
 }
 
 // Inserts the program row; throws when the slug is already live in this
@@ -37,6 +72,7 @@ export async function insertHostedProgram(input: {
   id: string;
   workspaceId: string;
   programName: string;
+  programDescription?: string | null;
   ownerHcaId: string;
   ownerSlackId: string | null;
 }): Promise<HostedProgramRow> {
@@ -46,10 +82,12 @@ export async function insertHostedProgram(input: {
       id: input.id,
       workspace_id: input.workspaceId,
       program_name: input.programName,
+      program_description: input.programDescription ?? null,
       owner_hca_id: input.ownerHcaId,
       owner_slack_id: input.ownerSlackId,
       deployment_mode: "hosted_shared",
       status: "active",
+      settings: input.programDescription ? { description: input.programDescription } : {},
     })
     .select("*")
     .single();

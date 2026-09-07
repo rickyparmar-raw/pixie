@@ -24,6 +24,50 @@
       {
         "question": "Who created pixie?",
         "answer": "Ricky created me! He's the one who brought me to life to help out around here."
+      },
+      {
+        "question": "Can I use AI or ChatGPT for my Pixl project?",
+        "answer": "Yes, you can use AI tools like ChatGPT or Copilot for up to 30% of your project's code (for debugging, boilerplate, syntax), but AI cannot exceed 30%, your README cannot be made with AI, and you must disclose all AI usage in your submission."
+      },
+      {
+        "question": "How much AI am I allowed to use?",
+        "answer": "AI usage is capped at a hard ceiling of 30% of your project's code. Exceeding 30% AI breaks the rules and will get your project rejected or your payout deflated."
+      },
+      {
+        "question": "Can AI make 40% or most of my project?",
+        "answer": "No, AI cannot make 40% or most of your project. At most 30% of your code can be built with AI, and fully AI-generated projects are strictly prohibited."
+      },
+      {
+        "question": "Do I need to disclose AI?",
+        "answer": "Yes, you must disclose where and how AI was used in your project submission notes and README. Hiding AI usage will penalize your payout and can result in rejection or a ban."
+      },
+      {
+        "question": "What happens if I go above the AI limit or don't disclose AI?",
+        "answer": "If you exceed the 30% AI limit, your project will be rejected or your approved hours/payout deflated. If you hide AI usage, your project will be rejected, your payout penalized, and it can lead to a ban for fraud."
+      },
+      {
+        "question": "Does the same AI rule apply to hardware or CAD?",
+        "answer": "No, hardware design is strictly not allowed to use AI. All CAD files and PCB designs must be 100% original custom work by you, not by AI. Fully AI-generated designs are rejected and can lead to a ban."
+      },
+      {
+        "question": "Can AI generate my firmware?",
+        "answer": "Firmware is code, so AI can assist with up to 30% of firmware code with honest disclosure, but AI cannot generate your entire firmware."
+      },
+      {
+        "question": "What are the requirements for a software README?",
+        "answer": "For software projects, your README must explain what the project is, how to set it up or run it, and how it can be experienced. It should document the technology used. You must write the README yourself without AI."
+      },
+      {
+        "question": "What happens if my submission is returned?",
+        "answer": "A returned project is not a penalty or final rejection. You will receive specific reviewer feedback on what needs fixing, make the requested adjustments, and resubmit your project for review!"
+      },
+      {
+        "question": "Can I resubmit a returned submission?",
+        "answer": "Yes, absolutely! Returned submissions just need changes based on reviewer feedback. Once you update your project to address the feedback, you can resubmit it for review."
+      },
+      {
+        "question": "How long do referral codes last or when do they expire?",
+        "answer": "Referral codes expire in 48 hours (2 days) after being generated. Submitter referrals must be used within the 48-hour expiration window before they expire!"
       }
     ]
   }

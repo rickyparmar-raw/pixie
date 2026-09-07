@@ -2,7 +2,7 @@
 // configuration rows; Pixie Core owns runtime rows. Writes here never touch
 // Railway, Slack tokens, or model keys — hosted programs have none.
 import { db } from "@/lib/supabase";
-import type { HostedProgramRow, HostedProgramChannel } from "@/lib/types";
+import type { HostedProgramRow, HostedProgramChannel, HostedProgramHelper } from "@/lib/types";
 
 export async function getHostedProgram(id: string): Promise<HostedProgramRow | null> {
   const { data, error } = await db.from("hosted_programs").select("*").eq("id", id).maybeSingle();
@@ -67,3 +67,50 @@ export async function listHostedAudit(programId: string, limit = 100): Promise<u
   if (error) throw new Error(error.message);
   return data ?? [];
 }
+
+export async function addHostedHelper(input: {
+  programId: string;
+  slackUserId: string;
+  role?: "helper" | "organizer" | "owner";
+  helperSource?: "creator" | "organizer_channel" | "usergroup" | "manual";
+}): Promise<HostedProgramHelper> {
+  const role = input.role ?? "helper";
+  const helperSource = input.helperSource ?? "manual";
+  const { data, error } = await db
+    .from("hosted_program_helpers")
+    .insert({
+      program_id: input.programId,
+      slack_user_id: input.slackUserId,
+      role,
+      helper_source: helperSource,
+      active: true,
+    })
+    .select("*")
+    .single();
+  if (error) {
+    if (error.code === "23505") {
+      const { data: updated, error: updateErr } = await db
+        .from("hosted_program_helpers")
+        .update({ role, helper_source: helperSource, active: true, removed_at: null })
+        .eq("program_id", input.programId)
+        .eq("slack_user_id", input.slackUserId)
+        .select("*")
+        .single();
+      if (updateErr) throw new Error(updateErr.message);
+      return updated as HostedProgramHelper;
+    }
+    throw new Error(error.message);
+  }
+  return data as HostedProgramHelper;
+}
+
+export async function listHostedHelpers(programId: string): Promise<HostedProgramHelper[]> {
+  const { data, error } = await db
+    .from("hosted_program_helpers")
+    .select("*")
+    .eq("program_id", programId)
+    .eq("active", true);
+  if (error) throw new Error(error.message);
+  return (data as HostedProgramHelper[]) ?? [];
+}
+

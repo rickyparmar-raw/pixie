@@ -34,7 +34,7 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
   const helperResolved = (a?.helperResolved ?? []) as Array<{ userId: string; resolved: number }>;
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
+    <main className="max-w-none px-0 py-0">
       <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · analytics · 30d</p>
       <h1 className="font-heading mt-3 text-2xl text-text">How support is doing</h1>
       <p className="mt-2 text-sm text-text-muted">Computed from ticket rows — no model invents these numbers.</p>

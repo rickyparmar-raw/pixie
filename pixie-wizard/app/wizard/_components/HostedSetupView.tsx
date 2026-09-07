@@ -1,164 +1,45 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { activateHostedProgram } from "@/app/wizard/hostedActions";
 import type { ActionState } from "@/app/wizard/actions";
 import { SubmitButton } from "./SubmitButton";
-import { inputClass, labelClass } from "./formStyles";
 import type { CoreChannel } from "@/lib/pixieCore";
 
+const steps = ["Program", "Channels", "Identity", "Docs", "Behavior", "Helpers", "Review"];
 const initialState: ActionState = { error: null };
+const inputClass = "pixie-input";
 
-function Section({ n, title, hint, children }: { n: string; title: string; hint: string; children: React.ReactNode }) {
-  return (
-    <section className="rounded-lg border border-line bg-panel p-6">
-      <p className="font-heading text-xs uppercase tracking-[0.2em] text-brand">{n}</p>
-      <h2 className="font-heading mt-2 text-lg text-text">{title}</h2>
-      <p className="mt-1 text-sm text-text-muted">{hint}</p>
-      <div className="mt-5 space-y-4">{children}</div>
-    </section>
-  );
+function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+  return <label className="block text-xs text-text-muted"><span className="mb-2 block">{label}</span>{children}{hint && <span className="mt-2 block text-[11px] text-text-muted/70">{hint}</span>}</label>;
 }
 
-function ChannelSelect({
-  name,
-  channels,
-}: {
-  name: string;
-  channels: CoreChannel[];
-}) {
-  return (
-    <div>
-      <select name={name} defaultValue="" className={inputClass}>
-        <option value="" disabled>
-          Choose a channel…
-        </option>
-        {channels.map((c) => (
-          <option key={c.id} value={c.id}>
-            #{c.name} {c.isMember ? "· Pixie has access" : "· invite @Pixie"}
-          </option>
-        ))}
-      </select>
-      <details className="mt-2 text-xs text-text-muted">
-        <summary className="cursor-pointer underline">Channel not listed? Paste its ID</summary>
-        <input name={`${name}Raw`} placeholder="C0123456789" className={`${inputClass} mt-2 font-mono`} />
-        <p className="mt-1">Raw IDs work for private channels Pixie can already see. If Pixie lacks access, run <code>/invite @Pixie</code> in the channel first.</p>
-      </details>
-    </div>
-  );
+function Select({ name, channels, label }: { name: string; channels: CoreChannel[]; label: string }) {
+  return <Field label={label}><select name={name} required defaultValue="" className={inputClass}><option value="" disabled>Choose a channel...</option>{channels.map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}{channel.isMember ? "" : " · invite @Pixie"}</option>)}</select></Field>;
+}
+
+function Toggle({ name, label, description, checked = true }: { name: string; label: string; description: string; checked?: boolean }) {
+  return <label className="flex gap-3 rounded-md border border-line px-3 py-3"><input type="hidden" name={name} value="off" /><input className="mt-0.5 accent-brand" type="checkbox" name={name} value="on" defaultChecked={checked} /><span><span className="block text-sm text-text">{label}</span><span className="mt-1 block text-xs leading-relaxed text-text-muted">{description}</span></span></label>;
+}
+
+function Stage({ step, title, description, children }: { step: number; title: string; description: string; children: React.ReactNode }) {
+  return <section><p className="text-xs text-text-muted">STEP {String(step).padStart(2, "0")} / 07</p><h1 className="mt-5 text-2xl font-medium text-text">{title}</h1><p className="mt-3 max-w-xl text-sm leading-relaxed text-text-muted">{description}</p><div className="mt-8 space-y-5">{children}</div></section>;
 }
 
 export function HostedSetupView({ channels, coreLive }: { channels: CoreChannel[]; coreLive: boolean }) {
   const [state, formAction] = useActionState(activateHostedProgram, initialState);
-
-  return (
-    <main className="mx-auto max-w-xl px-6 py-16">
-      <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">hosted pixie · shared @Pixie</p>
-      <h1 className="font-heading mt-3 text-2xl text-text">Connect your program</h1>
-      <p className="mt-2 text-sm text-text-muted">
-        No Slack app, no tokens, no Railway, no AI keys. Pick channels, tune behavior, activate — Pixie starts answering in seconds.
-      </p>
-      {!coreLive && (
-        <p className="mt-4 rounded-md border border-line bg-panel px-3 py-2 text-sm text-text-muted">
-          Pixie Core is unreachable right now. You can still activate — your program is saved and syncs automatically once Core is back.
-        </p>
-      )}
-
-      <form action={formAction} className="mt-8 space-y-6">
-        <Section n="Step 1 · Program" title="What's the program?" hint="The support identity is how Pixie signs its replies.">
-          <div>
-            <label htmlFor="programName" className={labelClass}>Program name</label>
-            <input id="programName" name="programName" required maxLength={80} placeholder="e.g. Highway" className={inputClass} />
-          </div>
-          <div>
-            <label htmlFor="supportName" className={labelClass}>Support display name (optional)</label>
-            <input id="supportName" name="supportName" maxLength={80} placeholder="e.g. Highway Help" className={inputClass} />
-          </div>
-        </Section>
-
-        <Section n="Step 2 · Channels" title="Where does Pixie help?" hint="Invite @Pixie into both channels before activating.">
-          <div>
-            <label className={labelClass}>Help channel — members ask here</label>
-            <ChannelSelect name="helpChannelId" channels={channels} />
-          </div>
-          <div>
-            <label className={labelClass}>Organizer channel — helpers coordinate here</label>
-            <ChannelSelect name="organizerChannelId" channels={channels} />
-          </div>
-          <div>
-            <label htmlFor="extraChannelId" className={labelClass}>Extra channel IDs, one per line (optional)</label>
-            <textarea id="extraChannelId" name="extraChannelId" rows={2} placeholder={"C0123456789"} className={`${inputClass} font-mono`} />
-          </div>
-        </Section>
-
-        <Section n="Step 3 · AI behavior" title="When should Pixie answer?" hint="Pixie only answers from your docs. Unsure means a human gets it.">
-          <label className="flex items-center gap-2 text-sm text-text">
-            <input type="hidden" name="aiAnswers" value="off" />
-            <input type="checkbox" name="aiAnswers" value="on" defaultChecked /> AI answers on
-          </label>
-          <label className="flex items-center gap-2 text-sm text-text">
-            <input type="hidden" name="ticketsEnabled" value="off" />
-            <input type="checkbox" name="ticketsEnabled" value="on" defaultChecked /> Human tickets on
-          </label>
-          <label className="flex items-center gap-2 text-sm text-text">
-            <input type="hidden" name="autoEscalate" value="off" />
-            <input type="checkbox" name="autoEscalate" value="on" defaultChecked /> Escalate automatically when unsure
-          </label>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label htmlFor="posture" className={labelClass}>Posture</label>
-              <select id="posture" name="posture" defaultValue="active" className={inputClass}>
-                <option value="active">Active — answers when it can</option>
-                <option value="passive">Passive — only when addressed</option>
-                <option value="muted">Muted — silent while setting up</option>
-              </select>
-            </div>
-            <div>
-              <label htmlFor="scope" className={labelClass}>Answer scope</label>
-              <select id="scope" name="scope" defaultValue="program" className={inputClass}>
-                <option value="program">Program questions only</option>
-                <option value="any">Anything members are stuck on</option>
-              </select>
-            </div>
-          </div>
-        </Section>
-
-        <Section n="Step 4 · Support experience" title="How do replies feel?" hint="Shown in thread acknowledgements and ticket cards.">
-          <p className="text-sm text-text-muted">Uses your support display name from Step 1. Fine-tune acknowledgement and resolve wording after activation, from the program page.</p>
-        </Section>
-
-        <Section n="Step 5 · Knowledge" title="What does Pixie know?" hint="Start with your main docs — add more anytime from the program page.">
-          <div className="grid grid-cols-[110px_1fr] gap-2">
-            <select name="sourceType" defaultValue="url" className={inputClass} aria-label="Source type">
-              <option value="url">Web docs</option>
-              <option value="github-dir">GitHub dir</option>
-              <option value="gdoc">Google Doc</option>
-              <option value="json-faq">JSON FAQ</option>
-            </select>
-            <input name="sourceUrl" placeholder="https://…" className={inputClass} />
-          </div>
-          <div className="grid grid-cols-[110px_1fr] gap-2">
-            <select name="sourceType" defaultValue="url" className={inputClass} aria-label="Source type">
-              <option value="url">Web docs</option>
-              <option value="github-dir">GitHub dir</option>
-              <option value="gdoc">Google Doc</option>
-              <option value="json-faq">JSON FAQ</option>
-            </select>
-            <input name="sourceUrl" placeholder="https://… (optional second source)" className={inputClass} />
-          </div>
-        </Section>
-
-        <Section n="Steps 6–7 · Helpers & retention" title="Defaults that just work" hint="You organize helpers in your organizer channel; retention uses safe defaults.">
-          <p className="text-sm text-text-muted">You (the creator) start as organizer. Helper sync from the organizer channel and retention windows are managed from the program page after activation.</p>
-        </Section>
-
-        <Section n="Step 8 · Review & activate" title="Ready?" hint="Activation takes seconds. No deployment, no build, no restart.">
-          {state.error && (
-            <p className="rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{state.error}</p>
-          )}
-          <SubmitButton pendingLabel="Activating…">Activate hosted Pixie</SubmitButton>
-        </Section>
-      </form>
-    </main>
-  );
+  const [step, setStep] = useState(0);
+  const [programName, setProgramName] = useState("");
+  const move = (to: number) => setStep(Math.max(0, Math.min(steps.length - 1, to)));
+  const next = () => move(step + 1);
+  return <main className="mx-auto min-h-screen max-w-5xl px-5 py-6 sm:px-8"><header className="flex items-center justify-between border-b border-line pb-5"><a href="/wizard" className="flex items-center gap-2 text-sm font-medium text-text"><span className="grid size-7 place-items-center rounded-full bg-brand text-ink">✦</span>pixie</a><a href="/programs" className="text-xs text-text-muted hover:text-text">Open dashboard ›</a></header><div className="mx-auto mt-16 max-w-[680px]"><nav aria-label="Hosted setup progress" className="mb-7 flex items-center gap-2">{steps.map((name, index) => <button type="button" key={name} onClick={() => index <= step && move(index)} className="flex min-w-0 flex-1 items-center gap-2 text-left"><span className={`grid size-6 shrink-0 place-items-center rounded-full border text-[11px] ${index === step ? "border-brand bg-brand text-ink" : index < step ? "border-mint text-mint" : "border-line text-text-muted"}`}>{index + 1}</span><span className={`hidden text-xs sm:block ${index === step ? "text-text" : "text-text-muted"}`}>{name}</span>{index < steps.length - 1 && <span className="h-px flex-1 bg-line" />}</button>)}</nav><form action={formAction} className="pixie-panel p-6 sm:p-9">{!coreLive && <p className="mb-6 rounded-md border border-tang/40 bg-tang/10 p-3 text-xs text-tang">Pixie Core is temporarily unreachable. Your configuration will sync when it is available.</p>}
+    <div hidden={step !== 0}><Stage step={1} title="What's the program?" description="This shows up in how Pixie introduces itself and answers questions."><Field label="Program name"><input className={inputClass} name="programName" required maxLength={80} value={programName} onChange={(event) => setProgramName(event.target.value)} placeholder="Your program" /></Field><Field label="Short description · optional"><textarea className={inputClass} name="programDescription" rows={3} placeholder="A short line about what members are building" /></Field></Stage></div>
+    <div hidden={step !== 1}><Stage step={2} title="Where should Pixie help?" description="Choose the channel where members ask for help and the private channel where helpers receive escalations."><Select name="helpChannelId" channels={channels} label="Help channel" /><Select name="organizerChannelId" channels={channels} label="Organizer channel" /><input type="hidden" name="allowPublicOrganizer" value="off" /><p className="text-xs text-text-muted">Questions and public replies happen in the help channel. Private tickets and claim controls stay in the organizer channel.</p></Stage></div>
+    <div hidden={step !== 2}><Stage step={3} title="Make Pixie yours" description="Choose how Pixie appears when helping members of this program."><Field label="Support bot name"><input className={inputClass} name="supportName" maxLength={80} placeholder={programName ? `${programName} Help` : "Program Help"} /></Field><Field label="Bot logo / avatar" hint="Use an approved Wizard storage URL. Image bytes are never saved in database rows."><input className={inputClass} name="iconUrl" type="url" placeholder="https://.../avatar.png" /></Field><div className="rounded-md border border-line bg-panel-2 p-4"><p className="text-xs text-text-muted">Live Slack message preview</p><div className="mt-3 flex gap-3"><span className="grid size-8 place-items-center rounded-md bg-brand text-xs text-ink">PX</span><p className="text-xs leading-relaxed text-text"><b>{programName ? `${programName} Help` : "Pixie Help"}</b> <span className="text-text-muted">APP · just now</span><br />Pixie answers from your program&apos;s docs and flags anything a human should review.</p></div></div></Stage></div>
+    <div hidden={step !== 3}><Stage step={4} title="Point Pixie at your docs" description="Add every page, FAQ, or doc Pixie should answer questions from. You can add more later."><Field label="Primary source"><div className="grid gap-2 sm:grid-cols-[170px_1fr]"><select name="sourceType" className={inputClass} defaultValue="url"><option value="url">Web page</option><option value="github-dir">GitHub directory</option><option value="gdoc">Google Doc</option><option value="json-faq">FAQ / JSON</option><option value="text">Plain text</option></select><input className={inputClass} name="sourceUrl" required placeholder="https://docs.example.com" /></div></Field><Field label="Additional source · optional"><div className="grid gap-2 sm:grid-cols-[170px_1fr]"><select name="sourceType" className={inputClass} defaultValue="url"><option value="url">Web page</option><option value="github-dir">GitHub directory</option><option value="gdoc">Google Doc</option><option value="json-faq">FAQ / JSON</option></select><input className={inputClass} name="sourceUrl" placeholder="https://..." /></div></Field></Stage></div>
+    <div hidden={step !== 4}><Stage step={5} title="How should Pixie help?" description="Keep support behavior simple. Pixie is hosted, so there are no model or provider settings to configure."><Toggle name="aiAnswers" label="AI answers" description="Allow Pixie to answer questions when it has enough grounded information." /><Toggle name="ticketsEnabled" label="Human handoff" description="Escalate sensitive, uncertain, or explicitly human-directed questions." /><Toggle name="autoEscalate" label="Source citations" description="Show relevant sources when useful." /><div className="grid gap-3 sm:grid-cols-2"><Field label="Posture"><select className={inputClass} name="posture" defaultValue="active"><option value="active">Friendly</option><option value="passive">Concise</option><option value="muted">Detailed</option></select></Field><Field label="Answer scope"><select className={inputClass} name="scope" defaultValue="program"><option value="program">Program only</option><option value="any">Anything members need</option></select></Field></div></Stage></div>
+    <div hidden={step !== 5}><Stage step={6} title="Who's helping?" description="Add people who can claim, resolve, and support Pixie tickets in the private organizer channel."><Field label="Initial helper Slack user IDs · optional" hint="The creator is automatically an owner and organizer."><input className={inputClass} name="initialHelperIds" placeholder="U01234567, U02345678" /></Field><Toggle name="autoAssign" label="Auto-assign" description="Route tickets to available helpers based on their expertise." checked={false} /></Stage></div>
+    <div hidden={step !== 6}><Stage step={7} title="Ready to ship Pixie?" description={`Review the basics, then activate Pixie for ${programName || "your program"}. You can edit everything later.`}><dl className="divide-y divide-line border-y border-line text-sm"><div className="flex justify-between py-3"><dt className="text-text-muted">Program</dt><dd>{programName || "Not named yet"}</dd></div><div className="flex justify-between py-3"><dt className="text-text-muted">Support identity</dt><dd>Configured</dd></div><div className="flex justify-between py-3"><dt className="text-text-muted">Knowledge</dt><dd>Sources configured</dd></div><div className="flex justify-between py-3"><dt className="text-text-muted">Behavior</dt><dd>Grounded support</dd></div></dl>{state.error && <p className="rounded-md border border-brand/40 bg-brand/10 p-3 text-sm text-brand">{state.error}</p>}</Stage></div>
+    <footer className="mt-8 flex items-center justify-between border-t border-line pt-5"><span className="text-xs text-text-muted">Hosted Pixie · no keys required</span>{step === 6 ? <SubmitButton pendingLabel="Activating Pixie...">Activate Pixie</SubmitButton> : <div className="flex gap-2"><button type="button" onClick={() => move(step - 1)} disabled={step === 0} className="pixie-button pixie-button-quiet disabled:opacity-30">Back</button><button type="button" onClick={next} className="pixie-button pixie-button-primary">Continue ›</button></div>}</footer>
+  </form></div></main>;
 }

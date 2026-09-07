@@ -34,7 +34,7 @@ export default async function GapsPage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
+    <main className="max-w-none px-0 py-0">
       <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · faq gaps</p>
       <h1 className="font-heading mt-3 text-2xl text-text">What docs don&apos;t answer</h1>
       <p className="mt-2 text-sm text-text-muted">Equivalent asks grouped automatically. Drafts need approval before they teach Pixie anything.</p>

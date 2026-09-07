@@ -18,9 +18,19 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
       <form action={settingsAction} className="space-y-4 rounded-lg border border-line bg-panel p-6">
         <h2 className="font-heading text-lg text-text">AI & support behavior</h2>
         <input type="hidden" name="programId" value={program.id} />
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="supportName" className={labelClass}>Support display name</label>
+            <input id="supportName" name="supportName" defaultValue={program.support_name ?? ""} maxLength={80} className={inputClass} />
+          </div>
+          <div>
+            <label htmlFor="iconUrl" className={labelClass}>Support icon / avatar URL</label>
+            <input id="iconUrl" name="iconUrl" defaultValue={program.icon_url ?? ""} placeholder="https://…/avatar.png" className={inputClass} />
+          </div>
+        </div>
         <div>
-          <label htmlFor="supportName" className={labelClass}>Support display name</label>
-          <input id="supportName" name="supportName" defaultValue={program.support_name ?? ""} maxLength={80} className={inputClass} />
+          <label htmlFor="programDescription" className={labelClass}>Program description</label>
+          <textarea id="programDescription" name="programDescription" defaultValue={program.program_description ?? ""} rows={2} className={inputClass} />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>

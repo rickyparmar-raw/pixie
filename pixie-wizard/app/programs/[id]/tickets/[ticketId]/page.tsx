@@ -52,7 +52,7 @@ export default async function TicketPage({
 
   if (loadError || !detail) {
     return (
-      <main className="mx-auto max-w-2xl px-6 py-16">
+      <main className="max-w-none px-0 py-0">
         <p className="rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{loadError} — is Pixie Core running?</p>
         <Link href={`/programs/${id}/tickets`} className="mt-4 inline-block text-sm text-text-muted underline">← Back to queue</Link>
       </main>
@@ -69,7 +69,7 @@ export default async function TicketPage({
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
+    <main className="max-w-none px-0 py-0">
       <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">
         {program.program_name} · ticket #{ticket.id} · {ticket.status}
       </p>

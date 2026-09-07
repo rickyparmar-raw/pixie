@@ -1,0 +1,23 @@
+import { redirect } from "next/navigation";
+import { DashboardShell, MetricCard, PageHeader, SectionCard, StatusBadge } from "@/app/_components/DashboardShell";
+import { getSession } from "@/lib/session";
+import { listHostedProgramsForOwner } from "@/lib/hostedPrograms";
+import { coreAnalytics } from "@/lib/pixieCore";
+import { summarizeAnalytics, type AnalyticsSnapshot } from "@/lib/dashboardMetrics";
+
+function percent(value: number, total: number): string { return total ? `${Math.round((value / total) * 100)}%` : "0%"; }
+
+export default async function OverviewPage() {
+  const session = await getSession();
+  if (!session) redirect("/");
+  const programs = await listHostedProgramsForOwner(session.hcaId).catch(() => []);
+  const snapshots = (await Promise.all(programs.map(async (program) => {
+    try { return await coreAnalytics(program.id, 30) as unknown as AnalyticsSnapshot; } catch { return null; }
+  }))).filter((value): value is AnalyticsSnapshot => value !== null);
+  const totals = summarizeAnalytics(snapshots);
+  return <DashboardShell><PageHeader eyebrow="Workspace" title="Support across all your programs" description="A deterministic 30-day view of questions, tickets, and helper workload." actions={<span className="pixie-button pixie-button-quiet">30d</span>} />
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><MetricCard label="Questions" value={totals.questions} detail="last 30 days" tone="text-text" /><MetricCard label="AI answered" value={totals.aiAnswered} detail={`${percent(totals.aiAnswered, totals.questions)} answer rate`} /><MetricCard label="Escalated" value={totals.escalated} detail={`${percent(totals.escalated, totals.questions)} escalation rate`} tone="text-brand" /><MetricCard label="Open tickets" value={totals.openTickets} detail={`${totals.stale} stale 48h+`} tone="text-tang" /></div>
+    <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><MetricCard label="Resolved" value={totals.resolved} tone="text-text" /><MetricCard label="FAQ gaps" value={totals.faqGaps} tone="text-tang" /><MetricCard label="Active incidents" value={totals.activeIncidents} tone={totals.activeIncidents ? "text-brand" : "text-mint"} /><MetricCard label="Programs" value={programs.length} tone="text-text" /></div>
+    <div className="mt-6 grid gap-6 lg:grid-cols-[1.2fr_0.8fr]"><SectionCard title="Program health" description="Real program-level aggregates from Pixie Core."><div className="overflow-x-auto"><table className="w-full min-w-[620px] text-left text-xs"><thead className="text-[10px] uppercase tracking-[0.16em] text-text-muted"><tr><th className="pb-3 font-normal">Program</th><th className="pb-3 font-normal">Health</th><th className="pb-3 font-normal">Questions</th><th className="pb-3 font-normal">AI answer %</th><th className="pb-3 font-normal">Open</th></tr></thead><tbody className="divide-y divide-line">{programs.map((program) => { const row = snapshots.find((snapshot) => snapshot.programId === program.id); const open = row ? Object.entries(row.byStatus).filter(([status]) => status !== "resolved").reduce((sum, [, count]) => sum + count, 0) : 0; return <tr key={program.id}><td className="py-3"><a className="text-text hover:text-brand" href={`/programs/${program.id}`}>{program.program_name}</a></td><td className="py-3"><StatusBadge status={program.status === "active" ? "Healthy" : program.status} /></td><td className="py-3 text-text-muted">{row?.created ?? "—"}</td><td className="py-3 text-text-muted">{row ? percent(row.aiAnswered, row.created) : "—"}</td><td className="py-3 text-text-muted">{row ? open : "—"}</td></tr>; })}</tbody></table></div>{programs.length === 0 && <p className="text-sm text-text-muted">No hosted programs yet.</p>}</SectionCard><SectionCard title="Activity mix" description="30-day volume by program; no synthetic series are generated."><div className="space-y-4">{snapshots.map((row) => { const max = Math.max(row.created, 1); return <div key={row.programId}><div className="mb-2 flex justify-between text-xs"><span className="text-text">{programs.find((program) => program.id === row.programId)?.program_name ?? row.programId}</span><span className="text-text-muted">{row.created} questions</span></div><div className="flex h-2 overflow-hidden rounded-sm bg-line"><span className="bg-mint" style={{ width: `${(row.aiAnswered / max) * 100}%` }} /><span className="bg-brand" style={{ width: `${((row.byStatus.escalated ?? 0) / max) * 100}%` }} /></div></div>; })}</div>{snapshots.length === 0 && <p className="text-sm text-text-muted">Analytics will appear after Pixie Core records support activity.</p>}</SectionCard></div>
+  </DashboardShell>;
+}

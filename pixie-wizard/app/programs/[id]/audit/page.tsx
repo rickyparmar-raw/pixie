@@ -43,7 +43,7 @@ export default async function AuditPage({
     : events;
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
+    <main className="max-w-none px-0 py-0">
       <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · audit</p>
       <h1 className="font-heading mt-3 text-2xl text-text">What happened</h1>
       <p className="mt-2 text-sm text-text-muted">Append-only. Secrets are never recorded here.</p>

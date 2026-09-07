@@ -66,7 +66,7 @@ export default async function TicketsPage({
   const pages = Math.max(Math.ceil(total / limit), 1);
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
+    <main className="max-w-none px-0 py-0">
       <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · tickets</p>
       <h1 className="font-heading mt-3 text-2xl text-text">Support queue {total > 0 && <span className="text-text-muted">({total})</span>}</h1>
 

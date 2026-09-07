@@ -68,3 +68,26 @@ test("re-claiming your own channels is idempotent", async () => {
   const second = await claim({ workspaceId: "T9", programId: "newprog", channels: [{ id: "C-mine", kind: "help" }], claimedByHcaId: "H1" });
   expect(second.ok).toBe(true);
 });
+
+test("validateOrDeriveSlug handles derived and custom slugs", async () => {
+  const { validateOrDeriveSlug: valSlug } = await import("./programClaim");
+  expect(valSlug("My Cool Program")).toBe("my-cool-program");
+  expect(valSlug("My Program", "custom-slug")).toBe("custom-slug");
+  expect(() => valSlug("My Program", "INVALID")).toThrow();
+  expect(() => valSlug("My Program", "x")).toThrow();
+});
+
+test("findChannelConflicts discovers taken channels before claim", async () => {
+  const { insertHostedProgram: insert, claimHostedChannels: claim, findChannelConflicts: conflicts } = await import("./programClaim");
+  await insert({ id: "owner-prog", workspaceId: "T_TEST", programName: "Owner Prog", ownerHcaId: "H_OWNER", ownerSlackId: null });
+  await claim({ workspaceId: "T_TEST", programId: "owner-prog", channels: [{ id: "C-claimed", kind: "help" }], claimedByHcaId: "H_OWNER" });
+
+  const conflict = await conflicts("T_TEST", "different-prog", ["C-free", "C-claimed"]);
+  expect(conflict).not.toBeNull();
+  expect(conflict?.conflictChannel).toBe("C-claimed");
+  expect(conflict?.ownerProgramId).toBe("owner-prog");
+
+  const noConflict = await conflicts("T_TEST", "owner-prog", ["C-claimed"]);
+  expect(noConflict).toBeNull();
+});
+

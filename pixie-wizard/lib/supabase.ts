@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { timeoutFetch } from "@/lib/timeoutFetch";
 
 function required(name: string): string {
   const v = process.env[name];
@@ -13,7 +14,7 @@ function client(): SupabaseClient {
   _client ??= createClient(
     required("SUPABASE_URL"),
     required("SUPABASE_SERVICE_KEY"),
-    { auth: { persistSession: false } },
+    { auth: { persistSession: false }, global: { fetch: timeoutFetch } },
   );
   return _client;
 }

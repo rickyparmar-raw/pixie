@@ -4,7 +4,8 @@ import { getSession } from "@/lib/session";
 import { getHostedProgram, listHostedChannels, listHostedAudit } from "@/lib/hostedPrograms";
 import { ProgramSettingsForms } from "./ProgramSettingsForms";
 import { ChannelChangeForm } from "./ChannelChangeForm";
-import { coreSlackChannels } from "@/lib/pixieCore";
+import { coreAnalytics, coreSlackChannels } from "@/lib/pixieCore";
+import { PageHeader, SectionCard, MetricCard, StatusBadge } from "@/app/_components/DashboardShell";
 
 export default async function ProgramPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -23,18 +24,21 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
   } catch {
     coreChannels = [];
   }
+  let analytics: Record<string, unknown> | null = null;
+  try {
+    analytics = await coreAnalytics(id, 30);
+  } catch {
+    analytics = null;
+  }
+  const byStatus = (analytics?.byStatus ?? {}) as Record<string, number>;
+  const open = Object.entries(byStatus).filter(([status]) => status !== "resolved").reduce((sum, [, count]) => sum + count, 0);
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
-      <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">hosted pixie · {program.status}</p>
-      <h1 className="font-heading mt-3 text-2xl text-text">{program.program_name}</h1>
-      <p className="mt-2 text-sm text-text-muted">
-        Support identity <span className="text-text">{program.support_name ?? `${program.program_name} Help`}</span>
-        {" · "}Core sync <span className="text-text">{program.core_sync_state}</span>
-        {program.core_sync_state === "failed" && program.core_sync_error && (
-          <span> — {program.core_sync_error}. Settings are saved and retry on the next save.</span>
-        )}
-      </p>
+    <main className="max-w-none px-0 py-0">
+      <PageHeader eyebrow={`Hosted Pixie · ${program.status}`} title={program.program_name} description={`Support identity ${program.support_name ?? `${program.program_name} Help`} · Core sync ${program.core_sync_state}`} actions={<StatusBadge status={program.status === "active" ? "Healthy" : program.status} />} />
+      {program.core_sync_state === "failed" && program.core_sync_error && <p className="-mt-3 mb-5 text-sm text-brand">{program.core_sync_error}. Settings are saved and retry on the next save.</p>}
+
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><MetricCard label="Questions" value={String(analytics?.created ?? "—")} tone="text-text" /><MetricCard label="AI answered" value={String(analytics?.aiAnswered ?? "—")} /><MetricCard label="Escalated" value={String(byStatus.escalated ?? "—")} tone="text-brand" /><MetricCard label="Open tickets" value={analytics ? open : "—"} tone="text-tang" /></div>
 
       <div className="mt-6 flex flex-wrap gap-3">
         <Link href={`/programs/${id}/tickets`} className="rounded-md bg-brand px-4 py-2 font-heading text-sm text-white hover:bg-brand-dim">
@@ -56,8 +60,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         ))}
       </div>
 
-      <div className="mt-6 rounded-lg border border-line bg-panel p-6">
-        <h2 className="font-heading text-lg text-text">Channels</h2>
+      <SectionCard title="Channels" description="Claimed support and organizer channels.">
         <ul className="mt-3 space-y-1 text-sm text-text">
           {channels.map((c) => (
             <li key={`${c.workspace_id}:${c.channel_id}`} className="font-mono">
@@ -67,7 +70,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
           {channels.length === 0 && <li className="text-text-muted">No channels claimed yet.</li>}
         </ul>
         <ChannelChangeForm programId={id} channels={coreChannels} />
-      </div>
+      </SectionCard>
 
       <div className="mt-6">
         <ProgramSettingsForms program={program} />

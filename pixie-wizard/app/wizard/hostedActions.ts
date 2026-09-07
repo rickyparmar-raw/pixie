@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { creatorEligible, programSlugFor, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
+import { creatorEligible, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
 import { sourceUrlProblem } from "@/lib/sourceUrls";
-import { getHostedProgram, updateHostedProgram, logHostedAudit } from "@/lib/hostedPrograms";
-import { syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot } from "@/lib/pixieCore";
+import { getHostedProgram, updateHostedProgram, logHostedAudit, addHostedHelper } from "@/lib/hostedPrograms";
+import { syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot, coreChannelMembership, coreConfigured, coreHelpersSync } from "@/lib/pixieCore";
+import { validateActivationGuards } from "@/lib/activationGuards";
 import type { ActionState } from "@/app/wizard/actions";
 import type { DocSource } from "@/lib/types";
 
@@ -66,36 +67,64 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
   const session = await requireHostedSession();
 
   const programName = String(formData.get("programName") ?? "").trim();
+  const programSlug = String(formData.get("programSlug") ?? "").trim();
+  const programDescription = String(formData.get("programDescription") ?? "").trim();
   const supportName = String(formData.get("supportName") ?? "").trim();
-  if (!programName) return { error: "Program name is required." };
-  if (programName.length > 80) return { error: "Keep the program name under 80 characters." };
+  const iconUrl = String(formData.get("iconUrl") ?? "").trim();
 
-  let slug: string;
-  try {
-    slug = programSlugFor(programName);
-  } catch (err) {
-    return { error: err instanceof Error ? err.message : "Bad program name." };
-  }
   const helpChannelId = String(formData.get("helpChannelId") ?? formData.get("helpChannelIdRaw") ?? "").trim();
   const organizerChannelId = String(formData.get("organizerChannelId") ?? formData.get("organizerChannelIdRaw") ?? "").trim();
-  if (!helpChannelId) return { error: "Pick a help channel." };
-  if (!organizerChannelId) return { error: "Pick an organizer channel." };
+  const rawExtra = formData.getAll("extraChannelId").map(String);
+  const extraChannelIds: string[] = [];
+  for (const item of rawExtra) {
+    for (const part of item.split(/[\r\n,]+/)) {
+      const t = part.trim();
+      if (t) extraChannelIds.push(t);
+    }
+  }
 
-  const extraIds = formData.getAll("extraChannelId").map(String).map((s) => s.trim()).filter(Boolean);
-  const channels = [
-    { id: helpChannelId, kind: "help" as const },
-    { id: organizerChannelId, kind: "organizer" as const },
-    ...extraIds.filter((id) => id !== helpChannelId && id !== organizerChannelId).map((id) => ({ id, kind: "discussion" as const })),
-  ];
-
+  const allowPublicOrganizer = flagOn(formData, "allowPublicOrganizer", false);
   const aiAnswers = flagOn(formData, "aiAnswers", true);
   const ticketsEnabled = flagOn(formData, "ticketsEnabled", true);
   const autoEscalate = flagOn(formData, "autoEscalate", true);
+  const autoAssign = flagOn(formData, "autoAssign", false);
   const posture = (String(formData.get("posture") ?? "active") || "active") as "active" | "passive" | "muted";
   const scope = (String(formData.get("scope") ?? "program") || "program") as "any" | "program";
+
+  const rawHelpers = String(formData.get("initialHelperIds") ?? "");
+  const helperIds = rawHelpers
+    .split(/[\r\n,]+/)
+    .map((s) => s.trim())
+    .filter((s) => /^[UW][A-Z0-9]{8,14}$/.test(s));
+
   const parsed = parseSources(formData);
   if (parsed.error) return { error: parsed.error };
   const sources = parsed.sources;
+
+  // HARD ACTIVATION GUARDS
+  const guard = await validateActivationGuards({
+    workspaceId: CENTRAL_WORKSPACE,
+    expectedWorkspaceId: CENTRAL_WORKSPACE,
+    programName,
+    programSlug: programSlug || null,
+    programDescription: programDescription || null,
+    helpChannelId,
+    organizerChannelId,
+    extraChannelIds,
+    supportName: supportName || null,
+    iconUrl: iconUrl || null,
+    sources,
+    allowPublicOrganizer,
+    checkDbConflicts: true,
+    membershipChecker: coreConfigured() ? coreChannelMembership : undefined,
+  });
+
+  if (!guard.ok) {
+    return { error: guard.error ?? "Activation guard failed." };
+  }
+
+  const slug = guard.validatedSlug!;
+  const channels = guard.channels!;
 
   let program;
   try {
@@ -103,6 +132,7 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
       id: slug,
       workspaceId: CENTRAL_WORKSPACE,
       programName,
+      programDescription: programDescription || null,
       ownerHcaId: session.hcaId,
       ownerSlackId: session.slackId,
     });
@@ -117,10 +147,6 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
     claimedByHcaId: session.hcaId,
   });
   if (!claim.ok) {
-    // Roll back the just-created row: without channels the program cannot
-    // serve, and leaving it would turn every retry into a duplicate-slug
-    // error. The row only ever exists from the insert above, so deleting it
-    // here cannot strand another flow's program.
     const { db } = await import("@/lib/supabase");
     await db.from("hosted_programs").delete().eq("id", slug).eq("workspace_id", CENTRAL_WORKSPACE);
     return { error: `Channel <#${claim.conflictChannel}> is already owned by another program. Pick a different channel and activate again.` };
@@ -128,13 +154,49 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
 
   const patched = await updateHostedProgram(slug, {
     support_name: supportName || `${programName} Help`,
+    icon_url: iconUrl || null,
+    program_description: programDescription || null,
     ai_answers: aiAnswers,
     tickets_enabled: ticketsEnabled,
     auto_escalate: autoEscalate,
     posture: ["active", "passive", "muted"].includes(posture) ? posture : "active",
     scope: scope === "any" ? "any" : "program",
     sources,
+    settings: {
+      ...(programDescription ? { description: programDescription } : {}),
+      autoAssign,
+    },
   });
+
+  // Helpers bootstrapping: creator as owner/organizer, initial helpers as helpers
+  if (session.slackId) {
+    await addHostedHelper({
+      programId: slug,
+      slackUserId: session.slackId,
+      role: "owner",
+      helperSource: "creator",
+    }).catch(() => null);
+  }
+  for (const hId of helperIds) {
+    await addHostedHelper({
+      programId: slug,
+      slackUserId: hId,
+      role: "helper",
+      helperSource: "manual",
+    }).catch(() => null);
+  }
+
+  const allHelperMembers = [
+    ...(session.slackId ? [session.slackId] : []),
+    ...helperIds,
+  ];
+  if (allHelperMembers.length > 0) {
+    await coreHelpersSync(slug, {
+      actorId: session.slackId || allHelperMembers[0],
+      members: allHelperMembers,
+      source: "manual",
+    }).catch(() => null);
+  }
 
   await logHostedAudit({
     programId: slug,
@@ -143,15 +205,21 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
     action: "program.activated",
     entityType: "program",
     entityId: slug,
-    metadata: { channels: channels.map((c) => c.id) },
+    metadata: {
+      channels: channels.map((c) => c.id),
+      hasIcon: Boolean(iconUrl),
+      sourcesCount: sources.length,
+      helpersCount: allHelperMembers.length,
+    },
   });
 
-  // Best-effort: the program is live in the control plane regardless. A down
-  // Core keeps serving from its last sync; this row retries via core_sync_state.
+  // Best-effort sync to Core
   const sync = await syncProgramToCore(slug, {
     name: patched.program_name,
+    description: programDescription || null,
     workspaceId: CENTRAL_WORKSPACE,
     supportName: patched.support_name,
+    iconUrl: patched.icon_url,
     helpChannel: helpChannelId,
     channels: channels.map((c) => c.id),
     posture: patched.posture,
@@ -159,6 +227,7 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
     aiAnswers,
     ticketsEnabled,
     autoEscalate,
+    autoAssign,
     sources,
     claimedBy: session.slackId,
     workspace_id: CENTRAL_WORKSPACE,
@@ -189,26 +258,43 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
     assignedMs: minutes("slaAssignedMin"),
     waitingMs: minutes("slaWaitingMin"),
   };
+  const supportName = String(formData.get("supportName") ?? program.support_name ?? "").trim() || program.support_name;
+  const iconUrl = String(formData.get("iconUrl") ?? program.icon_url ?? "").trim() || null;
+  const programDescription = String(formData.get("programDescription") ?? program.program_description ?? "").trim() || null;
+  if (iconUrl) {
+    const iconProb = sourceUrlProblem(iconUrl);
+    if (iconProb) return { error: `Invalid icon URL: ${iconProb}` };
+  }
+  const autoAssign = flagOn(formData, "autoAssign", false);
   const patch = {
-    support_name: String(formData.get("supportName") ?? program.support_name ?? "").trim() || program.support_name,
+    support_name: supportName,
+    icon_url: iconUrl,
+    program_description: programDescription,
     ai_answers: flagOn(formData, "aiAnswers", program.ai_answers),
     tickets_enabled: flagOn(formData, "ticketsEnabled", program.tickets_enabled),
     auto_escalate: flagOn(formData, "autoEscalate", program.auto_escalate),
     posture: (String(formData.get("posture") ?? program.posture) || program.posture) as "active" | "passive" | "muted",
     scope: (String(formData.get("scope") ?? program.scope) || program.scope) as "any" | "program",
+    settings: {
+      ...((program.settings as Record<string, unknown>) || {}),
+      ...(programDescription ? { description: programDescription } : {}),
+      autoAssign,
+    },
   };
   const updated = await updateHostedProgram(programId, patch);
   await logHostedAudit({ programId, actorHcaId: session.hcaId, actorSlackId: session.slackId, action: "program.settings_updated", entityType: "program", entityId: programId });
   const sync = await syncProgramToCore(programId, {
     name: updated.program_name,
+    description: updated.program_description ?? null,
     workspaceId: updated.workspace_id,
     supportName: updated.support_name,
+    iconUrl: updated.icon_url,
     posture: updated.posture,
     scope: updated.scope,
     aiAnswers: updated.ai_answers,
     ticketsEnabled: updated.tickets_enabled,
     autoEscalate: updated.auto_escalate,
-    autoAssign: flagOn(formData, "autoAssign", false),
+    autoAssign,
     sensitiveCategories: String(formData.get("sensitiveCategories") ?? "").split(",").map((t) => t.trim()).filter(Boolean),
     sources: updated.sources,
     sla: Object.fromEntries(Object.entries(sla).filter(([, v]) => v !== null)),

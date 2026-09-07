@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { isAllowed, setSessionCookie } from "@/lib/session";
+import { timeoutFetch } from "@/lib/timeoutFetch";
 
 const HCA_BASE_URL = "https://auth.hackclub.com";
 
@@ -37,7 +38,7 @@ export async function GET(req: NextRequest) {
 
   if (!code || !state || !expected || state !== expected) return fail("state");
 
-  const tokenRes = await fetch(`${HCA_BASE_URL}/oauth/token`, {
+  const tokenRes = await timeoutFetch(`${HCA_BASE_URL}/oauth/token`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -53,7 +54,7 @@ export async function GET(req: NextRequest) {
 
   const tokens = (await tokenRes.json()) as HackClubTokenResponse;
 
-  const meRes = await fetch(`${HCA_BASE_URL}/api/v1/me`, {
+  const meRes = await timeoutFetch(`${HCA_BASE_URL}/api/v1/me`, {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
 

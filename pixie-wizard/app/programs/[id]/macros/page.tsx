@@ -22,7 +22,7 @@ export default async function MacrosPage({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
+    <main className="max-w-none px-0 py-0">
       <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · macros</p>
       <h1 className="font-heading mt-3 text-2xl text-text">Approved replies</h1>
       <p className="mt-2 text-sm text-text-muted">Helpers send these from any ticket. <code>{"{requester} {ticket_id} {program} {status} {helper}"}</code> interpolate; anything else stays literal.</p>

@@ -24,7 +24,7 @@ export default async function RetentionPage({ params }: { params: Promise<{ id: 
   const policy = (preview?.policy ?? {}) as Record<string, number>;
 
   return (
-    <main className="mx-auto max-w-2xl px-6 py-16">
+    <main className="max-w-none px-0 py-0">
       <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · retention</p>
       <h1 className="font-heading mt-3 text-2xl text-text">What gets forgotten</h1>
       <p className="mt-2 text-sm text-text-muted">Raw support content expires on schedule. Approved knowledge and open tickets survive.</p>

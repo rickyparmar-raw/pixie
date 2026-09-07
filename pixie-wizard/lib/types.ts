@@ -171,6 +171,7 @@ export interface HostedProgramRow {
   id: string;
   workspace_id: string;
   program_name: string;
+  program_description?: string | null;
   support_name: string | null;
   icon_url: string | null;
   owner_hca_id: string;
@@ -202,4 +203,14 @@ export interface HostedProgramChannel {
   kind: "help" | "organizer" | "discussion" | "announcement";
   claimed_by_hca_id: string | null;
   created_at: string;
+}
+
+export interface HostedProgramHelper {
+  program_id: string;
+  slack_user_id: string;
+  helper_source: "creator" | "organizer_channel" | "usergroup" | "manual";
+  role: "helper" | "organizer" | "owner";
+  active: boolean;
+  added_at: string;
+  removed_at?: string | null;
 }
