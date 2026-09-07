@@ -3,6 +3,8 @@ import Link from "next/link";
 import { getSession } from "@/lib/session";
 import { getHostedProgram, listHostedChannels, listHostedAudit } from "@/lib/hostedPrograms";
 import { ProgramSettingsForms } from "./ProgramSettingsForms";
+import { ChannelChangeForm } from "./ChannelChangeForm";
+import { coreSlackChannels } from "@/lib/pixieCore";
 
 export default async function ProgramPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -14,6 +16,13 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
   if (program.owner_hca_id !== session.hcaId) redirect("/wizard");
 
   const [channels, audit] = await Promise.all([listHostedChannels(id), listHostedAudit(id, 20)]);
+  let coreChannels: { id: string; name: string; isMember: boolean }[] = [];
+  try {
+    const res = await coreSlackChannels();
+    if (res.ok) coreChannels = res.channels;
+  } catch {
+    coreChannels = [];
+  }
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
@@ -57,6 +66,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
           ))}
           {channels.length === 0 && <li className="text-text-muted">No channels claimed yet.</li>}
         </ul>
+        <ChannelChangeForm programId={id} channels={coreChannels} />
       </div>
 
       <div className="mt-6">

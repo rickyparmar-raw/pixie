@@ -117,7 +117,13 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
     claimedByHcaId: session.hcaId,
   });
   if (!claim.ok) {
-    return { error: `Channel <#${claim.conflictChannel}> is already owned by another program. Ask in that program's organizer channel or pick a different channel.` };
+    // Roll back the just-created row: without channels the program cannot
+    // serve, and leaving it would turn every retry into a duplicate-slug
+    // error. The row only ever exists from the insert above, so deleting it
+    // here cannot strand another flow's program.
+    const { db } = await import("@/lib/supabase");
+    await db.from("hosted_programs").delete().eq("id", slug).eq("workspace_id", CENTRAL_WORKSPACE);
+    return { error: `Channel <#${claim.conflictChannel}> is already owned by another program. Pick a different channel and activate again.` };
   }
 
   const patched = await updateHostedProgram(slug, {
@@ -530,5 +536,77 @@ export async function hostedRetentionSweep(_prev: ActionState, formData: FormDat
     return { error: err instanceof Error ? err.message : "Retention sweep failed." };
   }
   revalidatePath(`/programs/${programId}/retention`);
+  return { error: null };
+}
+
+// Help-channel move: verify Pixie access, claim the new channel, release the
+// old claim, keep ticket history untouched. Any failure leaves routing exactly
+// as it was — claims are atomic on both sides.
+export async function hostedChannelsUpdate(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await getSession();
+  if (!session) return { error: "Unauthorized." };
+  const programId = String(formData.get("programId") ?? "");
+  const rawNew = String(formData.get("newHelpChannelId") ?? formData.get("newHelpChannelIdRaw") ?? "").trim();
+  if (!programId || !rawNew) return { error: "Pick a new help channel." };
+
+  const { getHostedProgram } = await import("@/lib/hostedPrograms");
+  const program = await getHostedProgram(programId);
+  if (!program || program.owner_hca_id !== session.hcaId) return { error: "Only the program owner can move channels." };
+  const { listHostedChannels } = await import("@/lib/hostedPrograms");
+  const current = await listHostedChannels(programId);
+  const oldHelp = current.find((c) => c.kind === "help");
+  if (oldHelp && oldHelp.channel_id === rawNew) return { error: "That's already the help channel." };
+
+  const { coreChannelMembership, syncProgramToCore } = await import("@/lib/pixieCore");
+  try {
+    const membership = await coreChannelMembership(rawNew);
+    if (!membership.ok || !membership.hasAccess) {
+      return { error: "Pixie can't see that channel yet — run /invite @Pixie there first, then retry." };
+    }
+  } catch {
+    return { error: "Could not verify channel access — is Pixie Core running?" };
+  }
+
+  const { claimHostedChannels } = await import("@/lib/programClaim");
+  const claim = await claimHostedChannels({
+    workspaceId: program.workspace_id,
+    programId,
+    channels: [{ id: rawNew, kind: "help" }],
+    claimedByHcaId: session.hcaId,
+  });
+  if (!claim.ok) {
+    return { error: `Channel is already owned by another program.` };
+  }
+
+  const sync = await syncProgramToCore(programId, {
+    name: program.program_name,
+    workspaceId: program.workspace_id,
+    helpChannel: rawNew,
+    programChannels: [
+      { id: rawNew, kind: "help" },
+      ...(oldHelp ? [{ id: oldHelp.channel_id, kind: "release" }] : []),
+    ],
+  });
+  if (!sync.ok) {
+    const { db } = await import("@/lib/supabase");
+    await db.from("hosted_program_channels").delete().eq("workspace_id", program.workspace_id).eq("channel_id", rawNew).eq("program_id", programId);
+    return { error: sync.error ?? "Core sync failed — routing unchanged." };
+  }
+
+  if (oldHelp) {
+    const { db } = await import("@/lib/supabase");
+    await db.from("hosted_program_channels").delete().eq("workspace_id", program.workspace_id).eq("channel_id", oldHelp.channel_id).eq("program_id", programId);
+  }
+  const { logHostedAudit } = await import("@/lib/hostedPrograms");
+  await logHostedAudit({
+    programId,
+    actorHcaId: session.hcaId,
+    actorSlackId: session.slackId,
+    action: "program.help_channel_moved",
+    entityType: "program",
+    entityId: programId,
+    metadata: { from: oldHelp?.channel_id ?? null, to: rawNew },
+  });
+  revalidatePath(`/programs/${programId}`);
   return { error: null };
 }
