@@ -63,6 +63,13 @@ async function startBot() {
   // Judges the unclassified gap backlog on a slow loop, and posts the weekly
   // report once it's due. Both are background work — see lib/report.js.
   report.start(app.client);
+  // Stale-ticket watchdog. No-op unless programs set SLA thresholds; one
+  // replica at a time via job lease — see lib/sla.js.
+  try {
+    require("./lib/sla").startSlaLoop(app.client);
+  } catch (e) {
+    log.error("sla", "loop failed to start:", e.message);
+  }
 
   // Web console: starts if SLACK_CLIENT_ID is set, silently skipped otherwise.
   const webServer = web.start();
