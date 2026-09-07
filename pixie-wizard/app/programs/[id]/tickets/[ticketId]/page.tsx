@@ -5,6 +5,8 @@ import { getHostedProgram } from "@/lib/hostedPrograms";
 import { coreTicketDetail } from "@/lib/pixieCore";
 import { TicketActions } from "./TicketActions";
 import { CopilotPanel } from "./CopilotPanel";
+import { MacroSendForm, type MacroRow } from "../../macros/MacroForms";
+import { coreMacrosList } from "@/lib/pixieCore";
 
 interface TicketDetail {
   ticket: {
@@ -59,6 +61,13 @@ export default async function TicketPage({
 
   const { ticket, events, notes } = detail;
 
+  let macros: MacroRow[] = [];
+  try {
+    macros = (await coreMacrosList(id)) as MacroRow[];
+  } catch {
+    macros = [];
+  }
+
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
       <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">
@@ -76,6 +85,10 @@ export default async function TicketPage({
 
       <div className="mt-6">
         <TicketActions programId={id} ticketId={ticket.id} />
+      </div>
+
+      <div className="mt-6">
+        <MacroSendForm programId={id} ticketId={ticket.id} macros={macros.filter((m) => m.enabled)} />
       </div>
 
       <div className="mt-6">

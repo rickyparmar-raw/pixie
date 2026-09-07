@@ -107,8 +107,7 @@ export async function coreGapClusters(programId: string): Promise<{ clusters: un
   return body as { clusters: unknown[] };
 }
 
-export async function coreFaqPropose(programId: string, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/gaps/clusters`, {
+export async function coreFaqPropose(programId: string, payload: Record<string, unknown>): Promise<unknown> {  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/gaps/clusters`, {
     method: "POST",
     body: JSON.stringify(payload),
   });
@@ -139,4 +138,45 @@ export async function coreSlackChannels(): Promise<{ ok: boolean; channels: Core
 export async function coreChannelMembership(channelId: string): Promise<{ ok: boolean; hasAccess: boolean; name?: string | null; reason?: string }> {
   const { body } = await call(`/internal/v1/slack/membership?channel=${encodeURIComponent(channelId)}`);
   return body as { ok: boolean; hasAccess: boolean; name?: string | null; reason?: string };
+}
+
+export async function coreMacrosList(programId: string, q = ""): Promise<unknown[]> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/macros${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `macros lookup failed (${status})`);
+  return body as unknown[];
+}
+
+export async function coreMacroSave(programId: string, payload: Record<string, unknown> & { id?: number }): Promise<unknown> {
+  if (payload.id) {
+    const { status, body } = await call(`/internal/v1/macros/${payload.id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    if (status !== 200) throw new Error((body as { error?: string })?.error || `macro update failed (${status})`);
+    return body;
+  }
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/macros`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `macro create failed (${status})`);
+  return body;
+}
+
+export async function coreMacroDelete(macroId: number, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/macros/${macroId}`, {
+    method: "DELETE",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `macro delete failed (${status})`);
+  return body;
+}
+
+export async function coreMacroSend(macroId: number, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/macros/${macroId}`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `macro send failed (${status})`);
+  return body;
 }

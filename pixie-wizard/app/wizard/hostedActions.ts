@@ -372,3 +372,65 @@ export async function hostedFaqPropose(_prev: ActionState, formData: FormData): 
   revalidatePath(`/programs/${programId}/gaps`);
   return { error: null };
 }
+
+// Macros: organizer-managed, helper-invoked. Sends go through Core so program
+// branding, permissions, and optional ticket transitions all apply.
+export async function hostedMacroSave(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await getSession();
+  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const id = Number(formData.get("macroId") ?? "");
+  const trigger = String(formData.get("trigger") ?? "").trim();
+  const name = String(formData.get("macroName") ?? "").trim();
+  const content = String(formData.get("macroContent") ?? "").trim();
+  if (!programId || !trigger || !name || !content) return { error: "Trigger, name, and content are required." };
+  try {
+    const { coreMacroSave } = await import("@/lib/pixieCore");
+    await coreMacroSave(programId, {
+      actorId: session.slackId,
+      ...(id ? { id } : {}),
+      trigger,
+      name,
+      description: String(formData.get("macroDescription") ?? "").trim() || null,
+      content,
+      on_send_transition: String(formData.get("macroTransition") ?? "").trim() || null,
+    });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Macro save failed." };
+  }
+  revalidatePath(`/programs/${programId}/macros`);
+  return { error: null };
+}
+
+export async function hostedMacroDelete(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await getSession();
+  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const id = Number(formData.get("macroId") ?? "");
+  if (!programId || !id) return { error: "Missing macro fields." };
+  try {
+    const { coreMacroDelete } = await import("@/lib/pixieCore");
+    await coreMacroDelete(id, { actorId: session.slackId });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Macro delete failed." };
+  }
+  revalidatePath(`/programs/${programId}/macros`);
+  return { error: null };
+}
+
+export async function hostedMacroSend(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await getSession();
+  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const id = Number(formData.get("macroId") ?? "");
+  const ticketId = Number(formData.get("ticketId") ?? "");
+  if (!programId || !id || !ticketId) return { error: "Pick a macro and a ticket first." };
+  try {
+    const { coreMacroSend } = await import("@/lib/pixieCore");
+    await coreMacroSend(id, { actorId: session.slackId, ticketId });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Macro send failed." };
+  }
+  revalidatePath(`/programs/${programId}/tickets/${ticketId}`);
+  return { error: null };
+}
