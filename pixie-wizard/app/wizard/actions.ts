@@ -8,6 +8,7 @@ import { testBotToken, testAppToken } from "@/lib/slackApi";
 import { encryptSecret } from "@/lib/crypto";
 import { provisionTrial } from "@/lib/provisionTrial";
 import { slugify } from "@/lib/slackManifest";
+import { sourceUrlProblem } from "@/lib/sourceUrls";
 import type { DocSource } from "@/lib/types";
 
 export interface ActionState {
@@ -92,11 +93,8 @@ export async function saveSources(_prev: ActionState, formData: FormData): Promi
     if (!url && !type) continue;
     if (!url) return { error: `Row ${i + 1} is missing a URL.` };
     if (!type || !SOURCE_TYPES.has(type)) return { error: `Row ${i + 1} has an invalid type.` };
-    try {
-      new URL(url);
-    } catch {
-      return { error: `Row ${i + 1}'s URL doesn't look valid.` };
-    }
+    const problem = sourceUrlProblem(url);
+    if (problem) return { error: `Row ${i + 1}: ${problem}` };
     sources.push({ type: type as DocSource["type"], url, label: labels[i]?.trim() || undefined });
   }
 

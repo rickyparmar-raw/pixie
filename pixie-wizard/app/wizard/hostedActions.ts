@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { creatorEligible, programSlugFor, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
+import { sourceUrlProblem } from "@/lib/sourceUrls";
 import { getHostedProgram, updateHostedProgram, logHostedAudit } from "@/lib/hostedPrograms";
 import { syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot } from "@/lib/pixieCore";
 import type { ActionState } from "@/app/wizard/actions";
@@ -43,11 +44,8 @@ function parseSources(formData: FormData): { sources: DocSource[]; error: string
     if (!url) {
       return { sources: [], error: `Source row ${i + 1} is missing its URL.` };
     }
-    try {
-      new URL(url);
-    } catch {
-      return { sources: [], error: `Source row ${i + 1}'s URL doesn't look valid.` };
-    }
+    const problem = sourceUrlProblem(url);
+    if (problem) return { sources: [], error: `Row ${i + 1}: ${problem}` };
     sources.push({ type, url, label: (labels[i] || "").trim() || undefined });
   }
   return { sources, error: null };
