@@ -176,6 +176,15 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
   const program = await getHostedProgram(programId);
   if (!program) return { error: "Program not found." };
 
+  const minutes = (name: string) => {
+    const v = Number(formData.get(name) ?? "");
+    return Number.isFinite(v) && v > 0 ? Math.round(v * 60000) : null;
+  };
+  const sla = {
+    unassignedMs: minutes("slaUnassignedMin"),
+    assignedMs: minutes("slaAssignedMin"),
+    waitingMs: minutes("slaWaitingMin"),
+  };
   const patch = {
     support_name: String(formData.get("supportName") ?? program.support_name ?? "").trim() || program.support_name,
     ai_answers: flagOn(formData, "aiAnswers", program.ai_answers),
@@ -195,7 +204,10 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
     aiAnswers: updated.ai_answers,
     ticketsEnabled: updated.tickets_enabled,
     autoEscalate: updated.auto_escalate,
+    autoAssign: flagOn(formData, "autoAssign", false),
+    sensitiveCategories: String(formData.get("sensitiveCategories") ?? "").split(",").map((t) => t.trim()).filter(Boolean),
     sources: updated.sources,
+    sla: Object.fromEntries(Object.entries(sla).filter(([, v]) => v !== null)),
   });
   await updateHostedProgram(programId, {
     core_sync_state: sync.ok ? "synced" : "failed",
@@ -432,5 +444,93 @@ export async function hostedMacroSend(_prev: ActionState, formData: FormData): P
     return { error: err instanceof Error ? err.message : "Macro send failed." };
   }
   revalidatePath(`/programs/${programId}/tickets/${ticketId}`);
+  return { error: null };
+}
+
+// Helpers: manual membership, expertise tags, reconciliation.
+export async function hostedHelperSave(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await getSession();
+  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const userId = String(formData.get("helperUserId") ?? "").trim();
+  const tags = String(formData.get("helperTags") ?? "").split(",").map((t) => t.trim()).filter(Boolean);
+  if (!programId || !userId) return { error: "Helper user ID is required." };
+  try {
+    const { coreHelpers, coreHelpersSync, coreRoutingExpertise } = await import("@/lib/pixieCore");
+    const current = ((await coreHelpers(programId)) as Array<{ user_id: string }>) ?? [];
+    const members = [...new Set([...current.map((h) => h.user_id), userId])];
+    await coreHelpersSync(programId, { actorId: session.slackId, members, source: "manual" });
+    if (tags.length > 0) {
+      await coreRoutingExpertise(programId, { actorId: session.slackId, userId, tags });
+    }
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Helper save failed." };
+  }
+  revalidatePath(`/programs/${programId}/helpers`);
+  return { error: null };
+}
+
+// Incidents: detect/confirm/dismiss/resolve/link/unlink. Announcement drafts
+// return data for display; posting stays human.
+export async function hostedIncidentAction(input: {
+  programId: string;
+  incidentId?: number;
+  action: string;
+  ticketId?: number;
+}): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  const session = await getSession();
+  if (!session?.slackId) return { ok: false, error: "Link your Slack account first." };
+  try {
+    const { coreIncidentDetect, coreIncidentAction } = await import("@/lib/pixieCore");
+    if (input.action === "detect") {
+      const data = await coreIncidentDetect(input.programId, { actorId: session.slackId });
+      return { ok: true, data };
+    }
+    if (!input.incidentId) return { ok: false, error: "Missing incident." };
+    const data = await coreIncidentAction(input.incidentId, {
+      actorId: session.slackId,
+      action: input.action,
+      ticketId: input.ticketId,
+    });
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Incident action failed." };
+  }
+}
+
+// Retention: policy update (helpers) and confirmed sweep (organizers).
+export async function hostedRetentionPolicy(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await getSession();
+  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  if (!programId) return { error: "Missing program." };
+  const policy: Record<string, number> = {};
+  for (const key of ["contextDays", "ticketsDays", "notesDays", "tracesDays", "analyticsDays", "auditDays"]) {
+    const v = Number(formData.get(key) ?? "");
+    if (Number.isFinite(v) && v > 0) policy[key] = v;
+  }
+  try {
+    const { coreRetentionPolicy } = await import("@/lib/pixieCore");
+    await coreRetentionPolicy(programId, { actorId: session.slackId, policy });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Retention update failed." };
+  }
+  revalidatePath(`/programs/${programId}/retention`);
+  return { error: null };
+}
+
+export async function hostedRetentionSweep(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await getSession();
+  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const confirm = String(formData.get("confirm") ?? "");
+  if (!programId || confirm !== `DELETE ${programId}`) return { error: "Type the exact confirmation phrase to sweep." };
+  try {
+    const { coreRetentionSweep } = await import("@/lib/pixieCore");
+    await coreRetentionSweep(programId, { actorId: session.slackId, confirm: true });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Retention sweep failed." };
+  }
+  revalidatePath(`/programs/${programId}/retention`);
   return { error: null };
 }

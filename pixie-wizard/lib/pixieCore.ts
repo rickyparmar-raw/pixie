@@ -180,3 +180,110 @@ export async function coreMacroSend(macroId: number, payload: Record<string, unk
   if (status !== 200) throw new Error((body as { error?: string })?.error || `macro send failed (${status})`);
   return body;
 }
+
+export async function coreAnalytics(programId: string, days = 30): Promise<Record<string, unknown>> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/analytics?days=${days}`);
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `analytics failed (${status})`);
+  return body as Record<string, unknown>;
+}
+
+export async function coreRoutingRecommend(programId: string, category?: string): Promise<unknown[]> {
+  const { status, body } = await call(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/routing/recommend${category ? `?category=${encodeURIComponent(category)}` : ""}`,
+  );
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `routing failed (${status})`);
+  return body as unknown[];
+}
+
+export async function coreRoutingExpertise(programId: string, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/routing/expertise`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `expertise update failed (${status})`);
+  return body;
+}
+
+export async function coreDuplicates(programId: string, params: Record<string, string>): Promise<unknown> {
+  const query = new URLSearchParams(params).toString();
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/duplicates?${query}`);
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `duplicates failed (${status})`);
+  return body;
+}
+
+export async function coreIncidents(programId: string, status?: string): Promise<unknown[]> {
+  const { status: code, body } = await call(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/incidents${status ? `?status=${status}` : ""}`,
+  );
+  if (code !== 200) throw new Error((body as { error?: string })?.error || `incidents failed (${code})`);
+  return body as unknown[];
+}
+
+export async function coreIncidentDetail(incidentId: number): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/incidents/${incidentId}`);
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `incident lookup failed (${status})`);
+  return body;
+}
+
+export async function coreIncidentDetect(programId: string, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/incidents`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `incident detection failed (${status})`);
+  return body;
+}
+
+export async function coreIncidentAction(incidentId: number, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/incidents/${incidentId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `incident action failed (${status})`);
+  return body;
+}
+
+export async function coreRetentionPreview(programId: string): Promise<Record<string, unknown>> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/retention`);
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `retention preview failed (${status})`);
+  return body as Record<string, unknown>;
+}
+
+export async function coreRetentionPolicy(programId: string, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/retention`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `retention update failed (${status})`);
+  return body;
+}
+
+export async function coreRetentionSweep(programId: string, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/retention`, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `retention sweep failed (${status})`);
+  return body;
+}
+
+export async function coreHelpers(programId: string): Promise<unknown[]> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers`);
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `helpers lookup failed (${status})`);
+  return body as unknown[];
+}
+
+export async function coreAudit(programId: string): Promise<unknown[]> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/audit?limit=100`);
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `audit lookup failed (${status})`);
+  return body as unknown[];
+}
+
+export async function coreHelpersSync(programId: string, payload: Record<string, unknown>): Promise<unknown> {
+  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `helpers sync failed (${status})`);
+  return body;
+}

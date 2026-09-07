@@ -27,13 +27,24 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         )}
       </p>
 
-      <div className="mt-6 flex gap-3">
+      <div className="mt-6 flex flex-wrap gap-3">
         <Link href={`/programs/${id}/tickets`} className="rounded-md bg-brand px-4 py-2 font-heading text-sm text-white hover:bg-brand-dim">
           Open tickets →
         </Link>
-        <Link href="/wizard" className="rounded-md border border-line px-4 py-2 font-heading text-sm text-text-muted hover:text-text">
-          All programs
-        </Link>
+        {[
+          ["knowledge", "Knowledge"],
+          ["gaps", "FAQ gaps"],
+          ["macros", "Macros"],
+          ["helpers", "Helpers"],
+          ["analytics", "Analytics"],
+          ["incidents", "Incidents"],
+          ["audit", "Audit"],
+          ["retention", "Retention"],
+        ].map(([slug, label]) => (
+          <Link key={slug} href={`/programs/${id}/${slug}`} className="rounded-md border border-line px-4 py-2 font-heading text-sm text-text-muted hover:text-text">
+            {label}
+          </Link>
+        ))}
       </div>
 
       <div className="mt-6 rounded-lg border border-line bg-panel p-6">

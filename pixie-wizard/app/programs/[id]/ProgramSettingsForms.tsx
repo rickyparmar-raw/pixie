@@ -51,6 +51,29 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
           <input type="hidden" name="autoEscalate" value="off" />
           <input type="checkbox" name="autoEscalate" value="on" defaultChecked={program.auto_escalate} /> Auto-escalate when unsure
         </label>
+        <label className="flex items-center gap-2 text-sm text-text">
+          <input type="hidden" name="autoAssign" value="off" />
+          <input type="checkbox" name="autoAssign" value="on" /> Auto-assign to the recommended helper
+        </label>
+        <div>
+          <label htmlFor="sensitiveCategories" className={labelClass}>Human-only categories (comma-separated)</label>
+          <input id="sensitiveCategories" name="sensitiveCategories" placeholder="money, reimbursement, safety" className={inputClass} />
+          <p className="mt-1 text-xs text-text-muted">Matching questions skip the AI entirely and go straight to humans.</p>
+        </div>
+        <div className="grid grid-cols-3 gap-4">
+          <div>
+            <label htmlFor="slaUnassignedMin" className={labelClass}>Flag unassigned after (min)</label>
+            <input id="slaUnassignedMin" name="slaUnassignedMin" placeholder="e.g. 120" className={`${inputClass} font-mono`} />
+          </div>
+          <div>
+            <label htmlFor="slaAssignedMin" className={labelClass}>Flag assigned idle after (min)</label>
+            <input id="slaAssignedMin" name="slaAssignedMin" placeholder="e.g. 240" className={`${inputClass} font-mono`} />
+          </div>
+          <div>
+            <label htmlFor="slaWaitingMin" className={labelClass}>Flag waiting after (min)</label>
+            <input id="slaWaitingMin" name="slaWaitingMin" placeholder="e.g. 180" className={`${inputClass} font-mono`} />
+          </div>
+        </div>
         {settingsState.error && <p className="rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{settingsState.error}</p>}
         <SubmitButton>Save behavior</SubmitButton>
       </form>

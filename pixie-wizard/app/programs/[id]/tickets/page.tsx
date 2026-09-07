@@ -17,12 +17,21 @@ interface TicketRow {
 
 const STATUSES = ["open", "assigned", "waiting_for_helper", "escalated", "resolved", "reopened", "closed", "snoozed", "duplicate"];
 
+function pageHref(query: Record<string, string | undefined>, page: number): string {
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) {
+    if (v) params.set(k, v);
+  }
+  params.set("page", String(page));
+  return `?${params.toString()}`;
+}
+
 export default async function TicketsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ status?: string; q?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; assignee?: string; requester?: string; category?: string; priority?: string; page?: string }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
@@ -32,6 +41,8 @@ export default async function TicketsPage({
   const program = await getHostedProgram(id);
   if (!program || program.owner_hca_id !== session.hcaId) redirect("/wizard");
 
+  const page = Math.max(Number(query.page) || 1, 1);
+  const limit = 20;
   let total = 0;
   let rows: TicketRow[] = [];
   let searchError: string | null = null;
@@ -40,28 +51,42 @@ export default async function TicketsPage({
       programId: id,
       ...(query.status ? { status: query.status } : {}),
       ...(query.q ? { q: query.q } : {}),
-      limit: "50",
+      ...(query.assignee ? { assigneeId: query.assignee } : {}),
+      ...(query.requester ? { requesterId: query.requester } : {}),
+      ...(query.category ? { category: query.category } : {}),
+      ...(query.priority ? { priority: query.priority } : {}),
+      limit: String(limit),
+      offset: String((page - 1) * limit),
     });
     total = res.total;
     rows = res.rows as TicketRow[];
   } catch (err) {
     searchError = err instanceof Error ? err.message : "Search failed.";
   }
+  const pages = Math.max(Math.ceil(total / limit), 1);
 
   return (
     <main className="mx-auto max-w-2xl px-6 py-16">
       <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · tickets</p>
       <h1 className="font-heading mt-3 text-2xl text-text">Support queue {total > 0 && <span className="text-text-muted">({total})</span>}</h1>
 
-      <form method="get" className="mt-6 flex gap-2">
-        <input name="q" defaultValue={query.q ?? ""} placeholder="Search questions…" className="w-full rounded-md border border-line bg-panel-2 px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-brand focus:outline-none" />
-        <select name="status" defaultValue={query.status ?? ""} className="rounded-md border border-line bg-panel-2 px-3 py-2 text-sm text-text">
-          <option value="">All states</option>
-          {STATUSES.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-        <button type="submit" className="rounded-md bg-brand px-4 py-2 font-heading text-sm text-white hover:bg-brand-dim">Go</button>
+      <form method="get" className="mt-6 space-y-2">
+        <div className="flex gap-2">
+          <input name="q" defaultValue={query.q ?? ""} placeholder="Search questions…" className="w-full rounded-md border border-line bg-panel-2 px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-brand focus:outline-none" />
+          <select name="status" defaultValue={query.status ?? ""} className="rounded-md border border-line bg-panel-2 px-3 py-2 text-sm text-text">
+            <option value="">All states</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <button type="submit" className="rounded-md bg-brand px-4 py-2 font-heading text-sm text-white hover:bg-brand-dim">Go</button>
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <input name="assignee" defaultValue={query.assignee ?? ""} placeholder="Assignee ID" className="w-32 rounded-md border border-line bg-panel-2 px-2 py-1 font-mono text-text" />
+          <input name="requester" defaultValue={query.requester ?? ""} placeholder="Requester ID" className="w-32 rounded-md border border-line bg-panel-2 px-2 py-1 font-mono text-text" />
+          <input name="category" defaultValue={query.category ?? ""} placeholder="Category" className="w-28 rounded-md border border-line bg-panel-2 px-2 py-1 text-text" />
+          <input name="priority" defaultValue={query.priority ?? ""} placeholder="Priority" className="w-24 rounded-md border border-line bg-panel-2 px-2 py-1 text-text" />
+        </div>
       </form>
 
       {searchError && <p className="mt-4 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{searchError} — is Pixie Core running?</p>}
@@ -83,6 +108,14 @@ export default async function TicketsPage({
         ))}
       </ul>
       {rows.length === 0 && !searchError && <p className="mt-6 text-sm text-text-muted">No tickets here yet. New help-channel questions show up automatically.</p>}
+
+      {pages > 1 && (
+        <div className="mt-6 flex items-center gap-3 text-sm text-text-muted">
+          <span>Page {page} of {pages}</span>
+          {page > 1 && <Link href={pageHref(query, page - 1)} className="underline">← Prev</Link>}
+          {page < pages && <Link href={pageHref(query, page + 1)} className="underline">Next →</Link>}
+        </div>
+      )}
 
       <Link href={`/programs/${id}`} className="mt-8 inline-block text-sm text-text-muted underline">← Back to {program.program_name}</Link>
     </main>
