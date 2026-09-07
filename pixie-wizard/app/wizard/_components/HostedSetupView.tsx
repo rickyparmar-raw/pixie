@@ -14,8 +14,34 @@ function Field({ label, children, hint }: { label: string; children: React.React
   return <label className="block text-xs text-text-muted"><span className="mb-2 block">{label}</span>{children}{hint && <span className="mt-2 block text-[11px] text-text-muted/70">{hint}</span>}</label>;
 }
 
+// A plain text input rather than a <select>: the channel list only reflects
+// what Core's Slack client happens to already know about, and a real channel
+// (or a sandbox/test one) that isn't in that list would otherwise be
+// unselectable. The known channels are still offered as datalist suggestions
+// for anyone who'd rather click than type an ID.
 function Select({ name, channels, label }: { name: string; channels: CoreChannel[]; label: string }) {
-  return <Field label={label}><select name={name} required defaultValue="" className={inputClass}><option value="" disabled>Choose a channel...</option>{channels.map((channel) => <option key={channel.id} value={channel.id}>#{channel.name}{channel.isMember ? "" : " · invite @Pixie"}</option>)}</select></Field>;
+  const listId = `${name}-options`;
+  return (
+    <Field label={label} hint="Slack channel ID, e.g. C0123456789 — right-click the channel in Slack → View channel details to find it.">
+      <input
+        className={inputClass}
+        name={name}
+        required
+        list={listId}
+        placeholder="C0123456789"
+        pattern="[CG][A-Z0-9]{8,14}"
+        title="A Slack channel ID starting with C or G (e.g. C0123456789)"
+      />
+      <datalist id={listId}>
+        {channels.map((channel) => (
+          <option key={channel.id} value={channel.id}>
+            #{channel.name}
+            {channel.isMember ? "" : " · invite @Pixie"}
+          </option>
+        ))}
+      </datalist>
+    </Field>
+  );
 }
 
 function Toggle({ name, label, description, checked = true }: { name: string; label: string; description: string; checked?: boolean }) {

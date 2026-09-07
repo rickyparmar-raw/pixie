@@ -14,16 +14,16 @@ export default function LandingPage() {
           </h1>
           <p className="mt-5 max-w-md text-sm leading-relaxed text-text-muted">
             Pixie answers questions from your program&apos;s docs, right in your
-            Slack channels. This wizard walks you through a free 14-day trial —
-            your own bot identity, your own docs, your own LLM key. No code.
+            Slack channels. No Slack app to build, no bot token, no LLM key —
+            just your channels and your docs.
           </p>
           <ol className="mt-8 space-y-2 text-sm text-text-muted">
             {[
               "Sign in with Hack Club Auth",
-              "Tell us about your program and paste an LLM key",
+              "Tell us about your program",
               "Point it at your docs",
-              "Create a Slack app from a generated manifest",
-              "We deploy it — answering in your channels within minutes",
+              "Pick your help and organizer channels",
+              "It's live — answering in your channels within minutes",
             ].map((step, i) => (
               <li key={step} className="flex items-baseline gap-3">
                 <span className="font-heading text-xs text-brand">
@@ -58,10 +58,10 @@ export default function LandingPage() {
             href="/api/auth/login"
             className="mt-2 flex w-full items-center justify-center rounded-md bg-brand px-4 py-3 font-heading text-sm text-white transition-colors hover:bg-brand-dim"
           >
-            Start your trial →
+            Get started →
           </a>
           <p className="mt-3 text-center text-xs text-text-muted">
-            Free for 14 days. Bring your own LLM key.
+            Hosted Pixie · no keys required
           </p>
           {devBypass && (
             <a

@@ -7,7 +7,7 @@ const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
   title: "Pixie Wizard",
-  description: "Spin up your own trial instance of pixie for your Hack Club program",
+  description: "Set up hosted Pixie for your Hack Club program",
 };
 
 export const viewport = {

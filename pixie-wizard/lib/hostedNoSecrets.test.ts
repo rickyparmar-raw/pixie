@@ -10,7 +10,6 @@ const HOSTED_FILES = [
   "app/wizard/hostedActions.ts",
   "app/wizard/_components/HostedSetupView.tsx",
   "lib/programClaim.ts",
-  "lib/deployment.ts",
   "lib/activationGuards.ts",
 ];
 
