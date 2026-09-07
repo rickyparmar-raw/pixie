@@ -92,6 +92,11 @@ create table if not exists hosted_program_helpers (
   primary key (program_id, slack_user_id)
 );
 
+-- CREATE TABLE IF NOT EXISTS above is a no-op against a database that
+-- already has this table from before visible_on_profile existed — this is
+-- the statement that actually adds it to an existing deployment.
+alter table hosted_program_helpers add column if not exists visible_on_profile boolean not null default true;
+
 -- Append-only audit. No update/delete path; retention archives, never rewrites.
 create table if not exists hosted_audit_events (
   id uuid primary key default gen_random_uuid(),
