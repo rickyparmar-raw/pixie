@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
+import { listHostedHelpers } from "@/lib/hostedPrograms";
 import { coreHelpers, coreRoutingRecommend } from "@/lib/pixieCore";
-import { HelperAddForm } from "./HelperForms";
+import { HelperAddForm, HelperVisibilityToggle } from "./HelperForms";
 
 interface Helper {
   user_id: string;
@@ -12,7 +13,9 @@ interface Helper {
 
 export default async function HelpersPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { program } = await requireProgramMembership(id);
+  const { program, relationship } = await requireProgramMembership(id);
+  const canManageVisibility = relationship === "owner" || relationship === "admin";
+  const wizardHelpers = canManageVisibility ? await listHostedHelpers(id).catch(() => []) : [];
 
   let helpers: Helper[] = [];
   let recommendations: Array<{ userId: string; score: number; reasons: string[] }> = [];
@@ -52,6 +55,18 @@ export default async function HelpersPage({ params }: { params: Promise<{ id: st
               <li key={r.userId}>&lt;@{r.userId}&gt; <span className="text-text-muted">· score {r.score} — {r.reasons.join("; ")}</span></li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {canManageVisibility && wizardHelpers.length > 0 && (
+        <div className="mt-6 rounded-lg border border-line bg-panel p-6">
+          <h2 className="font-heading text-lg text-text">Public profile visibility</h2>
+          <p className="mt-1 text-xs text-text-muted">Owner/admin only. Hiding a helper here only affects the public program profile — it never changes their actual permissions.</p>
+          <div className="mt-3 space-y-2">
+            {wizardHelpers.map((h) => (
+              <HelperVisibilityToggle key={h.slack_user_id} programId={id} slackUserId={h.slack_user_id} role={h.role} visible={h.visible_on_profile} />
+            ))}
+          </div>
         </div>
       )}
 

@@ -140,6 +140,14 @@ export async function coreChannelMembership(channelId: string): Promise<{ ok: bo
   return body as { ok: boolean; hasAccess: boolean; name?: string | null; reason?: string };
 }
 
+// Display identity only — display name + avatar, nothing else. Used
+// exclusively to render the public helper roster; never pass the userId
+// this was resolved from back out alongside the result.
+export async function coreUserInfo(userId: string): Promise<{ ok: boolean; displayName?: string | null; avatarUrl?: string | null; reason?: string }> {
+  const { body } = await call(`/internal/v1/slack/users/info?user=${encodeURIComponent(userId)}`);
+  return body as { ok: boolean; displayName?: string | null; avatarUrl?: string | null; reason?: string };
+}
+
 export async function coreMacrosList(programId: string, q = ""): Promise<unknown[]> {
   const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/macros${q ? `?q=${encodeURIComponent(q)}` : ""}`);
   if (status !== 200) throw new Error((body as { error?: string })?.error || `macros lookup failed (${status})`);

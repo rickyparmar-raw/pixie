@@ -1,11 +1,44 @@
 "use client";
 
 import { useActionState } from "react";
-import { hostedHelperSave } from "@/app/wizard/hostedActions";
+import { hostedHelperSave, setHelperVisibilityAction } from "@/app/wizard/hostedActions";
 import type { ActionState } from "@/lib/types";
 import { inputClass, labelClass } from "@/app/wizard/_components/formStyles";
 
 const initialState: ActionState = { error: null };
+
+// Owner/admin only — the page decides whether to render this at all, and
+// setHelperVisibilityAction() re-checks that server-side regardless, since a
+// page-level check is a UX nicety, never the actual authorization boundary.
+// Purely a display toggle: it can never grant or revoke real permissions,
+// only whether this one helper shows up on the public roster.
+export function HelperVisibilityToggle({
+  programId,
+  slackUserId,
+  role,
+  visible,
+}: {
+  programId: string;
+  slackUserId: string;
+  role: string;
+  visible: boolean;
+}) {
+  const [state, formAction] = useActionState(setHelperVisibilityAction, initialState);
+  return (
+    <form action={formAction} className="flex items-center justify-between gap-3 rounded-md border border-line px-3 py-2 text-sm">
+      <input type="hidden" name="programId" value={programId} />
+      <input type="hidden" name="slackUserId" value={slackUserId} />
+      <span className="font-mono text-text">
+        &lt;@{slackUserId}&gt; <span className="font-sans text-text-muted">· {role}</span>
+      </span>
+      <label className="flex items-center gap-2 text-xs text-text-muted">
+        <input type="checkbox" name="visible" value="on" defaultChecked={visible} className="accent-brand" onChange={(e) => e.currentTarget.form?.requestSubmit()} />
+        Show on public profile
+      </label>
+      {state.error && <span className="text-brand">{state.error}</span>}
+    </form>
+  );
+}
 
 export function HelperAddForm({ programId }: { programId: string }) {
   const [state, formAction] = useActionState(hostedHelperSave, initialState);

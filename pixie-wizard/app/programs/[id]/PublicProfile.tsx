@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { PublicProgramProfile } from "@/lib/types";
+import type { PublicProgramProfile, PublicHelperIdentity } from "@/lib/types";
 import { StatusBadge } from "@/app/_components/DashboardShell";
 
 const ROLE_LABEL: Record<"owner" | "organizer" | "helper", string> = {
@@ -17,9 +17,13 @@ const ROLE_LABEL: Record<"owner" | "organizer" | "helper", string> = {
 export function PublicProfile({
   profile,
   helpChannelDisplay,
+  roster,
 }: {
   profile: PublicProgramProfile;
   helpChannelDisplay: string | null;
+  // Identity-resolved where possible; a null displayName means resolution
+  // failed or Slack had nothing to offer — rendered as a role-only row.
+  roster: PublicHelperIdentity[];
 }) {
   return (
     <main className="mx-auto min-h-screen max-w-2xl px-6 py-16">
@@ -54,19 +58,24 @@ export function PublicProfile({
 
       <div className="mt-8 pixie-panel p-5">
         <h2 className="text-sm text-text">Support roster</h2>
-        {profile.roster.length === 0 ? (
+        {roster.length === 0 ? (
           <p className="mt-2 text-xs text-text-muted">No public roster for this program.</p>
         ) : (
-          <ul className="mt-3 space-y-1 text-sm text-text-muted">
-            {(["owner", "organizer", "helper"] as const)
-              .map((role) => ({ role, count: profile.roster.filter((r) => r.role === role).length }))
-              .filter((r) => r.count > 0)
-              .map(({ role, count }) => (
-                <li key={role}>
-                  {count} {ROLE_LABEL[role]}
-                  {count > 1 ? "s" : ""}
-                </li>
-              ))}
+          <ul className="mt-3 space-y-2 text-sm text-text-muted">
+            {roster.map((entry, i) => (
+              <li key={i} className="flex items-center gap-2">
+                {entry.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- external Slack CDN avatar, not a local asset
+                  <img src={entry.avatarUrl} alt="" className="size-6 rounded-full" />
+                ) : (
+                  <span className="grid size-6 place-items-center rounded-full bg-panel-2 text-[10px] text-text-muted">
+                    {ROLE_LABEL[entry.role].slice(0, 1)}
+                  </span>
+                )}
+                <span className="text-text">{entry.displayName ?? ROLE_LABEL[entry.role]}</span>
+                {entry.displayName && <span className="text-text-muted">· {ROLE_LABEL[entry.role]}</span>}
+              </li>
+            ))}
           </ul>
         )}
       </div>

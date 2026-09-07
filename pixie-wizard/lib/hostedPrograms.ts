@@ -87,6 +87,23 @@ export async function getPublicProgramProfile(id: string): Promise<PublicProgram
   };
 }
 
+// Server-page-only companion to getPublicProgramProfile(): the raw slack_user_id
+// per visible helper, so the calling page can resolve display identity via
+// Core (lib/pixieCore.ts's coreUserInfo) before ever constructing a client-
+// safe roster entry. Deliberately NOT part of PublicProgramProfile — nothing
+// with a slack_user_id in it may reach a client component.
+export async function listVisibleHelperIdentityKeys(
+  programId: string,
+): Promise<Array<{ slackUserId: string; role: "owner" | "organizer" | "helper" }>> {
+  const { rows } = await query<{ slack_user_id: string; role: "owner" | "organizer" | "helper" }>(
+    `select slack_user_id, role from hosted_program_helpers
+     where program_id = $1 and active = true and visible_on_profile = true
+     order by role`,
+    [programId],
+  );
+  return rows.map((r) => ({ slackUserId: r.slack_user_id, role: r.role }));
+}
+
 // Reconciliation queue: anything not confirmed synced to Core, whether it
 // never got a first attempt (pending) or its last attempt errored (failed).
 // Ordered oldest-first so a backlog drains in the order programs went stale,
@@ -207,4 +224,20 @@ export async function listHostedHelpers(programId: string): Promise<HostedProgra
     [programId],
   );
   return rows;
+}
+
+// Display-only — flips whether a helper appears on the public profile
+// roster. Never touches `role`/`active`, so this can never be used to grant
+// or revoke real permissions; it is explicitly scoped to one program so a
+// caller can't accidentally (or maliciously) touch another program's row by
+// passing the wrong slackUserId.
+export async function setHelperVisibility(programId: string, slackUserId: string, visible: boolean): Promise<HostedProgramHelper> {
+  const { rows } = await query<HostedProgramHelper>(
+    `update hosted_program_helpers set visible_on_profile = $1
+     where program_id = $2 and slack_user_id = $3
+     returning *`,
+    [visible, programId, slackUserId],
+  );
+  if (!rows[0]) throw new Error("helper not found for this program");
+  return rows[0];
 }

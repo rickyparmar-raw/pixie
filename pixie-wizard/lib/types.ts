@@ -117,3 +117,15 @@ export interface PublicProgramProfile {
   publicSourceCount: number;
   roster: Array<{ role: "owner" | "organizer" | "helper" }>;
 }
+
+// Identity-resolved roster entry for public display — built by the page
+// (never a data-access function) from listVisibleHelperIdentityKeys() +
+// Core's coreUserInfo(), specifically so nothing carrying a slack_user_id
+// ever exists in the same object as a resolved displayName. `displayName`/
+// `avatarUrl` are null when resolution failed or Slack has nothing to
+// offer — the UI falls back to a role-only row, it never blocks on this.
+export interface PublicHelperIdentity {
+  displayName: string | null;
+  avatarUrl: string | null;
+  role: "owner" | "organizer" | "helper";
+}

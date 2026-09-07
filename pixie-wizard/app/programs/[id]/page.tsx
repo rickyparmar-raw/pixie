@@ -1,13 +1,14 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/session";
-import { getHostedProgram, listHostedChannels, listHostedAudit, getPublicProgramProfile } from "@/lib/hostedPrograms";
+import { getHostedProgram, listHostedChannels, listHostedAudit, getPublicProgramProfile, listVisibleHelperIdentityKeys } from "@/lib/hostedPrograms";
 import { relationshipFor } from "@/lib/programAccess";
 import { ProgramSettingsForms } from "./ProgramSettingsForms";
 import { ChannelChangeForm } from "./ChannelChangeForm";
 import { PublicProfile } from "./PublicProfile";
-import { coreAnalytics, coreSlackChannels } from "@/lib/pixieCore";
+import { coreAnalytics, coreSlackChannels, coreUserInfo } from "@/lib/pixieCore";
 import { PageHeader, SectionCard, MetricCard, StatusBadge } from "@/app/_components/DashboardShell";
+import type { PublicHelperIdentity } from "@/lib/types";
 
 export default async function ProgramPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -35,7 +36,26 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         helpChannelDisplay = profile.publicHelpChannelId;
       }
     }
-    return <PublicProfile profile={profile} helpChannelDisplay={helpChannelDisplay} />;
+
+    // Identity resolution is best-effort and must never block the page: a
+    // slow or unreachable Slack identity provider still has to show the
+    // profile, just with role-only rows. Promise.allSettled + a per-lookup
+    // try/catch means one failed resolution can't take the others down.
+    const identityKeys = await listVisibleHelperIdentityKeys(id).catch(() => []);
+    const roster: PublicHelperIdentity[] = (
+      await Promise.allSettled(
+        identityKeys.map(async ({ slackUserId, role }) => {
+          try {
+            const info = await coreUserInfo(slackUserId);
+            return { role, displayName: info.ok ? info.displayName ?? null : null, avatarUrl: info.ok ? info.avatarUrl ?? null : null };
+          } catch {
+            return { role, displayName: null, avatarUrl: null };
+          }
+        }),
+      )
+    ).map((r, i) => (r.status === "fulfilled" ? r.value : { role: identityKeys[i].role, displayName: null, avatarUrl: null }));
+
+    return <PublicProfile profile={profile} helpChannelDisplay={helpChannelDisplay} roster={roster} />;
   }
 
   const [channels, audit] = await Promise.all([listHostedChannels(id), listHostedAudit(id, 20)]);

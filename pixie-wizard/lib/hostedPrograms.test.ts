@@ -122,3 +122,79 @@ test("listActiveHostedPrograms only returns active programs, ordered by name", a
   const rows = await listActiveHostedPrograms();
   expect(rows.map((r) => r.id)).toEqual(["a-active", "z-active"]);
 });
+
+test("setHelperVisibility flips visible_on_profile on and off without touching role/active", async () => {
+  mock.module("@/lib/db", () => createTestDb());
+  const { query } = await import("./db");
+  const { setHelperVisibility } = await import("./hostedPrograms");
+
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["vis-a", "T1", "Vis A", "H1"]);
+  await query(
+    `insert into hosted_program_helpers (program_id, slack_user_id, role, active, visible_on_profile) values ($1,$2,'helper',true,true)`,
+    ["vis-a", "U_TOGGLE"],
+  );
+
+  const hidden = await setHelperVisibility("vis-a", "U_TOGGLE", false);
+  expect(hidden.visible_on_profile).toBe(false);
+  expect(hidden.role).toBe("helper");
+  expect(hidden.active).toBe(true); // real permission untouched by the display toggle
+
+  const shown = await setHelperVisibility("vis-a", "U_TOGGLE", true);
+  expect(shown.visible_on_profile).toBe(true);
+  expect(shown.active).toBe(true);
+});
+
+test("a helper hidden from the public profile still appears in the real (non-public) helper list — permissions preserved", async () => {
+  mock.module("@/lib/db", () => createTestDb());
+  const { query } = await import("./db");
+  const { setHelperVisibility, listHostedHelpers, getPublicProgramProfile } = await import("./hostedPrograms");
+
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["vis-b", "T1", "Vis B", "H1"]);
+  await query(
+    `insert into hosted_program_helpers (program_id, slack_user_id, role, active, visible_on_profile) values ($1,$2,'organizer',true,true)`,
+    ["vis-b", "U_HIDE_ME"],
+  );
+
+  await setHelperVisibility("vis-b", "U_HIDE_ME", false);
+
+  // Gone from the public roster...
+  const profile = await getPublicProgramProfile("vis-b");
+  expect(profile?.roster).toEqual([]);
+
+  // ...but still fully present, active, with the same role, in the real list.
+  const real = await listHostedHelpers("vis-b");
+  expect(real).toHaveLength(1);
+  expect(real[0].active).toBe(true);
+  expect(real[0].role).toBe("organizer");
+});
+
+test("setHelperVisibility is program-scoped — cannot touch another program's row for the same slack_user_id", async () => {
+  mock.module("@/lib/db", () => createTestDb());
+  const { query } = await import("./db");
+  const { setHelperVisibility } = await import("./hostedPrograms");
+
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["vis-c1", "T1", "Vis C1", "H1"]);
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["vis-c2", "T1", "Vis C2", "H1"]);
+  // Same slack_user_id helps both programs.
+  await query(`insert into hosted_program_helpers (program_id, slack_user_id, role, active, visible_on_profile) values ($1,$2,'helper',true,true)`, ["vis-c1", "U_SHARED"]);
+  await query(`insert into hosted_program_helpers (program_id, slack_user_id, role, active, visible_on_profile) values ($1,$2,'helper',true,true)`, ["vis-c2", "U_SHARED"]);
+
+  await setHelperVisibility("vis-c1", "U_SHARED", false);
+
+  const { rows } = await query<{ program_id: string; visible_on_profile: boolean }>(
+    `select program_id, visible_on_profile from hosted_program_helpers where slack_user_id = $1 order by program_id`,
+    ["U_SHARED"],
+  );
+  expect(rows).toEqual([
+    { program_id: "vis-c1", visible_on_profile: false },
+    { program_id: "vis-c2", visible_on_profile: true },
+  ]);
+});
+
+test("setHelperVisibility throws for a helper that doesn't exist on this program", async () => {
+  mock.module("@/lib/db", () => createTestDb());
+  const { query } = await import("./db");
+  const { setHelperVisibility } = await import("./hostedPrograms");
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["vis-d", "T1", "Vis D", "H1"]);
+  await expect(setHelperVisibility("vis-d", "U_NEVER_ADDED", false)).rejects.toThrow(/not found/);
+});

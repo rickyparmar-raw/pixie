@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { creatorEligible, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
 import { sourceUrlProblem } from "@/lib/sourceUrls";
-import { getHostedProgram, updateHostedProgram, logHostedAudit, addHostedHelper } from "@/lib/hostedPrograms";
+import { getHostedProgram, updateHostedProgram, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow } from "@/lib/hostedPrograms";
+import { relationshipFor } from "@/lib/programAccess";
 import { query } from "@/lib/db";
 import { syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot, coreChannelMembership, coreConfigured, coreHelpersSync } from "@/lib/pixieCore";
 import { validateActivationGuards } from "@/lib/activationGuards";
@@ -29,6 +30,21 @@ async function requireProgramOwner(programId: string) {
   if (!program) throw new Error("Program not found");
   if (program.owner_hca_id !== session.hcaId) throw new Error("Only the program owner can change these settings.");
   return { session, program };
+}
+
+// Owner or an active organizer (the "admin" relationship) — used for the
+// smaller set of actions that don't need to be owner-exclusive, like
+// choosing what shows on the public roster. Still server-authorized on
+// every call, not just gated by what the page happens to render.
+async function requireProgramOwnerOrAdmin(programId: string) {
+  const session = await requireHostedSession();
+  const program = await getHostedProgram(programId);
+  if (!program) throw new Error("Program not found");
+  const relationship = await relationshipFor(program, session);
+  if (relationship !== "owner" && relationship !== "admin") {
+    throw new Error("Only the program owner or an admin can change this.");
+  }
+  return { session, program, relationship };
 }
 
 function parseSources(formData: FormData): { sources: DocSource[]; error: string | null } {
@@ -702,5 +718,33 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
     metadata: { from: oldHelp?.channel_id ?? null, to: rawNew },
   });
   revalidatePath(`/programs/${programId}`);
+  return { error: null };
+}
+
+// Display-only toggle: whether a helper appears on the program's public
+// profile roster. Never changes their actual role/active status — a hidden
+// helper keeps every real permission they had. Owner or admin only, and
+// setHelperVisibility() itself is scoped to (programId, slackUserId), so
+// this can't be used to touch a different program's row even by mistake.
+export async function setHelperVisibilityAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const programId = String(formData.get("programId") ?? "");
+  const slackUserId = String(formData.get("slackUserId") ?? "");
+  const visible = formData.get("visible") === "on";
+
+  const { session } = await requireProgramOwnerOrAdmin(programId);
+  if (!slackUserId) return { error: "Missing helper." };
+
+  await setHelperVisibilityRow(programId, slackUserId, visible);
+  await logHostedAudit({
+    programId,
+    actorHcaId: session.hcaId,
+    actorSlackId: session.slackId,
+    action: visible ? "helper.shown_on_profile" : "helper.hidden_from_profile",
+    entityType: "helper",
+    entityId: slackUserId,
+    metadata: { visible },
+  });
+
+  revalidatePath(`/programs/${programId}/helpers`);
   return { error: null };
 }
