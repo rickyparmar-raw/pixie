@@ -39,7 +39,11 @@ function parseSources(formData: FormData): { sources: DocSource[]; error: string
   for (let i = 0; i < Math.max(urls.length, types.length); i++) {
     const url = (urls[i] || "").trim();
     const type = (types[i] || "").trim() as DocSource["type"];
-    if (!url && !type) continue;
+    // An empty optional row still submits a non-empty type — <select> always
+    // has some value selected, even one nobody touched — so "no URL" is what
+    // actually means "this row was left blank", not "type and URL both
+    // blank". Skip it regardless of what the leftover type value is.
+    if (!url) continue;
     if (!["url", "json-faq", "gdoc", "github-dir", "text"].includes(type)) {
       return { sources: [], error: `Source row ${i + 1} has an unknown type.` };
     }
