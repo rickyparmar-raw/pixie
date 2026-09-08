@@ -29,7 +29,7 @@ export function HelperVisibilityToggle({
       <input type="hidden" name="programId" value={programId} />
       <input type="hidden" name="slackUserId" value={slackUserId} />
       <span className="font-mono text-text">
-        &lt;@{slackUserId}&gt; <span className="font-sans text-text-muted">· {role}</span>
+        @{slackUserId} <span className="font-sans text-text-muted">· {role}</span>
       </span>
       <label className="flex items-center gap-2 text-xs text-text-muted">
         <input type="checkbox" name="visible" value="on" defaultChecked={visible} className="accent-brand" onChange={(e) => e.currentTarget.form?.requestSubmit()} />

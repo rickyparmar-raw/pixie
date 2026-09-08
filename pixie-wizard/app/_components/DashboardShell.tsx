@@ -235,21 +235,26 @@ export function MiniBar({
   value,
   max,
   tone = "bg-text-muted",
+  display,
 }: {
   label: React.ReactNode;
   value: number;
   max: number;
   tone?: string;
+  // What to show at the end of the row. Defaults to the raw value; pass a
+  // formatted string (e.g. a duration) when the bar is proportional to
+  // something that shouldn't be printed literally.
+  display?: string;
 }) {
   const pct = max > 0 ? (value / max) * 100 : 0;
   const width = value > 0 ? Math.max(pct, 2) : 0;
   return (
-    <div className="grid grid-cols-[8.5rem_1fr_2.5rem] items-center gap-3 text-sm">
+    <div className="grid grid-cols-[8.5rem_1fr_3rem] items-center gap-3 text-sm">
       <span className="truncate text-text-muted">{label}</span>
       <span className="h-1.5 overflow-hidden rounded-full bg-line/50">
         <span className={`block h-full rounded-full ${tone}`} style={{ width: `${width}%` }} />
       </span>
-      <span className="text-right font-mono tabular-nums text-text">{value}</span>
+      <span className="text-right font-mono tabular-nums text-text">{display ?? value}</span>
     </div>
   );
 }

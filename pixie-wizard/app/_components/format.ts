@@ -28,6 +28,14 @@ export function timeAgo(ms: unknown): string {
   return formatDuration(Date.now() - ms);
 }
 
+// A Slack user id as a compact operational label: "@U0ABC123". The list
+// views don't resolve display names (that would be one Core call per row);
+// the ticket detail page resolves the handful it shows.
+export function userLabel(id: string | null | undefined): string {
+  if (!id) return "—";
+  return id.startsWith("@") ? id : `@${id}`;
+}
+
 // Absolute epoch-ms as "14:32" (today) or "Apr 3, 14:32".
 export function shortTime(ms: unknown): string {
   if (typeof ms !== "number" || !Number.isFinite(ms)) return "—";

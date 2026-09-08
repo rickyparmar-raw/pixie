@@ -47,8 +47,8 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
 
         <div>
           <label htmlFor="replySignature" className={labelClass}>Reply signature</label>
-          <input id="replySignature" name="replySignature" defaultValue={program.reply_signature ?? ""} maxLength={120} placeholder="e.g. stay wired :hardwire:" className={inputClass} />
-          <p className="mt-1 text-xs text-text-muted">Optional text appended to normal Pixie answers. Not added to escalations, incident notices or errors.</p>
+          <input id="replySignature" name="replySignature" defaultValue={program.reply_signature ?? ""} maxLength={120} placeholder="stay wired :hardwire:" className={inputClass} />
+          <p className="mt-1 text-xs text-text-muted">Optional text added to normal Pixie answers.</p>
         </div>
 
         <div>

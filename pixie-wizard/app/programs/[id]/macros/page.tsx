@@ -19,7 +19,7 @@ export default async function MacrosPage({ params }: { params: Promise<{ id: str
     <>
       <PageHeader
         title="Macros"
-        description="Saved replies helpers can send from any ticket. {requester} {ticket_id} {program} {status} {helper} interpolate."
+        description="Saved replies a helper can send from a ticket. Placeholders {requester}, {ticket_id}, {status}, {helper} fill in on send."
       />
 
       {loadError && <CoreError message={loadError} />}

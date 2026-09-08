@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreRadarList, coreHealthScore } from "@/lib/pixieCore";
-import { PageHeader, Section, MetricCard, CoreError } from "@/app/_components/DashboardShell";
+import { PageHeader, Section, CoreError, MiniBar, BarList, EmptyState } from "@/app/_components/DashboardShell";
+import { timeAgo } from "@/app/_components/format";
 import { RadarRefreshButton, RadarSignalControls } from "./RadarControls";
 
-interface RadarSignal {
+type RadarSignal = {
   id: number;
   type: string;
   severity: "INFO" | "LOW" | "MEDIUM" | "HIGH" | "CRITICAL";
@@ -15,83 +16,52 @@ interface RadarSignal {
   first_detected_at: number;
   last_detected_at: number;
   resolved_at: number | null;
-}
+};
 
-interface HealthScore {
+type HealthScore = {
   score: number | null;
   label: string | null;
   components: Record<string, number> | null;
   windowDays: number;
-}
+};
 
-const PATTERN_TYPES = new Set(["FAQ_CLUSTER", "LOW_CONFIDENCE_TOPIC", "KNOWLEDGE_GAP"]);
-const SYSTEM_TYPES = new Set(["SOURCE_FAILURE"]);
-
-const SEVERITY_TONE: Record<string, string> = {
+const SEV_TONE: Record<string, string> = {
   CRITICAL: "text-brand",
   HIGH: "text-brand",
   MEDIUM: "text-tang",
   LOW: "text-text-muted",
-  INFO: "text-text-muted",
+  INFO: "text-text-muted/70",
 };
+const SEV_RANK: Record<string, number> = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1, INFO: 0 };
 
-function timeAgo(ms: number): string {
-  const mins = Math.round((Date.now() - ms) / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.round(mins / 60);
-  if (hours < 48) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
-}
-
-function linkFor(signal: RadarSignal, programId: string): { href: string; label: string } | null {
-  const t = signal.type;
-  if (t === "INCIDENT_CANDIDATE" || t === "ACTIVE_INCIDENT") return { href: `/programs/${programId}/incidents`, label: "Review incident →" };
-  if (t === "STALE_TICKETS" || t === "REOPEN_SPIKE" || t === "ESCALATION_SPIKE") return { href: `/programs/${programId}/tickets`, label: "View tickets →" };
-  if (t === "SOURCE_FAILURE") return { href: `/programs/${programId}/knowledge`, label: "Inspect source →" };
-  if (t === "FAQ_CLUSTER" || t === "KNOWLEDGE_GAP") return { href: `/programs/${programId}/gaps`, label: "Review gap →" };
+function linkFor(t: string, programId: string): { href: string; label: string } | null {
+  if (t === "INCIDENT_CANDIDATE" || t === "ACTIVE_INCIDENT") return { href: `/programs/${programId}/incidents`, label: "incident →" };
+  if (t === "STALE_TICKETS" || t === "REOPEN_SPIKE" || t === "ESCALATION_SPIKE") return { href: `/programs/${programId}/tickets`, label: "tickets →" };
+  if (t === "SOURCE_FAILURE") return { href: `/programs/${programId}/knowledge`, label: "knowledge →" };
+  if (t === "FAQ_CLUSTER" || t === "KNOWLEDGE_GAP") return { href: `/programs/${programId}/gaps`, label: "gaps →" };
   return null;
 }
 
-function SignalRow({ programId, signal }: { programId: string; signal: RadarSignal }) {
-  const link = linkFor(signal, programId);
+function SignalRow({ programId, s }: { programId: string; s: RadarSignal }) {
+  const link = linkFor(s.type, programId);
   return (
-    <li className="py-4">
-      <p className="text-xs text-text-muted">
-        <span className={SEVERITY_TONE[signal.severity] ?? "text-text-muted"}>{signal.severity}</span>
-        {" · "}
-        {signal.type.replaceAll("_", " ").toLowerCase()}
-        {" · detected "}
-        {timeAgo(signal.first_detected_at)}
-      </p>
-      <p className="mt-1 text-sm text-text">{signal.title}</p>
-      {signal.summary && <p className="mt-0.5 text-xs text-text-muted">{signal.summary}</p>}
-      {link && (
-        <Link href={link.href} className="mt-1 inline-block text-xs text-text-muted hover:text-text">
-          {link.label}
-        </Link>
-      )}
-      <RadarSignalControls programId={programId} signalId={signal.id} status={signal.status} />
+    <li className="grid gap-x-4 gap-y-1 py-3 sm:grid-cols-[4.5rem_6rem_1fr]">
+      <span className="font-mono text-xs text-text-muted">{timeAgo(s.first_detected_at)}</span>
+      <span className={`font-mono text-xs ${SEV_TONE[s.severity] ?? "text-text-muted"}`}>{s.severity}</span>
+      <div className="min-w-0">
+        <p className="text-sm text-text">{s.title}</p>
+        {s.summary && <p className="mt-0.5 text-xs text-text-muted">{s.summary}</p>}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="font-mono text-[11px] text-text-muted/70">{s.type.replaceAll("_", " ").toLowerCase()}</span>
+          {link && (
+            <Link href={link.href} className="font-mono text-[11px] text-text-muted hover:text-text">
+              {link.label}
+            </Link>
+          )}
+          <RadarSignalControls programId={programId} signalId={s.id} status={s.status} />
+        </div>
+      </div>
     </li>
-  );
-}
-
-function SignalGroup({ programId, title, description, signals, empty }: {
-  programId: string;
-  title: string;
-  description?: string;
-  signals: RadarSignal[];
-  empty: string;
-}) {
-  return (
-    <Section title={title} description={description}>
-      {signals.length === 0 ? (
-        <p className="text-sm text-text-muted">{empty}</p>
-      ) : (
-        <ul className="divide-y divide-line border-t border-line">
-          {signals.map((s) => <SignalRow key={s.id} programId={programId} signal={s} />)}
-        </ul>
-      )}
-    </Section>
   );
 }
 
@@ -99,83 +69,95 @@ export default async function RadarPage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   await requireProgramMembership(id);
 
-  let signals: RadarSignal[] = [];
-  let health: HealthScore | null = null;
-  let loadError: string | null = null;
-  try {
-    const [radarRes, healthRes] = await Promise.all([coreRadarList(id), coreHealthScore(id)]);
-    signals = radarRes.signals as RadarSignal[];
-    health = healthRes as unknown as HealthScore;
-  } catch (err) {
-    loadError = err instanceof Error ? err.message : "Could not load Support Radar.";
-  }
+  const [radarR, healthR] = await Promise.allSettled([coreRadarList(id), coreHealthScore(id)]);
+  const loadError =
+    radarR.status === "rejected"
+      ? radarR.reason instanceof Error
+        ? radarR.reason.message
+        : "Support radar is unavailable."
+      : null;
 
-  const live = (s: RadarSignal) => s.status === "active" || s.status === "acknowledged";
-  const needsAttention = signals.filter((s) => live(s) && !PATTERN_TYPES.has(s.type) && !SYSTEM_TYPES.has(s.type));
-  const patterns = signals.filter((s) => live(s) && PATTERN_TYPES.has(s.type));
-  const systemHealth = signals.filter((s) => live(s) && SYSTEM_TYPES.has(s.type));
-  const recentlyResolved = signals.filter((s) => s.status === "resolved").slice(0, 10);
+  const signals = radarR.status === "fulfilled" ? (radarR.value.signals as RadarSignal[]) : [];
+  const health = healthR.status === "fulfilled" ? (healthR.value as unknown as HealthScore) : null;
 
-  const severityCounts = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 } as Record<string, number>;
-  for (const s of needsAttention) if (severityCounts[s.severity] !== undefined) severityCounts[s.severity] += 1;
+  const live = signals
+    .filter((s) => s.status === "active" || s.status === "acknowledged")
+    .sort((a, b) => SEV_RANK[b.severity] - SEV_RANK[a.severity] || b.first_detected_at - a.first_detected_at);
+  const resolvedRecently = signals.filter((s) => s.status === "resolved").slice(0, 8);
+
+  const sev = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 } as Record<string, number>;
+  for (const s of live) if (sev[s.severity] !== undefined) sev[s.severity] += 1;
 
   const healthTone =
     health?.score == null ? "text-text-muted" : health.score >= 80 ? "text-mint" : health.score >= 60 ? "text-tang" : "text-brand";
+  const compMax = health?.components ? Math.max(1, ...Object.values(health.components)) : 1;
 
   return (
     <>
       <PageHeader
-        title="Support radar"
-        description="Signals derived from tickets, gaps, incidents and source health."
+        title="Radar"
+        description="Signals derived from tickets, gaps, incidents and source health. Nothing here posts to Slack."
         actions={<RadarRefreshButton programId={id} />}
       />
 
       {loadError && <CoreError message={loadError} />}
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-6 sm:grid-cols-3 xl:grid-cols-5">
-        <MetricCard label="Critical" value={severityCounts.CRITICAL} tone={severityCounts.CRITICAL ? "text-brand" : "text-text"} />
-        <MetricCard label="High" value={severityCounts.HIGH} tone={severityCounts.HIGH ? "text-brand" : "text-text"} />
-        <MetricCard label="Medium" value={severityCounts.MEDIUM} tone={severityCounts.MEDIUM ? "text-tang" : "text-text"} />
-        <MetricCard label="Low" value={severityCounts.LOW} />
-        <MetricCard
-          label="Support health"
-          value={health?.score ?? "—"}
-          detail={health?.label ?? (health?.components ? `${health.windowDays}d window` : undefined)}
-          tone={healthTone}
-        />
+      {/* status line */}
+      <div className="mb-10 flex flex-wrap items-end gap-x-10 gap-y-4">
+        <div>
+          <p className={`font-mono text-2xl tabular-nums ${healthTone}`}>{health?.score ?? "—"}</p>
+          <p className="mt-1 text-xs text-text-muted">Support health{health?.label ? ` · ${health.label}` : ""}</p>
+        </div>
+        <div className="flex gap-6 font-mono text-xs">
+          {(["CRITICAL", "HIGH", "MEDIUM", "LOW"] as const).map((k) => (
+            <span key={k} className={sev[k] ? SEV_TONE[k] : "text-text-muted/50"}>
+              {sev[k]} {k.toLowerCase()}
+            </span>
+          ))}
+        </div>
       </div>
 
       {health?.components && (
-        <ul className="mt-8 max-w-sm">
-          {Object.entries(health.components).map(([key, value]) => (
-            <li key={key} className="flex justify-between gap-4 py-1 text-sm">
-              <span className="text-text-muted">{key.replace(/([A-Z])/g, " $1").trim()}</span>
-              <span className="tabular-nums text-text">{value}</span>
-            </li>
-          ))}
-        </ul>
+        <Section title="Health components" description={`${health.windowDays}-day window.`}>
+          <BarList>
+            {Object.entries(health.components).map(([k, v]) => (
+              <MiniBar
+                key={k}
+                label={k.replace(/([A-Z])/g, " $1").replace(/_/g, " ").trim()}
+                value={v}
+                max={compMax}
+                tone={v >= 80 ? "bg-mint" : v >= 60 ? "bg-tang" : "bg-brand"}
+              />
+            ))}
+          </BarList>
+        </Section>
       )}
 
-      <div className="mt-12 space-y-12">
-        <SignalGroup programId={id} title="Needs attention" description="Most severe first." signals={needsAttention} empty="Nothing needs attention right now." />
-        <SignalGroup programId={id} title="Emerging patterns" description="FAQ clusters, low-confidence topics and knowledge gaps." signals={patterns} empty="No emerging patterns detected." />
-        <SignalGroup programId={id} title="System health" description="Source refresh failures and sync issues." signals={systemHealth} empty="All configured sources are refreshing normally." />
-
-        <Section title="Recently resolved">
-          {recentlyResolved.length === 0 ? (
-            <p className="text-sm text-text-muted">Nothing resolved yet.</p>
-          ) : (
-            <ul className="space-y-1.5 text-xs text-text-muted">
-              {recentlyResolved.map((s) => (
-                <li key={s.id}>
-                  <span className={SEVERITY_TONE[s.severity] ?? "text-text-muted"}>{s.severity}</span> · {s.title}
-                  {s.resolved_at ? ` · resolved ${timeAgo(s.resolved_at)}` : ""}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Section>
+      <div className="mt-12 space-y-4">
+        <h2 className="text-sm font-medium text-text">Active signals{live.length ? ` · ${live.length}` : ""}</h2>
+        {live.length === 0 && !loadError ? (
+          <EmptyState title="Nothing on the radar." hint="Escalation spikes, stale tickets, FAQ clusters and source failures surface here." />
+        ) : (
+          <ul className="divide-y divide-line border-y border-line">
+            {live.map((s) => (
+              <SignalRow key={s.id} programId={id} s={s} />
+            ))}
+          </ul>
+        )}
       </div>
+
+      {resolvedRecently.length > 0 && (
+        <Section title="Recently cleared">
+          <ul className="space-y-1.5 font-mono text-xs text-text-muted">
+            {resolvedRecently.map((s) => (
+              <li key={s.id}>
+                <span className={SEV_TONE[s.severity]}>{s.severity}</span> · {s.title}
+                {s.resolved_at ? ` · ${timeAgo(s.resolved_at)}` : ""}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
     </>
   );
 }

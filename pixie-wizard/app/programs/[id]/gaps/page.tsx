@@ -1,9 +1,10 @@
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreGapClusters } from "@/lib/pixieCore";
-import { PageHeader, CoreError } from "@/app/_components/DashboardShell";
+import { PageHeader, CoreError, StatusDot, EmptyState } from "@/app/_components/DashboardShell";
+import { timeAgo } from "@/app/_components/format";
 import { FaqProposeButton } from "../knowledge/ReviewForms";
 
-interface Cluster {
+type Cluster = {
   representative: string;
   variants: number;
   askCount: number;
@@ -12,7 +13,7 @@ interface Cluster {
   lastSeen: number;
   escalated: number;
   covered: boolean;
-}
+};
 
 export default async function GapsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -24,32 +25,46 @@ export default async function GapsPage({ params }: { params: Promise<{ id: strin
     const res = await coreGapClusters(id);
     clusters = res.clusters as Cluster[];
   } catch (err) {
-    loadError = err instanceof Error ? err.message : "Could not load gaps.";
+    loadError = err instanceof Error ? err.message : "Gap clustering is unavailable.";
   }
+
+  clusters = [...clusters].sort((a, b) => b.askCount - a.askCount);
 
   return (
     <>
       <PageHeader
         title="FAQ gaps"
-        description="Repeated questions the docs don't answer well, grouped automatically."
+        description="Questions the docs don't answer well, grouped by meaning. The ones near the top keep coming back."
       />
 
-      {loadError && <CoreError message={loadError} />}
-
-      <ul className="divide-y divide-line border-t border-line">
-        {clusters.map((c) => (
-          <li key={c.representative} className="py-4">
-            <p className="text-sm text-text">{c.representative}</p>
-            <p className="mt-1 text-xs text-text-muted">
-              {c.askCount} asks · {c.askers} people · {c.variants} phrasing{c.variants === 1 ? "" : "s"} · escalated {c.escalated}×
-              {c.covered ? " · covered by an approved fact" : " · docs unclear"}
-            </p>
-            {!c.covered && <FaqProposeButton programId={id} question={c.representative} />}
-          </li>
-        ))}
-      </ul>
-      {clusters.length === 0 && !loadError && (
-        <p className="text-sm text-text-muted">No gaps with 2+ askers in the last 30 days.</p>
+      {loadError ? (
+        <CoreError message={loadError} />
+      ) : clusters.length === 0 ? (
+        <EmptyState
+          title="No gaps with two or more askers in the last 30 days."
+          hint="Pixie groups repeated misses here so you can fix the doc once."
+        />
+      ) : (
+        <ul className="divide-y divide-line border-y border-line">
+          {clusters.map((c) => (
+            <li key={c.representative} className="grid gap-x-6 gap-y-2 py-4 sm:grid-cols-[1fr_auto]">
+              <div className="min-w-0">
+                <p className="text-sm text-text">{c.representative}</p>
+                <p className="mt-1 font-mono text-xs text-text-muted">
+                  {c.askCount} asks · {c.askers} {c.askers === 1 ? "person" : "people"} · {c.variants}{" "}
+                  phrasing{c.variants === 1 ? "" : "s"}
+                  {c.escalated > 0 ? ` · escalated ${c.escalated}×` : ""} · seen {timeAgo(c.lastSeen)}
+                </p>
+              </div>
+              <div className="flex items-center gap-3 sm:flex-col sm:items-end">
+                <StatusDot status={c.covered ? "healthy" : "attention"}>
+                  {c.covered ? "covered" : "docs unclear"}
+                </StatusDot>
+                {!c.covered && <FaqProposeButton programId={id} question={c.representative} />}
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </>
   );

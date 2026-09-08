@@ -15,7 +15,7 @@ import {
   DataRow,
   EmptyState,
 } from "@/app/_components/DashboardShell";
-import { personaName, formatDuration, timeAgo } from "@/app/_components/format";
+import { personaName, formatDuration, timeAgo, userLabel } from "@/app/_components/format";
 import type { PublicHelperIdentity } from "@/lib/types";
 
 function healthLabel(status: string, sync: string): string {
@@ -310,6 +310,6 @@ function activityLine(e: AuditEvent, persona: string): { ref: string; verb: stri
     .replace(/^ai[_ ]/, "")
     .replace(/[._]/g, " ")
     .trim();
-  const who = e.actor_id ?? persona;
+  const who = e.actor_id ? userLabel(e.actor_id) : persona;
   return { ref, verb, who };
 }
