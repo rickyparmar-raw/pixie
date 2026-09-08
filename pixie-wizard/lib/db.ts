@@ -17,13 +17,17 @@ function required(name: string): string {
 // while prerendering static pages where env vars may be absent.
 let _pool: Pool | null = null;
 function pool(): Pool {
-  _pool ??= new Pool({
-    connectionString: required("DATABASE_URL"),
-    // Railway's private-network Postgres doesn't need or support TLS; a
-    // public DATABASE_URL (e.g. local dev via the public proxy) does.
-    ssl: /sslmode=require/.test(process.env.DATABASE_URL || "") ? { rejectUnauthorized: false } : undefined,
-    max: 10,
-  });
+  if (!_pool) {
+    const isLocal = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || "");
+    _pool = new Pool({
+      connectionString: required("DATABASE_URL"),
+      ssl: isLocal ? undefined : { rejectUnauthorized: false },
+      max: 10,
+    });
+    _pool.on("error", (err) => {
+      console.warn("[wizard/db] idle client error:", err.message);
+    });
+  }
   return _pool;
 }
 
