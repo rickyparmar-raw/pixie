@@ -10,7 +10,7 @@
 // claim either wins atomically or reports its owner.
 
 import { query, withTransaction, isUniqueViolation } from "@/lib/db";
-import { isAllowed, type WizardSession } from "@/lib/session";
+import { isCreatorAllowed, type WizardSession } from "@/lib/session";
 import { slugify } from "@/lib/slackManifest";
 import type { HostedProgramRow } from "@/lib/types";
 
@@ -51,7 +51,7 @@ export function validateOrDeriveSlug(name: string, customSlug?: string | null): 
 }
 
 export function creatorEligible(session: WizardSession): boolean {
-  return isAllowed({ hcaId: session.hcaId, email: session.email });
+  return isCreatorAllowed({ hcaId: session.hcaId, email: session.email });
 }
 
 // Check for channel claims by other programs before attempting activation.

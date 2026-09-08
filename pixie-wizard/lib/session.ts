@@ -80,12 +80,7 @@ export async function clearSessionCookie() {
   jar.delete(COOKIE);
 }
 
-// Unset means open to anyone with a Hack Club Auth account — an HCA account
-// is general Hack Club identity, not a vetted "runs a YSWS program" role, so
-// populate this before a real launch rather than trusting HCA login alone.
-export function isAllowed(identity: { hcaId: string; email: string }): boolean {
-  const raw = (process.env.PIXIE_WIZARD_ALLOWLIST ?? "").trim();
-  if (!raw) return true;
+function matchesAllowlist(raw: string, identity: { hcaId: string; email: string }): boolean {
   const entries = raw
     .split(",")
     .map((s) => s.trim().toLowerCase())
@@ -95,4 +90,24 @@ export function isAllowed(identity: { hcaId: string; email: string }): boolean {
   return entries.some(
     (e) => e === identity.hcaId.toLowerCase() || e === email || (domain && e === domain),
   );
+}
+
+// Who may sign in to the Wizard at all. Unset means open to anyone with a
+// Hack Club Auth account — an HCA account is general Hack Club identity, not a
+// vetted "runs a YSWS program" role, so populate this before a real launch
+// rather than trusting HCA login alone.
+export function isAllowed(identity: { hcaId: string; email: string }): boolean {
+  const raw = (process.env.PIXIE_WIZARD_ALLOWLIST ?? "").trim();
+  if (!raw) return true;
+  return matchesAllowlist(raw, identity);
+}
+
+// Who may create a new hosted program. Creating a program claims Slack
+// channels and stands up a tenant on shared Core, so it is invite-only:
+// unset PIXIE_WIZARD_CREATOR_ALLOWLIST means nobody. Signing in, being added
+// as a helper, and managing a program you already own are unaffected.
+export function isCreatorAllowed(identity: { hcaId: string; email: string }): boolean {
+  const raw = (process.env.PIXIE_WIZARD_CREATOR_ALLOWLIST ?? "").trim();
+  if (!raw) return false;
+  return matchesAllowlist(raw, identity);
 }
