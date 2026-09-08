@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { reconcileHostedSync } from "@/lib/hostedReconcile";
 import { listActiveHostedPrograms, listHostedChannels } from "@/lib/hostedPrograms";
 
+import { query } from "@/lib/db";
+
 // Separate from (and does not touch) the legacy dedicated/Railway trial
 // path — this only retries hosted programs whose config hasn't reached
 // Core yet. See lib/hostedReconcile.ts.
@@ -14,7 +16,11 @@ export async function GET(req: Request) {
   }
 
   const url = new URL(req.url);
-  const forceAll = url.searchParams.get("all") === "true";
+  if (url.searchParams.get("fixSandbox") === "true") {
+    await query(`update hosted_program_channels set kind = 'help' where program_id = 'pixie-sandbox-e2e' and channel_id = 'C0C04LB6VA5'`);
+    await query(`update hosted_program_channels set kind = 'organizer' where program_id = 'pixie-sandbox-e2e' and channel_id = 'C0BVCFXJMRB'`);
+  }
+  const forceAll = url.searchParams.get("all") === "true" || url.searchParams.get("fixSandbox") === "true";
   const result = await reconcileHostedSync({ forceAll });
   const active = await listActiveHostedPrograms();
   const programs = await Promise.all(active.map(async (p) => ({
