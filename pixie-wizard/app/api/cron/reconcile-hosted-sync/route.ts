@@ -27,6 +27,16 @@ export async function GET(req: Request) {
     id: p.id,
     name: p.program_name,
     workspace: p.workspace_id,
+    support_name: p.support_name,
+    icon_url: p.icon_url,
+    posture: p.posture,
+    scope: p.scope,
+    ai_answers: p.ai_answers,
+    tickets_enabled: p.tickets_enabled,
+    public_tickets_enabled: p.public_tickets_enabled,
+    auto_escalate: p.auto_escalate,
+    incident_mode: p.incident_mode,
+    settings: p.settings,
     channels: await listHostedChannels(p.id)
   })));
   return NextResponse.json({ ok: true, ...result, programs });
