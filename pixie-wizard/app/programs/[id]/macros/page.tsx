@@ -1,11 +1,11 @@
-import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreMacrosList } from "@/lib/pixieCore";
+import { PageHeader, CoreError } from "@/app/_components/DashboardShell";
 import { MacroCreateForm, MacroRowCard, type MacroRow } from "./MacroForms";
 
 export default async function MacrosPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { program } = await requireProgramMembership(id);
+  await requireProgramMembership(id);
 
   let macros: MacroRow[] = [];
   let loadError: string | null = null;
@@ -16,25 +16,22 @@ export default async function MacrosPage({ params }: { params: Promise<{ id: str
   }
 
   return (
-    <main className="max-w-none px-0 py-0">
-      <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · macros</p>
-      <h1 className="font-heading mt-3 text-2xl text-text">Approved replies</h1>
-      <p className="mt-2 text-sm text-text-muted">Helpers send these from any ticket. <code>{"{requester} {ticket_id} {program} {status} {helper}"}</code> interpolate; anything else stays literal.</p>
+    <>
+      <PageHeader
+        title="Macros"
+        description="Saved replies helpers can send from any ticket. {requester} {ticket_id} {program} {status} {helper} interpolate."
+      />
 
-      {loadError && <p className="mt-4 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{loadError} — is Pixie Core running?</p>}
+      {loadError && <CoreError message={loadError} />}
 
-      <div className="mt-6">
-        <MacroCreateForm programId={id} />
-      </div>
+      <MacroCreateForm programId={id} />
 
-      <div className="mt-6 space-y-4">
+      <div className="mt-8 space-y-4">
         {macros.map((m) => (
           <MacroRowCard key={m.id} programId={id} macro={m} />
         ))}
       </div>
-      {macros.length === 0 && !loadError && <p className="mt-6 text-sm text-text-muted">No macros yet. The first one is usually ?shipping.</p>}
-
-      <Link href={`/programs/${id}`} className="mt-8 inline-block text-sm text-text-muted underline">← Back</Link>
-    </main>
+      {macros.length === 0 && !loadError && <p className="mt-8 text-sm text-text-muted">No macros yet.</p>}
+    </>
   );
 }

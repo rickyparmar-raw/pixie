@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { hostedRetentionPolicy, hostedRetentionSweep } from "@/app/wizard/hostedActions";
 import type { ActionState } from "@/lib/types";
-import { inputClass, labelClass } from "@/app/wizard/_components/formStyles";
+import { inputClass, labelClass, btnPrimary } from "@/app/wizard/_components/formStyles";
 
 const initialState: ActionState = { error: null };
 
@@ -18,11 +18,11 @@ const FIELDS: Array<[string, string, number]> = [
 export function RetentionPolicyForm({ programId, policy }: { programId: string; policy: Record<string, number> }) {
   const [state, formAction] = useActionState(hostedRetentionPolicy, initialState);
   return (
-    <form action={formAction} className="space-y-3 rounded-lg border border-line bg-panel p-6">
-      <h2 className="font-heading text-lg text-text">Retention windows (days)</h2>
-      <p className="text-xs text-text-muted">Approved knowledge always survives. Open tickets are never deleted by retention.</p>
+    <form action={formAction} className="max-w-2xl space-y-3">
+      <h2 className="text-sm font-medium text-text">Retention windows (days)</h2>
+      <p className="text-xs text-text-muted">Approved knowledge and open tickets are always kept.</p>
       <input type="hidden" name="programId" value={programId} />
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2">
         {FIELDS.map(([key, label, fallback]) => (
           <div key={key}>
             <label htmlFor={key} className={labelClass}>{label}</label>
@@ -30,8 +30,8 @@ export function RetentionPolicyForm({ programId, policy }: { programId: string; 
           </div>
         ))}
       </div>
-      {state.error && <p className="rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{state.error}</p>}
-      <button type="submit" className="rounded-md bg-brand px-4 py-2 font-heading text-sm text-white hover:bg-brand-dim">Save retention</button>
+      {state.error && <p className="border-l-2 border-brand/60 pl-3 text-sm text-brand">{state.error}</p>}
+      <button type="submit" className={btnPrimary}>Save retention</button>
     </form>
   );
 }
@@ -39,13 +39,13 @@ export function RetentionPolicyForm({ programId, policy }: { programId: string; 
 export function RetentionSweepForm({ programId }: { programId: string }) {
   const [state, formAction] = useActionState(hostedRetentionSweep, initialState);
   return (
-    <form action={formAction} className="space-y-3 rounded-lg border border-brand/40 bg-panel p-6">
-      <h2 className="font-heading text-lg text-text">Run sweep now</h2>
-      <p className="text-xs text-text-muted">Organizers only. Type the exact phrase to confirm deletion.</p>
+    <form action={formAction} className="max-w-2xl space-y-3 rounded-md border border-brand/40 p-5">
+      <h2 className="text-sm font-medium text-text">Run sweep now</h2>
+      <p className="text-xs text-text-muted">Organizers only. Deletes everything currently eligible. Type the phrase to confirm.</p>
       <input type="hidden" name="programId" value={programId} />
       <input name="confirm" placeholder={`DELETE ${programId}`} aria-label="Confirmation phrase" className={`${inputClass} font-mono`} />
-      {state.error && <p className="rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{state.error}</p>}
-      <button type="submit" className="rounded-md border border-brand/60 px-4 py-2 font-heading text-sm text-brand">Sweep now</button>
+      {state.error && <p className="border-l-2 border-brand/60 pl-3 text-sm text-brand">{state.error}</p>}
+      <button type="submit" className="inline-flex items-center justify-center rounded-md border border-brand/60 px-3.5 py-2 text-sm font-medium text-brand transition-colors hover:bg-brand/10">Sweep now</button>
     </form>
   );
 }

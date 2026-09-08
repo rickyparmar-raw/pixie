@@ -1,6 +1,6 @@
-import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreGapClusters } from "@/lib/pixieCore";
+import { PageHeader, CoreError } from "@/app/_components/DashboardShell";
 import { FaqProposeButton } from "../knowledge/ReviewForms";
 
 interface Cluster {
@@ -16,7 +16,7 @@ interface Cluster {
 
 export default async function GapsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { program } = await requireProgramMembership(id);
+  await requireProgramMembership(id);
 
   let clusters: Cluster[] = [];
   let loadError: string | null = null;
@@ -28,31 +28,29 @@ export default async function GapsPage({ params }: { params: Promise<{ id: strin
   }
 
   return (
-    <main className="max-w-none px-0 py-0">
-      <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · faq gaps</p>
-      <h1 className="font-heading mt-3 text-2xl text-text">What docs don&apos;t answer</h1>
-      <p className="mt-2 text-sm text-text-muted">Equivalent asks grouped automatically. Drafts need approval before they teach Pixie anything.</p>
+    <>
+      <PageHeader
+        title="FAQ gaps"
+        description="Repeated questions the docs don't answer well, grouped automatically."
+      />
 
-      {loadError && <p className="mt-4 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{loadError} — is Pixie Core running?</p>}
+      {loadError && <CoreError message={loadError} />}
 
-      <ul className="mt-6 space-y-4">
+      <ul className="divide-y divide-line border-t border-line">
         {clusters.map((c) => (
-          <li key={c.representative} className="rounded-lg border border-line bg-panel p-4">
+          <li key={c.representative} className="py-4">
             <p className="text-sm text-text">{c.representative}</p>
             <p className="mt-1 text-xs text-text-muted">
               {c.askCount} asks · {c.askers} people · {c.variants} phrasing{c.variants === 1 ? "" : "s"} · escalated {c.escalated}×
-              {c.covered ? " · already covered by an approved fact" : " · docs unclear"}
+              {c.covered ? " · covered by an approved fact" : " · docs unclear"}
             </p>
             {!c.covered && <FaqProposeButton programId={id} question={c.representative} />}
           </li>
         ))}
       </ul>
-      {clusters.length === 0 && !loadError && <p className="mt-6 text-sm text-text-muted">No gaps with 2+ askers in the last 30 days. Quiet docs, or quiet channel.</p>}
-
-      <div className="mt-8 flex gap-4">
-        <Link href={`/programs/${id}/knowledge`} className="rounded-md bg-brand px-4 py-2 font-heading text-sm text-white hover:bg-brand-dim">Review drafts →</Link>
-        <Link href={`/programs/${id}`} className="mt-2 text-sm text-text-muted underline">← Back</Link>
-      </div>
-    </main>
+      {clusters.length === 0 && !loadError && (
+        <p className="text-sm text-text-muted">No gaps with 2+ askers in the last 30 days.</p>
+      )}
+    </>
   );
 }

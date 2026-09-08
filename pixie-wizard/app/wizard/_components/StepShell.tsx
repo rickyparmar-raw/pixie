@@ -25,7 +25,7 @@ export function StepShell({
                   (state === "done"
                     ? "bg-mint text-ink"
                     : state === "active"
-                      ? "bg-brand text-white"
+                      ? "bg-brand text-ink"
                       : "border border-line text-text-muted")
                 }
               >

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreTicketSearch } from "@/lib/pixieCore";
+import { PageHeader, CoreError } from "@/app/_components/DashboardShell";
 
 interface TicketRow {
   id: number;
@@ -33,7 +34,7 @@ export default async function TicketsPage({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const { program } = await requireProgramMembership(id);
+  await requireProgramMembership(id);
 
   const page = Math.max(Number(query.page) || 1, 1);
   const limit = 20;
@@ -60,58 +61,62 @@ export default async function TicketsPage({
   const pages = Math.max(Math.ceil(total / limit), 1);
 
   return (
-    <main className="max-w-none px-0 py-0">
-      <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · tickets</p>
-      <h1 className="font-heading mt-3 text-2xl text-text">Support queue {total > 0 && <span className="text-text-muted">({total})</span>}</h1>
+    <>
+      <PageHeader
+        title="Support queue"
+        description={total > 0 ? `${total} ticket${total === 1 ? "" : "s"} match this view.` : undefined}
+      />
 
-      <form method="get" className="mt-6 space-y-2">
-        <div className="flex gap-2">
-          <input name="q" defaultValue={query.q ?? ""} placeholder="Search questions…" className="w-full rounded-md border border-line bg-panel-2 px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-brand focus:outline-none" />
-          <select name="status" defaultValue={query.status ?? ""} className="rounded-md border border-line bg-panel-2 px-3 py-2 text-sm text-text">
+      <form method="get" className="mb-8 space-y-2">
+        <div className="flex flex-wrap gap-2">
+          <input name="q" defaultValue={query.q ?? ""} placeholder="Search questions" className="min-w-0 flex-1 rounded-md border border-line bg-panel-2 px-3 py-2 text-sm text-text placeholder:text-text-muted focus:border-brand focus:outline-none" />
+          <select name="status" defaultValue={query.status ?? ""} className="rounded-md border border-line bg-panel-2 px-3 py-2 text-sm text-text focus:border-brand focus:outline-none">
             <option value="">All states</option>
             {STATUSES.map((s) => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
-          <button type="submit" className="rounded-md bg-brand px-4 py-2 font-heading text-sm text-white hover:bg-brand-dim">Go</button>
+          <button type="submit" className="pixie-button pixie-button-primary">Search</button>
         </div>
         <div className="flex flex-wrap gap-2 text-xs">
-          <input name="assignee" defaultValue={query.assignee ?? ""} placeholder="Assignee ID" className="w-32 rounded-md border border-line bg-panel-2 px-2 py-1 font-mono text-text" />
-          <input name="requester" defaultValue={query.requester ?? ""} placeholder="Requester ID" className="w-32 rounded-md border border-line bg-panel-2 px-2 py-1 font-mono text-text" />
-          <input name="category" defaultValue={query.category ?? ""} placeholder="Category" className="w-28 rounded-md border border-line bg-panel-2 px-2 py-1 text-text" />
-          <input name="priority" defaultValue={query.priority ?? ""} placeholder="Priority" className="w-24 rounded-md border border-line bg-panel-2 px-2 py-1 text-text" />
+          <input name="assignee" defaultValue={query.assignee ?? ""} placeholder="Assignee ID" className="w-32 rounded-md border border-line bg-panel-2 px-2 py-1 font-mono text-text placeholder:text-text-muted focus:border-brand focus:outline-none" />
+          <input name="requester" defaultValue={query.requester ?? ""} placeholder="Requester ID" className="w-32 rounded-md border border-line bg-panel-2 px-2 py-1 font-mono text-text placeholder:text-text-muted focus:border-brand focus:outline-none" />
+          <input name="category" defaultValue={query.category ?? ""} placeholder="Category" className="w-28 rounded-md border border-line bg-panel-2 px-2 py-1 text-text placeholder:text-text-muted focus:border-brand focus:outline-none" />
+          <input name="priority" defaultValue={query.priority ?? ""} placeholder="Priority" className="w-24 rounded-md border border-line bg-panel-2 px-2 py-1 text-text placeholder:text-text-muted focus:border-brand focus:outline-none" />
         </div>
       </form>
 
-      {searchError && <p className="mt-4 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{searchError} — is Pixie Core running?</p>}
+      {searchError && <CoreError message={searchError} />}
 
-      <ul className="mt-6 space-y-3">
+      <ul className="divide-y divide-line border-t border-line">
         {rows.map((t) => (
-          <li key={t.id} className="rounded-lg border border-line bg-panel p-4">
-            <Link href={`/programs/${id}/tickets/${t.id}`} className="text-sm text-text hover:underline">
-              <span className="font-heading text-xs text-text-muted">#{t.id} · {t.status}</span>
-              <span className="mt-1 block">{t.question}</span>
+          <li key={t.id} className="py-3">
+            <Link href={`/programs/${id}/tickets/${t.id}`} className="group block">
+              <p className="text-xs text-text-muted">
+                #{t.id} · {t.status}
+              </p>
+              <p className="mt-0.5 text-sm text-text group-hover:text-brand">{t.question}</p>
+              <p className="mt-0.5 text-xs text-text-muted">
+                &lt;@{t.requester_id}&gt;
+                {t.assignee_id && <> · claimed by &lt;@{t.assignee_id}&gt;</>}
+                {t.category && <> · {t.category}</>}
+                {t.priority && <> · {t.priority}</>}
+              </p>
             </Link>
-            <p className="mt-1 text-xs text-text-muted">
-              <span>&lt;@{t.requester_id}&gt;</span>
-              {t.assignee_id && <span> · claimed by &lt;@{t.assignee_id}&gt;</span>}
-              {t.category && <span> · {t.category}</span>}
-              {t.priority && <span> · {t.priority}</span>}
-            </p>
           </li>
         ))}
       </ul>
-      {rows.length === 0 && !searchError && <p className="mt-6 text-sm text-text-muted">No tickets here yet. New help-channel questions show up automatically.</p>}
-
-      {pages > 1 && (
-        <div className="mt-6 flex items-center gap-3 text-sm text-text-muted">
-          <span>Page {page} of {pages}</span>
-          {page > 1 && <Link href={pageHref(query, page - 1)} className="underline">← Prev</Link>}
-          {page < pages && <Link href={pageHref(query, page + 1)} className="underline">Next →</Link>}
-        </div>
+      {rows.length === 0 && !searchError && (
+        <p className="text-sm text-text-muted">No tickets in this view. New help-channel questions appear automatically.</p>
       )}
 
-      <Link href={`/programs/${id}`} className="mt-8 inline-block text-sm text-text-muted underline">← Back to {program.program_name}</Link>
-    </main>
+      {pages > 1 && (
+        <div className="mt-6 flex items-center gap-4 text-sm text-text-muted">
+          <span>Page {page} of {pages}</span>
+          {page > 1 && <Link href={pageHref(query, page - 1)} className="hover:text-text">← Prev</Link>}
+          {page < pages && <Link href={pageHref(query, page + 1)} className="hover:text-text">Next →</Link>}
+        </div>
+      )}
+    </>
   );
 }

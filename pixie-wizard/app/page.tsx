@@ -8,14 +8,13 @@ export default function LandingPage() {
             hack club · pixie
           </p>
           <h1 className="font-heading mt-4 text-4xl leading-[1.05] text-text sm:text-5xl">
-            Get your own docs bot,
+            A docs bot for your
             <br />
-            running in Slack today.
+            program, in Slack.
           </h1>
           <p className="mt-5 max-w-md text-sm leading-relaxed text-text-muted">
-            Pixie answers questions from your program&apos;s docs, right in your
-            Slack channels. No Slack app to build, no bot token, no LLM key —
-            just your channels and your docs.
+            Pixie answers questions from your program&apos;s docs, in your Slack
+            channels. No Slack app to build, no bot token, no model key to bring.
           </p>
           <ol className="mt-8 space-y-2 text-sm text-text-muted">
             {[
@@ -23,7 +22,7 @@ export default function LandingPage() {
               "Tell us about your program",
               "Point it at your docs",
               "Pick your help and organizer channels",
-              "It's live — answering in your channels within minutes",
+              "It's live, answering in your channels within minutes",
             ].map((step, i) => (
               <li key={step} className="flex items-baseline gap-3">
                 <span className="font-heading text-xs text-brand">
@@ -50,15 +49,15 @@ export default function LandingPage() {
               hackatime to my project
             </p>
             <p className="rounded-md border border-line bg-panel-2 p-3 text-text">
-              Run <code className="text-mint">hackatime install</code> then link
-              it from your dashboard settings — full steps in the setup guide.
+              Run <code className="text-mint">hackatime install</code>, then link
+              it from your dashboard settings. Full steps in the setup guide.
             </p>
           </div>
           <a
             href="/api/auth/login"
-            className="mt-2 flex w-full items-center justify-center rounded-md bg-brand px-4 py-3 font-heading text-sm text-white transition-colors hover:bg-brand-dim"
+            className="mt-2 flex w-full items-center justify-center rounded-md bg-brand px-4 py-3 font-heading text-sm text-ink transition-colors hover:bg-brand-dim"
           >
-            Get started →
+            Sign in
           </a>
           <p className="mt-3 text-center text-xs text-text-muted">
             Hosted Pixie · no keys required

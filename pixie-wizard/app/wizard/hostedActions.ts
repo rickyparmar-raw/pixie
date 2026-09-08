@@ -337,6 +337,7 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
   });
   await markSyncState(programId, sync, updated.core_synced_at);
 
+  revalidatePath(`/programs/${programId}/settings`);
   revalidatePath(`/programs/${programId}`);
   return { error: null };
 }
@@ -352,7 +353,7 @@ export async function saveHostedSources(_prev: ActionState, formData: FormData):
   await logHostedAudit({ programId, actorHcaId: session.hcaId, actorSlackId: session.slackId, action: "program.sources_updated", entityType: "program", entityId: programId, metadata: { count: sources.length } });
   const sync = await syncProgramToCore(programId, { name: updated.program_name, workspaceId: updated.workspace_id, sources });
   await markSyncState(programId, sync, updated.core_synced_at);
-  revalidatePath(`/programs/${programId}`);
+  revalidatePath(`/programs/${programId}/settings`);
   return { error: null };
 }
 
@@ -704,10 +705,10 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
   try {
     const membership = await coreChannelMembership(rawNew);
     if (!membership.ok || !membership.hasAccess) {
-      return { error: "Pixie can't see that channel yet — run /invite @Pixie there first, then retry." };
+      return { error: "Pixie can't see that channel yet. Run /invite @Pixie there, then retry." };
     }
   } catch {
-    return { error: "Could not verify channel access — is Pixie Core running?" };
+    return { error: "Could not verify channel access. Pixie Core may be down; try again shortly." };
   }
 
   const claim = await claimHostedChannels({
@@ -734,7 +735,7 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
       `delete from hosted_program_channels where workspace_id = $1 and channel_id = $2 and program_id = $3`,
       [program.workspace_id, rawNew, programId],
     );
-    return { error: sync.error ?? "Core sync failed — routing unchanged." };
+    return { error: sync.error ?? "Core sync failed; routing unchanged." };
   }
 
   if (oldHelp) {
@@ -752,7 +753,7 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
     entityId: programId,
     metadata: { from: oldHelp?.channel_id ?? null, to: rawNew },
   });
-  revalidatePath(`/programs/${programId}`);
+  revalidatePath(`/programs/${programId}/settings`);
   return { error: null };
 }
 

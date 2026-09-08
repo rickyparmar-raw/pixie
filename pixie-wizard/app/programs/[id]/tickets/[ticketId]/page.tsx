@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
-import { coreTicketDetail } from "@/lib/pixieCore";
+import { coreTicketDetail, coreMacrosList } from "@/lib/pixieCore";
+import { PageHeader, Section, CoreError } from "@/app/_components/DashboardShell";
 import { TicketActions } from "./TicketActions";
 import { CopilotPanel } from "./CopilotPanel";
 import { MacroSendForm, type MacroRow } from "../../macros/MacroForms";
-import { coreMacrosList } from "@/lib/pixieCore";
 
 interface TicketDetail {
   ticket: {
@@ -34,7 +34,7 @@ export default async function TicketPage({
   params: Promise<{ id: string; ticketId: string }>;
 }) {
   const { id, ticketId } = await params;
-  const { program } = await requireProgramMembership(id);
+  await requireProgramMembership(id);
 
   let detail: TicketDetail | null = null;
   let loadError: string | null = null;
@@ -46,10 +46,10 @@ export default async function TicketPage({
 
   if (loadError || !detail) {
     return (
-      <main className="max-w-none px-0 py-0">
-        <p className="rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{loadError} — is Pixie Core running?</p>
-        <Link href={`/programs/${id}/tickets`} className="mt-4 inline-block text-sm text-text-muted underline">← Back to queue</Link>
-      </main>
+      <>
+        <CoreError message={loadError ?? "Ticket not found."} />
+        <Link href={`/programs/${id}/tickets`} className="text-sm text-text-muted hover:text-text">← Support queue</Link>
+      </>
     );
   }
 
@@ -63,59 +63,56 @@ export default async function TicketPage({
   }
 
   return (
-    <main className="max-w-none px-0 py-0">
-      <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">
-        {program.program_name} · ticket #{ticket.id} · {ticket.status}
-      </p>
-      <h1 className="font-heading mt-3 text-xl text-text">{ticket.question}</h1>
-      <p className="mt-2 text-sm text-text-muted">
-        from &lt;@{ticket.requester_id}&gt; in &lt;#{ticket.channel}&gt;
-        {ticket.assignee_id && <> · claimed by &lt;@{ticket.assignee_id}&gt;</>}
-        {ticket.category && <> · {ticket.category}</>}
-        {ticket.priority && <> · {ticket.priority}</>}
-        {ticket.ai_confidence !== null && <> · AI confidence {Math.round(ticket.ai_confidence * 100)}%</>}
-      </p>
-      {ticket.summary && <p className="mt-3 rounded-md border border-line bg-panel p-3 text-sm text-text">{ticket.summary}</p>}
+    <>
+      <PageHeader
+        title={ticket.question}
+        description={[
+          `#${ticket.id} · ${ticket.status}`,
+          `from <@${ticket.requester_id}> in <#${ticket.channel}>`,
+          ticket.assignee_id && `claimed by <@${ticket.assignee_id}>`,
+          ticket.category,
+          ticket.priority,
+          ticket.ai_confidence !== null && `AI confidence ${Math.round(ticket.ai_confidence * 100)}%`,
+        ]
+          .filter(Boolean)
+          .join(" · ")}
+      />
 
-      <div className="mt-6">
+      {ticket.summary && (
+        <p className="mb-8 border-l-2 border-line pl-3 text-sm text-text">{ticket.summary}</p>
+      )}
+
+      <div className="space-y-10">
         <TicketActions programId={id} ticketId={ticket.id} />
-      </div>
 
-      <div className="mt-6">
         <MacroSendForm programId={id} ticketId={ticket.id} macros={macros.filter((m) => m.enabled)} />
-      </div>
 
-      <div className="mt-6">
         <CopilotPanel programId={id} ticketId={ticket.id} question={ticket.question} threadTs={ticket.thread_ts} />
-      </div>
 
-      <div className="mt-6 rounded-lg border border-line bg-panel p-6">
-        <h2 className="font-heading text-lg text-text">Timeline</h2>
-        <ul className="mt-3 space-y-2 text-sm text-text-muted">
-          {events.map((e) => (
-            <li key={e.id}>
-              <span className="text-text">{e.event_type}</span>
-              {e.actor_id && <> by &lt;@{e.actor_id}&gt;</>} · {new Date(e.created_at).toLocaleString()}
-            </li>
-          ))}
-          {events.length === 0 && <li>No events yet.</li>}
-        </ul>
-      </div>
+        <Section title="Timeline">
+          <ul className="space-y-2 text-sm text-text-muted">
+            {events.map((e) => (
+              <li key={e.id}>
+                <span className="text-text">{e.event_type}</span>
+                {e.actor_id && <> by &lt;@{e.actor_id}&gt;</>} · {new Date(e.created_at).toLocaleString()}
+              </li>
+            ))}
+            {events.length === 0 && <li>No events yet.</li>}
+          </ul>
+        </Section>
 
-      <div className="mt-6 rounded-lg border border-line bg-panel p-6">
-        <h2 className="font-heading text-lg text-text">Internal notes</h2>
-        <ul className="mt-3 space-y-3 text-sm">
-          {notes.map((n) => (
-            <li key={n.id} className="rounded-md border border-line bg-panel-2 p-3">
-              <p className="text-text">{n.body}</p>
-              <p className="mt-1 text-xs text-text-muted">&lt;@{n.author_id}&gt; · {new Date(n.created_at).toLocaleString()}</p>
-            </li>
-          ))}
-          {notes.length === 0 && <li className="text-text-muted">No notes yet.</li>}
-        </ul>
+        <Section title="Internal notes">
+          <ul className="space-y-3 text-sm">
+            {notes.map((n) => (
+              <li key={n.id} className="border-l-2 border-line pl-3">
+                <p className="text-text">{n.body}</p>
+                <p className="mt-1 text-xs text-text-muted">&lt;@{n.author_id}&gt; · {new Date(n.created_at).toLocaleString()}</p>
+              </li>
+            ))}
+            {notes.length === 0 && <li className="text-text-muted">No notes yet.</li>}
+          </ul>
+        </Section>
       </div>
-
-      <Link href={`/programs/${id}/tickets`} className="mt-8 inline-block text-sm text-text-muted underline">← Back to queue</Link>
-    </main>
+    </>
   );
 }

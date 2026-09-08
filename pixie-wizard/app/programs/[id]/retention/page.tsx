@@ -1,11 +1,11 @@
-import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreRetentionPreview } from "@/lib/pixieCore";
+import { PageHeader, Section, CoreError } from "@/app/_components/DashboardShell";
 import { RetentionPolicyForm, RetentionSweepForm } from "./RetentionForms";
 
 export default async function RetentionPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const { program } = await requireProgramMembership(id);
+  await requireProgramMembership(id);
 
   let preview: Record<string, unknown> | null = null;
   let loadError: string | null = null;
@@ -16,36 +16,42 @@ export default async function RetentionPage({ params }: { params: Promise<{ id: 
   }
 
   const policy = (preview?.policy ?? {}) as Record<string, number>;
+  const eligible: Array<[string, string]> = preview
+    ? [
+        ["Tickets", String(preview.tickets ?? 0)],
+        ["Timeline events", String(preview.ticketEvents ?? 0)],
+        ["Notes", String(preview.notes ?? 0)],
+        ["Metrics", String(preview.metrics ?? 0)],
+        ["Doc gaps", String(preview.gaps ?? 0)],
+      ]
+    : [];
 
   return (
-    <main className="max-w-none px-0 py-0">
-      <p className="font-heading text-xs uppercase tracking-[0.2em] text-mint">{program.program_name} · retention</p>
-      <h1 className="font-heading mt-3 text-2xl text-text">What gets forgotten</h1>
-      <p className="mt-2 text-sm text-text-muted">Raw support content expires on schedule. Approved knowledge and open tickets survive.</p>
+    <>
+      <PageHeader
+        title="Retention"
+        description="Raw support content expires on schedule. Approved knowledge and open tickets are kept."
+      />
 
-      {loadError && <p className="mt-4 rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{loadError} — is Pixie Core running?</p>}
+      {loadError && <CoreError message={loadError} />}
 
-      {preview && (
-        <div className="mt-6 rounded-lg border border-line bg-panel p-6">
-          <h2 className="font-heading text-lg text-text">Currently eligible for deletion</h2>
-          <ul className="mt-3 space-y-1 text-sm text-text">
-            <li>Tickets <span className="text-text-muted">· {String(preview.tickets ?? 0)}</span></li>
-            <li>Timeline events <span className="text-text-muted">· {String(preview.ticketEvents ?? 0)}</span></li>
-            <li>Notes <span className="text-text-muted">· {String(preview.notes ?? 0)}</span></li>
-            <li>Metrics <span className="text-text-muted">· {String(preview.metrics ?? 0)}</span></li>
-            <li>Doc gaps <span className="text-text-muted">· {String(preview.gaps ?? 0)}</span></li>
-          </ul>
-        </div>
-      )}
+      <div className="space-y-12">
+        {preview && (
+          <Section title="Eligible for deletion now">
+            <ul className="max-w-sm">
+              {eligible.map(([label, value]) => (
+                <li key={label} className="flex justify-between gap-4 py-1 text-sm">
+                  <span className="text-text-muted">{label}</span>
+                  <span className="tabular-nums text-text">{value}</span>
+                </li>
+              ))}
+            </ul>
+          </Section>
+        )}
 
-      <div className="mt-6">
         <RetentionPolicyForm programId={id} policy={policy} />
-      </div>
-      <div className="mt-6">
         <RetentionSweepForm programId={id} />
       </div>
-
-      <Link href={`/programs/${id}`} className="mt-8 inline-block text-sm text-text-muted underline">← Back</Link>
-    </main>
+    </>
   );
 }

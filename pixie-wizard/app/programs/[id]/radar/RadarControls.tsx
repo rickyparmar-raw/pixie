@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { hostedRadarAction } from "@/app/wizard/hostedActions";
+import { btnPrimary, btnQuiet } from "@/app/wizard/_components/formStyles";
 
 export function RadarRefreshButton({ programId }: { programId: string }) {
   const [busy, setBusy] = useState(false);
@@ -18,13 +19,13 @@ export function RadarRefreshButton({ programId }: { programId: string }) {
           if (!res.ok) setResult(`Error: ${res.error}`);
           else {
             const signals = (res.data as { signals?: unknown[] })?.signals ?? [];
-            setResult(`Re-checked — ${signals.length} live signal${signals.length === 1 ? "" : "s"}.`);
+            setResult(`Re-checked. ${signals.length} live signal${signals.length === 1 ? "" : "s"}.`);
             window.location.reload();
           }
         }}
-        className="pixie-button pixie-button-quiet"
+        className={btnQuiet}
       >
-        {busy ? "Checking…" : "Refresh now"}
+        {busy ? "Checking…" : "Refresh"}
       </button>
       {result && <p className="mt-2 text-xs text-text-muted">{result}</p>}
     </div>
@@ -49,12 +50,12 @@ export function RadarSignalControls({ programId, signalId, status }: { programId
   }
 
   return (
-    <div className="mt-3 flex flex-wrap items-center gap-2">
+    <div className="mt-2 flex flex-wrap items-center gap-2">
       {status !== "acknowledged" && status !== "resolved" && (
-        <button disabled={busy} onClick={() => act("acknowledge")} className="rounded-md border border-line px-3 py-1.5 font-heading text-xs text-text hover:text-white disabled:opacity-60">Acknowledge</button>
+        <button disabled={busy} onClick={() => act("acknowledge")} className={btnQuiet}>Acknowledge</button>
       )}
       {status !== "resolved" && (
-        <button disabled={busy} onClick={() => act("resolve")} className="rounded-md bg-brand px-3 py-1.5 font-heading text-xs text-white hover:bg-brand-dim disabled:opacity-60">Resolve</button>
+        <button disabled={busy} onClick={() => act("resolve")} className={btnPrimary}>Resolve</button>
       )}
       {status !== "suppressed" && status !== "resolved" && (
         <>
@@ -63,7 +64,7 @@ export function RadarSignalControls({ programId, signalId, status }: { programId
             <option value="24h">24h</option>
             <option value="7d">7d</option>
           </select>
-          <button disabled={busy} onClick={() => act("suppress")} className="rounded-md border border-line px-3 py-1.5 font-heading text-xs text-text hover:text-white disabled:opacity-60">Suppress</button>
+          <button disabled={busy} onClick={() => act("suppress")} className={btnQuiet}>Suppress</button>
         </>
       )}
       {error && <p className="w-full text-xs text-brand">{error}</p>}

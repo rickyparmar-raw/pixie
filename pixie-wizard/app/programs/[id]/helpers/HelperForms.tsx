@@ -3,7 +3,7 @@
 import { useActionState } from "react";
 import { hostedHelperSave, setHelperVisibilityAction } from "@/app/wizard/hostedActions";
 import type { ActionState } from "@/lib/types";
-import { inputClass, labelClass } from "@/app/wizard/_components/formStyles";
+import { inputClass, labelClass, btnPrimary } from "@/app/wizard/_components/formStyles";
 
 const initialState: ActionState = { error: null };
 
@@ -25,7 +25,7 @@ export function HelperVisibilityToggle({
 }) {
   const [state, formAction] = useActionState(setHelperVisibilityAction, initialState);
   return (
-    <form action={formAction} className="flex items-center justify-between gap-3 rounded-md border border-line px-3 py-2 text-sm">
+    <form action={formAction} className="flex flex-wrap items-center justify-between gap-3 border-b border-line py-2 text-sm">
       <input type="hidden" name="programId" value={programId} />
       <input type="hidden" name="slackUserId" value={slackUserId} />
       <span className="font-mono text-text">
@@ -43,19 +43,20 @@ export function HelperVisibilityToggle({
 export function HelperAddForm({ programId }: { programId: string }) {
   const [state, formAction] = useActionState(hostedHelperSave, initialState);
   return (
-    <form action={formAction} className="space-y-3 rounded-lg border border-line bg-panel p-6">
-      <h2 className="font-heading text-lg text-text">Add helper + expertise</h2>
+    <form action={formAction} className="max-w-lg space-y-3">
+      <h2 className="text-sm font-medium text-text">Add helper</h2>
       <input type="hidden" name="programId" value={programId} />
       <div>
         <label htmlFor="helperUserId" className={labelClass}>Slack user ID</label>
         <input id="helperUserId" name="helperUserId" placeholder="U0123456789" className={`${inputClass} font-mono`} />
       </div>
       <div>
-        <label htmlFor="helperTags" className={labelClass}>Expertise tags (comma-separated)</label>
+        <label htmlFor="helperTags" className={labelClass}>Expertise tags</label>
         <input id="helperTags" name="helperTags" placeholder="ordering, verification, pcb" className={inputClass} />
+        <p className="mt-1 text-xs text-text-muted">Comma-separated. Used to route matching questions.</p>
       </div>
-      {state.error && <p className="rounded-md border border-brand/40 bg-brand/10 px-3 py-2 text-sm text-brand">{state.error}</p>}
-      <button type="submit" className="rounded-md bg-brand px-4 py-2 font-heading text-sm text-white hover:bg-brand-dim">Save helper</button>
+      {state.error && <p className="border-l-2 border-brand/60 pl-3 text-sm text-brand">{state.error}</p>}
+      <button type="submit" className={btnPrimary}>Add helper</button>
     </form>
   );
 }

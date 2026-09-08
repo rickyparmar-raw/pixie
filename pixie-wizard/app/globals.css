@@ -11,6 +11,7 @@
   --color-line: #252d39;
   --color-text: #d7dbe4;
   --color-text-muted: #717b8d;
+  --radius: 6px;
   --font-mono-heading:
     "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas,
     monospace;
@@ -34,13 +35,15 @@ body {
 
 body {
   font-family: var(--font-mono-heading);
+  /* Dot texture: kept as identity, dialed down so pages read as negative
+     space rather than pattern. */
   background-image:
     radial-gradient(
       circle at 1px 1px,
-      rgba(231, 233, 238, 0.06) 1px,
+      rgba(231, 233, 238, 0.045) 1px,
       transparent 0
     );
-  background-size: 16px 16px;
+  background-size: 22px 22px;
 }
 
 ::selection {
@@ -53,13 +56,14 @@ body {
   letter-spacing: 0;
 }
 
-.pixie-panel { border: 1px solid var(--color-line); border-radius: 6px; background: var(--color-panel); }
-.pixie-input { width: 100%; border: 1px solid var(--color-line); border-radius: 6px; background: var(--color-panel-2); color: var(--color-text); padding: 10px 12px; font-size: 13px; outline: none; transition: border-color 150ms ease, background-color 150ms ease; }
+.pixie-panel { border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-panel); }
+.pixie-input { width: 100%; border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-panel-2); color: var(--color-text); padding: 9px 12px; font-size: 13px; outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; }
 .pixie-input::placeholder { color: #4e5868; }
-.pixie-input:focus { border-color: var(--color-brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand) 22%, transparent); }
-.pixie-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 36px; border-radius: 6px; border: 1px solid transparent; padding: 8px 14px; font-size: 13px; font-weight: 500; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
+.pixie-input:focus { border-color: var(--color-brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand) 20%, transparent); }
+
+.pixie-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 34px; border-radius: var(--radius); border: 1px solid transparent; padding: 7px 13px; font-size: 13px; font-weight: 500; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
 .pixie-button-primary { background: var(--color-brand); color: #0b0e13; }
-.pixie-button-primary:hover { background: #f07082; }
+.pixie-button-primary:hover { background: #f2707f; }
 .pixie-button-quiet { border-color: var(--color-line); color: var(--color-text-muted); background: transparent; }
 .pixie-button-quiet:hover { color: var(--color-text); border-color: #3a4556; }
 
