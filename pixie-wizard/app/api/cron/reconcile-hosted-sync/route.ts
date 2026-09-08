@@ -12,6 +12,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: false }, { status: 401 });
   }
 
-  const result = await reconcileHostedSync();
+  const url = new URL(req.url);
+  const forceAll = url.searchParams.get("all") === "true";
+  const result = await reconcileHostedSync({ forceAll });
   return NextResponse.json({ ok: true, ...result });
 }

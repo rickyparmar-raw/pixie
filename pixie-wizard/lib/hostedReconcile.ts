@@ -8,7 +8,7 @@
 // Idempotent by construction: syncProgramToCore does a PUT keyed by program
 // id (Core's internalProgramSync upserts on that id), so re-sending the same
 // row twice is a no-op beyond overwriting Core's copy with the same values.
-import { listHostedProgramsPendingSync, listHostedChannels, markSyncState } from "@/lib/hostedPrograms";
+import { listHostedProgramsPendingSync, listActiveHostedPrograms, listHostedChannels, markSyncState } from "@/lib/hostedPrograms";
 import { syncProgramToCore, coreConfigured } from "@/lib/pixieCore";
 import type { HostedProgramChannel } from "@/lib/types";
 
@@ -48,14 +48,14 @@ function buildSyncPayload(
   };
 }
 
-// Best-effort, one pass over the current backlog. Safe to call repeatedly
+// Best-effort, one pass over the backlog or all programs. Safe to call repeatedly
 // (cron) or on demand — never throws, every program's outcome is recorded on
 // its own row so one bad program can't block the rest of the batch.
-export async function reconcileHostedSync(): Promise<ReconcileResult> {
+export async function reconcileHostedSync(opts: { forceAll?: boolean } = {}): Promise<ReconcileResult> {
   const result: ReconcileResult = { attempted: 0, synced: 0, stillFailed: 0, errors: [] };
   if (!coreConfigured()) return result;
 
-  const pending = await listHostedProgramsPendingSync();
+  const pending = opts.forceAll ? await listActiveHostedPrograms() : await listHostedProgramsPendingSync();
   for (const program of pending) {
     result.attempted += 1;
     try {
