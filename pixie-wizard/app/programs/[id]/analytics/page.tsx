@@ -39,7 +39,7 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
   if (loadError || !a) {
     return (
       <>
-        <PageHeader title="Analytics" description="Deterministic — every figure is counted from stored tickets, never estimated." />
+        <PageHeader title="Analytics" description="Every figure is counted from stored tickets, never estimated." />
         <CoreError message={loadError ?? "Analytics are unavailable."} />
       </>
     );

@@ -1040,8 +1040,8 @@
     "semantic_hash": ""
   },
   "pixie-wizard/app/_components/DashboardShell.tsx": {
-    "mtime": 1788897050.5250063,
-    "ast_hash": "6f03c3412c677c7c3257e9c6b6db2322",
+    "mtime": 1788902700.9244654,
+    "ast_hash": "9641d4380fdbc189fcc5826b31cf2bfd",
     "semantic_hash": ""
   },
   "pixie-wizard/app/api/auth/callback/route.ts": {
@@ -1120,8 +1120,8 @@
     "semantic_hash": ""
   },
   "pixie-wizard/app/programs/[id]/helpers/page.tsx": {
-    "mtime": 1788896403.2590888,
-    "ast_hash": "86847379625c2dfb040a40008c0d8eba",
+    "mtime": 1788902808.4176905,
+    "ast_hash": "332553287035bb9401dd0fa12195e0ac",
     "semantic_hash": ""
   },
   "pixie-wizard/app/programs/[id]/incidents/IncidentControls.tsx": {
@@ -1135,8 +1135,8 @@
     "semantic_hash": ""
   },
   "pixie-wizard/app/programs/[id]/incidents/page.tsx": {
-    "mtime": 1788896437.5080736,
-    "ast_hash": "12d4ea779e0a90c5d592622b8bb3a7f1",
+    "mtime": 1788902812.5276985,
+    "ast_hash": "4ab2f2ff00a10ad172a52ff7936b648a",
     "semantic_hash": ""
   },
   "pixie-wizard/app/programs/[id]/knowledge/ReviewForms.tsx": {
@@ -1190,8 +1190,8 @@
     "semantic_hash": ""
   },
   "pixie-wizard/app/programs/[id]/tickets/[ticketId]/CopilotPanel.tsx": {
-    "mtime": 1788896842.1859097,
-    "ast_hash": "2478e55ecd886a45e89cc3bb12218a5c",
+    "mtime": 1788902816.4387062,
+    "ast_hash": "91fbc02b1b2999a40979cdfab8ecd8f5",
     "semantic_hash": ""
   },
   "pixie-wizard/app/programs/[id]/tickets/[ticketId]/TicketActions.tsx": {
@@ -1215,13 +1215,13 @@
     "semantic_hash": ""
   },
   "pixie-wizard/app/programs/page.tsx": {
-    "mtime": 1788896577.53539,
-    "ast_hash": "44779c2dc1c8422d15911347df435e6b",
+    "mtime": 1788902714.6354957,
+    "ast_hash": "ba0394e058d8338de07486afbfa9b27f",
     "semantic_hash": ""
   },
   "pixie-wizard/app/wizard/_components/HostedSetupView.tsx": {
-    "mtime": 1788815939.9551795,
-    "ast_hash": "a3bdf71891bde830a4f558fc5245854e",
+    "mtime": 1788902834.6467412,
+    "ast_hash": "69dabbab817ffb13060068117a1ff08b",
     "semantic_hash": ""
   },
   "pixie-wizard/app/wizard/_components/StepShell.tsx": {
@@ -1240,8 +1240,8 @@
     "semantic_hash": ""
   },
   "pixie-wizard/app/wizard/hostedActions.ts": {
-    "mtime": 1788896297.9739575,
-    "ast_hash": "8aa8d050e3bffedef29ac799c3e9a72c",
+    "mtime": 1788901763.7538204,
+    "ast_hash": "450564410042492799e2cb018f89e29c",
     "semantic_hash": ""
   },
   "pixie-wizard/app/wizard/page.tsx": {
@@ -1250,8 +1250,8 @@
     "semantic_hash": ""
   },
   "pixie-wizard/db/schema.sql": {
-    "mtime": 1788893834.4052613,
-    "ast_hash": "6a53c510ce235d58e867558dc716c2f8",
+    "mtime": 1788901671.827831,
+    "ast_hash": "494755d3e648f2bbb2a02ddacc7ec855",
     "semantic_hash": ""
   },
   "pixie-wizard/lib/activationGuards.test.ts": {
@@ -1532,6 +1532,91 @@
   "pixie-wizard/lib/coreChannels.ts": {
     "mtime": 1788895797.0503047,
     "ast_hash": "21d8bf35121d0feed48b317a88f38d8d",
+    "semantic_hash": ""
+  },
+  "_seed2.mjs": {
+    "mtime": 1788902048.8050342,
+    "ast_hash": "9bc79f5f08b71893300a924a93585e00",
+    "semantic_hash": ""
+  },
+  ".playwright-mcp/page-2026-09-08T21-13-15-200Z.yml": {
+    "mtime": 1788901995.2006974,
+    "ast_hash": "343d4cb65fd7ad70e56cb31cdcb4142f",
+    "semantic_hash": ""
+  },
+  ".playwright-mcp/page-2026-09-08T21-13-20-520Z.yml": {
+    "mtime": 1788902000.5197322,
+    "ast_hash": "6a808b6764c60e650a4799ccc8fa38f0",
+    "semantic_hash": ""
+  },
+  ".playwright-mcp/page-2026-09-08T21-14-28-184Z.yml": {
+    "mtime": 1788902068.1841483,
+    "ast_hash": "80bdd4bdb2cf96bf0da6e445012b992f",
+    "semantic_hash": ""
+  },
+  ".playwright-mcp/page-2026-09-08T21-14-51-924Z.yml": {
+    "mtime": 1788902091.9242835,
+    "ast_hash": "e150eacb3cc3b6242001fb0fe3f3834b",
+    "semantic_hash": ""
+  },
+  ".playwright-mcp/page-2026-09-08T21-21-37-280Z.yml": {
+    "mtime": 1788902497.280942,
+    "ast_hash": "bfde99bbe307309cb41157a2f28fd10d",
+    "semantic_hash": ""
+  },
+  ".playwright-mcp/page-2026-09-08T21-22-29-175Z.yml": {
+    "mtime": 1788902549.1750896,
+    "ast_hash": "bc17fad2badb473b91aae137d408d0f3",
+    "semantic_hash": ""
+  },
+  ".playwright-mcp/page-2026-09-08T21-22-44-465Z.yml": {
+    "mtime": 1788902564.466131,
+    "ast_hash": "b7de0f54715d95af709bc3bb52b0ce62",
+    "semantic_hash": ""
+  },
+  ".playwright-mcp/page-2026-09-08T21-23-11-081Z.yml": {
+    "mtime": 1788902591.081201,
+    "ast_hash": "a9d4b86b5fa71fafd53ee5e50b632af8",
+    "semantic_hash": ""
+  },
+  ".playwright-mcp/page-2026-09-08T21-23-30-784Z.yml": {
+    "mtime": 1788902610.7842515,
+    "ast_hash": "7c7d4927b557111b00171fbdcb9e5707",
+    "semantic_hash": ""
+  },
+  ".playwright-mcp/page-2026-09-08T21-23-53-774Z.yml": {
+    "mtime": 1788902633.7743084,
+    "ast_hash": "362c23d93ea4a83cb78ef1a2fa29a123",
+    "semantic_hash": ""
+  },
+  "pixie-wizard/qa-analytics.png": {
+    "mtime": 1788902637.8713183,
+    "ast_hash": "571d7e955910a15ce3a5c46d660281dd",
+    "semantic_hash": ""
+  },
+  "pixie-wizard/qa-hardwire.png": {
+    "mtime": 1788902096.4623086,
+    "ast_hash": "2320426bab4d706681fab3a917ab90f2",
+    "semantic_hash": ""
+  },
+  "pixie-wizard/qa-overview.png": {
+    "mtime": 1788902073.2281775,
+    "ast_hash": "9d4784208757cba88199cb2281c114e1",
+    "semantic_hash": ""
+  },
+  "pixie-wizard/qa-public.png": {
+    "mtime": 1788902569.2341437,
+    "ast_hash": "b8ce6d4daf8e921ce9cbf95fc10f2fe7",
+    "semantic_hash": ""
+  },
+  "pixie-wizard/qa-settings.png": {
+    "mtime": 1788902501.1749535,
+    "ast_hash": "da1301f95fea057c376fbc5e49ef0d90",
+    "semantic_hash": ""
+  },
+  "qa-01-programs-1440.png": {
+    "mtime": 1788902004.179756,
+    "ast_hash": "89ba73fb6d27d00ea0e33dec00334094",
     "semantic_hash": ""
   }
 }
