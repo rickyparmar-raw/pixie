@@ -5,9 +5,10 @@
 // refactor away from silently losing that check. Redirecting a non-member
 // to the public profile (rather than throwing) matches the product
 // requirement directly: a non-member isn't an error case, they're a reader.
+import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getSession, type WizardSession } from "@/lib/session";
-import { getHostedProgram, listHostedHelpers } from "@/lib/hostedPrograms";
+import { getHostedProgram, getHelperRow } from "@/lib/hostedPrograms";
 import type { HostedProgramRow, ProgramRelationship } from "@/lib/types";
 
 export async function relationshipFor(
@@ -17,13 +18,36 @@ export async function relationshipFor(
   if (!session) return "public";
   if (program.owner_hca_id === session.hcaId) return "owner";
   if (session.slackId) {
-    const helpers = await listHostedHelpers(program.id);
-    const mine = helpers.find((h) => h.slack_user_id === session.slackId);
+    // Targeted single-row lookup (program + this Slack user), not the whole
+    // roster — same active-only, role semantics as before.
+    const mine = await getHelperRow(program.id, session.slackId);
     if (mine?.role === "organizer") return "admin";
     if (mine) return "helper";
   }
   return "public";
 }
+
+export interface ProgramContext {
+  session: WizardSession | null;
+  program: HostedProgramRow | null;
+  relationship: ProgramRelationship;
+}
+
+// The one place session + program row + relationship are resolved for a
+// hosted-program request. React.cache keys it by programId and holds the
+// result for exactly one request, so the layout, the page, and every nested
+// server component that calls loadProgramContext(id) share a single
+// resolution — the pre-change duplicate (layout AND page each re-running
+// getSession + getHostedProgram + a roster fetch) collapses to one pass.
+// Not a cross-request or cross-user cache: cache() retains nothing between
+// requests, the key is the program id, and every request still runs the
+// full authorization — it just isn't recomputed within the same request.
+export const loadProgramContext = cache(async (programId: string): Promise<ProgramContext> => {
+  const session = await getSession();
+  const program = await getHostedProgram(programId);
+  const relationship = program ? await relationshipFor(program, session) : "public";
+  return { session, program, relationship };
+});
 
 export interface ProgramMembership {
   program: HostedProgramRow;
@@ -47,13 +71,9 @@ export async function linkedSlackSession(): Promise<(WizardSession & { slackId: 
 // generic error page that would itself confirm "this program exists and you
 // can't see it" any louder than the profile already does on purpose.
 export async function requireProgramMembership(programId: string): Promise<ProgramMembership> {
-  const session = await getSession();
+  const { session, program, relationship } = await loadProgramContext(programId);
   if (!session) redirect("/");
-
-  const program = await getHostedProgram(programId);
   if (!program) redirect("/programs");
-
-  const relationship = await relationshipFor(program, session);
   if (relationship === "public") redirect(`/programs/${programId}`);
 
   return { program, session, relationship };

@@ -6,19 +6,38 @@
 // plane still records configuration and marks core_sync_state=pending —
 // configured programs keep serving from Core's last-synced state.
 
-const CORE_BASE_URL = (process.env.PIXIE_CORE_BASE_URL || "").replace(/\/+$/, "");
-const CORE_TOKEN = process.env.PIXIE_INTERNAL_TOKEN || "";
+import { timeoutFetch, REQUEST_TIMEOUT_MS } from "@/lib/timeoutFetch";
+import { coreFetchErrorMessage } from "@/lib/pixieCoreErrors";
+
+// Read at call time, not import time: Next evaluates this module during
+// prerender when env vars may be absent, and db.ts already takes the same
+// lazy approach for its pool.
+function coreBaseUrl(): string {
+  return (process.env.PIXIE_CORE_BASE_URL || "").replace(/\/+$/, "");
+}
+function coreToken(): string {
+  return process.env.PIXIE_INTERNAL_TOKEN || "";
+}
 
 export function coreConfigured(): boolean {
-  return Boolean(CORE_BASE_URL && CORE_TOKEN);
+  return Boolean(coreBaseUrl() && coreToken());
 }
 
 async function call(path: string, init: RequestInit = {}): Promise<{ status: number; body: unknown }> {
   if (!coreConfigured()) throw new Error("Pixie Core is not configured (PIXIE_CORE_BASE_URL/PIXIE_INTERNAL_TOKEN)");
-  const res = await fetch(`${CORE_BASE_URL}${path}`, {
-    ...init,
-    headers: { Authorization: `Bearer ${CORE_TOKEN}`, "Content-Type": "application/json", ...(init.headers || {}) },
-  });
+  let res: Response;
+  try {
+    res = await timeoutFetch(`${coreBaseUrl()}${path}`, {
+      ...init,
+      headers: { Authorization: `Bearer ${coreToken()}`, "Content-Type": "application/json", ...(init.headers || {}) },
+    });
+  } catch (err) {
+    // timeoutFetch's AbortSignal.timeout rejects with a TimeoutError
+    // DOMException; a hard network failure (DNS, refused, reset) lands here
+    // too. coreFetchErrorMessage keeps the token, headers, and query string
+    // out of what gets thrown.
+    throw new Error(coreFetchErrorMessage(err, path, REQUEST_TIMEOUT_MS));
+  }
   const body = await res.json().catch(() => ({}));
   return { status: res.status, body };
 }

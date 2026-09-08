@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createHmac, timingSafeEqual } from "crypto";
 import { cookies } from "next/headers";
 
@@ -48,10 +49,16 @@ export function decodeSession(raw: string | undefined): WizardSession | null {
   }
 }
 
-export async function getSession(): Promise<WizardSession | null> {
+// Request-scoped memo: the layout, the page, and any nested server component
+// all call getSession() on the same request — React.cache collapses that to
+// one cookie read + one HMAC verify per request. cache() is per-request by
+// construction (it holds nothing between requests) and outside a request
+// scope it simply passes through, so it never becomes a shared/persistent
+// auth cache.
+export const getSession = cache(async (): Promise<WizardSession | null> => {
   const jar = await cookies();
   return decodeSession(jar.get(COOKIE)?.value);
-}
+});
 
 export async function setSessionCookie(session: Omit<WizardSession, "exp">) {
   const jar = await cookies();

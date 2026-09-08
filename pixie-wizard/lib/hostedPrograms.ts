@@ -254,6 +254,22 @@ export async function listHostedHelpers(programId: string): Promise<HostedProgra
   return rows;
 }
 
+// One viewer's membership in one program — the targeted lookup behind
+// relationshipFor(). Same active-only filter as listHostedHelpers(), but it
+// never pulls more than the single row that decides this viewer's role, and
+// it is scoped to (program_id, slack_user_id) so it can't return another
+// program's row. Pages that render the whole roster still use
+// listHostedHelpers().
+export async function getHelperRow(programId: string, slackUserId: string): Promise<HostedProgramHelper | null> {
+  const { rows } = await query<HostedProgramHelper>(
+    `select * from hosted_program_helpers
+     where program_id = $1 and slack_user_id = $2 and active = true
+     limit 1`,
+    [programId, slackUserId],
+  );
+  return rows[0] ?? null;
+}
+
 // Display-only — flips whether a helper appears on the public profile
 // roster. Never touches `role`/`active`, so this can never be used to grant
 // or revoke real permissions; it is explicitly scoped to one program so a

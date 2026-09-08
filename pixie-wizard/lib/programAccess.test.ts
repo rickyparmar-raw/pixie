@@ -68,3 +68,65 @@ test("relationshipFor: an inactive (removed) helper no longer counts as a member
   const program = await getHostedProgram("p6");
   expect(await relationshipFor(program!, session({ hcaId: "H_OTHER", slackId: "U_REMOVED" }))).toBe("public");
 });
+
+test("relationshipFor: a helper in one program is a stranger in another — role never crosses programs", async () => {
+  mock.module("@/lib/db", () => createTestDb());
+  const { query } = await import("./db");
+  const { relationshipFor } = await import("./programAccess");
+  const { getHostedProgram } = await import("./hostedPrograms");
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["a", "T1", "A", "H_A"]);
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["b", "T1", "B", "H_B"]);
+  await query(`insert into hosted_program_helpers (program_id, slack_user_id, role, active) values ($1,$2,'organizer',true)`, ["a", "U_X"]);
+  const asAdminOfA = session({ hcaId: "H_OTHER", slackId: "U_X" });
+  expect(await relationshipFor((await getHostedProgram("a"))!, asAdminOfA)).toBe("admin");
+  expect(await relationshipFor((await getHostedProgram("b"))!, asAdminOfA)).toBe("public");
+});
+
+test("getHelperRow: returns only the active row for that exact program + slack user", async () => {
+  mock.module("@/lib/db", () => createTestDb());
+  const { query } = await import("./db");
+  const { getHelperRow } = await import("./hostedPrograms");
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["g1", "T1", "G1", "H"]);
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["g2", "T1", "G2", "H"]);
+  await query(`insert into hosted_program_helpers (program_id, slack_user_id, role, active) values ('g1','U_ACTIVE','helper',true)`);
+  await query(`insert into hosted_program_helpers (program_id, slack_user_id, role, active) values ('g1','U_GONE','helper',false)`);
+  await query(`insert into hosted_program_helpers (program_id, slack_user_id, role, active) values ('g2','U_ELSEWHERE','organizer',true)`);
+
+  expect((await getHelperRow("g1", "U_ACTIVE"))?.role).toBe("helper");
+  expect(await getHelperRow("g1", "U_GONE")).toBeNull();
+  expect(await getHelperRow("g1", "U_ELSEWHERE")).toBeNull();
+  expect(await getHelperRow("g2", "U_ACTIVE")).toBeNull();
+});
+
+test("loadProgramContext: resolves session + program + relationship, and denies an outsider", async () => {
+  let currentSession: WizardSession | null = null;
+  mock.module("@/lib/db", () => createTestDb());
+  mock.module("@/lib/session", () => ({
+    getSession: async () => currentSession,
+  }));
+  const { query } = await import("./db");
+  const { loadProgramContext } = await import("./programAccess");
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["ctx", "T1", "Ctx", "H_OWNER"]);
+  await query(`insert into hosted_program_helpers (program_id, slack_user_id, role, active) values ('ctx','U_ORG','organizer',true)`);
+
+  currentSession = session({ hcaId: "H_OWNER" });
+  const asOwner = await loadProgramContext("ctx");
+  expect(asOwner.program?.id).toBe("ctx");
+  expect(asOwner.relationship).toBe("owner");
+
+  currentSession = session({ hcaId: "H_STRANGER", slackId: "U_NOBODY" });
+  expect((await loadProgramContext("ctx")).relationship).toBe("public");
+
+  currentSession = session({ hcaId: "H_X", slackId: "U_ORG" });
+  expect((await loadProgramContext("ctx")).relationship).toBe("admin");
+
+  currentSession = null;
+  const anon = await loadProgramContext("ctx");
+  expect(anon.session).toBeNull();
+  expect(anon.relationship).toBe("public");
+
+  currentSession = session({ hcaId: "H_OWNER" });
+  const missing = await loadProgramContext("does-not-exist");
+  expect(missing.program).toBeNull();
+  expect(missing.relationship).toBe("public");
+});

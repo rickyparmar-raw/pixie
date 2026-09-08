@@ -1,8 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/session";
-import { getHostedProgram, listHostedChannels, listHostedAudit, getPublicProgramProfile, listVisibleHelperIdentityKeys } from "@/lib/hostedPrograms";
-import { relationshipFor } from "@/lib/programAccess";
+import { listHostedChannels, listHostedAudit, getPublicProgramProfile, listVisibleHelperIdentityKeys } from "@/lib/hostedPrograms";
+import { loadProgramContext } from "@/lib/programAccess";
 import { ProgramSettingsForms } from "./ProgramSettingsForms";
 import { ChannelChangeForm } from "./ChannelChangeForm";
 import { PublicProfile } from "./PublicProfile";
@@ -12,13 +11,9 @@ import type { PublicHelperIdentity } from "@/lib/types";
 
 export default async function ProgramPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const session = await getSession();
+  const { session, program, relationship } = await loadProgramContext(id);
   if (!session) redirect("/");
-
-  const program = await getHostedProgram(id);
   if (!program) redirect("/programs");
-
-  const relationship = await relationshipFor(program, session);
 
   // Non-member: safe read-only profile. getPublicProgramProfile() is a
   // column-allowlisted projection — there is no admin `program` object in
@@ -26,22 +21,25 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
   if (relationship === "public") {
     const profile = await getPublicProgramProfile(id);
     if (!profile) redirect("/programs");
+
+    // The channel-name lookup and the helper identity list are independent —
+    // run them together, not in sequence. Both fail soft: a slow or
+    // unreachable Core still shows the profile, just with the raw channel id
+    // and role-only helper rows.
+    const [channelsRes, identityKeys] = await Promise.all([
+      profile.publicHelpChannelId ? coreSlackChannels().catch(() => null) : Promise.resolve(null),
+      listVisibleHelperIdentityKeys(id).catch(() => []),
+    ]);
+
     let helpChannelDisplay: string | null = null;
     if (profile.publicHelpChannelId) {
-      try {
-        const res = await coreSlackChannels();
-        const match = res.ok ? res.channels.find((c) => c.id === profile.publicHelpChannelId) : null;
-        helpChannelDisplay = match ? `#${match.name}` : profile.publicHelpChannelId;
-      } catch {
-        helpChannelDisplay = profile.publicHelpChannelId;
-      }
+      const match = channelsRes?.ok ? channelsRes.channels.find((c) => c.id === profile.publicHelpChannelId) : null;
+      helpChannelDisplay = match ? `#${match.name}` : profile.publicHelpChannelId;
     }
 
-    // Identity resolution is best-effort and must never block the page: a
-    // slow or unreachable Slack identity provider still has to show the
-    // profile, just with role-only rows. Promise.allSettled + a per-lookup
-    // try/catch means one failed resolution can't take the others down.
-    const identityKeys = await listVisibleHelperIdentityKeys(id).catch(() => []);
+    // Identity resolution is best-effort and must never block the page.
+    // Promise.allSettled + a per-lookup try/catch means one failed
+    // resolution can't take the others down.
     const roster: PublicHelperIdentity[] = (
       await Promise.allSettled(
         identityKeys.map(async ({ slackUserId, role }) => {
@@ -58,35 +56,39 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
     return <PublicProfile profile={profile} helpChannelDisplay={helpChannelDisplay} roster={roster} />;
   }
 
-  const [channels, audit] = await Promise.all([listHostedChannels(id), listHostedAudit(id, 20)]);
-  let coreChannels: { id: string; name: string; isMember: boolean }[] = [];
-  try {
-    const res = await coreSlackChannels();
-    if (res.ok) coreChannels = res.channels;
-  } catch {
-    coreChannels = [];
-  }
-  let analytics: Record<string, unknown> | null = null;
-  try {
-    analytics = await coreAnalytics(id, 30);
-  } catch {
-    analytics = null;
-  }
+  // Two required Postgres reads (throw → error page, as before) run
+  // alongside three independent Core widgets that each degrade on their own:
+  // channels, analytics, and the radar count are unrelated, so a slow or
+  // failed one never delays or blanks the others.
+  const [dbData, coreData] = await Promise.all([
+    Promise.all([listHostedChannels(id), listHostedAudit(id, 20)]),
+    Promise.allSettled([
+      coreSlackChannels(),
+      coreAnalytics(id, 30),
+      coreRadarList(id, { status: "active" }),
+    ]),
+  ]);
+  const [channels, audit] = dbData;
+  const [coreChannelsR, analyticsR, radarR] = coreData;
+
+  const coreChannels: { id: string; name: string; isMember: boolean }[] =
+    coreChannelsR.status === "fulfilled" && coreChannelsR.value.ok ? coreChannelsR.value.channels : [];
+
+  const analytics: Record<string, unknown> | null =
+    analyticsR.status === "fulfilled" ? analyticsR.value : null;
+
   const byStatus = (analytics?.byStatus ?? {}) as Record<string, number>;
   const open = Object.entries(byStatus).filter(([status]) => status !== "resolved").reduce((sum, [, count]) => sum + count, 0);
 
   let needsAttention = { critical: 0, high: 0, medium: 0, total: 0 };
-  try {
-    const radar = await coreRadarList(id, { status: "active" });
-    const signals = radar.signals as Array<{ severity: string }>;
+  if (radarR.status === "fulfilled") {
+    const signals = (radarR.value.signals ?? []) as Array<{ severity: string }>;
     needsAttention = {
       critical: signals.filter((s) => s.severity === "CRITICAL").length,
       high: signals.filter((s) => s.severity === "HIGH").length,
       medium: signals.filter((s) => s.severity === "MEDIUM").length,
       total: signals.length,
     };
-  } catch {
-    needsAttention = { critical: 0, high: 0, medium: 0, total: 0 };
   }
 
   return (
