@@ -1,9 +1,10 @@
+import { Suspense } from "react";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { listHostedChannels, listHostedAudit, getPublicProgramProfile, listVisibleHelperIdentityKeys } from "@/lib/hostedPrograms";
+import { listHostedAudit, getPublicProgramProfile, listVisibleHelperIdentityKeys } from "@/lib/hostedPrograms";
 import { loadProgramContext } from "@/lib/programAccess";
 import { ProgramSettingsForms } from "./ProgramSettingsForms";
-import { ChannelChangeForm } from "./ChannelChangeForm";
+import { ChannelsSection } from "./ChannelsSection";
 import { PublicProfile } from "./PublicProfile";
 import { coreAnalytics, coreSlackChannels, coreUserInfo, coreRadarList } from "@/lib/pixieCore";
 import { PageHeader, SectionCard, MetricCard, StatusBadge } from "@/app/_components/DashboardShell";
@@ -56,23 +57,19 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
     return <PublicProfile profile={profile} helpChannelDisplay={helpChannelDisplay} roster={roster} />;
   }
 
-  // Two required Postgres reads (throw → error page, as before) run
-  // alongside three independent Core widgets that each degrade on their own:
-  // channels, analytics, and the radar count are unrelated, so a slow or
-  // failed one never delays or blanks the others.
-  const [dbData, coreData] = await Promise.all([
-    Promise.all([listHostedChannels(id), listHostedAudit(id, 20)]),
+  // The audit read (required — throws → error page) runs alongside the two
+  // Core widgets the header and metrics need. The workspace channel list is
+  // deliberately absent here: it is the slowest Core call and only the
+  // Channels section needs it, so it streams in its own Suspense boundary
+  // below (see ChannelsSection) instead of holding up first paint.
+  const [audit, coreData] = await Promise.all([
+    listHostedAudit(id, 20),
     Promise.allSettled([
-      coreSlackChannels(),
       coreAnalytics(id, 30),
       coreRadarList(id, { status: "active" }),
     ]),
   ]);
-  const [channels, audit] = dbData;
-  const [coreChannelsR, analyticsR, radarR] = coreData;
-
-  const coreChannels: { id: string; name: string; isMember: boolean }[] =
-    coreChannelsR.status === "fulfilled" && coreChannelsR.value.ok ? coreChannelsR.value.channels : [];
+  const [analyticsR, radarR] = coreData;
 
   const analytics: Record<string, unknown> | null =
     analyticsR.status === "fulfilled" ? analyticsR.value : null;
@@ -125,17 +122,15 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         ))}
       </div>
 
-      <SectionCard title="Channels" description="Claimed support and organizer channels.">
-        <ul className="mt-3 space-y-1 text-sm text-text">
-          {channels.map((c) => (
-            <li key={`${c.workspace_id}:${c.channel_id}`} className="font-mono">
-              &lt;#{c.channel_id}&gt; <span className="font-sans text-text-muted">· {c.kind}</span>
-            </li>
-          ))}
-          {channels.length === 0 && <li className="text-text-muted">No channels claimed yet.</li>}
-        </ul>
-        <ChannelChangeForm programId={id} channels={coreChannels} />
-      </SectionCard>
+      <Suspense
+        fallback={
+          <SectionCard title="Channels" description="Claimed support and organizer channels.">
+            <p className="mt-3 text-sm text-text-muted">Loading channels…</p>
+          </SectionCard>
+        }
+      >
+        <ChannelsSection programId={id} workspaceId={program.workspace_id} />
+      </Suspense>
 
       <div className="mt-6">
         <ProgramSettingsForms program={program} />
