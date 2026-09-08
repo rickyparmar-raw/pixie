@@ -5,10 +5,14 @@ export function DashboardShell({
   children,
   programId,
   programName,
+  crumb = "Overview",
 }: {
   children: React.ReactNode;
   programId?: string;
   programName?: string;
+  // Second breadcrumb segment for workspace-level pages (no program in scope).
+  // Ignored when programName is set — that always wins the crumb.
+  crumb?: string;
 }) {
   return (
     <div className="min-h-screen bg-ink text-text">
@@ -41,7 +45,7 @@ export function DashboardShell({
           <div className="text-xs text-text-muted">
             <Link href="/overview" className="text-text hover:text-brand">pixie</Link>
             <span className="px-2 text-text-muted/50">/</span>
-            {programName ?? "Overview"}
+            {programName ?? crumb}
           </div>
           <Link href="/wizard?mode=hosted" className="ml-auto text-xs text-text-muted hover:text-text">
             New program

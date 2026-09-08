@@ -49,7 +49,7 @@ export default async function HelpersPage({ params }: { params: Promise<{ id: st
               </li>
             ))}
             {active.length === 0 && !loadError && (
-              <li className="text-text-muted">No helpers yet — you (creator) are organizer.</li>
+              <li className="text-text-muted">No helpers yet. You&apos;re the organizer as creator.</li>
             )}
           </ul>
         </Section>
@@ -59,7 +59,7 @@ export default async function HelpersPage({ params }: { params: Promise<{ id: st
             <ul className="space-y-1 text-sm">
               {recommendations.map((r) => (
                 <li key={r.userId} className="text-text">
-                  &lt;@{r.userId}&gt; <span className="text-text-muted">· score {r.score} — {r.reasons.join("; ")}</span>
+                  &lt;@{r.userId}&gt; <span className="text-text-muted">· score {r.score} · {r.reasons.join("; ")}</span>
                 </li>
               ))}
             </ul>

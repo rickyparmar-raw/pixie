@@ -22,7 +22,7 @@ function Field({ label, children, hint }: { label: string; children: React.React
 function Select({ name, channels, label }: { name: string; channels: CoreChannel[]; label: string }) {
   const listId = `${name}-options`;
   return (
-    <Field label={label} hint="Slack channel ID, e.g. C0123456789 — right-click the channel in Slack → View channel details to find it.">
+    <Field label={label} hint="Slack channel ID, e.g. C0123456789. Right-click the channel in Slack, then View channel details, to find it.">
       <input
         className={inputClass}
         name={name}

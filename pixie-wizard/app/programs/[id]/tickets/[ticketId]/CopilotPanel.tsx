@@ -37,7 +37,7 @@ function CopilotResult({ body }: { body: unknown }) {
         {Array.isArray(b.verdicts) && (
           <ul className="space-y-1 text-xs">
             {(b.verdicts as Array<{ sentence: string; verdict: string }>).map((v, i) => (
-              <li key={i}><span className="text-text">{v.verdict}</span> — {v.sentence}</li>
+              <li key={i}><span className="text-text">{v.verdict}</span> · {v.sentence}</li>
             ))}
           </ul>
         )}

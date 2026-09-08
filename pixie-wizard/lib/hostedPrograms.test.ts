@@ -110,6 +110,35 @@ test("getPublicProgramProfile returns null for a suspended/archived program", as
   expect(await getPublicProgramProfile("pub-d")).toBeNull();
 });
 
+test("updateHostedProgram persists reply_signature, incident_mode and public_tickets_enabled — the drift-prone columns", async () => {
+  // Guards the schema drift fix: db/schema.sql must carry a standalone
+  // `alter table ... add column if not exists reply_signature` (create-table
+  // is a no-op on deployed databases), and the column must be in the
+  // updateHostedProgram allowlist, or a settings save 500s in production.
+  mock.module("@/lib/db", () => createTestDb());
+  const { query } = await import("./db");
+  const { updateHostedProgram, getHostedProgram } = await import("./hostedPrograms");
+
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["sig-a", "T1", "Sig A", "H1"]);
+
+  const fresh = await getHostedProgram("sig-a");
+  expect(fresh?.reply_signature).toBeNull();
+  expect(fresh?.incident_mode).toBe("ANSWER_AND_TRACK");
+  expect(fresh?.public_tickets_enabled).toBe(true);
+
+  const updated = await updateHostedProgram("sig-a", {
+    reply_signature: "stay wired :hardwire:",
+    incident_mode: "ANSWER_ONLY",
+    public_tickets_enabled: false,
+  });
+  expect(updated.reply_signature).toBe("stay wired :hardwire:");
+  expect(updated.incident_mode).toBe("ANSWER_ONLY");
+  expect(updated.public_tickets_enabled).toBe(false);
+
+  const cleared = await updateHostedProgram("sig-a", { reply_signature: null });
+  expect(cleared.reply_signature).toBeNull();
+});
+
 test("listActiveHostedPrograms only returns active programs, ordered by name", async () => {
   mock.module("@/lib/db", () => createTestDb());
   const { query } = await import("./db");

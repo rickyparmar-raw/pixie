@@ -283,8 +283,9 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
   const supportName = String(formData.get("supportName") ?? program.support_name ?? "").trim() || program.support_name;
   const iconUrl = String(formData.get("iconUrl") ?? program.icon_url ?? "").trim() || null;
   // A short catchphrase the program appends to its genuine answers only.
-  // Empty clears it. Kept short so it reads as a sign-off, not a paragraph.
-  const replySignature = String(formData.get("replySignature") ?? "").trim().slice(0, 120) || null;
+  // Empty clears it. Collapse any pasted newlines/runs of space to one space
+  // so it stays a one-line sign-off, then trim and cap length.
+  const replySignature = String(formData.get("replySignature") ?? "").replace(/\s+/g, " ").trim().slice(0, 120) || null;
   const programDescription = String(formData.get("programDescription") ?? program.program_description ?? "").trim() || null;
   if (iconUrl) {
     const iconProb = sourceUrlProblem(iconUrl);

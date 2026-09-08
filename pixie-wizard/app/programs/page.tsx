@@ -33,7 +33,7 @@ export default async function ProgramsIndex() {
   );
 
   return (
-    <DashboardShell>
+    <DashboardShell crumb="Programs">
       <PageHeader
         title="Programs"
         description="Every active hosted Pixie program. Membership only changes what you can manage."

@@ -92,7 +92,7 @@ export async function IncidentDetailSection({ programId, incidentId }: { program
               <Link href={`/programs/${programId}/tickets/${t.id}`} className="text-text hover:text-brand">
                 #{t.id} · {t.status}
               </Link>
-              <span className="text-text-muted"> — {t.question}</span>
+              <span className="text-text-muted"> · {t.question}</span>
             </li>
           ))}
         </ul>
