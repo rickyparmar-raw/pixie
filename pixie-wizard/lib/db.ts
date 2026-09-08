@@ -18,10 +18,11 @@ function required(name: string): string {
 let _pool: Pool | null = null;
 function pool(): Pool {
   if (!_pool) {
-    const isLocal = /localhost|127\.0\.0\.1/.test(process.env.DATABASE_URL || "");
     _pool = new Pool({
       connectionString: required("DATABASE_URL"),
-      ssl: isLocal ? undefined : { rejectUnauthorized: false },
+      // Railway's private-network Postgres doesn't need or support TLS; a
+      // public DATABASE_URL (e.g. local dev via the public proxy) does.
+      ssl: /sslmode=require/.test(process.env.DATABASE_URL || "") ? { rejectUnauthorized: false } : undefined,
       max: 10,
     });
     _pool.on("error", (err) => {
