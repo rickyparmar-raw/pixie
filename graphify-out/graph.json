@@ -4,6 +4,28 @@
   "graph": {},
   "nodes": [
     {
+      "label": "_seed2.mjs",
+      "file_type": "code",
+      "source_file": "_seed2.mjs",
+      "source_location": "L1",
+      "_origin": "ast",
+      "id": "seed2",
+      "community": 150,
+      "community_name": "_seed2.mjs",
+      "norm_label": "_seed2.mjs"
+    },
+    {
+      "label": "c",
+      "file_type": "code",
+      "source_file": "_seed2.mjs",
+      "source_location": "L2",
+      "_origin": "ast",
+      "id": "seed2_c",
+      "community": 150,
+      "community_name": "_seed2.mjs",
+      "norm_label": "c"
+    },
+    {
       "label": "9router/railway.json",
       "file_type": "code",
       "source_file": "deploy/9router/railway.json",
@@ -384,8 +406,8 @@
       "source_location": "L46",
       "_origin": "ast",
       "id": "lib_answer_normalizeemoji",
-      "community": 160,
-      "community_name": "normalizeEmoji",
+      "community": 22,
+      "community_name": "answer.js",
       "norm_label": "normalizeemoji()"
     },
     {
@@ -395,8 +417,8 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "lib_answer_lookslikecode",
-      "community": 52,
-      "community_name": "chat.js",
+      "community": 47,
+      "community_name": "intent.js",
       "norm_label": "lookslikecode()"
     },
     {
@@ -406,8 +428,8 @@
       "source_location": "L67",
       "_origin": "ast",
       "id": "lib_answer_resolveprogram",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 135,
+      "community_name": "answerOrChatPrompt",
       "norm_label": "resolveprogram()"
     },
     {
@@ -417,8 +439,8 @@
       "source_location": "L77",
       "_origin": "ast",
       "id": "lib_answer_programname",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 135,
+      "community_name": "answerOrChatPrompt",
       "norm_label": "programname()"
     },
     {
@@ -428,8 +450,8 @@
       "source_location": "L81",
       "_origin": "ast",
       "id": "lib_answer_helpchannelref",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 135,
+      "community_name": "answerOrChatPrompt",
       "norm_label": "helpchannelref()"
     },
     {
@@ -439,8 +461,8 @@
       "source_location": "L86",
       "_origin": "ast",
       "id": "lib_answer_otherprogramnames",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 135,
+      "community_name": "answerOrChatPrompt",
       "norm_label": "otherprogramnames()"
     },
     {
@@ -450,8 +472,8 @@
       "source_location": "L104",
       "_origin": "ast",
       "id": "lib_answer_whereyouare",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 135,
+      "community_name": "answerOrChatPrompt",
       "norm_label": "whereyouare()"
     },
     {
@@ -461,8 +483,8 @@
       "source_location": "L136",
       "_origin": "ast",
       "id": "lib_answer_programguardrail",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 135,
+      "community_name": "answerOrChatPrompt",
       "norm_label": "programguardrail()"
     },
     {
@@ -494,8 +516,8 @@
       "source_location": "L169",
       "_origin": "ast",
       "id": "lib_answer_timelineauthorityrule",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 135,
+      "community_name": "answerOrChatPrompt",
       "norm_label": "timelineauthorityrule()"
     },
     {
@@ -505,8 +527,8 @@
       "source_location": "L179",
       "_origin": "ast",
       "id": "lib_answer_shopauthorityrule",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 135,
+      "community_name": "answerOrChatPrompt",
       "norm_label": "shopauthorityrule()"
     },
     {
@@ -527,8 +549,8 @@
       "source_location": "L192",
       "_origin": "ast",
       "id": "lib_answer_systemprompt",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 135,
+      "community_name": "answerOrChatPrompt",
       "norm_label": "systemprompt()"
     },
     {
@@ -538,8 +560,8 @@
       "source_location": "L244",
       "_origin": "ast",
       "id": "lib_answer_stripleadingsafety",
-      "community": 160,
-      "community_name": "normalizeEmoji",
+      "community": 22,
+      "community_name": "answer.js",
       "norm_label": "stripleadingsafety()"
     },
     {
@@ -549,8 +571,8 @@
       "source_location": "L258",
       "_origin": "ast",
       "id": "lib_answer_sanitizeanswer",
-      "community": 160,
-      "community_name": "normalizeEmoji",
+      "community": 22,
+      "community_name": "answer.js",
       "norm_label": "sanitizeanswer()"
     },
     {
@@ -560,8 +582,8 @@
       "source_location": "L298",
       "_origin": "ast",
       "id": "lib_answer_instruction_echo_strong",
-      "community": 160,
-      "community_name": "normalizeEmoji",
+      "community": 22,
+      "community_name": "answer.js",
       "norm_label": "instruction_echo_strong"
     },
     {
@@ -582,8 +604,8 @@
       "source_location": "L332",
       "_origin": "ast",
       "id": "lib_answer_lookslikeinstructionecho",
-      "community": 160,
-      "community_name": "normalizeEmoji",
+      "community": 22,
+      "community_name": "answer.js",
       "norm_label": "lookslikeinstructionecho()"
     },
     {
@@ -593,8 +615,8 @@
       "source_location": "L343",
       "_origin": "ast",
       "id": "lib_answer_parsereply",
-      "community": 160,
-      "community_name": "normalizeEmoji",
+      "community": 22,
+      "community_name": "answer.js",
       "norm_label": "parsereply()"
     },
     {
@@ -604,8 +626,8 @@
       "source_location": "L374",
       "_origin": "ast",
       "id": "lib_answer_answerorchatprompt",
-      "community": 22,
-      "community_name": "answer.js",
+      "community": 135,
+      "community_name": "answerOrChatPrompt",
       "norm_label": "answerorchatprompt()"
     },
     {
@@ -615,8 +637,8 @@
       "source_location": "L487",
       "_origin": "ast",
       "id": "lib_answer_lookstruncated",
-      "community": 160,
-      "community_name": "normalizeEmoji",
+      "community": 22,
+      "community_name": "answer.js",
       "norm_label": "lookstruncated()"
     },
     {
@@ -626,8 +648,8 @@
       "source_location": "L513",
       "_origin": "ast",
       "id": "lib_answer_parseanswerorchat",
-      "community": 160,
-      "community_name": "normalizeEmoji",
+      "community": 22,
+      "community_name": "answer.js",
       "norm_label": "parseanswerorchat()"
     },
     {
@@ -659,8 +681,8 @@
       "source_location": "L568",
       "_origin": "ast",
       "id": "lib_answer_getanswerorchat",
-      "community": 160,
-      "community_name": "normalizeEmoji",
+      "community": 22,
+      "community_name": "answer.js",
       "norm_label": "getanswerorchat()"
     },
     {
@@ -670,8 +692,8 @@
       "source_location": "L578",
       "_origin": "ast",
       "id": "lib_answer_getanswerorchatstream",
-      "community": 160,
-      "community_name": "normalizeEmoji",
+      "community": 22,
+      "community_name": "answer.js",
       "norm_label": "getanswerorchatstream()"
     },
     {
@@ -681,8 +703,8 @@
       "source_location": "L646",
       "_origin": "ast",
       "id": "lib_answer_retryiftruncated",
-      "community": 160,
-      "community_name": "normalizeEmoji",
+      "community": 22,
+      "community_name": "answer.js",
       "norm_label": "retryiftruncated()"
     },
     {
@@ -912,7 +934,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_brand",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "brand.js"
     },
@@ -923,7 +945,7 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "lib_brand_envvalue",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "envvalue()"
     },
@@ -934,7 +956,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "lib_brand_name",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "name()"
     },
@@ -945,7 +967,7 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "lib_brand_rawslug",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "rawslug()"
     },
@@ -956,7 +978,7 @@
       "source_location": "L41",
       "_origin": "ast",
       "id": "lib_brand_slug",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "slug()"
     },
@@ -967,7 +989,7 @@
       "source_location": "L51",
       "_origin": "ast",
       "id": "lib_brand_cmd",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "cmd()"
     },
@@ -978,7 +1000,7 @@
       "source_location": "L57",
       "_origin": "ast",
       "id": "lib_brand_id",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "id()"
     },
@@ -989,7 +1011,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_brand_test",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "brand.test.js"
     },
@@ -1000,7 +1022,7 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "lib_brand_test_test",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "{ test }"
     },
@@ -1011,7 +1033,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_brand_test_assert",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "assert"
     },
@@ -1022,7 +1044,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_brand_test_brand",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "brand"
     },
@@ -1033,7 +1055,7 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "lib_brand_test_withenv",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "withenv()"
     },
@@ -1627,8 +1649,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_commands_respond",
-      "community": 135,
-      "community_name": "isAdmin",
+      "community": 1,
+      "community_name": "commands.js",
       "norm_label": "respond"
     },
     {
@@ -1759,8 +1781,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "lib_commands_adminonly",
-      "community": 135,
-      "community_name": "isAdmin",
+      "community": 1,
+      "community_name": "commands.js",
       "norm_label": "adminonly()"
     },
     {
@@ -1781,8 +1803,8 @@
       "source_location": "L61",
       "_origin": "ast",
       "id": "lib_commands_adminonlyshortcut",
-      "community": 135,
-      "community_name": "isAdmin",
+      "community": 1,
+      "community_name": "commands.js",
       "norm_label": "adminonlyshortcut()"
     },
     {
@@ -1848,7 +1870,7 @@
       "_origin": "ast",
       "id": "lib_commands_sourcescommand",
       "community": 44,
-      "community_name": "relativeTime",
+      "community_name": "stats.js",
       "norm_label": "sourcescommand()"
     },
     {
@@ -1880,8 +1902,8 @@
       "source_location": "L249",
       "_origin": "ast",
       "id": "lib_commands_statscommand",
-      "community": 116,
-      "community_name": "stats.js",
+      "community": 1,
+      "community_name": "commands.js",
       "norm_label": "statscommand()"
     },
     {
@@ -1914,7 +1936,7 @@
       "_origin": "ast",
       "id": "lib_commands_pendingcommand",
       "community": 44,
-      "community_name": "relativeTime",
+      "community_name": "stats.js",
       "norm_label": "pendingcommand()"
     },
     {
@@ -2001,8 +2023,8 @@
       "source_location": "L497",
       "_origin": "ast",
       "id": "lib_commands_programcommand",
-      "community": 135,
-      "community_name": "isAdmin",
+      "community": 1,
+      "community_name": "commands.js",
       "norm_label": "programcommand()"
     },
     {
@@ -2628,7 +2650,7 @@
       "source_location": "L428",
       "_origin": "ast",
       "id": "lib_config_isadmin",
-      "community": 135,
+      "community": 155,
       "community_name": "isAdmin",
       "norm_label": "isadmin()"
     },
@@ -2815,8 +2837,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_context_test",
-      "community": 179,
-      "community_name": "context.test.js",
+      "community": 88,
+      "community_name": "context.js",
       "norm_label": "context.test.js"
     },
     {
@@ -2826,8 +2848,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "lib_context_test_test",
-      "community": 179,
-      "community_name": "context.test.js",
+      "community": 88,
+      "community_name": "context.js",
       "norm_label": "{ test }"
     },
     {
@@ -2837,8 +2859,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_context_test_assert",
-      "community": 179,
-      "community_name": "context.test.js",
+      "community": 88,
+      "community_name": "context.js",
       "norm_label": "assert"
     },
     {
@@ -2848,8 +2870,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_context_test_db",
-      "community": 179,
-      "community_name": "context.test.js",
+      "community": 88,
+      "community_name": "context.js",
       "norm_label": "db"
     },
     {
@@ -2859,8 +2881,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_context_test_context",
-      "community": 179,
-      "community_name": "context.test.js",
+      "community": 88,
+      "community_name": "context.js",
       "norm_label": "context"
     },
     {
@@ -3640,8 +3662,8 @@
       "source_location": "L266",
       "_origin": "ast",
       "id": "lib_db_gapforthread",
-      "community": 2,
-      "community_name": "db.js",
+      "community": 40,
+      "community_name": "now",
       "norm_label": "gapforthread()"
     },
     {
@@ -3695,8 +3717,8 @@
       "source_location": "L370",
       "_origin": "ast",
       "id": "lib_db_gapcountsbykind",
-      "community": 40,
-      "community_name": "now",
+      "community": 2,
+      "community_name": "db.js",
       "norm_label": "gapcountsbykind()"
     },
     {
@@ -4256,8 +4278,8 @@
       "source_location": "L913",
       "_origin": "ast",
       "id": "lib_db_assignticket",
-      "community": 2,
-      "community_name": "db.js",
+      "community": 40,
+      "community_name": "now",
       "norm_label": "assignticket()"
     },
     {
@@ -4454,8 +4476,8 @@
       "source_location": "L1071",
       "_origin": "ast",
       "id": "lib_db_addticketevent",
-      "community": 40,
-      "community_name": "now",
+      "community": 2,
+      "community_name": "db.js",
       "norm_label": "addticketevent()"
     },
     {
@@ -6368,8 +6390,8 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "lib_handlers_delete_reactions",
-      "community": 150,
-      "community_name": "onReactionAdded",
+      "community": 3,
+      "community_name": "handlers.js",
       "norm_label": "delete_reactions"
     },
     {
@@ -6379,8 +6401,8 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "lib_handlers_up_reactions",
-      "community": 150,
-      "community_name": "onReactionAdded",
+      "community": 3,
+      "community_name": "handlers.js",
       "norm_label": "up_reactions"
     },
     {
@@ -6390,8 +6412,8 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "lib_handlers_down_reactions",
-      "community": 150,
-      "community_name": "onReactionAdded",
+      "community": 3,
+      "community_name": "handlers.js",
       "norm_label": "down_reactions"
     },
     {
@@ -6402,7 +6424,7 @@
       "_origin": "ast",
       "id": "lib_handlers_escaperegex",
       "community": 155,
-      "community_name": "handleTeachRequest",
+      "community_name": "isAdmin",
       "norm_label": "escaperegex()"
     },
     {
@@ -6424,7 +6446,7 @@
       "_origin": "ast",
       "id": "lib_handlers_teachpattern",
       "community": 155,
-      "community_name": "handleTeachRequest",
+      "community_name": "isAdmin",
       "norm_label": "teachpattern()"
     },
     {
@@ -6435,7 +6457,7 @@
       "_origin": "ast",
       "id": "lib_handlers_stripteachcommand",
       "community": 155,
-      "community_name": "handleTeachRequest",
+      "community_name": "isAdmin",
       "norm_label": "stripteachcommand()"
     },
     {
@@ -6446,7 +6468,7 @@
       "_origin": "ast",
       "id": "lib_handlers_sumpattern",
       "community": 155,
-      "community_name": "handleTeachRequest",
+      "community_name": "isAdmin",
       "norm_label": "sumpattern()"
     },
     {
@@ -6522,8 +6544,8 @@
       "source_location": "L123",
       "_origin": "ast",
       "id": "lib_handlers_checkeligibility",
-      "community": 139,
-      "community_name": "onMessage",
+      "community": 155,
+      "community_name": "isAdmin",
       "norm_label": "checkeligibility()"
     },
     {
@@ -6534,7 +6556,7 @@
       "_origin": "ast",
       "id": "lib_handlers_handleteachrequest",
       "community": 155,
-      "community_name": "handleTeachRequest",
+      "community_name": "isAdmin",
       "norm_label": "handleteachrequest()"
     },
     {
@@ -6545,7 +6567,7 @@
       "_origin": "ast",
       "id": "lib_handlers_handlesumrequest",
       "community": 155,
-      "community_name": "handleTeachRequest",
+      "community_name": "isAdmin",
       "norm_label": "handlesumrequest()"
     },
     {
@@ -6555,8 +6577,8 @@
       "source_location": "L324",
       "_origin": "ast",
       "id": "lib_handlers_stagingblocked",
-      "community": 150,
-      "community_name": "onReactionAdded",
+      "community": 3,
+      "community_name": "handlers.js",
       "norm_label": "stagingblocked()"
     },
     {
@@ -6588,8 +6610,8 @@
       "source_location": "L631",
       "_origin": "ast",
       "id": "lib_handlers_messageauthor",
-      "community": 150,
-      "community_name": "onReactionAdded",
+      "community": 3,
+      "community_name": "handlers.js",
       "norm_label": "messageauthor()"
     },
     {
@@ -6599,8 +6621,8 @@
       "source_location": "L647",
       "_origin": "ast",
       "id": "lib_handlers_onreactionadded",
-      "community": 150,
-      "community_name": "onReactionAdded",
+      "community": 3,
+      "community_name": "handlers.js",
       "norm_label": "onreactionadded()"
     },
     {
@@ -6610,8 +6632,8 @@
       "source_location": "L720",
       "_origin": "ast",
       "id": "lib_handlers_onreactionremoved",
-      "community": 150,
-      "community_name": "onReactionAdded",
+      "community": 3,
+      "community_name": "handlers.js",
       "norm_label": "onreactionremoved()"
     },
     {
@@ -7248,8 +7270,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "lib_home_divider",
-      "community": 44,
-      "community_name": "relativeTime",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "divider()"
     },
     {
@@ -7259,8 +7281,8 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "lib_home_section",
-      "community": 44,
-      "community_name": "relativeTime",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "section()"
     },
     {
@@ -7270,8 +7292,8 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "lib_home_coverageblocks",
-      "community": 44,
-      "community_name": "relativeTime",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "coverageblocks()"
     },
     {
@@ -7281,8 +7303,8 @@
       "source_location": "L61",
       "_origin": "ast",
       "id": "lib_home_learnedblocks",
-      "community": 44,
-      "community_name": "relativeTime",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "learnedblocks()"
     },
     {
@@ -7292,8 +7314,8 @@
       "source_location": "L80",
       "_origin": "ast",
       "id": "lib_home_reviewblocks",
-      "community": 44,
-      "community_name": "relativeTime",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "reviewblocks()"
     },
     {
@@ -7380,8 +7402,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_home_test",
-      "community": 32,
-      "community_name": "home.test.js",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "home.test.js"
     },
     {
@@ -7391,8 +7413,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "lib_home_test_test",
-      "community": 32,
-      "community_name": "home.test.js",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "{ test }"
     },
     {
@@ -7402,8 +7424,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_home_test_assert",
-      "community": 32,
-      "community_name": "home.test.js",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "assert"
     },
     {
@@ -7413,8 +7435,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_home_test_db",
-      "community": 32,
-      "community_name": "home.test.js",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "db"
     },
     {
@@ -7424,8 +7446,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_home_test_learn",
-      "community": 32,
-      "community_name": "home.test.js",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "learn"
     },
     {
@@ -7435,8 +7457,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "lib_home_test_config",
-      "community": 32,
-      "community_name": "home.test.js",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "{ config }"
     },
     {
@@ -7446,8 +7468,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "lib_home_test_reviewblocks_reviewaction_coverageblocks_homeblocks",
-      "community": 32,
-      "community_name": "home.test.js",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "{ reviewblocks, reviewaction, coverageblocks, homeblocks }"
     },
     {
@@ -7457,8 +7479,8 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "lib_home_test_seedpending",
-      "community": 32,
-      "community_name": "home.test.js",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "seedpending()"
     },
     {
@@ -7468,8 +7490,8 @@
       "source_location": "L112",
       "_origin": "ast",
       "id": "lib_home_test_withcounts",
-      "community": 32,
-      "community_name": "home.test.js",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "withcounts()"
     },
     {
@@ -7579,7 +7601,7 @@
       "_origin": "ast",
       "id": "lib_identity",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "identity.js"
     },
     {
@@ -7590,7 +7612,7 @@
       "_origin": "ast",
       "id": "lib_identity_brand",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "brand"
     },
     {
@@ -7601,7 +7623,7 @@
       "_origin": "ast",
       "id": "lib_identity_botname",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "botname()"
     },
     {
@@ -7612,7 +7634,7 @@
       "_origin": "ast",
       "id": "lib_identity_isdefaultbot",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "isdefaultbot()"
     },
     {
@@ -7623,7 +7645,7 @@
       "_origin": "ast",
       "id": "lib_identity_makerline",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "makerline()"
     },
     {
@@ -7634,7 +7656,7 @@
       "_origin": "ast",
       "id": "lib_identity_pixorpheuspair",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "pixorpheuspair()"
     },
     {
@@ -7645,7 +7667,7 @@
       "_origin": "ast",
       "id": "lib_identity_memorypair",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "memorypair()"
     },
     {
@@ -7656,7 +7678,7 @@
       "_origin": "ast",
       "id": "lib_identity_defaultidentity",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "defaultidentity()"
     },
     {
@@ -7667,7 +7689,7 @@
       "_origin": "ast",
       "id": "lib_identity_otherprogramnames",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "otherprogramnames()"
     },
     {
@@ -7678,7 +7700,7 @@
       "_origin": "ast",
       "id": "lib_identity_corpussection",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "corpussection()"
     },
     {
@@ -7689,7 +7711,7 @@
       "_origin": "ast",
       "id": "lib_identity_identity",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "identity()"
     },
     {
@@ -7700,7 +7722,7 @@
       "_origin": "ast",
       "id": "lib_identity_test",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "identity.test.js"
     },
     {
@@ -7711,7 +7733,7 @@
       "_origin": "ast",
       "id": "lib_identity_test_test",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "{ test }"
     },
     {
@@ -7722,7 +7744,7 @@
       "_origin": "ast",
       "id": "lib_identity_test_assert",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "assert"
     },
     {
@@ -7733,7 +7755,7 @@
       "_origin": "ast",
       "id": "lib_identity_test_identity",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "identity"
     },
     {
@@ -7744,7 +7766,7 @@
       "_origin": "ast",
       "id": "lib_identity_test_withbrand",
       "community": 29,
-      "community_name": "brand.js",
+      "community_name": "identity.js",
       "norm_label": "withbrand()"
     },
     {
@@ -7820,8 +7842,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "lib_incidents_similarityscore",
-      "community": 72,
-      "community_name": "incidents.js",
+      "community": 122,
+      "community_name": "rankDuplicateCandidates",
       "norm_label": "similarityscore()"
     },
     {
@@ -7831,8 +7853,8 @@
       "source_location": "L39",
       "_origin": "ast",
       "id": "lib_incidents_issimilar",
-      "community": 72,
-      "community_name": "incidents.js",
+      "community": 122,
+      "community_name": "rankDuplicateCandidates",
       "norm_label": "issimilar()"
     },
     {
@@ -7842,8 +7864,8 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "lib_incidents_clamplimit",
-      "community": 72,
-      "community_name": "incidents.js",
+      "community": 122,
+      "community_name": "rankDuplicateCandidates",
       "norm_label": "clamplimit()"
     },
     {
@@ -7853,8 +7875,8 @@
       "source_location": "L50",
       "_origin": "ast",
       "id": "lib_incidents_scoreduplicate",
-      "community": 72,
-      "community_name": "incidents.js",
+      "community": 122,
+      "community_name": "rankDuplicateCandidates",
       "norm_label": "scoreduplicate()"
     },
     {
@@ -7864,8 +7886,8 @@
       "source_location": "L54",
       "_origin": "ast",
       "id": "lib_incidents_rankduplicatecandidates",
-      "community": 72,
-      "community_name": "incidents.js",
+      "community": 122,
+      "community_name": "rankDuplicateCandidates",
       "norm_label": "rankduplicatecandidates()"
     },
     {
@@ -7875,8 +7897,8 @@
       "source_location": "L71",
       "_origin": "ast",
       "id": "lib_incidents_pickbestincident",
-      "community": 72,
-      "community_name": "incidents.js",
+      "community": 122,
+      "community_name": "rankDuplicateCandidates",
       "norm_label": "pickbestincident()"
     },
     {
@@ -7919,8 +7941,8 @@
       "source_location": "L98",
       "_origin": "ast",
       "id": "lib_incidents_defaultresolutiontext",
-      "community": 181,
-      "community_name": "getIncident",
+      "community": 72,
+      "community_name": "incidents.js",
       "norm_label": "defaultresolutiontext()"
     },
     {
@@ -7930,8 +7952,8 @@
       "source_location": "L102",
       "_origin": "ast",
       "id": "lib_incidents_fetchduplicaterows",
-      "community": 72,
-      "community_name": "incidents.js",
+      "community": 122,
+      "community_name": "rankDuplicateCandidates",
       "norm_label": "fetchduplicaterows()"
     },
     {
@@ -7963,8 +7985,8 @@
       "source_location": "L124",
       "_origin": "ast",
       "id": "lib_incidents_findcooldownincident",
-      "community": 72,
-      "community_name": "incidents.js",
+      "community": 122,
+      "community_name": "rankDuplicateCandidates",
       "norm_label": "findcooldownincident()"
     },
     {
@@ -8018,8 +8040,8 @@
       "source_location": "L169",
       "_origin": "ast",
       "id": "lib_incidents_suggestduplicates",
-      "community": 72,
-      "community_name": "incidents.js",
+      "community": 122,
+      "community_name": "rankDuplicateCandidates",
       "norm_label": "suggestduplicates()"
     },
     {
@@ -8029,8 +8051,8 @@
       "source_location": "L175",
       "_origin": "ast",
       "id": "lib_incidents_getincident",
-      "community": 181,
-      "community_name": "getIncident",
+      "community": 72,
+      "community_name": "incidents.js",
       "norm_label": "getincident()"
     },
     {
@@ -8040,8 +8062,8 @@
       "source_location": "L179",
       "_origin": "ast",
       "id": "lib_incidents_listincidents",
-      "community": 72,
-      "community_name": "incidents.js",
+      "community": 122,
+      "community_name": "rankDuplicateCandidates",
       "norm_label": "listincidents()"
     },
     {
@@ -8051,8 +8073,8 @@
       "source_location": "L186",
       "_origin": "ast",
       "id": "lib_incidents_incidenttickets",
-      "community": 181,
-      "community_name": "getIncident",
+      "community": 72,
+      "community_name": "incidents.js",
       "norm_label": "incidenttickets()"
     },
     {
@@ -8073,8 +8095,8 @@
       "source_location": "L229",
       "_origin": "ast",
       "id": "lib_incidents_declareincident",
-      "community": 181,
-      "community_name": "getIncident",
+      "community": 72,
+      "community_name": "incidents.js",
       "norm_label": "declareincident()"
     },
     {
@@ -8084,8 +8106,8 @@
       "source_location": "L245",
       "_origin": "ast",
       "id": "lib_incidents_matchactiveincident",
-      "community": 72,
-      "community_name": "incidents.js",
+      "community": 122,
+      "community_name": "rankDuplicateCandidates",
       "norm_label": "matchactiveincident()"
     },
     {
@@ -8106,8 +8128,8 @@
       "source_location": "L264",
       "_origin": "ast",
       "id": "lib_incidents_affectedreports",
-      "community": 181,
-      "community_name": "getIncident",
+      "community": 72,
+      "community_name": "incidents.js",
       "norm_label": "affectedreports()"
     },
     {
@@ -8117,8 +8139,8 @@
       "source_location": "L273",
       "_origin": "ast",
       "id": "lib_incidents_notifyaffectedusers",
-      "community": 181,
-      "community_name": "getIncident",
+      "community": 72,
+      "community_name": "incidents.js",
       "norm_label": "notifyaffectedusers()"
     },
     {
@@ -8128,8 +8150,8 @@
       "source_location": "L295",
       "_origin": "ast",
       "id": "lib_incidents_setincidentstatus",
-      "community": 181,
-      "community_name": "getIncident",
+      "community": 72,
+      "community_name": "incidents.js",
       "norm_label": "setincidentstatus()"
     },
     {
@@ -8139,8 +8161,8 @@
       "source_location": "L307",
       "_origin": "ast",
       "id": "lib_incidents_linkticket",
-      "community": 181,
-      "community_name": "getIncident",
+      "community": 72,
+      "community_name": "incidents.js",
       "norm_label": "linkticket()"
     },
     {
@@ -8161,8 +8183,8 @@
       "source_location": "L322",
       "_origin": "ast",
       "id": "lib_incidents_draftannouncement",
-      "community": 181,
-      "community_name": "getIncident",
+      "community": 72,
+      "community_name": "incidents.js",
       "norm_label": "draftannouncement()"
     },
     {
@@ -8282,8 +8304,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_incidents_test",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "incidents.test.js"
     },
     {
@@ -8293,8 +8315,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "lib_incidents_test_test_before_after",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "{ test, before, after }"
     },
     {
@@ -8304,8 +8326,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_incidents_test_assert",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "assert"
     },
     {
@@ -8315,8 +8337,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_incidents_test_db",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "db"
     },
     {
@@ -8326,8 +8348,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_incidents_test_programs",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "programs"
     },
     {
@@ -8337,8 +8359,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "lib_incidents_test_incidents",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "incidents"
     },
     {
@@ -8348,8 +8370,8 @@
       "source_location": "L18",
       "_origin": "ast",
       "id": "lib_incidents_test_makecandidate",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "makecandidate()"
     },
     {
@@ -8359,8 +8381,8 @@
       "source_location": "L111",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_111",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: similarity is the rounded pairoverlap, gated at 0.35 \u2014 pins the exact"
     },
     {
@@ -8370,8 +8392,8 @@
       "source_location": "L144",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_144",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: duplicates are same-program and same-30d only \u2014 cross-program wording"
     },
     {
@@ -8381,8 +8403,8 @@
       "source_location": "L167",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_167",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: closed/spam/duplicate tickets are not \"similar open work\" \u2014 duplicates"
     },
     {
@@ -8392,8 +8414,8 @@
       "source_location": "L179",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_179",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: threshold=4 in a 1h window is the burst definition \u2014 fewer than 4"
     },
     {
@@ -8403,8 +8425,8 @@
       "source_location": "L206",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_206",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: custom threshold/window params are honored \u2014 callers (and tests) can"
     },
     {
@@ -8414,8 +8436,8 @@
       "source_location": "L221",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_221",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: the 1h window is a recency gate \u2014 yesterday's outage must not re-fire"
     },
     {
@@ -8425,8 +8447,8 @@
       "source_location": "L234",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_234",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: the 6h cooldown links into the live candidate instead of spawning a"
     },
     {
@@ -8436,8 +8458,8 @@
       "source_location": "L254",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_254",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: bursts never cross programs \u2014 identical wording in another tenant is a"
     },
     {
@@ -8447,8 +8469,8 @@
       "source_location": "L272",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_272",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: the full lifecycle is candidate\u2192confirmed\u2192resolved/dismissed with one"
     },
     {
@@ -8458,8 +8480,8 @@
       "source_location": "L320",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_320",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: 0.35 is the shared \"same incident\" line \u2014 1/3 overlap (0.333) misses,"
     },
     {
@@ -8469,8 +8491,8 @@
       "source_location": "L343",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_343",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: the affected-report dedupe key is exactly (incident, channel, thread) \u2014"
     },
     {
@@ -8480,8 +8502,8 @@
       "source_location": "L365",
       "_origin": "ast",
       "id": "lib_incidents_test_rationale_365",
-      "community": 122,
-      "community_name": "incidents.test.js",
+      "community": 67,
+      "community_name": "gapClusters.js",
       "norm_label": "why: notify is explicit-only and idempotent \u2014 error strings, default vs"
     },
     {
@@ -11714,8 +11736,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_manifest_test",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "manifest.test.js"
     },
     {
@@ -11725,8 +11747,8 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "lib_manifest_test_test",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "{ test }"
     },
     {
@@ -11736,8 +11758,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "lib_manifest_test_assert",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "assert"
     },
     {
@@ -11747,8 +11769,8 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "lib_manifest_test_brand",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "brand"
     },
     {
@@ -11758,8 +11780,8 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "lib_manifest_test_manifest_bot_scopes",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "{ manifest, bot_scopes }"
     },
     {
@@ -11769,8 +11791,8 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "lib_manifest_test_registeredcommands",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "registeredcommands()"
     },
     {
@@ -11780,8 +11802,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "lib_manifest_test_withbrand",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "withbrand()"
     },
     {
@@ -14618,7 +14640,7 @@
       "source_location": "L405",
       "_origin": "ast",
       "id": "lib_reply_seedfeedbackreactions",
-      "community": 29,
+      "community": 76,
       "community_name": "brand.js",
       "norm_label": "seedfeedbackreactions()"
     },
@@ -14728,8 +14750,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "lib_report_reply",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "reply"
     },
     {
@@ -15113,8 +15135,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_report_test",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "report.test.js"
     },
     {
@@ -15124,8 +15146,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "lib_report_test_test",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "{ test }"
     },
     {
@@ -15135,8 +15157,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_report_test_assert",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "assert"
     },
     {
@@ -15146,8 +15168,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_report_test_db",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "db"
     },
     {
@@ -15157,8 +15179,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_report_test_llm",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "llm"
     },
     {
@@ -15168,8 +15190,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "lib_report_test_config",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "{ config }"
     },
     {
@@ -15179,8 +15201,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "lib_report_test_report",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "report"
     },
     {
@@ -15190,8 +15212,8 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "lib_report_test_learn",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "learn"
     },
     {
@@ -15201,8 +15223,8 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "lib_report_test_withjudge",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "withjudge()"
     },
     {
@@ -15212,8 +15234,8 @@
       "source_location": "L339",
       "_origin": "ast",
       "id": "lib_report_test_seedgap",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "seedgap()"
     },
     {
@@ -15223,8 +15245,8 @@
       "source_location": "L345",
       "_origin": "ast",
       "id": "lib_report_test_seedmetric",
-      "community": 13,
-      "community_name": "report.js",
+      "community": 117,
+      "community_name": "report.test.js",
       "norm_label": "seedmetric()"
     },
     {
@@ -16257,8 +16279,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_retention_test",
-      "community": 184,
-      "community_name": "retention.test.js",
+      "community": 96,
+      "community_name": "retention.js",
       "norm_label": "retention.test.js"
     },
     {
@@ -16268,8 +16290,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "lib_retention_test_test_before_after",
-      "community": 184,
-      "community_name": "retention.test.js",
+      "community": 96,
+      "community_name": "retention.js",
       "norm_label": "{ test, before, after }"
     },
     {
@@ -16279,8 +16301,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_retention_test_assert",
-      "community": 184,
-      "community_name": "retention.test.js",
+      "community": 96,
+      "community_name": "retention.js",
       "norm_label": "assert"
     },
     {
@@ -16290,8 +16312,8 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_retention_test_db",
-      "community": 184,
-      "community_name": "retention.test.js",
+      "community": 96,
+      "community_name": "retention.js",
       "norm_label": "db"
     },
     {
@@ -16301,8 +16323,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_retention_test_programs",
-      "community": 184,
-      "community_name": "retention.test.js",
+      "community": 96,
+      "community_name": "retention.js",
       "norm_label": "programs"
     },
     {
@@ -16312,8 +16334,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "lib_retention_test_retention",
-      "community": 184,
-      "community_name": "retention.test.js",
+      "community": 96,
+      "community_name": "retention.js",
       "norm_label": "retention"
     },
     {
@@ -17808,8 +17830,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_slackmessages",
-      "community": 87,
-      "community_name": "slackMessages.test.js",
+      "community": 146,
+      "community_name": "slackMessages.js",
       "norm_label": "slackmessages.js"
     },
     {
@@ -17819,8 +17841,8 @@
       "source_location": "L11",
       "_origin": "ast",
       "id": "lib_slackmessages_log",
-      "community": 87,
-      "community_name": "slackMessages.test.js",
+      "community": 146,
+      "community_name": "slackMessages.js",
       "norm_label": "log"
     },
     {
@@ -17830,8 +17852,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "lib_slackmessages_brandingfor",
-      "community": 87,
-      "community_name": "slackMessages.test.js",
+      "community": 146,
+      "community_name": "slackMessages.js",
       "norm_label": "brandingfor()"
     },
     {
@@ -17841,8 +17863,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "lib_slackmessages_headercaseinsensitive",
-      "community": 87,
-      "community_name": "slackMessages.test.js",
+      "community": 146,
+      "community_name": "slackMessages.js",
       "norm_label": "headercaseinsensitive()"
     },
     {
@@ -17852,8 +17874,8 @@
       "source_location": "L38",
       "_origin": "ast",
       "id": "lib_slackmessages_retryafterms",
-      "community": 87,
-      "community_name": "slackMessages.test.js",
+      "community": 146,
+      "community_name": "slackMessages.js",
       "norm_label": "retryafterms()"
     },
     {
@@ -17863,8 +17885,8 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "lib_slackmessages_ispermanenterror",
-      "community": 87,
-      "community_name": "slackMessages.test.js",
+      "community": 146,
+      "community_name": "slackMessages.js",
       "norm_label": "ispermanenterror()"
     },
     {
@@ -17874,8 +17896,8 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "lib_slackmessages_sleep",
-      "community": 87,
-      "community_name": "slackMessages.test.js",
+      "community": 146,
+      "community_name": "slackMessages.js",
       "norm_label": "sleep()"
     },
     {
@@ -17885,8 +17907,8 @@
       "source_location": "L62",
       "_origin": "ast",
       "id": "lib_slackmessages_sendprogrammessage",
-      "community": 87,
-      "community_name": "slackMessages.test.js",
+      "community": 146,
+      "community_name": "slackMessages.js",
       "norm_label": "sendprogrammessage()"
     },
     {
@@ -17896,8 +17918,8 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "lib_slackmessages_rationale_24",
-      "community": 87,
-      "community_name": "slackMessages.test.js",
+      "community": 146,
+      "community_name": "slackMessages.js",
       "norm_label": "why: slack rejects non-http icons, so only http(s) survives branding."
     },
     {
@@ -17907,8 +17929,8 @@
       "source_location": "L45",
       "_origin": "ast",
       "id": "lib_slackmessages_rationale_45",
-      "community": 87,
-      "community_name": "slackMessages.test.js",
+      "community": 146,
+      "community_name": "slackMessages.js",
       "norm_label": "why: missing/empty must fall to backoff, not a 0ms retry storm."
     },
     {
@@ -18259,7 +18281,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_stats",
-      "community": 116,
+      "community": 44,
       "community_name": "stats.js",
       "norm_label": "stats.js"
     },
@@ -18270,7 +18292,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "lib_stats_db",
-      "community": 116,
+      "community": 44,
       "community_name": "stats.js",
       "norm_label": "db"
     },
@@ -18281,7 +18303,7 @@
       "source_location": "L5",
       "_origin": "ast",
       "id": "lib_stats_cache",
-      "community": 116,
+      "community": 44,
       "community_name": "stats.js",
       "norm_label": "cache"
     },
@@ -18292,7 +18314,7 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "lib_stats_config",
-      "community": 116,
+      "community": 44,
       "community_name": "stats.js",
       "norm_label": "{ config }"
     },
@@ -18304,7 +18326,7 @@
       "_origin": "ast",
       "id": "lib_stats_relativetime",
       "community": 44,
-      "community_name": "relativeTime",
+      "community_name": "stats.js",
       "norm_label": "relativetime()"
     },
     {
@@ -18314,8 +18336,8 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "lib_stats_coveragestats",
-      "community": 44,
-      "community_name": "relativeTime",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "coveragestats()"
     },
     {
@@ -18325,8 +18347,8 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "lib_stats_statstext",
-      "community": 116,
-      "community_name": "stats.js",
+      "community": 30,
+      "community_name": "home.js",
       "norm_label": "statstext()"
     },
     {
@@ -20184,8 +20206,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_validator_test",
-      "community": 146,
-      "community_name": "validator.test.js",
+      "community": 26,
+      "community_name": "validator.js",
       "norm_label": "validator.test.js"
     },
     {
@@ -20195,8 +20217,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "lib_validator_test_test",
-      "community": 146,
-      "community_name": "validator.test.js",
+      "community": 26,
+      "community_name": "validator.js",
       "norm_label": "{ test }"
     },
     {
@@ -20206,8 +20228,8 @@
       "source_location": "L2",
       "_origin": "ast",
       "id": "lib_validator_test_assert",
-      "community": 146,
-      "community_name": "validator.test.js",
+      "community": 26,
+      "community_name": "validator.js",
       "norm_label": "assert"
     },
     {
@@ -20217,8 +20239,8 @@
       "source_location": "L3",
       "_origin": "ast",
       "id": "lib_validator_test_validator",
-      "community": 146,
-      "community_name": "validator.test.js",
+      "community": 26,
+      "community_name": "validator.js",
       "norm_label": "validator"
     },
     {
@@ -20955,7 +20977,7 @@
       "_origin": "ast",
       "id": "lib_web_api_buildpulse",
       "community": 44,
-      "community_name": "relativeTime",
+      "community_name": "stats.js",
       "norm_label": "buildpulse()"
     },
     {
@@ -20977,7 +20999,7 @@
       "_origin": "ast",
       "id": "lib_web_api_queuelist",
       "community": 44,
-      "community_name": "relativeTime",
+      "community_name": "stats.js",
       "norm_label": "queuelist()"
     },
     {
@@ -21065,7 +21087,7 @@
       "_origin": "ast",
       "id": "lib_web_api_knowledgeinfo",
       "community": 44,
-      "community_name": "relativeTime",
+      "community_name": "stats.js",
       "norm_label": "knowledgeinfo()"
     },
     {
@@ -21416,8 +21438,8 @@
       "source_location": "L613",
       "_origin": "ast",
       "id": "lib_web_api_internalhelperssync",
-      "community": 135,
-      "community_name": "isAdmin",
+      "community": 6,
+      "community_name": "api.js",
       "norm_label": "internalhelperssync()"
     },
     {
@@ -21757,8 +21779,8 @@
       "source_location": "L952",
       "_origin": "ast",
       "id": "lib_web_api_internalretentionsweep",
-      "community": 135,
-      "community_name": "isAdmin",
+      "community": 6,
+      "community_name": "api.js",
       "norm_label": "internalretentionsweep()"
     },
     {
@@ -23088,8 +23110,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_dashboardshell",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "dashboardshell.tsx"
     },
     {
@@ -23099,7 +23121,7 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_dashboardshell_dashboardshell",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "dashboardshell()"
     },
@@ -23107,66 +23129,66 @@
       "label": "PageHeader()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L60",
+      "source_location": "L64",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_dashboardshell_pageheader",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "pageheader()"
     },
     {
       "label": "Section()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L84",
+      "source_location": "L88",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_dashboardshell_section",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "section()"
     },
     {
       "label": "MetricCard()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L113",
+      "source_location": "L117",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_dashboardshell_metriccard",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "metriccard()"
     },
     {
       "label": "MetricRow()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L135",
+      "source_location": "L139",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_dashboardshell_metricrow",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 108,
+      "community_name": "[id]/page.tsx",
       "norm_label": "metricrow()"
     },
     {
       "label": "StatusBadge()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L144",
+      "source_location": "L148",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_dashboardshell_statusbadge",
-      "community": 117,
-      "community_name": "programAccess.ts",
+      "community": 108,
+      "community_name": "[id]/page.tsx",
       "norm_label": "statusbadge()"
     },
     {
       "label": "CoreError()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L160",
+      "source_location": "L164",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_dashboardshell_coreerror",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "coreerror()"
     },
     {
@@ -23176,8 +23198,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_sidebarnav",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "sidebarnav.tsx"
     },
     {
@@ -23187,8 +23209,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_sidebarnav_item",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "item"
     },
     {
@@ -23198,8 +23220,8 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_sidebarnav_main",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "main"
     },
     {
@@ -23209,8 +23231,8 @@
       "source_location": "L23",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_sidebarnav_secondary",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "secondary"
     },
     {
@@ -23220,8 +23242,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_sidebarnav_isactive",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "isactive()"
     },
     {
@@ -23231,8 +23253,8 @@
       "source_location": "L34",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_sidebarnav_navlink",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "navlink()"
     },
     {
@@ -23242,8 +23264,8 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_sidebarnav_workspacenav",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "workspacenav()"
     },
     {
@@ -23253,8 +23275,8 @@
       "source_location": "L61",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_sidebarnav_mobilenavlink",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "mobilenavlink()"
     },
     {
@@ -23264,8 +23286,8 @@
       "source_location": "L78",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_sidebarnav_mobileprogramnav",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "mobileprogramnav()"
     },
     {
@@ -23275,8 +23297,8 @@
       "source_location": "L90",
       "_origin": "ast",
       "id": "pixie_wizard_app_components_sidebarnav_programnav",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "programnav()"
     },
     {
@@ -23286,8 +23308,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_api_auth_callback_route",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "callback/route.ts"
     },
     {
@@ -23297,8 +23319,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "pixie_wizard_app_api_auth_callback_route_hackclubtokenresponse",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "hackclubtokenresponse"
     },
     {
@@ -23308,8 +23330,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "pixie_wizard_app_api_auth_callback_route_hackclubmeresponse",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "hackclubmeresponse"
     },
     {
@@ -23319,8 +23341,8 @@
       "source_location": "L29",
       "_origin": "ast",
       "id": "pixie_wizard_app_api_auth_callback_route_get",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "get()"
     },
     {
@@ -23330,8 +23352,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_api_auth_dev_login_route",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "dev-login/route.ts"
     },
     {
@@ -23341,8 +23363,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "pixie_wizard_app_api_auth_dev_login_route_get",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "get()"
     },
     {
@@ -23374,8 +23396,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_api_auth_logout_route",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "logout/route.ts"
     },
     {
@@ -23385,8 +23407,8 @@
       "source_location": "L4",
       "_origin": "ast",
       "id": "pixie_wizard_app_api_auth_logout_route_get",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "get()"
     },
     {
@@ -23496,7 +23518,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_overview_page",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "overview/page.tsx"
     },
     {
@@ -23507,7 +23529,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_overview_page_percent",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "percent()"
     },
     {
@@ -23518,7 +23540,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_overview_page_overviewpage",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "overviewpage()"
     },
     {
@@ -23573,7 +23595,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_channelchangeform_channelchangeform",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "channelchangeform()"
     },
     {
@@ -23584,7 +23606,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_channelssection",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "channelssection.tsx"
     },
     {
@@ -23595,7 +23617,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_channelssection_channelssection",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "channelssection()"
     },
     {
@@ -23694,7 +23716,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_analytics_page",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "analytics/page.tsx"
     },
     {
@@ -23705,7 +23727,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_analytics_page_ms",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "ms()"
     },
     {
@@ -23716,7 +23738,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_analytics_page_analyticspage",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "analyticspage()"
     },
     {
@@ -23727,7 +23749,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_audit_page",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "audit/page.tsx"
     },
     {
@@ -23738,7 +23760,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_audit_page_auditevent",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "auditevent"
     },
     {
@@ -23749,7 +23771,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_audit_page_auditpage",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "auditpage()"
     },
     {
@@ -23782,7 +23804,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_gaps_page",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "gaps/page.tsx"
     },
     {
@@ -23793,7 +23815,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_gaps_page_cluster",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "cluster"
     },
     {
@@ -23804,7 +23826,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_gaps_page_gapspage",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "gapspage()"
     },
     {
@@ -23936,7 +23958,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_incidents_incidentid_page",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "[incidentid]/page.tsx"
     },
     {
@@ -23947,7 +23969,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_incidents_incidentid_page_incidentdetailpage",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "incidentdetailpage()"
     },
     {
@@ -23957,8 +23979,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_incidents_page",
-      "community": 81,
-      "community_name": "requireProgramMembership",
+      "community": 73,
+      "community_name": "hostedActions.ts",
       "norm_label": "incidents/page.tsx"
     },
     {
@@ -23968,8 +23990,8 @@
       "source_location": "L7",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_incidents_page_incident",
-      "community": 81,
-      "community_name": "requireProgramMembership",
+      "community": 73,
+      "community_name": "hostedActions.ts",
       "norm_label": "incident"
     },
     {
@@ -23979,8 +24001,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_incidents_page_incidentspage",
-      "community": 81,
-      "community_name": "requireProgramMembership",
+      "community": 73,
+      "community_name": "hostedActions.ts",
       "norm_label": "incidentspage()"
     },
     {
@@ -23990,8 +24012,8 @@
       "source_location": "L59",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_incidents_page_incidentdetailsection",
-      "community": 81,
-      "community_name": "requireProgramMembership",
+      "community": 73,
+      "community_name": "hostedActions.ts",
       "norm_label": "incidentdetailsection()"
     },
     {
@@ -24035,7 +24057,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_knowledge_reviewforms_proposeticketform",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "proposeticketform()"
     },
     {
@@ -24046,7 +24068,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_knowledge_reviewforms_candidatecard",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "candidatecard()"
     },
     {
@@ -24057,7 +24079,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_knowledge_reviewforms_faqproposebutton",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "faqproposebutton()"
     },
     {
@@ -24068,7 +24090,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_knowledge_page",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "knowledge/page.tsx"
     },
     {
@@ -24079,7 +24101,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_knowledge_page_candidate",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "candidate"
     },
     {
@@ -24090,7 +24112,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_knowledge_page_knowledgepage",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "knowledgepage()"
     },
     {
@@ -24100,7 +24122,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_layout",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "[id]/layout.tsx"
     },
@@ -24111,7 +24133,7 @@
       "source_location": "L12",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_layout_programlayout",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "programlayout()"
     },
@@ -24144,8 +24166,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_macros_macroforms",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 74,
+      "community_name": "types.ts",
       "norm_label": "macroforms.tsx"
     },
     {
@@ -24155,8 +24177,8 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_macros_macroforms_initialstate",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 74,
+      "community_name": "types.ts",
       "norm_label": "initialstate"
     },
     {
@@ -24166,8 +24188,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_macros_macroforms_macrorow",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "macrorow"
     },
     {
@@ -24177,8 +24199,8 @@
       "source_location": "L20",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_macros_macroforms_errorline",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 74,
+      "community_name": "types.ts",
       "norm_label": "errorline()"
     },
     {
@@ -24188,8 +24210,8 @@
       "source_location": "L25",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_macros_macroforms_macrocreateform",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "macrocreateform()"
     },
     {
@@ -24199,8 +24221,8 @@
       "source_location": "L49",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_macros_macroforms_macrorowcard",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "macrorowcard()"
     },
     {
@@ -24210,8 +24232,8 @@
       "source_location": "L66",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_macros_macroforms_macrosendform",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "macrosendform()"
     },
     {
@@ -24221,8 +24243,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_macros_page",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "macros/page.tsx"
     },
     {
@@ -24232,8 +24254,8 @@
       "source_location": "L6",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_macros_page_macrospage",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "macrospage()"
     },
     {
@@ -24464,7 +24486,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_retention_retentionforms_retentionpolicyform",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "retentionpolicyform()"
     },
     {
@@ -24475,7 +24497,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_retention_retentionforms_retentionsweepform",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "retentionsweepform()"
     },
     {
@@ -24486,7 +24508,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_retention_page",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "retention/page.tsx"
     },
     {
@@ -24497,7 +24519,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_retention_page_retentionpage",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "retentionpage()"
     },
     {
@@ -24508,7 +24530,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_settings_page",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "settings/page.tsx"
     },
     {
@@ -24519,7 +24541,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_settings_page_settingspage",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "settingspage()"
     },
     {
@@ -24562,8 +24584,8 @@
       "source_location": "L50",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_tickets_ticketid_copilotpanel_copilotpanel",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "copilotpanel()"
     },
     {
@@ -24617,8 +24639,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_tickets_ticketid_page",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "[ticketid]/page.tsx"
     },
     {
@@ -24628,8 +24650,8 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_tickets_ticketid_page_ticketdetail",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "ticketdetail"
     },
     {
@@ -24639,8 +24661,8 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_tickets_ticketid_page_ticketpage",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "ticketpage()"
     },
     {
@@ -24651,7 +24673,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_tickets_page",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "tickets/page.tsx"
     },
     {
@@ -24662,7 +24684,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_tickets_page_ticketrow",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "ticketrow"
     },
     {
@@ -24673,7 +24695,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_tickets_page_statuses",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "statuses"
     },
     {
@@ -24684,7 +24706,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_tickets_page_pagehref",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "pagehref()"
     },
     {
@@ -24695,7 +24717,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_id_tickets_page_ticketspage",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "ticketspage()"
     },
     {
@@ -24705,7 +24727,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_layout",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "programs/layout.tsx"
     },
@@ -24716,7 +24738,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_layout_programslayout",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "programslayout()"
     },
@@ -24727,7 +24749,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_page",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "programs/page.tsx"
     },
@@ -24738,7 +24760,7 @@
       "source_location": "L9",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_page_relationship_label",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "relationship_label"
     },
@@ -24749,7 +24771,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_page_action_label",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "action_label"
     },
@@ -24760,7 +24782,7 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "pixie_wizard_app_programs_page_programsindex",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "programsindex()"
     },
@@ -24848,8 +24870,8 @@
       "source_location": "L55",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_components_hostedsetupview_hostedsetupview",
-      "community": 108,
-      "community_name": "[id]/page.tsx",
+      "community": 62,
+      "community_name": "hostedPrograms.ts",
       "norm_label": "hostedsetupview()"
     },
     {
@@ -24980,8 +25002,8 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_requirehostedsession",
-      "community": 62,
-      "community_name": "hostedPrograms.ts",
+      "community": 61,
+      "community_name": "activationGuards.ts",
       "norm_label": "requirehostedsession()"
     },
     {
@@ -25002,8 +25024,8 @@
       "source_location": "L45",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_requireprogramowneroradmin",
-      "community": 62,
-      "community_name": "hostedPrograms.ts",
+      "community": 183,
+      "community_name": "helpers/page.tsx",
       "norm_label": "requireprogramowneroradmin()"
     },
     {
@@ -25013,8 +25035,8 @@
       "source_location": "L56",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_parsesources",
-      "community": 62,
-      "community_name": "hostedPrograms.ts",
+      "community": 61,
+      "community_name": "activationGuards.ts",
       "norm_label": "parsesources()"
     },
     {
@@ -25054,7 +25076,7 @@
       "label": "saveHostedSources()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L345",
+      "source_location": "L346",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_savehostedsources",
       "community": 62,
@@ -25065,7 +25087,7 @@
       "label": "hostedTicketAction()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L362",
+      "source_location": "L363",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedticketaction",
       "community": 73,
@@ -25076,7 +25098,7 @@
       "label": "hostedTicketReply()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L385",
+      "source_location": "L386",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedticketreply",
       "community": 73,
@@ -25087,7 +25109,7 @@
       "label": "hostedTicketNote()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L401",
+      "source_location": "L402",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedticketnote",
       "community": 73,
@@ -25098,7 +25120,7 @@
       "label": "hostedCopilot()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L419",
+      "source_location": "L420",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedcopilot",
       "community": 73,
@@ -25109,7 +25131,7 @@
       "label": "hostedKnowledgePropose()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L447",
+      "source_location": "L448",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedknowledgepropose",
       "community": 73,
@@ -25120,7 +25142,7 @@
       "label": "hostedCandidateReview()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L462",
+      "source_location": "L463",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedcandidatereview",
       "community": 73,
@@ -25131,7 +25153,7 @@
       "label": "hostedFaqPropose()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L488",
+      "source_location": "L489",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedfaqpropose",
       "community": 73,
@@ -25142,7 +25164,7 @@
       "label": "hostedMacroSave()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L505",
+      "source_location": "L506",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedmacrosave",
       "community": 73,
@@ -25153,29 +25175,29 @@
       "label": "hostedMacroDelete()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L531",
+      "source_location": "L532",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedmacrodelete",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 73,
+      "community_name": "hostedActions.ts",
       "norm_label": "hostedmacrodelete()"
     },
     {
       "label": "hostedMacroSend()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L546",
+      "source_location": "L547",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedmacrosend",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 73,
+      "community_name": "hostedActions.ts",
       "norm_label": "hostedmacrosend()"
     },
     {
       "label": "hostedHelperSave()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L563",
+      "source_location": "L564",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedhelpersave",
       "community": 73,
@@ -25186,7 +25208,7 @@
       "label": "hostedIncidentAction()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L586",
+      "source_location": "L587",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedincidentaction",
       "community": 73,
@@ -25197,7 +25219,7 @@
       "label": "hostedIncidentNotify()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L618",
+      "source_location": "L619",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedincidentnotify",
       "community": 73,
@@ -25208,7 +25230,7 @@
       "label": "hostedRadarAction()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L633",
+      "source_location": "L634",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedradaraction",
       "community": 73,
@@ -25219,7 +25241,7 @@
       "label": "hostedRetentionPolicy()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L655",
+      "source_location": "L656",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedretentionpolicy",
       "community": 73,
@@ -25230,7 +25252,7 @@
       "label": "hostedRetentionSweep()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L674",
+      "source_location": "L675",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedretentionsweep",
       "community": 73,
@@ -25241,22 +25263,22 @@
       "label": "hostedChannelsUpdate()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L692",
+      "source_location": "L693",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_hostedchannelsupdate",
-      "community": 62,
-      "community_name": "hostedPrograms.ts",
+      "community": 61,
+      "community_name": "activationGuards.ts",
       "norm_label": "hostedchannelsupdate()"
     },
     {
       "label": "setHelperVisibilityAction()",
       "file_type": "code",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L765",
+      "source_location": "L766",
       "_origin": "ast",
       "id": "pixie_wizard_app_wizard_hostedactions_sethelpervisibilityaction",
-      "community": 62,
-      "community_name": "hostedPrograms.ts",
+      "community": 183,
+      "community_name": "helpers/page.tsx",
       "norm_label": "sethelpervisibilityaction()"
     },
     {
@@ -25476,7 +25498,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_corechannels",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "corechannels.ts"
     },
     {
@@ -25487,7 +25509,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_corechannels_slackchannellist",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "slackchannellist"
     },
     {
@@ -25498,7 +25520,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_corechannels_fetchchannels",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "fetchchannels()"
     },
     {
@@ -25509,7 +25531,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_corechannels_workspaceslackchannels",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "workspaceslackchannels()"
     },
     {
@@ -25520,7 +25542,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_dashboardmetrics_test",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "dashboardmetrics.test.ts"
     },
     {
@@ -25531,7 +25553,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_dashboardmetrics",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "dashboardmetrics.ts"
     },
     {
@@ -25542,7 +25564,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_dashboardmetrics_analyticssnapshot",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "analyticssnapshot"
     },
     {
@@ -25553,7 +25575,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_dashboardmetrics_dashboardtotals",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "dashboardtotals"
     },
     {
@@ -25564,7 +25586,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_dashboardmetrics_open_statuses",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "open_statuses"
     },
     {
@@ -25575,7 +25597,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_dashboardmetrics_summarizeanalytics",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "summarizeanalytics()"
     },
     {
@@ -25585,8 +25607,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_lib_db",
-      "community": 62,
-      "community_name": "hostedPrograms.ts",
+      "community": 61,
+      "community_name": "activationGuards.ts",
       "norm_label": "db.ts"
     },
     {
@@ -25596,8 +25618,8 @@
       "source_location": "L10",
       "_origin": "ast",
       "id": "pixie_wizard_lib_db_required",
-      "community": 62,
-      "community_name": "hostedPrograms.ts",
+      "community": 61,
+      "community_name": "activationGuards.ts",
       "norm_label": "required()"
     },
     {
@@ -25607,8 +25629,8 @@
       "source_location": "L19",
       "_origin": "ast",
       "id": "pixie_wizard_lib_db_pool",
-      "community": 62,
-      "community_name": "hostedPrograms.ts",
+      "community": 61,
+      "community_name": "activationGuards.ts",
       "norm_label": "pool()"
     },
     {
@@ -25618,8 +25640,8 @@
       "source_location": "L35",
       "_origin": "ast",
       "id": "pixie_wizard_lib_db_query",
-      "community": 62,
-      "community_name": "hostedPrograms.ts",
+      "community": 61,
+      "community_name": "activationGuards.ts",
       "norm_label": "query()"
     },
     {
@@ -25629,8 +25651,8 @@
       "source_location": "L44",
       "_origin": "ast",
       "id": "pixie_wizard_lib_db_withtransaction",
-      "community": 62,
-      "community_name": "hostedPrograms.ts",
+      "community": 61,
+      "community_name": "activationGuards.ts",
       "norm_label": "withtransaction()"
     },
     {
@@ -25729,7 +25751,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_hostedprograms_listhostedprogramsforowner",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "listhostedprogramsforowner()"
     },
     {
@@ -25882,7 +25904,7 @@
       "source_location": "L263",
       "_origin": "ast",
       "id": "pixie_wizard_lib_hostedprograms_gethelperrow",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "gethelperrow()"
     },
@@ -26092,7 +26114,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_coreticketsearch",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "coreticketsearch()"
     },
     {
@@ -26124,8 +26146,8 @@
       "source_location": "L84",
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_coreticketdetail",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "coreticketdetail()"
     },
     {
@@ -26147,7 +26169,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_coreknowledgecandidates",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "coreknowledgecandidates()"
     },
     {
@@ -26180,7 +26202,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_coregapclusters",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "coregapclusters()"
     },
     {
@@ -26212,8 +26234,8 @@
       "source_location": "L127",
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_corechannel",
-      "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community": 74,
+      "community_name": "types.ts",
       "norm_label": "corechannel"
     },
     {
@@ -26256,8 +26278,8 @@
       "source_location": "L151",
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_coremacroslist",
-      "community": 76,
-      "community_name": "MacroForms.tsx",
+      "community": 81,
+      "community_name": "programAccess.ts",
       "norm_label": "coremacroslist()"
     },
     {
@@ -26301,7 +26323,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_coreanalytics",
       "community": 20,
-      "community_name": "DashboardShell.tsx",
+      "community_name": "overview/page.tsx",
       "norm_label": "coreanalytics()"
     },
     {
@@ -26344,8 +26366,8 @@
       "source_location": "L199",
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_coreincidents",
-      "community": 81,
-      "community_name": "requireProgramMembership",
+      "community": 73,
+      "community_name": "hostedActions.ts",
       "norm_label": "coreincidents()"
     },
     {
@@ -26355,8 +26377,8 @@
       "source_location": "L206",
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_coreincidentdetail",
-      "community": 81,
-      "community_name": "requireProgramMembership",
+      "community": 73,
+      "community_name": "hostedActions.ts",
       "norm_label": "coreincidentdetail()"
     },
     {
@@ -26399,8 +26421,8 @@
       "source_location": "L222",
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_coreincidentaffected",
-      "community": 81,
-      "community_name": "requireProgramMembership",
+      "community": 73,
+      "community_name": "hostedActions.ts",
       "norm_label": "coreincidentaffected()"
     },
     {
@@ -26455,7 +26477,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_coreretentionpreview",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "coreretentionpreview()"
     },
     {
@@ -26499,7 +26521,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_pixiecore_coreaudit",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "coreaudit()"
     },
     {
@@ -26586,7 +26608,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_lib_programaccess",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "programaccess.ts"
     },
@@ -26597,7 +26619,7 @@
       "source_location": "L14",
       "_origin": "ast",
       "id": "pixie_wizard_lib_programaccess_relationshipfor",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "relationshipfor()"
     },
@@ -26608,7 +26630,7 @@
       "source_location": "L30",
       "_origin": "ast",
       "id": "pixie_wizard_lib_programaccess_programcontext",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "programcontext"
     },
@@ -26619,7 +26641,7 @@
       "source_location": "L45",
       "_origin": "ast",
       "id": "pixie_wizard_lib_programaccess_loadprogramcontext",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "loadprogramcontext"
     },
@@ -26630,7 +26652,7 @@
       "source_location": "L52",
       "_origin": "ast",
       "id": "pixie_wizard_lib_programaccess_programmembership",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "programmembership"
     },
@@ -26653,7 +26675,7 @@
       "_origin": "ast",
       "id": "pixie_wizard_lib_programaccess_requireprogrammembership",
       "community": 81,
-      "community_name": "requireProgramMembership",
+      "community_name": "programAccess.ts",
       "norm_label": "requireprogrammembership()"
     },
     {
@@ -26773,8 +26795,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_lib_session",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "session.ts"
     },
     {
@@ -26784,7 +26806,7 @@
       "source_location": "L8",
       "_origin": "ast",
       "id": "pixie_wizard_lib_session_wizardsession",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "wizardsession"
     },
@@ -26795,8 +26817,8 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "pixie_wizard_lib_session_secret",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "secret()"
     },
     {
@@ -26806,8 +26828,8 @@
       "source_location": "L22",
       "_origin": "ast",
       "id": "pixie_wizard_lib_session_sign",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "sign()"
     },
     {
@@ -26817,8 +26839,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "pixie_wizard_lib_session_encodesession",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "encodesession()"
     },
     {
@@ -26828,8 +26850,8 @@
       "source_location": "L31",
       "_origin": "ast",
       "id": "pixie_wizard_lib_session_decodesession",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "decodesession()"
     },
     {
@@ -26839,7 +26861,7 @@
       "source_location": "L58",
       "_origin": "ast",
       "id": "pixie_wizard_lib_session_getsession",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "getsession"
     },
@@ -26850,8 +26872,8 @@
       "source_location": "L63",
       "_origin": "ast",
       "id": "pixie_wizard_lib_session_setsessioncookie",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "setsessioncookie()"
     },
     {
@@ -26861,8 +26883,8 @@
       "source_location": "L78",
       "_origin": "ast",
       "id": "pixie_wizard_lib_session_clearsessioncookie",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "clearsessioncookie()"
     },
     {
@@ -26872,8 +26894,8 @@
       "source_location": "L86",
       "_origin": "ast",
       "id": "pixie_wizard_lib_session_isallowed",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "isallowed()"
     },
     {
@@ -26949,8 +26971,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_lib_timeoutfetch_test",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "timeoutfetch.test.ts"
     },
     {
@@ -26960,8 +26982,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "pixie_wizard_lib_timeoutfetch",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "timeoutfetch.ts"
     },
     {
@@ -26971,8 +26993,8 @@
       "source_location": "L15",
       "_origin": "ast",
       "id": "pixie_wizard_lib_timeoutfetch_request_timeout_ms",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "request_timeout_ms"
     },
     {
@@ -26982,8 +27004,8 @@
       "source_location": "L26",
       "_origin": "ast",
       "id": "pixie_wizard_lib_timeoutfetch_timeoutfetch",
-      "community": 61,
-      "community_name": "activationGuards.ts",
+      "community": 32,
+      "community_name": "session.ts",
       "norm_label": "timeoutfetch()"
     },
     {
@@ -27059,7 +27081,7 @@
       "source_location": "L43",
       "_origin": "ast",
       "id": "pixie_wizard_lib_types_hostedprogramrow",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "hostedprogramrow"
     },
@@ -27070,8 +27092,8 @@
       "source_location": "L77",
       "_origin": "ast",
       "id": "pixie_wizard_lib_types_hostedprogramchannel",
-      "community": 62,
-      "community_name": "hostedPrograms.ts",
+      "community": 74,
+      "community_name": "types.ts",
       "norm_label": "hostedprogramchannel"
     },
     {
@@ -27092,7 +27114,7 @@
       "source_location": "L101",
       "_origin": "ast",
       "id": "pixie_wizard_lib_types_programrelationship",
-      "community": 117,
+      "community": 81,
       "community_name": "programAccess.ts",
       "norm_label": "programrelationship"
     },
@@ -29259,8 +29281,8 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "scripts_manifest",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "manifest.cjs"
     },
     {
@@ -29270,8 +29292,8 @@
       "source_location": "L13",
       "_origin": "ast",
       "id": "scripts_manifest_brand",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "brand"
     },
     {
@@ -29281,8 +29303,8 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "scripts_manifest_bot_scopes",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "bot_scopes"
     },
     {
@@ -29292,8 +29314,8 @@
       "source_location": "L37",
       "_origin": "ast",
       "id": "scripts_manifest_bot_events",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "bot_events"
     },
     {
@@ -29303,8 +29325,8 @@
       "source_location": "L50",
       "_origin": "ast",
       "id": "scripts_manifest_commands",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "commands"
     },
     {
@@ -29314,8 +29336,8 @@
       "source_location": "L67",
       "_origin": "ast",
       "id": "scripts_manifest_manifest",
-      "community": 29,
-      "community_name": "brand.js",
+      "community": 116,
+      "community_name": "manifest.test.js",
       "norm_label": "manifest()"
     },
     {
@@ -32532,6 +32554,17 @@
     }
   ],
   "links": [
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "_seed2.mjs",
+      "source_location": "L2",
+      "weight": 1.0,
+      "_origin": "ast",
+      "source": "seed2",
+      "target": "seed2_c",
+      "confidence_score": 1.0
+    },
     {
       "relation": "contains",
       "confidence": "EXTRACTED",
@@ -76415,7 +76448,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L160",
+      "source_location": "L164",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_components_dashboardshell",
@@ -76437,7 +76470,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L113",
+      "source_location": "L117",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_components_dashboardshell",
@@ -76448,7 +76481,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L135",
+      "source_location": "L139",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_components_dashboardshell",
@@ -76459,7 +76492,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L60",
+      "source_location": "L64",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_components_dashboardshell",
@@ -76470,7 +76503,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L84",
+      "source_location": "L88",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_components_dashboardshell",
@@ -76481,7 +76514,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/_components/DashboardShell.tsx",
-      "source_location": "L144",
+      "source_location": "L148",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_components_dashboardshell",
@@ -82719,7 +82752,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L462",
+      "source_location": "L463",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82730,7 +82763,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L692",
+      "source_location": "L693",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82741,7 +82774,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L419",
+      "source_location": "L420",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82752,7 +82785,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L488",
+      "source_location": "L489",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82763,7 +82796,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L563",
+      "source_location": "L564",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82774,7 +82807,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L586",
+      "source_location": "L587",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82785,7 +82818,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L618",
+      "source_location": "L619",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82796,7 +82829,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L447",
+      "source_location": "L448",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82807,7 +82840,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L531",
+      "source_location": "L532",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82818,7 +82851,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L505",
+      "source_location": "L506",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82829,7 +82862,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L546",
+      "source_location": "L547",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82840,7 +82873,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L633",
+      "source_location": "L634",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82851,7 +82884,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L655",
+      "source_location": "L656",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82862,7 +82895,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L674",
+      "source_location": "L675",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82873,7 +82906,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L362",
+      "source_location": "L363",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82884,7 +82917,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L401",
+      "source_location": "L402",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82895,7 +82928,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L385",
+      "source_location": "L386",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82961,7 +82994,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L345",
+      "source_location": "L346",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -82972,7 +83005,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L765",
+      "source_location": "L766",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions",
@@ -83668,7 +83701,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L347",
+      "source_location": "L348",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsources",
@@ -83704,7 +83737,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L770",
+      "source_location": "L771",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_sethelpervisibilityaction",
@@ -83740,7 +83773,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L348",
+      "source_location": "L349",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsources",
@@ -83764,7 +83797,7 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L293",
+      "source_location": "L294",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsettings",
@@ -83909,7 +83942,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L318",
+      "source_location": "L319",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsettings",
@@ -83921,7 +83954,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L338",
+      "source_location": "L339",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsettings",
@@ -83933,7 +83966,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L317",
+      "source_location": "L318",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsettings",
@@ -83945,7 +83978,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L319",
+      "source_location": "L320",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsettings",
@@ -83957,7 +83990,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L290",
+      "source_location": "L291",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsettings",
@@ -83969,7 +84002,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L353",
+      "source_location": "L354",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsources",
@@ -83981,7 +84014,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L355",
+      "source_location": "L356",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsources",
@@ -83993,7 +84026,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L352",
+      "source_location": "L353",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsources",
@@ -84005,7 +84038,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L354",
+      "source_location": "L355",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_savehostedsources",
@@ -84017,7 +84050,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L370",
+      "source_location": "L371",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedticketaction",
@@ -84029,7 +84062,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L363",
+      "source_location": "L364",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedticketaction",
@@ -84041,7 +84074,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L393",
+      "source_location": "L394",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedticketreply",
@@ -84053,7 +84086,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L386",
+      "source_location": "L387",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedticketreply",
@@ -84065,7 +84098,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L409",
+      "source_location": "L410",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedticketnote",
@@ -84077,7 +84110,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L402",
+      "source_location": "L403",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedticketnote",
@@ -84089,7 +84122,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L430",
+      "source_location": "L431",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedcopilot",
@@ -84101,7 +84134,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L427",
+      "source_location": "L428",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedcopilot",
@@ -84113,7 +84146,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L454",
+      "source_location": "L455",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedknowledgepropose",
@@ -84125,7 +84158,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L448",
+      "source_location": "L449",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedknowledgepropose",
@@ -84137,7 +84170,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L472",
+      "source_location": "L473",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedcandidatereview",
@@ -84149,7 +84182,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L463",
+      "source_location": "L464",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedcandidatereview",
@@ -84161,7 +84194,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L495",
+      "source_location": "L496",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedfaqpropose",
@@ -84173,7 +84206,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L489",
+      "source_location": "L490",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedfaqpropose",
@@ -84185,7 +84218,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L515",
+      "source_location": "L516",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedmacrosave",
@@ -84197,7 +84230,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L506",
+      "source_location": "L507",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedmacrosave",
@@ -84209,7 +84242,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L538",
+      "source_location": "L539",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedmacrodelete",
@@ -84221,7 +84254,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L532",
+      "source_location": "L533",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedmacrodelete",
@@ -84233,7 +84266,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L554",
+      "source_location": "L555",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedmacrosend",
@@ -84245,7 +84278,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L547",
+      "source_location": "L548",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedmacrosend",
@@ -84257,7 +84290,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L571",
+      "source_location": "L572",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedhelpersave",
@@ -84269,7 +84302,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L573",
+      "source_location": "L574",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedhelpersave",
@@ -84281,7 +84314,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L575",
+      "source_location": "L576",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedhelpersave",
@@ -84293,7 +84326,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L564",
+      "source_location": "L565",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedhelpersave",
@@ -84305,7 +84338,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L602",
+      "source_location": "L603",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedincidentaction",
@@ -84317,7 +84350,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L598",
+      "source_location": "L599",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedincidentaction",
@@ -84329,7 +84362,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L594",
+      "source_location": "L595",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedincidentaction",
@@ -84341,7 +84374,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L625",
+      "source_location": "L626",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedincidentnotify",
@@ -84353,7 +84386,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L622",
+      "source_location": "L623",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedincidentnotify",
@@ -84365,7 +84398,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L647",
+      "source_location": "L648",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedradaraction",
@@ -84377,7 +84410,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L643",
+      "source_location": "L644",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedradaraction",
@@ -84389,7 +84422,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L639",
+      "source_location": "L640",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedradaraction",
@@ -84401,7 +84434,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L666",
+      "source_location": "L667",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedretentionpolicy",
@@ -84413,7 +84446,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L656",
+      "source_location": "L657",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedretentionpolicy",
@@ -84425,7 +84458,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L681",
+      "source_location": "L682",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedretentionsweep",
@@ -84437,7 +84470,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L675",
+      "source_location": "L676",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedretentionsweep",
@@ -84449,7 +84482,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L734",
+      "source_location": "L735",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedchannelsupdate",
@@ -84461,7 +84494,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L699",
+      "source_location": "L700",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedchannelsupdate",
@@ -84473,7 +84506,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L701",
+      "source_location": "L702",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedchannelsupdate",
@@ -84485,7 +84518,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L747",
+      "source_location": "L748",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedchannelsupdate",
@@ -84497,7 +84530,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L706",
+      "source_location": "L707",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedchannelsupdate",
@@ -84509,7 +84542,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L724",
+      "source_location": "L725",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedchannelsupdate",
@@ -84521,7 +84554,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L714",
+      "source_location": "L715",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedchannelsupdate",
@@ -84533,7 +84566,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L693",
+      "source_location": "L694",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_hostedchannelsupdate",
@@ -84545,7 +84578,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "pixie-wizard/app/wizard/hostedActions.ts",
-      "source_location": "L774",
+      "source_location": "L775",
       "weight": 1.0,
       "_origin": "ast",
       "source": "pixie_wizard_app_wizard_hostedactions_sethelpervisibilityaction",
@@ -95102,5 +95135,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "e0e99258285566c7eb22fa84a28dc4330acff8f1"
+  "built_at_commit": "952d94ed5485775df045503d412e257dcdbaefda"
 }
