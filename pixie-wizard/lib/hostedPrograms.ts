@@ -127,6 +127,8 @@ const UPDATABLE_PROGRAM_COLUMNS = new Set([
   "ai_answers",
   "tickets_enabled",
   "auto_escalate",
+  "incident_mode",
+  "public_tickets_enabled",
   "posture",
   "scope",
   "sensitive_categories",
@@ -157,6 +159,31 @@ export async function updateHostedProgram(id: string, patch: Partial<HostedProgr
   );
   if (!rows[0]) throw new Error(`hosted program ${id} not found`);
   return rows[0];
+}
+
+// Every Core sync attempt — activation, settings/sources saves, help-channel
+// move, cron reconcile — ends by recording the same triple on the program
+// row. One helper so a new sync site can't forget the error text or invert
+// the keep-old-timestamp-on-failure rule. keepSyncedAt omitted means the
+// timestamp column is left untouched (the reconcile-catch path, where even
+// reading the row already failed).
+export async function markSyncState(
+  programId: string,
+  sync: { ok: boolean; error?: string },
+  keepSyncedAt?: string | null,
+): Promise<HostedProgramRow> {
+  if (sync.ok) {
+    return updateHostedProgram(programId, {
+      core_sync_state: "synced",
+      core_sync_error: null,
+      core_synced_at: new Date().toISOString(),
+    });
+  }
+  return updateHostedProgram(programId, {
+    core_sync_state: "failed",
+    core_sync_error: sync.error ?? "unknown",
+    ...(keepSyncedAt === undefined ? {} : { core_synced_at: keepSyncedAt }),
+  });
 }
 
 export async function listHostedChannels(programId: string): Promise<HostedProgramChannel[]> {

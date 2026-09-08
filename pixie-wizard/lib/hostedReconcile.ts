@@ -8,7 +8,7 @@
 // Idempotent by construction: syncProgramToCore does a PUT keyed by program
 // id (Core's internalProgramSync upserts on that id), so re-sending the same
 // row twice is a no-op beyond overwriting Core's copy with the same values.
-import { listHostedProgramsPendingSync, listHostedChannels, updateHostedProgram } from "@/lib/hostedPrograms";
+import { listHostedProgramsPendingSync, listHostedChannels, markSyncState } from "@/lib/hostedPrograms";
 import { syncProgramToCore, coreConfigured } from "@/lib/pixieCore";
 import type { HostedProgramChannel } from "@/lib/types";
 
@@ -38,6 +38,8 @@ function buildSyncPayload(
     aiAnswers: program.ai_answers,
     ticketsEnabled: program.tickets_enabled,
     autoEscalate: program.auto_escalate,
+    incidentMode: program.incident_mode,
+    publicTicketsEnabled: program.public_tickets_enabled,
     autoAssign: settings.autoAssign === true,
     sources: program.sources,
     claimedBy: program.owner_slack_id,
@@ -60,11 +62,7 @@ export async function reconcileHostedSync(): Promise<ReconcileResult> {
       const channels = await listHostedChannels(program.id);
       const payload = buildSyncPayload(program, channels);
       const sync = await syncProgramToCore(program.id, payload);
-      await updateHostedProgram(program.id, {
-        core_sync_state: sync.ok ? "synced" : "failed",
-        core_sync_error: sync.ok ? null : (sync.error ?? "unknown"),
-        core_synced_at: sync.ok ? new Date().toISOString() : program.core_synced_at,
-      });
+      await markSyncState(program.id, sync, program.core_synced_at);
       if (sync.ok) result.synced += 1;
       else {
         result.stillFailed += 1;
@@ -74,7 +72,7 @@ export async function reconcileHostedSync(): Promise<ReconcileResult> {
       result.stillFailed += 1;
       const message = err instanceof Error ? err.message : "unknown error";
       result.errors.push({ programId: program.id, error: message });
-      await updateHostedProgram(program.id, { core_sync_state: "failed", core_sync_error: message }).catch(() => null);
+      await markSyncState(program.id, { ok: false, error: message }).catch(() => null);
     }
   }
   return result;

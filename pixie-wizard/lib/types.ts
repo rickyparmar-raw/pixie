@@ -54,6 +54,8 @@ export interface HostedProgramRow {
   ai_answers: boolean;
   tickets_enabled: boolean;
   auto_escalate: boolean;
+  incident_mode: "ANSWER_ONLY" | "ANSWER_AND_TRACK" | "NORMAL_TICKET";
+  public_tickets_enabled: boolean;
   posture: "active" | "passive" | "muted";
   scope: "any" | "program";
   sensitive_categories: string[];

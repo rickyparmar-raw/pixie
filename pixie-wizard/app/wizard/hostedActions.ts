@@ -5,10 +5,16 @@ import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { creatorEligible, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
 import { sourceUrlProblem } from "@/lib/sourceUrls";
-import { getHostedProgram, updateHostedProgram, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow } from "@/lib/hostedPrograms";
-import { relationshipFor } from "@/lib/programAccess";
+import { getHostedProgram, listHostedChannels, updateHostedProgram, markSyncState, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow } from "@/lib/hostedPrograms";
+import { relationshipFor, linkedSlackSession } from "@/lib/programAccess";
 import { query } from "@/lib/db";
-import { syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot, coreChannelMembership, coreConfigured, coreHelpersSync } from "@/lib/pixieCore";
+import {
+  syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot,
+  coreChannelMembership, coreConfigured, coreHelpersSync, coreHelpers, coreRoutingExpertise,
+  coreKnowledgePropose, coreKnowledgeReview, coreFaqPropose, coreMacroSave, coreMacroDelete,
+  coreMacroSend, coreIncidentDetect, coreIncidentAction, coreIncidentNotify,
+  coreRadarEvaluate, coreRadarAction, coreRetentionPolicy, coreRetentionSweep,
+} from "@/lib/pixieCore";
 import { validateActivationGuards } from "@/lib/activationGuards";
 import type { ActionState } from "@/lib/types";
 import type { DocSource } from "@/lib/types";
@@ -253,11 +259,7 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
     workspace_id: CENTRAL_WORKSPACE,
     programChannels: channels,
   });
-  await updateHostedProgram(slug, {
-    core_sync_state: sync.ok ? "synced" : "failed",
-    core_sync_error: sync.ok ? null : (sync.error ?? "unknown"),
-    core_synced_at: sync.ok ? new Date().toISOString() : patched.core_synced_at,
-  });
+  await markSyncState(slug, sync, patched.core_synced_at);
 
   redirect(`/programs/${slug}`);
   return { error: null };
@@ -265,9 +267,9 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
 
 export async function saveHostedSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const programId = String(formData.get("programId") ?? "");
-  const { session } = await requireProgramOwner(programId);
-  const program = await getHostedProgram(programId);
-  if (!program) return { error: "Program not found." };
+  // requireProgramOwner throws on missing program or non-owner — no second
+  // fetch needed, and the null check it replaced was unreachable.
+  const { session, program } = await requireProgramOwner(programId);
 
   const minutes = (name: string) => {
     const v = Number(formData.get(name) ?? "");
@@ -286,6 +288,11 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
     if (iconProb) return { error: `Invalid icon URL: ${iconProb}` };
   }
   const autoAssign = flagOn(formData, "autoAssign", false);
+  const VALID_INCIDENT_MODES = ["ANSWER_ONLY", "ANSWER_AND_TRACK", "NORMAL_TICKET"] as const;
+  const rawIncidentMode = String(formData.get("incidentMode") ?? program.incident_mode);
+  const incidentMode = (VALID_INCIDENT_MODES as readonly string[]).includes(rawIncidentMode)
+    ? (rawIncidentMode as (typeof VALID_INCIDENT_MODES)[number])
+    : program.incident_mode;
   const patch = {
     support_name: supportName,
     icon_url: iconUrl,
@@ -293,6 +300,8 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
     ai_answers: flagOn(formData, "aiAnswers", program.ai_answers),
     tickets_enabled: flagOn(formData, "ticketsEnabled", program.tickets_enabled),
     auto_escalate: flagOn(formData, "autoEscalate", program.auto_escalate),
+    incident_mode: incidentMode,
+    public_tickets_enabled: flagOn(formData, "publicTicketsEnabled", program.public_tickets_enabled),
     posture: (String(formData.get("posture") ?? program.posture) || program.posture) as "active" | "passive" | "muted",
     scope: (String(formData.get("scope") ?? program.scope) || program.scope) as "any" | "program",
     settings: {
@@ -314,16 +323,14 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
     aiAnswers: updated.ai_answers,
     ticketsEnabled: updated.tickets_enabled,
     autoEscalate: updated.auto_escalate,
+    incidentMode: updated.incident_mode,
+    publicTicketsEnabled: updated.public_tickets_enabled,
     autoAssign,
     sensitiveCategories: String(formData.get("sensitiveCategories") ?? "").split(",").map((t) => t.trim()).filter(Boolean),
     sources: updated.sources,
     sla: Object.fromEntries(Object.entries(sla).filter(([, v]) => v !== null)),
   });
-  await updateHostedProgram(programId, {
-    core_sync_state: sync.ok ? "synced" : "failed",
-    core_sync_error: sync.ok ? null : (sync.error ?? "unknown"),
-    core_synced_at: sync.ok ? new Date().toISOString() : updated.core_synced_at,
-  });
+  await markSyncState(programId, sync, updated.core_synced_at);
 
   revalidatePath(`/programs/${programId}`);
   return { error: null };
@@ -339,11 +346,7 @@ export async function saveHostedSources(_prev: ActionState, formData: FormData):
   const updated = await updateHostedProgram(programId, { sources });
   await logHostedAudit({ programId, actorHcaId: session.hcaId, actorSlackId: session.slackId, action: "program.sources_updated", entityType: "program", entityId: programId, metadata: { count: sources.length } });
   const sync = await syncProgramToCore(programId, { name: updated.program_name, workspaceId: updated.workspace_id, sources });
-  await updateHostedProgram(programId, {
-    core_sync_state: sync.ok ? "synced" : "failed",
-    core_sync_error: sync.ok ? null : (sync.error ?? "unknown"),
-    core_synced_at: sync.ok ? new Date().toISOString() : updated.core_synced_at,
-  });
+  await markSyncState(programId, sync, updated.core_synced_at);
   revalidatePath(`/programs/${programId}`);
   return { error: null };
 }
@@ -351,8 +354,8 @@ export async function saveHostedSources(_prev: ActionState, formData: FormData):
 // Ticket workspace actions. The acting Slack user is the logged-in owner's
 // linked Slack id; Core re-verifies helper membership before mutating.
 export async function hostedTicketAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account to act on tickets." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account to act on tickets." };
   const programId = String(formData.get("programId") ?? "");
   const ticketId = Number(formData.get("ticketId") ?? "");
   const action = String(formData.get("ticketAction") ?? "");
@@ -374,8 +377,8 @@ export async function hostedTicketAction(_prev: ActionState, formData: FormData)
 }
 
 export async function hostedTicketReply(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account to reply." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account to reply." };
   const programId = String(formData.get("programId") ?? "");
   const ticketId = Number(formData.get("ticketId") ?? "");
   const text = String(formData.get("replyText") ?? "").trim();
@@ -390,14 +393,13 @@ export async function hostedTicketReply(_prev: ActionState, formData: FormData):
 }
 
 export async function hostedTicketNote(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account to add notes." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account to add notes." };
   const programId = String(formData.get("programId") ?? "");
   const ticketId = Number(formData.get("ticketId") ?? "");
   const bodyText = String(formData.get("noteBody") ?? "").trim();
   if (!programId || !ticketId || !bodyText) return { error: "Write a note first." };
   try {
-    const { coreTicketNote } = await import("@/lib/pixieCore");
     await coreTicketNote(ticketId, { programId, actorId: session.slackId, body: bodyText });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Note failed." };
@@ -416,8 +418,8 @@ export async function hostedCopilot(input: {
   text?: string;
   threadTs?: string;
 }): Promise<{ ok: boolean; data?: unknown; error?: string }> {
-  const session = await getSession();
-  if (!session?.slackId) return { ok: false, error: "Link your Slack account to use copilot." };
+  const session = await linkedSlackSession();
+  if (!session) return { ok: false, error: "Link your Slack account to use copilot." };
   try {
     const data = await coreCopilot(input.action, {
       programId: input.programId,
@@ -437,13 +439,12 @@ export async function hostedCopilot(input: {
 // candidate, propose an FAQ draft from a gap cluster. Approval is the only
 // path into the corpus.
 export async function hostedKnowledgePropose(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
   const programId = String(formData.get("programId") ?? "");
   const ticketId = Number(formData.get("ticketId") ?? "");
   if (!programId || !ticketId) return { error: "Pick a resolved ticket first." };
   try {
-    const { coreKnowledgePropose } = await import("@/lib/pixieCore");
     await coreKnowledgePropose(programId, { actorId: session.slackId, ticketId });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Proposal failed." };
@@ -453,8 +454,8 @@ export async function hostedKnowledgePropose(_prev: ActionState, formData: FormD
 }
 
 export async function hostedCandidateReview(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
   const programId = String(formData.get("programId") ?? "");
   const candidateId = Number(formData.get("candidateId") ?? "");
   const reviewAction = String(formData.get("reviewAction") ?? "");
@@ -462,7 +463,6 @@ export async function hostedCandidateReview(_prev: ActionState, formData: FormDa
     return { error: "Missing review fields." };
   }
   try {
-    const { coreKnowledgeReview } = await import("@/lib/pixieCore");
     await coreKnowledgeReview(candidateId, {
       actorId: session.slackId,
       action: reviewAction,
@@ -480,13 +480,12 @@ export async function hostedCandidateReview(_prev: ActionState, formData: FormDa
 }
 
 export async function hostedFaqPropose(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
   const programId = String(formData.get("programId") ?? "");
   const question = String(formData.get("faqQuestion") ?? "").trim();
   if (!programId || !question) return { error: "Missing FAQ question." };
   try {
-    const { coreFaqPropose } = await import("@/lib/pixieCore");
     await coreFaqPropose(programId, { actorId: session.slackId, question });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "FAQ proposal failed." };
@@ -498,8 +497,8 @@ export async function hostedFaqPropose(_prev: ActionState, formData: FormData): 
 // Macros: organizer-managed, helper-invoked. Sends go through Core so program
 // branding, permissions, and optional ticket transitions all apply.
 export async function hostedMacroSave(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
   const programId = String(formData.get("programId") ?? "");
   const id = Number(formData.get("macroId") ?? "");
   const trigger = String(formData.get("trigger") ?? "").trim();
@@ -507,7 +506,6 @@ export async function hostedMacroSave(_prev: ActionState, formData: FormData): P
   const content = String(formData.get("macroContent") ?? "").trim();
   if (!programId || !trigger || !name || !content) return { error: "Trigger, name, and content are required." };
   try {
-    const { coreMacroSave } = await import("@/lib/pixieCore");
     await coreMacroSave(programId, {
       actorId: session.slackId,
       ...(id ? { id } : {}),
@@ -525,13 +523,12 @@ export async function hostedMacroSave(_prev: ActionState, formData: FormData): P
 }
 
 export async function hostedMacroDelete(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
   const programId = String(formData.get("programId") ?? "");
   const id = Number(formData.get("macroId") ?? "");
   if (!programId || !id) return { error: "Missing macro fields." };
   try {
-    const { coreMacroDelete } = await import("@/lib/pixieCore");
     await coreMacroDelete(id, { actorId: session.slackId });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Macro delete failed." };
@@ -541,14 +538,13 @@ export async function hostedMacroDelete(_prev: ActionState, formData: FormData):
 }
 
 export async function hostedMacroSend(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
   const programId = String(formData.get("programId") ?? "");
   const id = Number(formData.get("macroId") ?? "");
   const ticketId = Number(formData.get("ticketId") ?? "");
   if (!programId || !id || !ticketId) return { error: "Pick a macro and a ticket first." };
   try {
-    const { coreMacroSend } = await import("@/lib/pixieCore");
     await coreMacroSend(id, { actorId: session.slackId, ticketId });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Macro send failed." };
@@ -559,14 +555,13 @@ export async function hostedMacroSend(_prev: ActionState, formData: FormData): P
 
 // Helpers: manual membership, expertise tags, reconciliation.
 export async function hostedHelperSave(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
   const programId = String(formData.get("programId") ?? "");
   const userId = String(formData.get("helperUserId") ?? "").trim();
   const tags = String(formData.get("helperTags") ?? "").split(",").map((t) => t.trim()).filter(Boolean);
   if (!programId || !userId) return { error: "Helper user ID is required." };
   try {
-    const { coreHelpers, coreHelpersSync, coreRoutingExpertise } = await import("@/lib/pixieCore");
     const current = ((await coreHelpers(programId)) as Array<{ user_id: string }>) ?? [];
     const members = [...new Set([...current.map((h) => h.user_id), userId])];
     await coreHelpersSync(programId, { actorId: session.slackId, members, source: "manual" });
@@ -580,18 +575,19 @@ export async function hostedHelperSave(_prev: ActionState, formData: FormData): 
   return { error: null };
 }
 
-// Incidents: detect/confirm/dismiss/resolve/link/unlink. Announcement drafts
-// return data for display; posting stays human.
+// Incidents: detect/confirm/dismiss/resolve/link/unlink/declare. Announcement
+// drafts return data for display; posting stays human.
 export async function hostedIncidentAction(input: {
   programId: string;
   incidentId?: number;
   action: string;
   ticketId?: number;
+  description?: string;
+  publicMessage?: string;
 }): Promise<{ ok: boolean; data?: unknown; error?: string }> {
-  const session = await getSession();
-  if (!session?.slackId) return { ok: false, error: "Link your Slack account first." };
+  const session = await linkedSlackSession();
+  if (!session) return { ok: false, error: "Link your Slack account first." };
   try {
-    const { coreIncidentDetect, coreIncidentAction } = await import("@/lib/pixieCore");
     if (input.action === "detect") {
       const data = await coreIncidentDetect(input.programId, { actorId: session.slackId });
       return { ok: true, data };
@@ -601,6 +597,8 @@ export async function hostedIncidentAction(input: {
       actorId: session.slackId,
       action: input.action,
       ticketId: input.ticketId,
+      description: input.description,
+      publicMessage: input.publicMessage,
     });
     return { ok: true, data };
   } catch (err) {
@@ -608,10 +606,49 @@ export async function hostedIncidentAction(input: {
   }
 }
 
+// Affected-user resolution notice: an explicit, human-triggered, retry-safe
+// broadcast to every thread that got the "known issue" answer while this
+// incident was active. Never fires on its own.
+export async function hostedIncidentNotify(input: {
+  incidentId: number;
+  resolutionMessage?: string;
+}): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  const session = await linkedSlackSession();
+  if (!session) return { ok: false, error: "Link your Slack account first." };
+  try {
+    const data = await coreIncidentNotify(input.incidentId, { actorId: session.slackId, resolutionMessage: input.resolutionMessage });
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Notify failed." };
+  }
+}
+
+// Support Radar: on-demand refresh plus acknowledge/resolve/suppress on one signal.
+export async function hostedRadarAction(input: {
+  programId: string;
+  signalId?: number;
+  action: "evaluate" | "acknowledge" | "resolve" | "suppress";
+  duration?: "1h" | "24h" | "7d";
+}): Promise<{ ok: boolean; data?: unknown; error?: string }> {
+  const session = await linkedSlackSession();
+  if (!session) return { ok: false, error: "Link your Slack account first." };
+  try {
+    if (input.action === "evaluate") {
+      const data = await coreRadarEvaluate(input.programId, { actorId: session.slackId });
+      return { ok: true, data };
+    }
+    if (!input.signalId) return { ok: false, error: "Missing signal." };
+    const data = await coreRadarAction(input.signalId, { actorId: session.slackId, action: input.action, duration: input.duration });
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Radar action failed." };
+  }
+}
+
 // Retention: policy update (helpers) and confirmed sweep (organizers).
 export async function hostedRetentionPolicy(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
   const programId = String(formData.get("programId") ?? "");
   if (!programId) return { error: "Missing program." };
   const policy: Record<string, number> = {};
@@ -620,7 +657,6 @@ export async function hostedRetentionPolicy(_prev: ActionState, formData: FormDa
     if (Number.isFinite(v) && v > 0) policy[key] = v;
   }
   try {
-    const { coreRetentionPolicy } = await import("@/lib/pixieCore");
     await coreRetentionPolicy(programId, { actorId: session.slackId, policy });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Retention update failed." };
@@ -630,13 +666,12 @@ export async function hostedRetentionPolicy(_prev: ActionState, formData: FormDa
 }
 
 export async function hostedRetentionSweep(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await getSession();
-  if (!session?.slackId) return { error: "Link your Slack account first." };
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
   const programId = String(formData.get("programId") ?? "");
   const confirm = String(formData.get("confirm") ?? "");
   if (!programId || confirm !== `DELETE ${programId}`) return { error: "Type the exact confirmation phrase to sweep." };
   try {
-    const { coreRetentionSweep } = await import("@/lib/pixieCore");
     await coreRetentionSweep(programId, { actorId: session.slackId, confirm: true });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Retention sweep failed." };
@@ -655,15 +690,12 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
   const rawNew = String(formData.get("newHelpChannelId") ?? formData.get("newHelpChannelIdRaw") ?? "").trim();
   if (!programId || !rawNew) return { error: "Pick a new help channel." };
 
-  const { getHostedProgram } = await import("@/lib/hostedPrograms");
   const program = await getHostedProgram(programId);
   if (!program || program.owner_hca_id !== session.hcaId) return { error: "Only the program owner can move channels." };
-  const { listHostedChannels } = await import("@/lib/hostedPrograms");
   const current = await listHostedChannels(programId);
   const oldHelp = current.find((c) => c.kind === "help");
   if (oldHelp && oldHelp.channel_id === rawNew) return { error: "That's already the help channel." };
 
-  const { coreChannelMembership, syncProgramToCore } = await import("@/lib/pixieCore");
   try {
     const membership = await coreChannelMembership(rawNew);
     if (!membership.ok || !membership.hasAccess) {
@@ -673,7 +705,6 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
     return { error: "Could not verify channel access — is Pixie Core running?" };
   }
 
-  const { claimHostedChannels } = await import("@/lib/programClaim");
   const claim = await claimHostedChannels({
     workspaceId: program.workspace_id,
     programId,
@@ -707,7 +738,6 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
       [program.workspace_id, oldHelp.channel_id, programId],
     );
   }
-  const { logHostedAudit } = await import("@/lib/hostedPrograms");
   await logHostedAudit({
     programId,
     actorHcaId: session.hcaId,

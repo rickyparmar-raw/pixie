@@ -19,9 +19,17 @@ export interface ChannelClaim {
   kind: "help" | "organizer" | "discussion" | "announcement";
 }
 
+// One shape rule for derived and custom slugs alike — a display name and a
+// hand-typed slug must clear the same bar, or activation and settings drift.
+const SLUG_SHAPE = /^[a-z0-9][a-z0-9-]{1,60}[a-z0-9]$/;
+
+export function isSlugShape(slug: string): boolean {
+  return SLUG_SHAPE.test(slug);
+}
+
 export function programSlugFor(name: string): string {
   const slug = slugify(name);
-  if (!/^[a-z0-9][a-z0-9-]{1,60}[a-z0-9]$/.test(slug)) {
+  if (!isSlugShape(slug)) {
     throw new Error("Program name must produce a 3-62 char lowercase slug.");
   }
   return slug;
@@ -30,13 +38,13 @@ export function programSlugFor(name: string): string {
 export function validateOrDeriveSlug(name: string, customSlug?: string | null): string {
   if (customSlug && customSlug.trim()) {
     const raw = customSlug.trim();
-    if (!/^[a-z0-9][a-z0-9-]{1,60}[a-z0-9]$/.test(raw)) {
+    if (!isSlugShape(raw)) {
       throw new Error("Custom slug must be 3-62 characters, lowercase alphanumeric and hyphens (e.g. 'my-program').");
     }
     return raw;
   }
   const slug = slugify(name);
-  if (!/^[a-z0-9][a-z0-9-]{1,60}[a-z0-9]$/.test(slug)) {
+  if (!isSlugShape(slug)) {
     throw new Error("Program name must produce a 3-62 char lowercase slug (alphanumeric and hyphens).");
   }
   return slug;

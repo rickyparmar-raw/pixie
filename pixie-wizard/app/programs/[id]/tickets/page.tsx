@@ -13,7 +13,7 @@ interface TicketRow {
   created_at: number;
 }
 
-const STATUSES = ["open", "assigned", "waiting_for_helper", "escalated", "resolved", "reopened", "closed", "snoozed", "duplicate"];
+const STATUSES = ["open", "ai_answered", "waiting_for_helper", "assigned", "escalated", "resolved", "reopened", "closed", "snoozed", "duplicate"];
 
 function pageHref(query: Record<string, string | undefined>, page: number): string {
   const params = new URLSearchParams();

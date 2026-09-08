@@ -31,6 +31,16 @@ export interface ProgramMembership {
   relationship: Exclude<ProgramRelationship, "public">;
 }
 
+// Slack-linked session for Core-mutating actions. Core re-verifies helper
+// membership from actorId before mutating, but anonymous calls must not
+// reach it at all — every ticket/copilot/macro/helper/incident/radar
+// action starts here instead of repeating the getSession + slackId pair.
+export async function linkedSlackSession(): Promise<(WizardSession & { slackId: string }) | null> {
+  const session = await getSession();
+  if (!session || !session.slackId) return null;
+  return { ...session, slackId: session.slackId };
+}
+
 // The gate every management page (tickets, audit, analytics, settings, ...)
 // must call before reading or rendering anything program-specific. Redirects
 // to the public profile for a non-member — never throws, never renders a

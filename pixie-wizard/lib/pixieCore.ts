@@ -23,6 +23,19 @@ async function call(path: string, init: RequestInit = {}): Promise<{ status: num
   return { status: res.status, body };
 }
 
+// Every Core read/mutation below shares one contract: 200 with a JSON body,
+// otherwise the body's own error or a fixed fallback naming the operation.
+// One helper keeps a new endpoint from inventing a third error shape.
+async function request<T>(path: string, fallback: string, init?: RequestInit): Promise<T> {
+  const { status, body } = await call(path, init);
+  if (status !== 200) throw new Error((body as { error?: string })?.error || `${fallback} (${status})`);
+  return body as T;
+}
+
+function send(method: string, payload: Record<string, unknown>): RequestInit {
+  return { method, body: JSON.stringify(payload) };
+}
+
 export async function syncProgramToCore(programId: string, payload: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
   try {
     const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}`, {
@@ -38,90 +51,58 @@ export async function syncProgramToCore(programId: string, payload: Record<strin
 }
 
 export async function coreTicketSearch(params: Record<string, string>): Promise<{ total: number; rows: unknown[] }> {
-  const query = new URLSearchParams(params).toString();
-  const { status, body } = await call(`/internal/v1/tickets?${query}`);
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `ticket search failed (${status})`);
-  return body as { total: number; rows: unknown[] };
+  return request(`/internal/v1/tickets?${new URLSearchParams(params).toString()}`, "ticket search failed");
 }
 
 export async function coreTicketAction(ticketId: number, action: string, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/tickets/${ticketId}/${action}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `ticket action failed (${status})`);
-  return body;
+  return request(`/internal/v1/tickets/${ticketId}/${action}`, "ticket action failed", send("PATCH", payload));
 }
 
 export async function coreTicketReply(ticketId: number, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/tickets/${ticketId}/reply`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `ticket reply failed (${status})`);
-  return body;
+  return request(`/internal/v1/tickets/${ticketId}/reply`, "reply failed", send("POST", payload));
 }
 
 export async function coreTicketDetail(ticketId: number, programId: string): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/tickets/${ticketId}?programId=${encodeURIComponent(programId)}`);
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `ticket lookup failed (${status})`);
-  return body;
+  return request(`/internal/v1/tickets/${ticketId}?programId=${encodeURIComponent(programId)}`, "ticket lookup failed");
 }
 
 export async function coreTicketNote(ticketId: number, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/tickets/${ticketId}/notes`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `ticket note failed (${status})`);
-  return body;
+  return request(`/internal/v1/tickets/${ticketId}/notes`, "note failed", send("POST", payload));
 }
 
 export async function coreKnowledgeCandidates(programId: string, status = "candidate"): Promise<unknown[]> {
-  const { status: code, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/knowledge/candidates?status=${encodeURIComponent(status)}`);
-  if (code !== 200) throw new Error((body as { error?: string })?.error || `candidates lookup failed (${code})`);
-  return body as unknown[];
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/knowledge/candidates?status=${encodeURIComponent(status)}`,
+    "candidates lookup failed",
+  );
 }
 
 export async function coreKnowledgePropose(programId: string, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/knowledge/candidates`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `candidate proposal failed (${status})`);
-  return body;
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/knowledge/candidates`,
+    "candidate proposal failed",
+    send("POST", payload),
+  );
 }
 
 export async function coreKnowledgeReview(candidateId: number, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/knowledge/candidates/${candidateId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `candidate review failed (${status})`);
-  return body;
+  return request(`/internal/v1/knowledge/candidates/${candidateId}`, "candidate review failed", send("PATCH", payload));
 }
 
 export async function coreGapClusters(programId: string): Promise<{ clusters: unknown[] }> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/gaps/clusters`);
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `gap clusters failed (${status})`);
-  return body as { clusters: unknown[] };
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/gaps/clusters`, "gap clusters failed");
 }
 
-export async function coreFaqPropose(programId: string, payload: Record<string, unknown>): Promise<unknown> {  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/gaps/clusters`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `FAQ proposal failed (${status})`);
-  return body;
+export async function coreFaqPropose(programId: string, payload: Record<string, unknown>): Promise<unknown> {
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/gaps/clusters`,
+    "FAQ proposal failed",
+    send("POST", payload),
+  );
 }
 
 export async function coreCopilot(action: string, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/copilot/${action}`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `copilot ${action} failed (${status})`);
-  return body;
+  return request(`/internal/v1/copilot/${action}`, `copilot ${action} failed`, send("POST", payload));
 }
 
 export interface CoreChannel {
@@ -149,149 +130,120 @@ export async function coreUserInfo(userId: string): Promise<{ ok: boolean; displ
 }
 
 export async function coreMacrosList(programId: string, q = ""): Promise<unknown[]> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/macros${q ? `?q=${encodeURIComponent(q)}` : ""}`);
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `macros lookup failed (${status})`);
-  return body as unknown[];
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/macros${q ? `?q=${encodeURIComponent(q)}` : ""}`,
+    "macros lookup failed",
+  );
 }
 
 export async function coreMacroSave(programId: string, payload: Record<string, unknown> & { id?: number }): Promise<unknown> {
   if (payload.id) {
-    const { status, body } = await call(`/internal/v1/macros/${payload.id}`, {
-      method: "PATCH",
-      body: JSON.stringify(payload),
-    });
-    if (status !== 200) throw new Error((body as { error?: string })?.error || `macro update failed (${status})`);
-    return body;
+    return request(`/internal/v1/macros/${payload.id}`, "macro update failed", send("PATCH", payload));
   }
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/macros`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `macro create failed (${status})`);
-  return body;
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/macros`, "macro create failed", send("POST", payload));
 }
 
 export async function coreMacroDelete(macroId: number, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/macros/${macroId}`, {
-    method: "DELETE",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `macro delete failed (${status})`);
-  return body;
+  return request(`/internal/v1/macros/${macroId}`, "macro delete failed", send("DELETE", payload));
 }
 
 export async function coreMacroSend(macroId: number, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/macros/${macroId}`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `macro send failed (${status})`);
-  return body;
+  return request(`/internal/v1/macros/${macroId}`, "macro send failed", send("POST", payload));
 }
 
 export async function coreAnalytics(programId: string, days = 30): Promise<Record<string, unknown>> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/analytics?days=${days}`);
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `analytics failed (${status})`);
-  return body as Record<string, unknown>;
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/analytics?days=${days}`, "analytics failed");
 }
 
 export async function coreRoutingRecommend(programId: string, category?: string): Promise<unknown[]> {
-  const { status, body } = await call(
+  return request(
     `/internal/v1/programs/${encodeURIComponent(programId)}/routing/recommend${category ? `?category=${encodeURIComponent(category)}` : ""}`,
+    "routing failed",
   );
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `routing failed (${status})`);
-  return body as unknown[];
 }
 
 export async function coreRoutingExpertise(programId: string, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/routing/expertise`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `expertise update failed (${status})`);
-  return body;
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/routing/expertise`,
+    "expertise update failed",
+    send("PUT", payload),
+  );
 }
 
 export async function coreDuplicates(programId: string, params: Record<string, string>): Promise<unknown> {
-  const query = new URLSearchParams(params).toString();
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/duplicates?${query}`);
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `duplicates failed (${status})`);
-  return body;
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/duplicates?${new URLSearchParams(params).toString()}`,
+    "duplicates failed",
+  );
 }
 
 export async function coreIncidents(programId: string, status?: string): Promise<unknown[]> {
-  const { status: code, body } = await call(
+  return request(
     `/internal/v1/programs/${encodeURIComponent(programId)}/incidents${status ? `?status=${status}` : ""}`,
+    "incidents failed",
   );
-  if (code !== 200) throw new Error((body as { error?: string })?.error || `incidents failed (${code})`);
-  return body as unknown[];
 }
 
 export async function coreIncidentDetail(incidentId: number): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/incidents/${incidentId}`);
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `incident lookup failed (${status})`);
-  return body;
+  return request(`/internal/v1/incidents/${incidentId}`, "incident lookup failed");
 }
 
 export async function coreIncidentDetect(programId: string, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/incidents`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `incident detection failed (${status})`);
-  return body;
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/incidents`, "incident detection failed", send("POST", payload));
 }
 
 export async function coreIncidentAction(incidentId: number, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/incidents/${incidentId}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `incident action failed (${status})`);
-  return body;
+  return request(`/internal/v1/incidents/${incidentId}`, "incident action failed", send("PATCH", payload));
+}
+
+export async function coreIncidentNotify(incidentId: number, payload: Record<string, unknown>): Promise<unknown> {
+  return request(`/internal/v1/incidents/${incidentId}/notify`, "incident notify failed", send("POST", payload));
+}
+
+export async function coreIncidentAffected(incidentId: number): Promise<{ total: number; unnotified: number; reports: unknown[] }> {
+  return request(`/internal/v1/incidents/${incidentId}/affected`, "incident affected-reports failed");
+}
+
+export async function coreRadarList(programId: string, params: Record<string, string> = {}): Promise<{ signals: unknown[] }> {
+  const query = new URLSearchParams(params).toString();
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/radar${query ? `?${query}` : ""}`,
+    "radar list failed",
+  );
+}
+
+export async function coreRadarEvaluate(programId: string, payload: Record<string, unknown>): Promise<unknown> {
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/radar`, "radar evaluate failed", send("POST", payload));
+}
+
+export async function coreRadarAction(signalId: number, payload: Record<string, unknown>): Promise<unknown> {
+  return request(`/internal/v1/radar/${signalId}`, "radar action failed", send("PATCH", payload));
+}
+
+export async function coreHealthScore(programId: string): Promise<Record<string, unknown>> {
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/health`, "health score failed");
 }
 
 export async function coreRetentionPreview(programId: string): Promise<Record<string, unknown>> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/retention`);
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `retention preview failed (${status})`);
-  return body as Record<string, unknown>;
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/retention`, "retention preview failed");
 }
 
 export async function coreRetentionPolicy(programId: string, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/retention`, {
-    method: "PATCH",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `retention update failed (${status})`);
-  return body;
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/retention`, "retention update failed", send("PATCH", payload));
 }
 
 export async function coreRetentionSweep(programId: string, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/retention`, {
-    method: "POST",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `retention sweep failed (${status})`);
-  return body;
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/retention`, "retention sweep failed", send("POST", payload));
 }
 
 export async function coreHelpers(programId: string): Promise<unknown[]> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers`);
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `helpers lookup failed (${status})`);
-  return body as unknown[];
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers`, "helpers lookup failed");
 }
 
 export async function coreAudit(programId: string): Promise<unknown[]> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/audit?limit=100`);
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `audit lookup failed (${status})`);
-  return body as unknown[];
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/audit?limit=100`, "audit lookup failed");
 }
 
 export async function coreHelpersSync(programId: string, payload: Record<string, unknown>): Promise<unknown> {
-  const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers`, {
-    method: "PUT",
-    body: JSON.stringify(payload),
-  });
-  if (status !== 200) throw new Error((body as { error?: string })?.error || `helpers sync failed (${status})`);
-  return body;
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers`, "helpers sync failed", send("PUT", payload));
 }

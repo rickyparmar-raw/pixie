@@ -56,6 +56,19 @@ create unique index if not exists hosted_programs_live_slug_unique
 create index if not exists hosted_programs_owner_idx
   on hosted_programs (owner_hca_id, status);
 
+-- How an ACTIVE Core incident affects a new matching question — mirrors
+-- Core's programs.incident_mode (lib/schema.js). Added after the table
+-- already existed in deployed databases; see the visible_on_profile
+-- pattern above for why this is a separate alter, not part of the create.
+alter table hosted_programs add column if not exists incident_mode text not null default 'ANSWER_AND_TRACK'
+  check (incident_mode in ('ANSWER_ONLY', 'ANSWER_AND_TRACK', 'NORMAL_TICKET'));
+
+-- Mirrors Core's programs.public_tickets_enabled (lib/schema.js): an
+-- independent kill switch for auto-opening tickets from this program's
+-- public help channel, toggleable here or live via /pixie-program tickets
+-- on|off run in that channel.
+alter table hosted_programs add column if not exists public_tickets_enabled boolean not null default true;
+
 -- Explicit channel claims. The unique (workspace, channel) primary key is
 -- the atomic anti-hijack guard: claiming an owned channel fails the insert,
 -- and the claimant learns the owning program instead of stealing the channel.

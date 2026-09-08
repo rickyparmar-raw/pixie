@@ -70,6 +70,13 @@ async function startBot() {
   } catch (e) {
     log.error("sla", "loop failed to start:", e.message);
   }
+  // Support Radar detectors, same single-flight-across-replicas shape as the
+  // SLA loop — see lib/radar.js.
+  try {
+    require("./lib/radar").startRadarLoop();
+  } catch (e) {
+    log.error("radar", "loop failed to start:", e.message);
+  }
 
   // Web console: starts if SLACK_CLIENT_ID is set, silently skipped otherwise.
   const webServer = web.start();

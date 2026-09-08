@@ -3,7 +3,7 @@ import Link from "next/link";
 export const programNav = [
   ["", "Overview"], ["tickets", "Tickets"], ["knowledge", "Knowledge"],
   ["gaps", "FAQ Gaps"], ["helpers", "Helpers"], ["macros", "Macros"],
-  ["analytics", "Analytics"], ["incidents", "Incidents"], ["audit", "Audit"],
+  ["analytics", "Analytics"], ["radar", "Support Radar"], ["incidents", "Incidents"], ["audit", "Audit"],
 ];
 
 export function DashboardShell({ children, programId, programName }: { children: React.ReactNode; programId?: string; programName?: string }) {

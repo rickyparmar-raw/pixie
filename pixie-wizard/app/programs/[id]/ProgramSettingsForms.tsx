@@ -66,6 +66,20 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
           <input type="checkbox" name="autoAssign" value="on" /> Auto-assign to the recommended helper
         </label>
         <div>
+          <label htmlFor="incidentMode" className={labelClass}>When an incident is active</label>
+          <select id="incidentMode" name="incidentMode" defaultValue={program.incident_mode} className={inputClass}>
+            <option value="ANSWER_AND_TRACK">Answer with the known issue, track affected threads (recommended)</option>
+            <option value="ANSWER_ONLY">Answer with the known issue only</option>
+            <option value="NORMAL_TICKET">Always open a normal ticket</option>
+          </select>
+          <p className="mt-1 text-xs text-text-muted">Applies only while an incident on Support Radar is declared active.</p>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-text">
+          <input type="hidden" name="publicTicketsEnabled" value="off" />
+          <input type="checkbox" name="publicTicketsEnabled" value="on" defaultChecked={program.public_tickets_enabled} /> Auto-open tickets from the public help channel
+        </label>
+        <p className="-mt-2 text-xs text-text-muted">Turn off to stop new tickets from the help channel specifically — Pixie keeps answering. Helpers can also toggle this live with <code>/pixie-program tickets on|off</code> in the channel.</p>
+        <div>
           <label htmlFor="sensitiveCategories" className={labelClass}>Human-only categories (comma-separated)</label>
           <input id="sensitiveCategories" name="sensitiveCategories" placeholder="money, reimbursement, safety" className={inputClass} />
           <p className="mt-1 text-xs text-text-muted">Matching questions skip the AI entirely and go straight to humans.</p>
