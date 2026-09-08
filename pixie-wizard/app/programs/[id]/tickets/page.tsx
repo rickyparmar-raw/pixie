@@ -92,21 +92,23 @@ export default async function TicketsPage({
             );
           })}
         </nav>
-        <form method="get" className="flex flex-wrap gap-2">
+        <form method="get" className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           {query.status && <input type="hidden" name="status" value={query.status} />}
           <input
             name="q"
             defaultValue={query.q ?? ""}
             placeholder="Search questions and summaries"
-            className="min-w-0 flex-1 rounded-[var(--radius)] border border-line bg-panel-2 px-3 py-1.5 text-sm text-text placeholder:text-text-muted focus:border-brand focus:outline-none"
+            className="w-full min-w-0 rounded-[var(--radius)] border border-line bg-panel-2 px-3 py-1.5 text-sm text-text placeholder:text-text-muted focus:border-brand focus:outline-none sm:flex-1"
           />
-          <input
-            name="assignee"
-            defaultValue={query.assignee ?? ""}
-            placeholder="Assignee ID"
-            className="w-36 rounded-[var(--radius)] border border-line bg-panel-2 px-2.5 py-1.5 font-mono text-xs text-text placeholder:text-text-muted focus:border-brand focus:outline-none"
-          />
-          <button type="submit" className="pixie-button pixie-button-quiet">Search</button>
+          <div className="flex gap-2">
+            <input
+              name="assignee"
+              defaultValue={query.assignee ?? ""}
+              placeholder="Assignee ID"
+              className="min-w-0 flex-1 rounded-[var(--radius)] border border-line bg-panel-2 px-2.5 py-1.5 font-mono text-xs text-text placeholder:text-text-muted focus:border-brand focus:outline-none sm:w-36 sm:flex-none"
+            />
+            <button type="submit" className="pixie-button pixie-button-quiet">Search</button>
+          </div>
         </form>
       </div>
 

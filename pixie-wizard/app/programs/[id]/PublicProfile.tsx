@@ -31,8 +31,8 @@ export function PublicProfile({
           {profile.programName.slice(0, 2).toUpperCase()}
         </span>
         <div>
-          <h1 className="text-lg font-medium text-text">{profile.programName}</h1>
-          {profile.supportName && <p className="mt-0.5 text-sm text-text-muted">Support identity: {profile.supportName}</p>}
+          <h1 className="font-heading text-xl text-text">{profile.programName}</h1>
+          {profile.supportName && <p className="mt-0.5 text-sm text-text-muted">Answers as {profile.supportName}</p>}
         </div>
         <div className="ml-auto">
           <StatusBadge status={profile.status === "active" ? "Active" : profile.status} />

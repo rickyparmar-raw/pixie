@@ -31,13 +31,18 @@ export default async function ProgramsIndex() {
   const withRelationship = await Promise.all(
     programs.map(async (p) => ({ program: p, relationship: await relationshipFor(p, session) })),
   );
+  // Your programs first (owner, then admin, then helper), each group by name;
+  // programs you only have public access to fall to the bottom.
+  const rank: Record<ProgramRelationship, number> = { owner: 0, admin: 1, helper: 2, public: 3 };
+  withRelationship.sort(
+    (a, b) => rank[a.relationship] - rank[b.relationship] || a.program.program_name.localeCompare(b.program.program_name),
+  );
 
   return (
     <DashboardShell crumb="Programs">
       <PageHeader
         title="Programs"
         description="Every active hosted Pixie program. Membership only changes what you can manage."
-        actions={<Link href="/wizard?mode=hosted" className="pixie-button pixie-button-primary">New program</Link>}
       />
 
       {withRelationship.length === 0 ? (
