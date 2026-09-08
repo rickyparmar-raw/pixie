@@ -29,6 +29,11 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
           </div>
         </div>
         <div>
+          <label htmlFor="replySignature" className={labelClass}>Reply sign-off</label>
+          <input id="replySignature" name="replySignature" defaultValue={program.reply_signature ?? ""} maxLength={120} placeholder="e.g. stay wired :hardwire:" className={inputClass} />
+          <p className="mt-1 text-xs text-text-muted">Appended to Pixie&apos;s own answers. Never added to escalations, incident notices or errors. Leave blank for none.</p>
+        </div>
+        <div>
           <label htmlFor="programDescription" className={labelClass}>Program description</label>
           <textarea id="programDescription" name="programDescription" defaultValue={program.program_description ?? ""} rows={2} className={inputClass} />
         </div>

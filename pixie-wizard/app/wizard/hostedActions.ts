@@ -282,6 +282,9 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
   };
   const supportName = String(formData.get("supportName") ?? program.support_name ?? "").trim() || program.support_name;
   const iconUrl = String(formData.get("iconUrl") ?? program.icon_url ?? "").trim() || null;
+  // A short catchphrase the program appends to its genuine answers only.
+  // Empty clears it. Kept short so it reads as a sign-off, not a paragraph.
+  const replySignature = String(formData.get("replySignature") ?? "").trim().slice(0, 120) || null;
   const programDescription = String(formData.get("programDescription") ?? program.program_description ?? "").trim() || null;
   if (iconUrl) {
     const iconProb = sourceUrlProblem(iconUrl);
@@ -296,6 +299,7 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
   const patch = {
     support_name: supportName,
     icon_url: iconUrl,
+    reply_signature: replySignature,
     program_description: programDescription,
     ai_answers: flagOn(formData, "aiAnswers", program.ai_answers),
     tickets_enabled: flagOn(formData, "ticketsEnabled", program.tickets_enabled),
@@ -318,6 +322,7 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
     workspaceId: updated.workspace_id,
     supportName: updated.support_name,
     iconUrl: updated.icon_url,
+    replySignature: updated.reply_signature,
     posture: updated.posture,
     scope: updated.scope,
     aiAnswers: updated.ai_answers,

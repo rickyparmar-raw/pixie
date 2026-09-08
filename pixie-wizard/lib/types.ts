@@ -47,6 +47,10 @@ export interface HostedProgramRow {
   program_description?: string | null;
   support_name: string | null;
   icon_url: string | null;
+  // A fixed line the program appends to its genuine AI/FAQ answers only
+  // (Hardwire: "stay wired :hardwire:"). Never on escalations, incidents,
+  // errors or status changes. NULL = no signature, default behaviour.
+  reply_signature: string | null;
   owner_hca_id: string;
   owner_slack_id: string | null;
   deployment_mode: DeploymentMode;

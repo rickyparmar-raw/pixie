@@ -29,6 +29,7 @@ export async function GET(req: Request) {
     workspace: p.workspace_id,
     support_name: p.support_name,
     icon_url: p.icon_url,
+    reply_signature: p.reply_signature,
     posture: p.posture,
     scope: p.scope,
     ai_answers: p.ai_answers,

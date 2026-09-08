@@ -20,6 +20,7 @@ create table if not exists hosted_programs (
   program_description text,
   support_name text,
   icon_url text,
+  reply_signature text,
   owner_hca_id text not null,
   owner_slack_id text,
   deployment_mode text not null default 'hosted_shared'

@@ -123,6 +123,7 @@ export async function listHostedProgramsPendingSync(): Promise<HostedProgramRow[
 const UPDATABLE_PROGRAM_COLUMNS = new Set([
   "support_name",
   "icon_url",
+  "reply_signature",
   "program_description",
   "ai_answers",
   "tickets_enabled",

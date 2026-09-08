@@ -31,6 +31,7 @@ function buildSyncPayload(
     workspaceId: program.workspace_id,
     supportName: program.support_name,
     iconUrl: program.icon_url,
+    replySignature: program.reply_signature,
     helpChannel,
     channels: channels.map((c) => c.channel_id),
     posture: program.posture,
