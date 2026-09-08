@@ -163,8 +163,8 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
             <Metric label="Resolved · 30d" value={resolved} tone="text-mint" />
           </div>
 
-          {/* primary: the support signal + what needs a person */}
-          <div className="grid gap-10 lg:grid-cols-[1.35fr_1fr]">
+          {/* primary: the support signal + its current state, and what needs a person */}
+          <div className="grid gap-10 lg:grid-cols-[1.4fr_1fr]">
             <Section
               title="Support pulse"
               description="Last 30 days."
@@ -179,9 +179,19 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
                 ]}
               />
               <p className="mt-5 text-xs text-text-muted">
-                {answered} of {questions} answered without a person.{" "}
-                {Number(analytics?.humanHandled ?? 0)} needed one.
+                {answered} of {questions} answered without a person. {Number(analytics?.humanHandled ?? 0)} needed one.
               </p>
+              <div className="mt-7 border-t border-line pt-5">
+                <p className="mb-3 text-xs text-text-muted">Open tickets by state</p>
+                <BarList>
+                  {STATE_ORDER.filter(([k]) => (byStatus[k] ?? 0) > 0).map(([k, label, tone]) => (
+                    <MiniBar key={k} label={label} value={byStatus[k] ?? 0} max={stateMax} tone={tone} />
+                  ))}
+                  {STATE_ORDER.every(([k]) => (byStatus[k] ?? 0) === 0) && (
+                    <EmptyState title="No tickets in the last 30 days." />
+                  )}
+                </BarList>
+              </div>
             </Section>
 
             <Section
@@ -209,30 +219,16 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
             </Section>
           </div>
 
-          {/* secondary: state + knowledge */}
-          <div className="grid gap-10 sm:grid-cols-2">
-            <Section title="Ticket state">
-              <BarList>
-                {STATE_ORDER.filter(([k]) => (byStatus[k] ?? 0) > 0).map(([k, label, tone]) => (
-                  <MiniBar key={k} label={label} value={byStatus[k] ?? 0} max={stateMax} tone={tone} />
-                ))}
-                {STATE_ORDER.every(([k]) => (byStatus[k] ?? 0) === 0) && (
-                  <EmptyState title="No tickets in the last 30 days." />
-                )}
-              </BarList>
-            </Section>
-
-            <Section
-              title="Knowledge"
-              actions={<Link href={`/programs/${id}/knowledge`} className="text-xs text-text-muted hover:text-text">Knowledge →</Link>}
-            >
-              <div className="space-y-1">
-                <KRow label="Sources" value={sourceCount} />
-                <KRow label="Open gaps" value={gapCount} tone={gapCount ? "text-tang" : "text-text"} />
-                <KRow label="Reopen rate" value={`${Math.round(Number(analytics?.reopenRate ?? 0) * 100)}%`} />
-                <KRow label="Deflection" value={`${Math.round(Number(analytics?.deflectionRate ?? 0) * 100)}%`} />
-              </div>
-            </Section>
+          {/* secondary: knowledge, one thin line */}
+          <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2 border-y border-line py-3 text-sm">
+            <span className="text-xs uppercase tracking-wide text-text-muted">Knowledge</span>
+            <KStat label="sources" value={sourceCount} />
+            <KStat label="open gaps" value={gapCount} tone={gapCount ? "text-tang" : "text-text"} />
+            <KStat label="reopen rate" value={`${Math.round(Number(analytics?.reopenRate ?? 0) * 100)}%`} />
+            <KStat label="deflection" value={`${Math.round(Number(analytics?.deflectionRate ?? 0) * 100)}%`} />
+            <Link href={`/programs/${id}/knowledge`} className="ml-auto text-xs text-text-muted hover:text-text">
+              Knowledge →
+            </Link>
           </div>
 
           {/* tertiary: what happened */}
@@ -284,12 +280,11 @@ function Metric({ label, value, tone = "text-text" }: { label: string; value: st
   );
 }
 
-function KRow({ label, value, tone = "text-text" }: { label: string; value: string | number; tone?: string }) {
+function KStat({ label, value, tone = "text-text" }: { label: string; value: string | number; tone?: string }) {
   return (
-    <div className="flex items-baseline justify-between gap-4 py-1.5 text-sm">
-      <span className="text-text-muted">{label}</span>
-      <span className={`font-mono tabular-nums ${tone}`}>{value}</span>
-    </div>
+    <span className="text-text-muted">
+      <span className={`font-mono tabular-nums ${tone}`}>{value}</span> {label}
+    </span>
   );
 }
 
@@ -304,7 +299,7 @@ function statusShort(s: string): string {
 // Turn a Core audit row into a ledger line: a ticket/entity ref, a plain
 // verb, and who did it. Never throws on an unfamiliar shape.
 function activityLine(e: AuditEvent, persona: string): { ref: string; verb: string; who: string } {
-  const ref = e.entity_type === "ticket" && e.entity_id ? `#${e.entity_id}` : "";
+  const ref = e.entity_id ? (e.entity_type === "ticket" ? `#${e.entity_id}` : e.entity_id) : "";
   const verb = e.action
     .replace(/^[a-z]+\./, "")
     .replace(/^ai[_ ]/, "")
