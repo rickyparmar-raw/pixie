@@ -12,11 +12,19 @@
   --color-text: #d7dbe4;
   --color-text-muted: #717b8d;
   --radius: 6px;
+  /* Two voices. Sans (Inter) carries product copy and headings; mono
+     (JetBrains) is reserved for operational text — ticket ids, timestamps,
+     states, source keys, metric figures. Both faces are loaded in layout.tsx
+     and set the matching CSS variable on <html>. */
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    sans-serif;
+  --font-heading:
+    "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono-heading:
     "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas,
     monospace;
-  --font-sans:
-    ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-mono-heading);
 }
 
 :root {
@@ -34,26 +42,40 @@ body {
 }
 
 body {
-  font-family: var(--font-mono-heading);
-  /* Dot texture: kept as identity, dialed down so pages read as negative
-     space rather than pattern. */
-  background-image:
-    radial-gradient(
-      circle at 1px 1px,
-      rgba(231, 233, 238, 0.045) 1px,
-      transparent 0
-    );
-  background-size: 22px 22px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
 ::selection {
   background: var(--color-brand);
-  color: white;
+  color: #0b0e13;
 }
 
+/* Headings — Space Grotesk. Distinctive but not decorative; never mono (a
+   heading is product copy, not machine output). */
 .font-heading {
-  font-family: var(--font-mono-heading);
-  letter-spacing: 0;
+  font-family: var(--font-heading);
+  font-weight: 500;
+  letter-spacing: -0.015em;
+}
+
+/* Pixie's dot texture. Opt-in per surface via this class — it marks a
+   "support-signal zone" (the hero, a product-story panel), never a default
+   page background. Put it on a decorative layer behind content, not on the
+   content's own element, so `dot-grid-fade` fades only the texture. */
+.dot-grid {
+  background-image:
+    radial-gradient(
+      circle at 1px 1px,
+      rgba(231, 233, 238, 0.07) 1px,
+      transparent 0
+    );
+  background-size: 20px 20px;
+}
+.dot-grid-fade {
+  -webkit-mask-image: linear-gradient(to bottom, #000 45%, transparent 92%);
+  mask-image: linear-gradient(to bottom, #000 45%, transparent 92%);
 }
 
 .pixie-panel { border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-panel); }
@@ -67,4 +89,4 @@ body {
 .pixie-button-quiet { border-color: var(--color-line); color: var(--color-text-muted); background: transparent; }
 .pixie-button-quiet:hover { color: var(--color-text); border-color: #3a4556; }
 
-@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; } }

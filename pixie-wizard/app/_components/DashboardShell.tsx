@@ -71,9 +71,9 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="mb-9 flex items-start justify-between gap-6">
+    <div className="mb-8 flex items-start justify-between gap-6">
       <div>
-        <h1 className="text-lg font-medium text-text">{title}</h1>
+        <h1 className="font-heading text-xl text-text">{title}</h1>
         {description && <p className="mt-1.5 max-w-prose text-sm text-text-muted">{description}</p>}
       </div>
       {actions && <div className="shrink-0">{actions}</div>}
@@ -128,7 +128,7 @@ export function MetricCard({
   return (
     <div>
       <p className="text-xs text-text-muted">{label}</p>
-      <p className={`mt-1.5 text-2xl tabular-nums ${tone}`}>{value}</p>
+      <p className={`mt-1 font-mono text-xl tabular-nums ${tone}`}>{value}</p>
       {detail && <p className="mt-1 text-[11px] text-text-muted">{detail}</p>}
     </div>
   );
@@ -140,7 +140,7 @@ export function MetricRow({ label, value, tone = "text-text" }: { label: string;
   return (
     <div className="flex items-baseline justify-between gap-4 py-1.5">
       <span className="text-sm text-text-muted">{label}</span>
-      <span className={`text-sm tabular-nums ${tone}`}>{value}</span>
+      <span className={`font-mono text-sm tabular-nums ${tone}`}>{value}</span>
     </div>
   );
 }
@@ -166,5 +166,140 @@ export function CoreError({ message }: { message: string }) {
     <p className="my-6 border-l-2 border-brand/60 pl-3 text-sm text-text-muted">
       {message} Pixie Core may be restarting; this page will recover on its own.
     </p>
+  );
+}
+
+/* ---------------------------------------------------------------------------
+   Support Signal — the shared visual language. A request moves
+   question → answer → ticket → human → resolved → knowledge; these
+   primitives render that motion from real counts and rows, never decoration.
+--------------------------------------------------------------------------- */
+
+// Operational text: ids, timestamps, states, source keys. Sans is the default
+// voice now, so machine text asks for mono explicitly.
+export function Mono({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <span className={`font-mono ${className}`}>{children}</span>;
+}
+
+function toneForStatus(s: string): string {
+  if (/resolved|healthy|active|synced|answered|ok\b/i.test(s)) return "bg-mint";
+  if (/fail|stale|critical|escalat|attention|reopen|error/i.test(s)) return "bg-brand";
+  if (/wait|pending|assigned|claim|review|candidate/i.test(s)) return "bg-tang";
+  return "bg-text-muted";
+}
+
+// Bare semantic dot + optional label. StatusBadge (above) is the same idea
+// with brand/mint/tang text colour; this one keeps the label in muted text
+// and only the dot carries state — quieter, for dense rows.
+export function StatusDot({ status, children }: { status: string; children?: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-text-muted">
+      <span className={`size-1.5 shrink-0 rounded-full ${toneForStatus(status)}`} aria-hidden />
+      {children ?? status}
+    </span>
+  );
+}
+
+export type Stage = { label: string; value: string | number; sub?: string; tone?: string };
+
+// The support-signal rail: a horizontal run of stages joined by a thin
+// connector with a node. `142 ──•── 98 ──•── 31 ──•── 120`, labels beneath.
+export function SignalRail({ stages, className = "" }: { stages: Stage[]; className?: string }) {
+  return (
+    <ol className={`flex items-start overflow-x-auto pb-1 ${className}`}>
+      {stages.map((s, i) => (
+        <li key={s.label} className="flex shrink-0 items-start">
+          <div className="min-w-[6.5rem] pr-1">
+            <div className={`font-mono text-2xl leading-none tabular-nums ${s.tone ?? "text-text"}`}>{s.value}</div>
+            <div className="mt-1.5 text-xs text-text-muted">{s.label}</div>
+            {s.sub ? <div className="mt-0.5 font-mono text-[11px] text-text-muted/70">{s.sub}</div> : null}
+          </div>
+          {i < stages.length - 1 && (
+            <div aria-hidden className="mx-1 flex items-center gap-1 pt-2.5 text-line sm:mx-2">
+              <span className="h-px w-5 bg-current sm:w-9" />
+              <span className="size-1 rounded-full bg-current" />
+              <span className="h-px w-5 bg-current sm:w-9" />
+            </div>
+          )}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+// One normalised horizontal bar. Widths share a `max` across a BarList so the
+// bars are comparable. The row is fully legible without the bar (screen
+// readers get label + value); the bar is the at-a-glance layer.
+export function MiniBar({
+  label,
+  value,
+  max,
+  tone = "bg-text-muted",
+}: {
+  label: React.ReactNode;
+  value: number;
+  max: number;
+  tone?: string;
+}) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  const width = value > 0 ? Math.max(pct, 2) : 0;
+  return (
+    <div className="grid grid-cols-[8.5rem_1fr_2.5rem] items-center gap-3 text-sm">
+      <span className="truncate text-text-muted">{label}</span>
+      <span className="h-1.5 overflow-hidden rounded-full bg-line/50">
+        <span className={`block h-full rounded-full ${tone}`} style={{ width: `${width}%` }} />
+      </span>
+      <span className="text-right font-mono tabular-nums text-text">{value}</span>
+    </div>
+  );
+}
+
+export function BarList({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-2">{children}</div>;
+}
+
+// A dense list row: optional mono lead (an id), primary text that can link,
+// a trailing meta cluster. Used by tickets, audit, knowledge, incidents,
+// helpers — anywhere the page is really a ledger.
+export function DataRow({
+  href,
+  lead,
+  title,
+  meta,
+  sub,
+}: {
+  href?: string;
+  lead?: React.ReactNode;
+  title: React.ReactNode;
+  meta?: React.ReactNode;
+  sub?: React.ReactNode;
+}) {
+  const body = (
+    <div className="flex items-baseline gap-3 py-2">
+      {lead != null && <span className="shrink-0 font-mono text-xs text-text-muted">{lead}</span>}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate text-sm text-text group-hover:text-brand">{title}</span>
+        {sub != null && <span className="mt-0.5 truncate text-xs text-text-muted">{sub}</span>}
+      </span>
+      {meta != null && <span className="shrink-0 text-xs text-text-muted">{meta}</span>}
+    </div>
+  );
+  return href ? (
+    <Link href={href} className="group block">
+      {body}
+    </Link>
+  ) : (
+    <div className="group">{body}</div>
+  );
+}
+
+// Empty state: one plain line of what would be here, one line of why it
+// isn't. No illustration, no confetti.
+export function EmptyState({ title, hint }: { title: string; hint?: string }) {
+  return (
+    <div className="py-1 text-sm">
+      <p className="text-text">{title}</p>
+      {hint ? <p className="mt-1 text-text-muted">{hint}</p> : null}
+    </div>
   );
 }
