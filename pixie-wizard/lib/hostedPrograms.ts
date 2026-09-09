@@ -301,13 +301,18 @@ export async function revokeHostedHelper(programId: string, slackUserId: string)
 }
 
 export async function upsertWizardPerson(input: { hcaId: string; email: string; displayName: string; slackUserId?: string | null; addedByHcaId?: string | null }): Promise<WizardPerson> {
+  const hcaId = input.hcaId.trim();
+  const email = input.email.trim().toLowerCase();
+  const displayName = input.displayName.trim();
+  const slackUserId = input.slackUserId?.trim() || null;
+  if (!hcaId || !email || !displayName) throw new Error("A verified HCA identity is required.");
   const { rows } = await query<WizardPerson>(
     `insert into wizard_people (hca_id, email, display_name, slack_user_id, added_by_hca_id)
      values ($1, $2, $3, $4, $5)
      on conflict (hca_id) do update set email = excluded.email, display_name = excluded.display_name,
        slack_user_id = coalesce(excluded.slack_user_id, wizard_people.slack_user_id), updated_at = now()
      returning *`,
-    [input.hcaId, input.email, input.displayName, input.slackUserId ?? null, input.addedByHcaId ?? null],
+    [hcaId, email, displayName, slackUserId, input.addedByHcaId ?? null],
   );
   return rows[0];
 }
@@ -343,4 +348,25 @@ export async function isWizardSuperadmin(hcaId: string): Promise<boolean> {
   const { rows } = await query<{ hca_id: string }>(`select hca_id from wizard_global_access where hca_id = $1`, [hcaId]);
   const allow = (process.env.PIXIE_WIZARD_SUPERADMIN_ALLOWLIST || "").split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
   return rows.length > 0 || allow.includes(hcaId.toLowerCase());
+}
+
+export async function hasPersistedWizardSuperadmin(hcaId: string): Promise<boolean> {
+  const { rows } = await query<{ hca_id: string }>(`select hca_id from wizard_global_access where hca_id = $1`, [hcaId]);
+  return rows.length > 0;
+}
+
+function bootstrapSuperadminIds(): string[] {
+  return (process.env.PIXIE_WIZARD_SUPERADMIN_ALLOWLIST || "").split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
+}
+
+export function isBootstrapSuperadmin(hcaId: string): boolean {
+  return bootstrapSuperadminIds().includes(hcaId.trim().toLowerCase());
+}
+
+export async function revokeWizardSuperadmin(hcaId: string, actorHcaId: string): Promise<void> {
+  if (isBootstrapSuperadmin(hcaId)) throw new Error("This person is still granted by PIXIE_WIZARD_SUPERADMIN_ALLOWLIST; remove them from deployment configuration first.");
+  const { rows } = await query<{ hca_id: string }>(`select hca_id from wizard_global_access where role = 'superadmin'`, []);
+  const effective = new Set([...rows.map((r) => r.hca_id.toLowerCase()), ...bootstrapSuperadminIds()]);
+  if (effective.size <= 1 && effective.has(hcaId.toLowerCase())) throw new Error("The final effective superadmin cannot be removed.");
+  await query(`delete from wizard_global_access where hca_id = $1`, [hcaId]);
 }

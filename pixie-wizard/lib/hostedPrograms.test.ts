@@ -187,6 +187,25 @@ test("wizard people and global access are program-scoped and idempotent", async 
   expect(await isWizardSuperadmin("H_PERSON")).toBe(true);
 });
 
+test("superadmin bootstrap allowlist is explicit and persisted revoke is possible", async () => {
+  mock.module("@/lib/db", () => createTestDb());
+  const { query } = await import("./db");
+  const { upsertWizardPerson, setWizardSuperadmin, revokeWizardSuperadmin, isWizardSuperadmin, isBootstrapSuperadmin } = await import("./hostedPrograms");
+  await upsertWizardPerson({ hcaId: "H_ROOT", email: "ROOT@EXAMPLE.COM", displayName: "Root" });
+  await upsertWizardPerson({ hcaId: "H_OTHER", email: "other@example.com", displayName: "Other" });
+  await setWizardSuperadmin("H_ROOT", "H_ROOT", true);
+  await setWizardSuperadmin("H_OTHER", "H_ROOT", true);
+  expect(await isWizardSuperadmin("H_ROOT")).toBe(true);
+  await revokeWizardSuperadmin("H_ROOT", "H_OTHER");
+  expect(await isWizardSuperadmin("H_ROOT")).toBe(false);
+  await expect(revokeWizardSuperadmin("H_OTHER", "H_OTHER")).rejects.toThrow(/final effective/);
+  process.env.PIXIE_WIZARD_SUPERADMIN_ALLOWLIST = "H_BOOT";
+  expect(isBootstrapSuperadmin("H_BOOT")).toBe(true);
+  await expect(revokeWizardSuperadmin("H_BOOT", "H_ROOT")).rejects.toThrow(/deployment configuration/);
+  delete process.env.PIXIE_WIZARD_SUPERADMIN_ALLOWLIST;
+  await query(`select 1`);
+});
+
 test("a helper hidden from the public profile still appears in the real (non-public) helper list — permissions preserved", async () => {
   mock.module("@/lib/db", () => createTestDb());
   const { query } = await import("./db");

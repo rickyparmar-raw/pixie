@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { getSession, ownsIdentifier } from "@/lib/session";
 import { creatorEligible, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
 import { sourceUrlProblem } from "@/lib/sourceUrls";
-import { getHostedProgram, listHostedChannels, updateHostedProgram, markSyncState, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow, upsertWizardPerson, setWizardSuperadmin, setHostedHelperRole, revokeHostedHelper, isWizardSuperadmin } from "@/lib/hostedPrograms";
+import { getHostedProgram, listHostedChannels, updateHostedProgram, markSyncState, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow, upsertWizardPerson, setWizardSuperadmin, setHostedHelperRole, revokeHostedHelper, isWizardSuperadmin, revokeWizardSuperadmin } from "@/lib/hostedPrograms";
 import { relationshipFor, linkedSlackSession, requireWizardSuperadmin } from "@/lib/programAccess";
 import { query } from "@/lib/db";
 import {
@@ -606,8 +606,10 @@ export async function hostedHelperSave(_prev: ActionState, formData: FormData): 
 export async function grantPersonAccess(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const requestedProgramId = String(formData.get("programId") ?? "").trim();
   let actor;
+  let programAccess = null;
   if (requestedProgramId) {
-    actor = (await requireProgramOwnerOrAdmin(requestedProgramId)).session;
+    programAccess = await requireProgramOwnerOrAdmin(requestedProgramId);
+    actor = programAccess.session;
   } else {
     actor = await requireWizardSuperadmin();
   }
@@ -618,6 +620,7 @@ export async function grantPersonAccess(_prev: ActionState, formData: FormData):
   const programId = requestedProgramId;
   const role = String(formData.get("role") ?? "helper") as "helper" | "organizer";
   if (!hcaId || !email || !displayName || !slackUserId || !programId || !["helper", "organizer"].includes(role)) return { error: "Choose a verified person with a linked Slack ID, program, and valid role." };
+  if (role === "organizer" && programAccess?.relationship === "admin" && !(await isWizardSuperadmin(actor.hcaId)) && !(await isWizardSuperadmin(actor.email))) return { error: "Only the program owner or superadmin can grant Organizer access." };
   try {
     await upsertWizardPerson({ hcaId, email, displayName, slackUserId, addedByHcaId: actor.hcaId });
     await addHostedHelper({ programId, slackUserId: slackUserId || hcaId, role, helperSource: "manual" });
@@ -644,12 +647,26 @@ export async function grantSuperadmin(_prev: ActionState, formData: FormData): P
   return { error: null };
 }
 
+export async function revokeSuperadmin(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireWizardSuperadmin();
+  const hcaId = String(formData.get("hcaId") ?? "").trim();
+  if (!hcaId) return { error: "Missing person." };
+  try {
+    await revokeWizardSuperadmin(hcaId, actor.hcaId);
+    await logHostedAudit({ programId: null, actorHcaId: actor.hcaId, actorSlackId: actor.slackId, action: "SUPERADMIN_REVOKED", entityType: "person", entityId: hcaId });
+  } catch (err) { return { error: err instanceof Error ? err.message : "Could not revoke superadmin access." }; }
+  revalidatePath("/people");
+  revalidatePath(`/people/${encodeURIComponent(hcaId)}`);
+  return { error: null };
+}
+
 export async function changePersonProgramRole(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const programId = String(formData.get("programId") ?? "").trim();
   const slackUserId = String(formData.get("slackUserId") ?? "").trim();
   const role = String(formData.get("role") ?? "helper") as "helper" | "organizer";
   const access = await requireProgramOwnerOrAdmin(programId);
   if (!slackUserId || !["helper", "organizer"].includes(role)) return { error: "Choose a valid program role." };
+  if (role === "organizer" && access.relationship === "admin" && !(await isWizardSuperadmin(access.session.hcaId)) && !(await isWizardSuperadmin(access.session.email))) return { error: "Only the program owner or superadmin can grant Organizer access." };
   try {
     await setHostedHelperRole(programId, slackUserId, role);
     await logHostedAudit({ programId, actorHcaId: access.session.hcaId, actorSlackId: access.session.slackId, action: "ROLE_CHANGED", entityType: "person", entityId: slackUserId, metadata: { newRole: role } });
