@@ -95,6 +95,17 @@ export interface HostedProgramHelper {
   removed_at?: string | null;
 }
 
+export interface WizardPerson {
+  hca_id: string;
+  email: string;
+  display_name: string;
+  slack_user_id: string | null;
+  status: "active" | "invited" | "disabled";
+  added_by_hca_id: string | null;
+  added_at: string;
+  updated_at: string;
+}
+
 // A caller's relationship to a program — drives both the directory's badge
 // and every management route's authorization check. "public" is the only
 // non-member value; everyone else is some flavor of member.

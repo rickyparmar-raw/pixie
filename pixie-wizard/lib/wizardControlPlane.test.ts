@@ -405,4 +405,9 @@ test("hostedActions mutators are server-authorized, never UI-only (static)", () 
     expect(text.includes("xoxb-"), `${c} must not contain tokens`).toBe(false);
   }
   expect(src("lib/pixieCore.ts").includes("NEXT_PUBLIC")).toBe(false);
+  const people = src("app/people/page.tsx");
+  expect(people.includes("requireWizardSuperadmin"), "global People must be superadmin-gated").toBe(true);
+  const programPeople = src("app/programs/[id]/people/page.tsx");
+  expect(programPeople.includes("requireProgramMembership"), "program People must be program-gated").toBe(true);
+  expect(s.includes("PROGRAM_ACCESS_GRANTED"), "access grants must be audited").toBe(true);
 });

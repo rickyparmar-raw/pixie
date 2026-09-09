@@ -173,6 +173,20 @@ test("setHelperVisibility flips visible_on_profile on and off without touching r
   expect(shown.active).toBe(true);
 });
 
+test("wizard people and global access are program-scoped and idempotent", async () => {
+  mock.module("@/lib/db", () => createTestDb());
+  const { query } = await import("./db");
+  const { upsertWizardPerson, addHostedHelper, listProgramAccessForPerson, setWizardSuperadmin, isWizardSuperadmin } = await import("./hostedPrograms");
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ('people-a','T1','A','H1'),('people-b','T1','B','H2')`);
+  await upsertWizardPerson({ hcaId: "H_PERSON", email: "person@example.com", displayName: "Person", slackUserId: "U_PERSON" });
+  await addHostedHelper({ programId: "people-a", slackUserId: "U_PERSON", role: "helper" });
+  await addHostedHelper({ programId: "people-b", slackUserId: "U_PERSON", role: "organizer" });
+  const access = await listProgramAccessForPerson("H_PERSON");
+  expect(access.map((p) => [p.id, p.role])).toEqual([["people-a", "helper"], ["people-b", "organizer"]]);
+  await setWizardSuperadmin("H_PERSON", "H_ROOT", true);
+  expect(await isWizardSuperadmin("H_PERSON")).toBe(true);
+});
+
 test("a helper hidden from the public profile still appears in the real (non-public) helper list — permissions preserved", async () => {
   mock.module("@/lib/db", () => createTestDb());
   const { query } = await import("./db");

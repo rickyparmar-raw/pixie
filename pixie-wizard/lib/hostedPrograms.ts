@@ -3,7 +3,7 @@
 // never touch Railway, Slack tokens, or model keys — hosted programs have
 // none.
 import { query } from "@/lib/db";
-import type { HostedProgramRow, HostedProgramChannel, HostedProgramHelper, PublicProgramProfile } from "@/lib/types";
+import type { HostedProgramRow, HostedProgramChannel, HostedProgramHelper, PublicProgramProfile, WizardPerson } from "@/lib/types";
 
 // jsonb columns: node-postgres auto-parses them back into JS values on read,
 // but writes need an explicit JSON string — it does not serialize objects/
@@ -286,4 +286,61 @@ export async function setHelperVisibility(programId: string, slackUserId: string
   );
   if (!rows[0]) throw new Error("helper not found for this program");
   return rows[0];
+}
+
+export async function setHostedHelperRole(programId: string, slackUserId: string, role: HostedProgramHelper["role"]): Promise<HostedProgramHelper> {
+  const { rows } = await query<HostedProgramHelper>(`update hosted_program_helpers set role = $1 where program_id = $2 and slack_user_id = $3 and active = true returning *`, [role, programId, slackUserId]);
+  if (!rows[0]) throw new Error("helper not found for this program");
+  return rows[0];
+}
+
+export async function revokeHostedHelper(programId: string, slackUserId: string): Promise<HostedProgramHelper> {
+  const { rows } = await query<HostedProgramHelper>(`update hosted_program_helpers set active = false, removed_at = now() where program_id = $1 and slack_user_id = $2 and active = true returning *`, [programId, slackUserId]);
+  if (!rows[0]) throw new Error("active access not found for this program");
+  return rows[0];
+}
+
+export async function upsertWizardPerson(input: { hcaId: string; email: string; displayName: string; slackUserId?: string | null; addedByHcaId?: string | null }): Promise<WizardPerson> {
+  const { rows } = await query<WizardPerson>(
+    `insert into wizard_people (hca_id, email, display_name, slack_user_id, added_by_hca_id)
+     values ($1, $2, $3, $4, $5)
+     on conflict (hca_id) do update set email = excluded.email, display_name = excluded.display_name,
+       slack_user_id = coalesce(excluded.slack_user_id, wizard_people.slack_user_id), updated_at = now()
+     returning *`,
+    [input.hcaId, input.email, input.displayName, input.slackUserId ?? null, input.addedByHcaId ?? null],
+  );
+  return rows[0];
+}
+
+export async function listWizardPeople(search = ""): Promise<WizardPerson[]> {
+  const q = `%${search.trim().toLowerCase()}%`;
+  const { rows } = await query<WizardPerson>(
+    `select * from wizard_people where lower(display_name) like $1 or lower(email) like $1 or lower(hca_id) like $1 or lower(coalesce(slack_user_id, '')) like $1 order by display_name asc`, [q],
+  );
+  return rows;
+}
+
+export async function getWizardPerson(hcaId: string): Promise<WizardPerson | null> {
+  const { rows } = await query<WizardPerson>(`select * from wizard_people where hca_id = $1`, [hcaId]);
+  return rows[0] ?? null;
+}
+
+export async function listProgramAccessForPerson(hcaId: string): Promise<Array<HostedProgramRow & { role: string }>> {
+  const { rows } = await query<HostedProgramRow & { role: string }>(
+    `select p.*, h.role from hosted_programs p join hosted_program_helpers h on h.program_id = p.id
+     join wizard_people w on lower(w.slack_user_id) = lower(h.slack_user_id)
+     where w.hca_id = $1 and h.active = true order by p.program_name asc`, [hcaId],
+  );
+  return rows;
+}
+
+export async function setWizardSuperadmin(hcaId: string, actorHcaId: string, granted: boolean): Promise<void> {
+  if (granted) await query(`insert into wizard_global_access (hca_id, role, granted_by_hca_id) values ($1, 'superadmin', $2) on conflict (hca_id) do update set role = 'superadmin', granted_by_hca_id = excluded.granted_by_hca_id`, [hcaId, actorHcaId]);
+  else await query(`delete from wizard_global_access where hca_id = $1`, [hcaId]);
+}
+
+export async function isWizardSuperadmin(hcaId: string): Promise<boolean> {
+  const { rows } = await query<{ hca_id: string }>(`select hca_id from wizard_global_access where hca_id = $1`, [hcaId]);
+  const allow = (process.env.PIXIE_WIZARD_SUPERADMIN_ALLOWLIST || "").split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
+  return rows.length > 0 || allow.includes(hcaId.toLowerCase());
 }

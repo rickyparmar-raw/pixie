@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import { getSession, ownsIdentifier } from "@/lib/session";
 import { creatorEligible, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
 import { sourceUrlProblem } from "@/lib/sourceUrls";
-import { getHostedProgram, listHostedChannels, updateHostedProgram, markSyncState, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow } from "@/lib/hostedPrograms";
-import { relationshipFor, linkedSlackSession } from "@/lib/programAccess";
+import { getHostedProgram, listHostedChannels, updateHostedProgram, markSyncState, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow, upsertWizardPerson, setWizardSuperadmin, setHostedHelperRole, revokeHostedHelper, isWizardSuperadmin } from "@/lib/hostedPrograms";
+import { relationshipFor, linkedSlackSession, requireWizardSuperadmin } from "@/lib/programAccess";
 import { query } from "@/lib/db";
 import {
   syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot,
@@ -53,7 +53,7 @@ async function requireProgramOwnerOrAdmin(programId: string) {
   const program = await getHostedProgram(programId);
   if (!program) throw new Error("Program not found");
   const relationship = await relationshipFor(program, session);
-  if (relationship !== "owner" && relationship !== "admin") {
+  if (relationship !== "owner" && relationship !== "admin" && !(await isWizardSuperadmin(session.hcaId)) && !(await isWizardSuperadmin(session.email))) {
     throw new Error("Only the program owner or an admin can change this.");
   }
   return { session, program, relationship };
@@ -580,15 +580,17 @@ export async function hostedMacroSend(_prev: ActionState, formData: FormData): P
 
 // Helpers: manual membership, expertise tags, reconciliation.
 export async function hostedHelperSave(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const programId = String(formData.get("programId") ?? "");
+  const access = await requireProgramOwnerOrAdmin(programId);
   const session = await linkedSlackSession();
   if (!session) return { error: "Link your Slack account first." };
-  const programId = String(formData.get("programId") ?? "");
   const userId = String(formData.get("helperUserId") ?? "").trim();
   const tags = String(formData.get("helperTags") ?? "").split(",").map((t) => t.trim()).filter(Boolean);
   if (!programId || !userId) return { error: "Helper user ID is required." };
   try {
     const current = ((await coreHelpers(programId)) as Array<{ user_id: string }>) ?? [];
     const members = [...new Set([...current.map((h) => h.user_id), userId])];
+    await addHostedHelper({ programId, slackUserId: userId, role: "helper", helperSource: "manual" });
     await coreHelpersSync(programId, { actorId: session.slackId, members, source: "manual" });
     if (tags.length > 0) {
       await coreRoutingExpertise(programId, { actorId: session.slackId, userId, tags });
@@ -596,7 +598,77 @@ export async function hostedHelperSave(_prev: ActionState, formData: FormData): 
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Helper save failed." };
   }
+  await logHostedAudit({ programId, actorHcaId: access.session.hcaId, actorSlackId: access.session.slackId, action: "PROGRAM_ACCESS_GRANTED", entityType: "person", entityId: userId, metadata: { role: "helper" } });
   revalidatePath(`/programs/${programId}/helpers`);
+  return { error: null };
+}
+
+export async function grantPersonAccess(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const requestedProgramId = String(formData.get("programId") ?? "").trim();
+  let actor;
+  if (requestedProgramId) {
+    actor = (await requireProgramOwnerOrAdmin(requestedProgramId)).session;
+  } else {
+    actor = await requireWizardSuperadmin();
+  }
+  const hcaId = String(formData.get("hcaId") ?? "").trim();
+  const email = String(formData.get("email") ?? "").trim();
+  const displayName = String(formData.get("displayName") ?? "").trim();
+  const slackUserId = String(formData.get("slackUserId") ?? "").trim() || null;
+  const programId = requestedProgramId;
+  const role = String(formData.get("role") ?? "helper") as "helper" | "organizer";
+  if (!hcaId || !email || !displayName || !slackUserId || !programId || !["helper", "organizer"].includes(role)) return { error: "Choose a verified person with a linked Slack ID, program, and valid role." };
+  try {
+    await upsertWizardPerson({ hcaId, email, displayName, slackUserId, addedByHcaId: actor.hcaId });
+    await addHostedHelper({ programId, slackUserId: slackUserId || hcaId, role, helperSource: "manual" });
+    await logHostedAudit({ programId, actorHcaId: actor.hcaId, actorSlackId: actor.slackId, action: "PROGRAM_ACCESS_GRANTED", entityType: "person", entityId: hcaId, metadata: { role } });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not grant access." };
+  }
+  revalidatePath("/people");
+  revalidatePath(`/programs/${programId}/people`);
+  return { error: null };
+}
+
+export async function grantSuperadmin(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const actor = await requireWizardSuperadmin();
+  const hcaId = String(formData.get("hcaId") ?? "").trim();
+  if (!hcaId || hcaId === actor.hcaId) return { error: "Choose another existing person." };
+  try {
+    await setWizardSuperadmin(hcaId, actor.hcaId, true);
+    await logHostedAudit({ programId: null, actorHcaId: actor.hcaId, actorSlackId: actor.slackId, action: "SUPERADMIN_GRANTED", entityType: "person", entityId: hcaId });
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Could not grant superadmin access." };
+  }
+  revalidatePath("/people");
+  return { error: null };
+}
+
+export async function changePersonProgramRole(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const programId = String(formData.get("programId") ?? "").trim();
+  const slackUserId = String(formData.get("slackUserId") ?? "").trim();
+  const role = String(formData.get("role") ?? "helper") as "helper" | "organizer";
+  const access = await requireProgramOwnerOrAdmin(programId);
+  if (!slackUserId || !["helper", "organizer"].includes(role)) return { error: "Choose a valid program role." };
+  try {
+    await setHostedHelperRole(programId, slackUserId, role);
+    await logHostedAudit({ programId, actorHcaId: access.session.hcaId, actorSlackId: access.session.slackId, action: "ROLE_CHANGED", entityType: "person", entityId: slackUserId, metadata: { newRole: role } });
+  } catch (err) { return { error: err instanceof Error ? err.message : "Could not change role." }; }
+  revalidatePath("/people");
+  revalidatePath(`/programs/${programId}/people`);
+  return { error: null };
+}
+
+export async function revokePersonProgramAccess(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const programId = String(formData.get("programId") ?? "").trim();
+  const slackUserId = String(formData.get("slackUserId") ?? "").trim();
+  const access = await requireProgramOwnerOrAdmin(programId);
+  try {
+    await revokeHostedHelper(programId, slackUserId);
+    await logHostedAudit({ programId, actorHcaId: access.session.hcaId, actorSlackId: access.session.slackId, action: "PROGRAM_ACCESS_REVOKED", entityType: "person", entityId: slackUserId });
+  } catch (err) { return { error: err instanceof Error ? err.message : "Could not revoke access." }; }
+  revalidatePath("/people");
+  revalidatePath(`/programs/${programId}/people`);
   return { error: null };
 }
 

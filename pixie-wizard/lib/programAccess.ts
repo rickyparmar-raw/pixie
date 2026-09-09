@@ -8,7 +8,7 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getSession, ownsIdentifier, type WizardSession } from "@/lib/session";
-import { getHostedProgram, getHelperRow } from "@/lib/hostedPrograms";
+import { getHostedProgram, getHelperRow, isWizardSuperadmin } from "@/lib/hostedPrograms";
 import type { HostedProgramRow, ProgramRelationship } from "@/lib/types";
 
 export async function relationshipFor(
@@ -77,4 +77,11 @@ export async function requireProgramMembership(programId: string): Promise<Progr
   if (relationship === "public") redirect(`/programs/${programId}`);
 
   return { program, session, relationship };
+}
+
+export async function requireWizardSuperadmin(): Promise<WizardSession> {
+  const session = await getSession();
+  if (!session) redirect("/");
+  if (!(await isWizardSuperadmin(session.hcaId)) && !(await isWizardSuperadmin(session.email))) redirect("/overview");
+  return session;
 }

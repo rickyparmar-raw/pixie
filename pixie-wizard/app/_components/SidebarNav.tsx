@@ -14,6 +14,7 @@ const MAIN: Item[] = [
   ["knowledge", "Knowledge"],
   ["gaps", "FAQ gaps"],
   ["helpers", "Helpers"],
+  ["people", "People"],
   ["macros", "Macros"],
   ["analytics", "Analytics"],
   ["radar", "Support radar"],
@@ -54,6 +55,7 @@ export function WorkspaceNav() {
     <nav className="mt-3 space-y-0.5">
       <NavLink href="/overview" label="Overview" exact />
       <NavLink href="/programs" label="Programs" exact />
+      <NavLink href="/people" label="People & access" exact />
     </nav>
   );
 }
