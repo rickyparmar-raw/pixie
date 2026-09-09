@@ -18,7 +18,7 @@ export function DashboardShell({
     <div className="min-h-screen bg-ink text-text">
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-[240px] border-r border-line bg-ink px-3 py-5 lg:block">
         <Link href="/overview" className="flex items-center gap-2 pl-1 text-sm">
-          <span className="size-4 rounded-[3px] bg-brand" aria-hidden />
+          <img src="/pixie-mark.png" alt="" width={20} height={20} className="pixel-art size-5 shrink-0" />
           pixie
         </Link>
 

@@ -7,10 +7,7 @@ import Link from "next/link";
 
 function Wordmark() {
   return (
-    <span className="inline-flex items-center gap-2">
-      <span className="size-3 rounded-[3px] bg-brand" aria-hidden />
-      <span className="font-mono text-xs uppercase tracking-[0.2em] text-text-muted">Pixie</span>
-    </span>
+    <span className="font-mono text-xs uppercase tracking-[0.2em] text-text-muted">Pixie</span>
   );
 }
 
@@ -69,6 +66,13 @@ export default function LandingPage() {
         <div className="dot-grid dot-grid-fade pointer-events-none absolute inset-0" aria-hidden />
         <div className="relative grid items-center gap-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-16">
           <div>
+            <img
+              src="/pixie-hero.png"
+              alt="Pixie"
+              width={512}
+              height={476}
+              className="pixel-art -ml-2 mb-4 h-auto w-56 sm:w-72"
+            />
             <Wordmark />
             <h1 className="font-heading mt-7 max-w-xl text-[2.9rem] font-semibold leading-[1.04] tracking-tight text-text sm:text-[3.5rem]">
               Support that knows your program.
@@ -107,9 +111,10 @@ export default function LandingPage() {
 
           {/* One real support moment. */}
           <div className="pixie-panel">
-            <div className="flex items-center gap-2 border-b border-line px-5 py-3">
-              <span className="size-1.5 rounded-full bg-brand" aria-hidden />
-              <span className="font-mono text-xs text-text-muted">#pixl-help</span>
+            <div className="flex items-center gap-2.5 border-b border-line px-5 py-3">
+              <img src="/pixie-hero.png" alt="Pixie" width={32} height={32} className="pixel-art size-8 shrink-0" />
+              <span className="text-sm text-text">Pixie</span>
+              <span className="font-mono text-xs text-text-muted">in #pixl-help</span>
             </div>
             <div className="space-y-4 px-5 py-4">
               <div className="text-sm">
@@ -137,7 +142,7 @@ export default function LandingPage() {
                 <span className="size-1.5 rounded-full bg-brand" aria-hidden /> answered
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="size-1.5 rounded-full bg-tang" aria-hidden /> #184 claimed · Cal
+                <span className="size-1.5 rounded-full bg-tang" aria-hidden /> #184 claimed · Ricky
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="size-1.5 rounded-full bg-mint" aria-hidden /> resolved · 6m
@@ -170,7 +175,7 @@ export default function LandingPage() {
           <Stage n={1} title="Question" body="Someone asks in your help channel. No command, no form." detail="#pixl-help" />
           <Stage n={2} title="Grounded answer" tone="brand" body="Pixie answers from your approved docs, with the source attached." detail="↗ Submission Guidelines" />
           <Stage n={3} title="Ticket" tone="tang" body="Judgment call, or Pixie isn't sure: a ticket opens and routes by expertise." detail="#184 · waiting_for_helper" />
-          <Stage n={4} title="A person" body="An organizer claims, replies, resolves. The asker just sees a normal reply." detail="Cal claimed · 2m" />
+          <Stage n={4} title="A person" body="An organizer claims, replies, resolves. The asker just sees a normal reply." detail="Ricky claimed · 2m" />
           <Stage n={5} title="Better docs" tone="mint" body="Recurring misses become review candidates. Approve once; it grounds future answers." detail="2 candidates" last />
         </ol>
       </section>

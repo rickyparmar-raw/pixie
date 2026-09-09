@@ -89,4 +89,8 @@ body {
 .pixie-button-quiet { border-color: var(--color-line); color: var(--color-text-muted); background: transparent; }
 .pixie-button-quiet:hover { color: var(--color-text); border-color: #3a4556; }
 
+/* The pixel-art Pixie mark — keep the pixels crisp at every size, never
+   let the browser smooth it into mush. */
+.pixel-art { image-rendering: pixelated; image-rendering: crisp-edges; }
+
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; } }

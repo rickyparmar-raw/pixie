@@ -2,6 +2,7 @@
   {
     "id": "pixl",
     "name": "Pixl",
+    "supportName": "Pixie",
     "posture": "passive",
     "scope": "program",
     "helpChannel": "C0B6STY9G5N",
