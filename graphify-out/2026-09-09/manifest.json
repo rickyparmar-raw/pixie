@@ -1245,8 +1245,8 @@
     "semantic_hash": ""
   },
   "pixie-wizard/app/wizard/page.tsx": {
-    "mtime": 1788808257.6643279,
-    "ast_hash": "d7095e814b6f46196f0186e68007a761",
+    "mtime": 1788908154.4266064,
+    "ast_hash": "dbf4b38266c7579812503b0a34e838be",
     "semantic_hash": ""
   },
   "pixie-wizard/db/schema.sql": {
@@ -1325,18 +1325,18 @@
     "semantic_hash": ""
   },
   "pixie-wizard/lib/programClaim.test.ts": {
-    "mtime": 1788814790.6124873,
-    "ast_hash": "840a309c5117feb116cf65120e78df4e",
+    "mtime": 1788908196.027675,
+    "ast_hash": "56021fc0b14f4683b25543cb0701d478",
     "semantic_hash": ""
   },
   "pixie-wizard/lib/programClaim.ts": {
-    "mtime": 1788863827.0267143,
-    "ast_hash": "4ba39e3b63fa65aa4cf8f7c3fb8e21f2",
+    "mtime": 1788908139.264944,
+    "ast_hash": "f667b050b763e9639e53ded460b20ac9",
     "semantic_hash": ""
   },
   "pixie-wizard/lib/session.ts": {
-    "mtime": 1788894814.8930945,
-    "ast_hash": "aab09b3e00a268d5e3a0890de1269654",
+    "mtime": 1788908127.3722084,
+    "ast_hash": "df92f2879d9790cc901d027e1eaccc98",
     "semantic_hash": ""
   },
   "pixie-wizard/lib/slackManifest.test.ts": {
@@ -1537,36 +1537,6 @@
   "pixie-wizard/app/_components/format.ts": {
     "mtime": 1788905857.8238885,
     "ast_hash": "82b806e7c4d3735cbb5c8280b2081c27",
-    "semantic_hash": ""
-  },
-  ".playwright-mcp/page-2026-09-08T22-33-06-176Z.yml": {
-    "mtime": 1788906786.175554,
-    "ast_hash": "67b67500a0663e58f4643656a3e929fb",
-    "semantic_hash": ""
-  },
-  ".playwright-mcp/page-2026-09-08T22-34-56-764Z.yml": {
-    "mtime": 1788906896.7641745,
-    "ast_hash": "bfd4b98df14061e9b10a5b87b5fb1015",
-    "semantic_hash": ""
-  },
-  ".playwright-mcp/page-2026-09-08T22-35-42-784Z.yml": {
-    "mtime": 1788906942.7839372,
-    "ast_hash": "512584bc16a8aace66ddb0361ea4feee",
-    "semantic_hash": ""
-  },
-  ".playwright-mcp/page-2026-09-08T22-36-15-115Z.yml": {
-    "mtime": 1788906975.1148975,
-    "ast_hash": "a329ba6b61d99ed86a20e1bed039c60e",
-    "semantic_hash": ""
-  },
-  ".playwright-mcp/page-2026-09-08T22-37-02-463Z.yml": {
-    "mtime": 1788907022.4624505,
-    "ast_hash": "0fca31353bd420ec8122f04763e0f3e9",
-    "semantic_hash": ""
-  },
-  ".playwright-mcp/page-2026-09-08T22-38-23-371Z.yml": {
-    "mtime": 1788907103.3707714,
-    "ast_hash": "6ed0bb387085d17911d7c490cfcc5cd4",
     "semantic_hash": ""
   },
   "pixie-wizard/app/apple-icon.png": {

@@ -61,10 +61,57 @@
       "create-hackpad",
       "create-devboard"
     ],
+    "pinnedRules": [
+      "- RULE HIERARCHY & CONTRADICTION HANDLING: A specific rule always strictly beats a general rule. For example, the specific hardware rule requiring 100% original CAD, 3D models (.step), and PCB designs/schematics (0% AI, no AI allowed) strictly beats any general software AI allowance. When answering about hardware CAD or PCB, never cite or apply the general 30% software code AI allowance.",
+      "- 30% AI POLICY: Software and firmware code is capped at a hard ceiling of <=30% AI code, and all AI usage must be honestly disclosed in submission notes and README. Hardware CAD, 3D models, and PCB designs must be 100% original (0% AI). Fully AI-generated projects are strictly prohibited. Exceeding the limit results in project rejection or reduced hours/payout; hiding AI is treated as fraud and leads to rejection and a permanent ban.",
+      "- REFERRAL CODES: Referral codes expire in 48 hours (2 days) after being generated.",
+      "- RETURNED SUBMISSIONS: if asked whether a returned submission is a penalty or can be resubmitted, answer ONLY about resubmitting returned projects and NEVER mention reduced-hour approvals, payout deductions, or other outcomes unless the user explicitly asked about them."
+    ],
     "links": {
       "docs": "https://pixl.hackclub.com/docs",
       "site": "https://pixl.hackclub.com",
       "repo": "https://github.com/hackclub/pixl"
+    }
+  },
+  {
+    "id": "back-to-basics",
+    "name": "Back to Basics",
+    "supportName": "B2B Support",
+    "posture": "passive",
+    "scope": "program",
+    "helpChannel": "C0BMHSDL597",
+    "channels": [
+      "C0BMHSDL597",
+      "C0BBY3B43EJ",
+      "C0BME2TT54N"
+    ],
+    "sources": [
+      {
+        "name": "Back to Basics Docs",
+        "type": "url",
+        "url": "https://back-to-basics-cyan.vercel.app/docs",
+        "siteUrl": "https://back-to-basics-cyan.vercel.app/docs"
+      },
+      {
+        "name": "Back to Basics Rubric",
+        "type": "url",
+        "url": "https://back-to-basics-cyan.vercel.app/",
+        "paths": ["/rubric"],
+        "siteUrl": "https://back-to-basics-cyan.vercel.app"
+      },
+      {
+        "name": "Back to Basics Repo Docs",
+        "type": "github-dir",
+        "url": "https://api.github.com/repos/K-man1/back-to-basics/contents/src/content/docs"
+      }
+    ],
+    "milestones": [],
+    "guides": [],
+    "sharedSources": false,
+    "links": {
+      "docs": "https://back-to-basics-cyan.vercel.app/docs",
+      "site": "https://back-to-basics-cyan.vercel.app",
+      "repo": "https://github.com/K-man1/back-to-basics"
     }
   }
 ]
