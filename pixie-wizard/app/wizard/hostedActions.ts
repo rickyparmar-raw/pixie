@@ -21,6 +21,10 @@ import type { DocSource } from "@/lib/types";
 
 const CENTRAL_WORKSPACE = (process.env.PIXIE_WORKSPACE_ID || "default").trim() || "default";
 
+// Creating a hosted program is invite-only (creatorEligible). Managing one you
+// already own is NOT — ownership of this specific program is the authorization,
+// so an owner who predates the creator allowlist can still change their
+// settings. Only the creation actions call this.
 async function requireHostedSession() {
   const session = await getSession();
   if (!session) throw new Error("Unauthorized");
@@ -28,10 +32,11 @@ async function requireHostedSession() {
   return session;
 }
 
-// A hosted program must be readable by its owner. Organizer/helper reads of
+// A hosted program must be manageable by its owner. Organizer/helper reads of
 // other programs' tickets are enforced per-action below via Core membership.
 async function requireProgramOwner(programId: string) {
-  const session = await requireHostedSession();
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
   const program = await getHostedProgram(programId);
   if (!program) throw new Error("Program not found");
   if (program.owner_hca_id !== session.hcaId) throw new Error("Only the program owner can change these settings.");
@@ -43,7 +48,8 @@ async function requireProgramOwner(programId: string) {
 // choosing what shows on the public roster. Still server-authorized on
 // every call, not just gated by what the page happens to render.
 async function requireProgramOwnerOrAdmin(programId: string) {
-  const session = await requireHostedSession();
+  const session = await getSession();
+  if (!session) throw new Error("Unauthorized");
   const program = await getHostedProgram(programId);
   if (!program) throw new Error("Program not found");
   const relationship = await relationshipFor(program, session);
@@ -267,9 +273,16 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
 
 export async function saveHostedSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const programId = String(formData.get("programId") ?? "");
-  // requireProgramOwner throws on missing program or non-owner — no second
-  // fetch needed, and the null check it replaced was unreachable.
-  const { session, program } = await requireProgramOwner(programId);
+  // Authorization failures render as an inline error, not the route error
+  // boundary. requireProgramOwner checks ownership of THIS program — not the
+  // creator allowlist, so an owner who predates invite-only can still save.
+  let session: Awaited<ReturnType<typeof requireProgramOwner>>["session"];
+  let program: Awaited<ReturnType<typeof requireProgramOwner>>["program"];
+  try {
+    ({ session, program } = await requireProgramOwner(programId));
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Not authorized." };
+  }
 
   const minutes = (name: string) => {
     const v = Number(formData.get(name) ?? "");
@@ -345,7 +358,12 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
 
 export async function saveHostedSources(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const programId = String(formData.get("programId") ?? "");
-  const { session } = await requireProgramOwner(programId);
+  let session: Awaited<ReturnType<typeof requireProgramOwner>>["session"];
+  try {
+    ({ session } = await requireProgramOwner(programId));
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Not authorized." };
+  }
   const parsed = parseSources(formData);
   if (parsed.error) return { error: parsed.error };
   if (parsed.sources.length === 0) return { error: "Add at least one doc source." };
@@ -768,7 +786,12 @@ export async function setHelperVisibilityAction(_prev: ActionState, formData: Fo
   const slackUserId = String(formData.get("slackUserId") ?? "");
   const visible = formData.get("visible") === "on";
 
-  const { session } = await requireProgramOwnerOrAdmin(programId);
+  let session: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["session"];
+  try {
+    ({ session } = await requireProgramOwnerOrAdmin(programId));
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Not authorized." };
+  }
   if (!slackUserId) return { error: "Missing helper." };
 
   await setHelperVisibilityRow(programId, slackUserId, visible);

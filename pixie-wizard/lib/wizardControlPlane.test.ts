@@ -386,6 +386,14 @@ test("hostedActions mutators are server-authorized, never UI-only (static)", () 
   // Display-only roster toggle is owner-or-admin, still server-side.
   const vis = s.slice(s.indexOf("export async function setHelperVisibilityAction"));
   expect(vis.includes("requireProgramOwnerOrAdmin")).toBe(true);
+
+  // Managing a program you already own must NOT require the creator allowlist —
+  // that gate (requireHostedSession / creatorEligible) is creation-only.
+  const ownerGuard = s.slice(s.indexOf("async function requireProgramOwner("), s.indexOf("async function requireProgramOwnerOrAdmin"));
+  expect(ownerGuard.includes("requireHostedSession"), "requireProgramOwner must not go through the creator gate").toBe(false);
+  expect(ownerGuard.includes("owner_hca_id"), "requireProgramOwner authorizes by program ownership").toBe(true);
+  const creationGuard = s.slice(s.indexOf("async function requireHostedSession"), s.indexOf("async function requireProgramOwner("));
+  expect(creationGuard.includes("creatorEligible"), "creation still gated by the creator allowlist").toBe(true);
   // Bearer token never leaves the server client: no token literal in client components.
   for (const c of [
     "app/programs/[id]/incidents/IncidentControls.tsx",
