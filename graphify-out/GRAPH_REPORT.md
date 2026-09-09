@@ -1,16 +1,16 @@
 # Graph Report - pixie  (2026-09-09)
 
 ## Corpus Check
-- 262 files · ~349,962 words
+- 262 files · ~350,320 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3019 nodes · 5558 edges · 191 communities (178 shown, 13 thin omitted)
+- 3019 nodes · 5558 edges · 192 communities (179 shown, 13 thin omitted)
 - Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 738 edges (avg confidence: 0.51)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `8bde796d`
+- Built from commit: `000f54b9`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -64,7 +64,7 @@
 - intent.js
 - answer.test.js
 - respond.test.js
-- config
+- learn.test.js
 - 1. 📚 Taught Facts & Core Rules
 - chat.js
 - Handoff checklist — pixie to a new Railway account
@@ -99,7 +99,7 @@
 - retrieve.js
 - copilot.js
 - tickets.test.js
-- sumThread.js
+- config
 - sla.js
 - slackMessages.test.js
 - context.js
@@ -199,6 +199,7 @@
 - reply.test.js
 - liveShop.test.js
 - validator.test.js
+- firecrawl.test.js
 
 ## God Nodes (most connected - your core abstractions)
 1. `handle()` - 96 edges
@@ -227,7 +228,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (191 total, 13 thin omitted)
+## Communities (192 total, 13 thin omitted)
 
 ### Community 0 - "llm.test.js"
 Cohesion: 0.17
@@ -421,9 +422,9 @@ Nodes (6): answer, assert, { config }, llm, pixlProgram, { test }
 Cohesion: 0.11
 Nodes (11): answer, assert, cache, { config }, db, intent, link, llm (+3 more)
 
-### Community 50 - "config"
-Cohesion: 0.11
-Nodes (16): config, assert, axios, { config }, firecrawl, { test, before, after, beforeEach }, assert, { config } (+8 more)
+### Community 50 - "learn.test.js"
+Cohesion: 0.29
+Nodes (6): assert, { config }, db, learn, llm, { test, before, after }
 
 ### Community 51 - "1. 📚 Taught Facts & Core Rules"
 Cohesion: 0.12
@@ -549,9 +550,9 @@ Nodes (39): ask(), audit, checkSentence(), clampLimit(), completeHelper(), { con
 Cohesion: 0.10
 Nodes (20): assert, db, WHY: legacy dashboard must share the control-plane outcome, never silent ok., WHY: malformed metadata must ack an error, never throw., WHY: second bot touch must not bump updated_at., WHY: unclaim is a demotion back to the queue, not back to waiting — the, WHY: reopen is unconditional outside the guarded set — even an open ticket, WHY: the conditional UPDATE is the race guard — exactly one claim can (+12 more)
 
-### Community 85 - "sumThread.js"
-Cohesion: 0.17
-Nodes (11): buildTranscript(), { config }, HELPER_SUMMARY_SYSTEM_PROMPT, llm, log, summarizeThreadForHelper(), assert, { config } (+3 more)
+### Community 85 - "config"
+Cohesion: 0.12
+Nodes (16): config, assert, { config }, log, { test }, buildTranscript(), { config }, HELPER_SUMMARY_SYSTEM_PROMPT (+8 more)
 
 ### Community 86 - "sla.js"
 Cohesion: 0.15
@@ -920,6 +921,10 @@ Nodes (3): assert, shop, { test }
 ### Community 190 - "validator.test.js"
 Cohesion: 0.50
 Nodes (3): assert, { test }, validator
+
+### Community 191 - "firecrawl.test.js"
+Cohesion: 0.33
+Nodes (5): assert, axios, { config }, firecrawl, { test, before, after, beforeEach }
 
 ## Knowledge Gaps
 - **1109 isolated node(s):** `$schema`, `builder`, `dockerfilePath`, `startCommand`, `restartPolicyType` (+1104 more)

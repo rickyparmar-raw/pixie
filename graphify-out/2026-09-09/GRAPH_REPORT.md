@@ -1,16 +1,16 @@
 # Graph Report - pixie  (2026-09-09)
 
 ## Corpus Check
-- 262 files · ~350,425 words
+- 262 files · ~349,962 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3034 nodes · 5584 edges · 184 communities (171 shown, 13 thin omitted)
-- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 743 edges (avg confidence: 0.51)
+- 3019 nodes · 5558 edges · 191 communities (178 shown, 13 thin omitted)
+- Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 738 edges (avg confidence: 0.51)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `319fba25`
+- Built from commit: `8bde796d`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -44,10 +44,10 @@
 - validator.js
 - deploy
 - respond.js
-- brand.js
+- manifest.test.js
 - home.js
 - link.js
-- pixieCore.ts
+- HostedSetupView.tsx
 - Real Screenshots Captured ✓
 - pixiewizard — architecture plan
 - commands.test.js
@@ -60,11 +60,11 @@
 - index.js
 - optimize-screenshots.js
 - stats.js
-- requireProgramMembership
+- hostedActions.ts
 - intent.js
 - answer.test.js
 - respond.test.js
-- learn.test.js
+- config
 - 1. 📚 Taught Facts & Core Rules
 - chat.js
 - Handoff checklist — pixie to a new Railway account
@@ -87,7 +87,7 @@
 - schema.js
 - devDependencies
 - incidents.js
-- hostedActions.ts
+- pixieCore.ts
 - types.ts
 - macros.js
 - report.test.js
@@ -95,11 +95,11 @@
 - compilerOptions
 - radar.js
 - tickets.js
-- [id]/page.tsx
+- DashboardShell.tsx
 - retrieve.js
 - copilot.js
 - tickets.test.js
-- config
+- sumThread.js
 - sla.js
 - slackMessages.test.js
 - context.js
@@ -131,12 +131,12 @@
 - jobLease.js
 - fetchSourceText
 - helpers/page.tsx
-- onReactionAdded
+- [id]/page.tsx
 - teachThread.js
 - tenancy.test.js
 - warm.test.js
 - ticketActorAllowed
-- firecrawl.test.js
+- session.ts
 - #pixie-sandbox Staging Runbook
 - calculator.js
 - hosted.test.js
@@ -157,9 +157,10 @@
 - hardwire-move-help.mjs
 - jobLease.test.js
 - programs.test.js
-- teachThread.test.js
+- identity.js
 - routing.js
 - shop.test.js
+- SidebarNav.tsx
 - Dedicated → Shared Migration
 - app/layout.tsx
 - Pixie Wizard — shared control plane
@@ -186,24 +187,30 @@
 - app/page.tsx
 - next.config.ts
 - postcss.config.mjs
-- retention.test.js
+- brand.js
 - resolutionMemory.test.js
+- programHealth.test.js
 - boostedValue
 - context.test.js
+- brand.test.js
 - hardwire-inspect.mjs
+- identity.test.js
 - chunkSection
+- reply.test.js
+- liveShop.test.js
+- validator.test.js
 
 ## God Nodes (most connected - your core abstractions)
-1. `handle()` - 97 edges
-2. `now()` - 55 edges
+1. `handle()` - 96 edges
+2. `now()` - 54 edges
 3. `config` - 37 edges
 4. `request()` - 37 edges
 5. `requireProgramMembership()` - 28 edges
 6. `register()` - 22 edges
 7. `isAdmin()` - 20 edges
 8. `send()` - 20 edges
-9. `recordTransition()` - 19 edges
-10. `linkedSlackSession()` - 19 edges
+9. `linkedSlackSession()` - 19 edges
+10. `ProgramPage()` - 18 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `sourceSections()` --indirect_call--> `src()`  [INFERRED]
@@ -220,7 +227,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (184 total, 13 thin omitted)
+## Communities (191 total, 13 thin omitted)
 
 ### Community 0 - "llm.test.js"
 Cohesion: 0.17
@@ -232,11 +239,11 @@ Nodes (44): adminOnly(), adminOnlyShortcut(), answer, approveCommand(), askComma
 
 ### Community 2 - "db.js"
 Cohesion: 0.06
-Nodes (63): addTicketEvent(), approvedFacts(), candidateForTicket(), claimMessage(), clearTakeover(), countRecentRequests(), { Database }, DEFAULT_PATH (+55 more)
+Nodes (62): addTicketNote(), approvedFacts(), assignTicket(), candidateForTicket(), claimMessage(), clearTakeover(), { Database }, DEFAULT_PATH (+54 more)
 
 ### Community 3 - "handlers.js"
 Cohesion: 0.09
-Nodes (21): brand, { config, isAdmin }, context, db, guides, learn, log, programs (+13 more)
+Nodes (28): brand, { config, isAdmin }, context, db, DELETE_REACTIONS, DOWN_REACTIONS, guides, learn (+20 more)
 
 ### Community 4 - "lookup.js"
 Cohesion: 0.11
@@ -315,8 +322,8 @@ Cohesion: 0.16
 Nodes (25): answerRequest(), brand, { config }, getAnswerOrChat(), getAnswerOrChatStream(), getGroundedAnswer(), INSTRUCTION_ECHO_STRONG, INSTRUCTION_ECHO_WEAK (+17 more)
 
 ### Community 23 - "reply.js"
-Cohesion: 0.11
-Nodes (22): { config }, decidePostSuppression(), dedash(), discardPlaceholder(), finalize(), flagForHumans(), knowledge, log (+14 more)
+Cohesion: 0.14
+Nodes (19): { config }, decidePostSuppression(), dedash(), discardPlaceholder(), finalize(), flagForHumans(), knowledge, log (+11 more)
 
 ### Community 24 - "Test Questions for Intent Classifier"
 Cohesion: 0.18
@@ -327,8 +334,8 @@ Cohesion: 0.20
 Nodes (9): build, builder, dockerfilePath, deploy, numReplicas, restartPolicyMaxRetries, restartPolicyType, startCommand (+1 more)
 
 ### Community 26 - "validator.js"
-Cohesion: 0.16
-Nodes (14): analyzeReadme(), assessReadiness(), axios, detectLicense(), fetchFirstHit(), fetchRawFile(), log, OPEN_SOURCE_LICENSES (+6 more)
+Cohesion: 0.23
+Nodes (11): analyzeReadme(), assessReadiness(), axios, detectLicense(), fetchFirstHit(), fetchRawFile(), log, OPEN_SOURCE_LICENSES (+3 more)
 
 ### Community 27 - "deploy"
 Cohesion: 0.20
@@ -338,9 +345,9 @@ Nodes (9): build, builder, dockerfilePath, deploy, numReplicas, restartPolicyMax
 Cohesion: 0.09
 Nodes (36): ASKS_WHAT_THEY_MEAN, brand, buildChatContext(), buildContextPrompt(), { config }, context, db, decideStreamGate() (+28 more)
 
-### Community 29 - "brand.js"
-Cohesion: 0.07
-Nodes (32): cmd(), envValue(), id(), name(), rawSlug(), slug(), assert, brand (+24 more)
+### Community 29 - "manifest.test.js"
+Cohesion: 0.18
+Nodes (9): assert, brand, { manifest, BOT_SCOPES }, { test }, BOT_EVENTS, BOT_SCOPES, brand, COMMANDS (+1 more)
 
 ### Community 30 - "home.js"
 Cohesion: 0.09
@@ -350,9 +357,9 @@ Nodes (32): statsCommand(), allProgramNames(), brand, cache, coverageBlocks(), d
 Cohesion: 0.15
 Nodes (16): blocked(), fetchUrlContent(), http, https, isBlockedHost(), isPrivateOrLoopbackIp(), knowledge, log (+8 more)
 
-### Community 32 - "pixieCore.ts"
-Cohesion: 0.10
-Nodes (29): dynamic, GET(), HostedSetupView(), initialState, steps, hostedChannelsUpdate(), WizardPage(), fetchChannels() (+21 more)
+### Community 32 - "HostedSetupView.tsx"
+Cohesion: 0.14
+Nodes (12): ChannelChangeForm(), ChannelsSection(), HostedSetupView(), initialState, steps, WizardPage(), fetchChannels(), SlackChannelList (+4 more)
 
 ### Community 33 - "Real Screenshots Captured ✓"
 Cohesion: 0.20
@@ -384,7 +391,7 @@ Nodes (7): args, fs, outputDir, outputDirOnly, outputPath, path, sharp
 
 ### Community 40 - "now"
 Cohesion: 0.05
-Nodes (40): addLearnedFact(), addThreadMessage(), addTicketNote(), assignTicket(), claimProgramChannel(), claimTicket(), closeTicket(), escalateTicketStatus() (+32 more)
+Nodes (40): addLearnedFact(), addThreadMessage(), addTicketEvent(), claimProgramChannel(), claimTicket(), closeTicket(), countRecentRequests(), escalateTicketStatus() (+32 more)
 
 ### Community 41 - "llm.js"
 Cohesion: 0.19
@@ -398,9 +405,9 @@ Nodes (19): { App }, commands, { config, validate, resolveBotUserId }, db, guide
 Cohesion: 0.20
 Nodes (9): pendingCommand(), sourcesCommand(), cache, { config }, db, relativeTime(), buildPulse(), knowledgeInfo() (+1 more)
 
-### Community 46 - "requireProgramMembership"
-Cohesion: 0.11
-Nodes (25): PageHeader(), Section(), ChannelChangeForm(), ChannelsSection(), IncidentControls(), IncidentDetailPage(), Incident, IncidentDetail (+17 more)
+### Community 46 - "hostedActions.ts"
+Cohesion: 0.17
+Nodes (30): dynamic, GET(), ProgramSettingsForms(), activateHostedProgram(), flagOn(), hostedChannelsUpdate(), parseSources(), requireHostedSession() (+22 more)
 
 ### Community 47 - "intent.js"
 Cohesion: 0.16
@@ -414,9 +421,9 @@ Nodes (6): answer, assert, { config }, llm, pixlProgram, { test }
 Cohesion: 0.11
 Nodes (11): answer, assert, cache, { config }, db, intent, link, llm (+3 more)
 
-### Community 50 - "learn.test.js"
-Cohesion: 0.29
-Nodes (6): assert, { config }, db, learn, llm, { test, before, after }
+### Community 50 - "config"
+Cohesion: 0.11
+Nodes (16): config, assert, axios, { config }, firecrawl, { test, before, after, beforeEach }, assert, { config } (+8 more)
 
 ### Community 51 - "1. 📚 Taught Facts & Core Rules"
 Cohesion: 0.12
@@ -455,8 +462,8 @@ Cohesion: 0.47
 Nodes (4): diff(), OPTIONAL, redactedForLog(), REQUIRED
 
 ### Community 61 - "programClaim.ts"
-Cohesion: 0.06
-Nodes (51): GET(), HackClubMeResponse, HackClubTokenResponse, GET(), GET(), ActivationGuardInput, ActivationGuardResult, ChannelMembershipInfo (+43 more)
+Cohesion: 0.08
+Nodes (35): ActivationGuardInput, ActivationGuardResult, ChannelMembershipInfo, checkChannelIds(), CheckedChannels, iconError(), isValidSlackChannelId(), MembershipChecker (+27 more)
 
 ### Community 62 - "supportTicket.test.js"
 Cohesion: 0.18
@@ -494,13 +501,13 @@ Nodes (39): clsx, next, pg, pg-mem, dependencies, clsx, next, pg (+31 more)
 Cohesion: 0.08
 Nodes (36): audit, buildQuestionIndex(), burstConfidence(), burstReason(), clampLimit(), db, detectBursts(), fetchDuplicateRows() (+28 more)
 
-### Community 73 - "hostedActions.ts"
-Cohesion: 0.06
-Nodes (75): HelperAddForm(), IncidentDetectButton(), NotifyAffectedButton(), CandidateCard(), FaqProposeButton(), ProposeTicketForm(), MacroCreateForm(), MacroRowCard() (+67 more)
+### Community 73 - "pixieCore.ts"
+Cohesion: 0.07
+Nodes (54): IncidentControls(), IncidentDetectButton(), NotifyAffectedButton(), FaqProposeButton(), ProposeTicketForm(), MacroCreateForm(), MacroRowCard(), MacroSendForm() (+46 more)
 
 ### Community 74 - "types.ts"
 Cohesion: 0.10
-Nodes (23): initialState, initialState, initialState, initialState, initialState, PublicProfile(), ROLE_LABEL, FIELDS (+15 more)
+Nodes (24): initialState, initialState, CandidateCard(), initialState, initialState, initialState, FIELDS, initialState (+16 more)
 
 ### Community 75 - "macros.js"
 Cohesion: 0.12
@@ -523,12 +530,12 @@ Cohesion: 0.08
 Nodes (24): audit, crypto, db, gapClusters, incidents, OPEN_STATUSES, WHY: a ticket with an owner or a pending state still needs someone to act,, WHY: 12h is the nudge point (something is waiting), 24h is the escalation (+16 more)
 
 ### Community 80 - "tickets.js"
-Cohesion: 0.06
-Nodes (76): ackTicket(), addInternalNote(), aiAnsweredLabel(), assignTicket(), audit, authorize(), buildPublicAckBlocks(), buildTicketCardBlocks() (+68 more)
+Cohesion: 0.08
+Nodes (61): addInternalNote(), assignTicket(), audit, authorize(), buildTicketCardBlocks(), checkIncident(), CLAIMABLE, claimTicket() (+53 more)
 
-### Community 81 - "[id]/page.tsx"
-Cohesion: 0.06
-Nodes (60): BarList(), CoreError(), DataRow(), EmptyState(), MiniBar(), SignalRail(), Stage, StatusDot() (+52 more)
+### Community 81 - "DashboardShell.tsx"
+Cohesion: 0.07
+Nodes (56): BarList(), CoreError(), EmptyState(), MiniBar(), PageHeader(), Section(), SignalRail(), Stage (+48 more)
 
 ### Community 82 - "retrieve.js"
 Cohesion: 0.13
@@ -540,11 +547,11 @@ Nodes (39): ask(), audit, checkSentence(), clampLimit(), completeHelper(), { con
 
 ### Community 84 - "tickets.test.js"
 Cohesion: 0.10
-Nodes (20): assert, db, WHY: refreshed row must exist before the timeline write., WHY: legacy dashboard must share the control-plane outcome, never silent ok., WHY: malformed metadata must ack an error, never throw., WHY: second bot touch must not bump updated_at., WHY: unclaim is a demotion back to the queue, not back to waiting — the, WHY: reopen is unconditional outside the guarded set — even an open ticket (+12 more)
+Nodes (20): assert, db, WHY: legacy dashboard must share the control-plane outcome, never silent ok., WHY: malformed metadata must ack an error, never throw., WHY: second bot touch must not bump updated_at., WHY: unclaim is a demotion back to the queue, not back to waiting — the, WHY: reopen is unconditional outside the guarded set — even an open ticket, WHY: the conditional UPDATE is the race guard — exactly one claim can (+12 more)
 
-### Community 85 - "config"
-Cohesion: 0.12
-Nodes (16): config, assert, { config }, log, { test }, buildTranscript(), { config }, HELPER_SUMMARY_SYSTEM_PROMPT (+8 more)
+### Community 85 - "sumThread.js"
+Cohesion: 0.17
+Nodes (11): buildTranscript(), { config }, HELPER_SUMMARY_SYSTEM_PROMPT, llm, log, summarizeThreadForHelper(), assert, { config } (+3 more)
 
 ### Community 86 - "sla.js"
 Cohesion: 0.15
@@ -559,8 +566,8 @@ Cohesion: 0.20
 Nodes (7): db, deriveTopic(), log, roleForMessage(), seedFromSlack(), STOPWORDS, updateUserHistory()
 
 ### Community 89 - "programHealth.js"
-Cohesion: 0.18
-Nodes (14): clamp(), computeHealthScore(), db, knowledgeCoverageComponent(), OPEN_STATUSES, resolutionQualityComponent(), sourceHealthComponent(), supportAnalytics (+6 more)
+Cohesion: 0.40
+Nodes (9): clamp(), computeHealthScore(), db, knowledgeCoverageComponent(), OPEN_STATUSES, resolutionQualityComponent(), sourceHealthComponent(), supportAnalytics (+1 more)
 
 ### Community 90 - "hardwire-setup.mjs"
 Cohesion: 0.13
@@ -572,11 +579,11 @@ Nodes (10): answerOrChatPrompt(), helpChannelRef(), pinnedRules(), programGuardr
 
 ### Community 92 - "programAccess.ts"
 Cohesion: 0.12
-Nodes (24): DashboardShell(), MetricCard(), StatusBadge(), OverviewPage(), percent(), ProgramLayout(), ProgramsLayout(), ACTION_LABEL (+16 more)
+Nodes (24): DashboardShell(), MetricCard(), OverviewPage(), percent(), ProgramLayout(), ProgramsLayout(), ACTION_LABEL, ProgramsIndex() (+16 more)
 
 ### Community 93 - "liveShop.js"
-Cohesion: 0.16
-Nodes (15): answerForStreamTime(), answerForThreshold(), answerForUnlockable(), axios, directAnswer(), formatMinutes(), items, matchingItem() (+7 more)
+Cohesion: 0.23
+Nodes (12): answerForStreamTime(), answerForThreshold(), answerForUnlockable(), axios, directAnswer(), formatMinutes(), items, matchingItem() (+4 more)
 
 ### Community 94 - "needProgram"
 Cohesion: 0.14
@@ -587,8 +594,8 @@ Cohesion: 0.19
 Nodes (9): audit, { config }, db, existingCandidate(), extractCandidate(), learn, log, proposeFromTicket() (+1 more)
 
 ### Community 96 - "retention.js"
-Cohesion: 0.24
-Nodes (11): audit, countFor(), db, DEFAULTS, deleteTicketScope(), eligibleTicketIds(), policyFor(), preview() (+3 more)
+Cohesion: 0.15
+Nodes (16): audit, countFor(), db, DEFAULTS, deleteTicketScope(), eligibleTicketIds(), policyFor(), preview() (+8 more)
 
 ### Community 97 - "sourceGuard.js"
 Cohesion: 0.26
@@ -675,16 +682,16 @@ Cohesion: 0.46
 Nodes (8): fetchGithubDir(), fetchGithubFile(), fetchSourceText(), inlineText(), localFileText(), recordLink(), resolveLocalPath(), textFromJsonFaq()
 
 ### Community 116 - "helpers/page.tsx"
-Cohesion: 0.36
-Nodes (7): HelperVisibilityToggle(), Helper, HelpersPage(), Recommendation, listHostedHelpers(), coreHelpers(), coreRoutingRecommend()
+Cohesion: 0.29
+Nodes (9): HelperAddForm(), HelperVisibilityToggle(), Helper, HelpersPage(), Recommendation, hostedHelperSave(), listHostedHelpers(), coreHelpers() (+1 more)
 
-### Community 117 - "onReactionAdded"
-Cohesion: 0.33
-Nodes (7): DELETE_REACTIONS, DOWN_REACTIONS, messageAuthor(), onReactionAdded(), onReactionRemoved(), stagingBlocked(), UP_REACTIONS
+### Community 117 - "[id]/page.tsx"
+Cohesion: 0.11
+Nodes (25): DataRow(), StatusBadge(), formatDuration(), personaName(), AnalyticsPage(), mergeHelpers(), activityLine(), ATTENTION_STATUSES (+17 more)
 
 ### Community 118 - "teachThread.js"
-Cohesion: 0.27
-Nodes (9): buildTranscript(), { config }, isDeclineLine(), learn, llm, { MAX_TOKENS }, parseModelReply(), summarizeThread() (+1 more)
+Cohesion: 0.15
+Nodes (13): buildTranscript(), { config }, isDeclineLine(), learn, llm, { MAX_TOKENS }, parseModelReply(), summarizeThread() (+5 more)
 
 ### Community 119 - "tenancy.test.js"
 Cohesion: 0.20
@@ -698,9 +705,9 @@ Nodes (7): assert, cache, db, knowledge, lookup, { test }, warm
 Cohesion: 0.20
 Nodes (10): internalIncidentAction(), internalIncidentNotify(), internalKnowledgeCandidateAction(), internalRadarAction(), internalTicketAction(), internalTicketNote(), internalTicketReply(), ticketActorAllowed() (+2 more)
 
-### Community 122 - "firecrawl.test.js"
-Cohesion: 0.33
-Nodes (5): assert, axios, { config }, firecrawl, { test, before, after, beforeEach }
+### Community 122 - "session.ts"
+Cohesion: 0.17
+Nodes (16): GET(), HackClubMeResponse, HackClubTokenResponse, GET(), GET(), clearSessionCookie(), decodeSession(), encodeSession() (+8 more)
 
 ### Community 123 - "#pixie-sandbox Staging Runbook"
 Cohesion: 0.20
@@ -782,9 +789,9 @@ Nodes (4): assert, db, lease, { test }
 Cohesion: 0.33
 Nodes (4): assert, db, programs, { test }
 
-### Community 143 - "teachThread.test.js"
-Cohesion: 0.33
-Nodes (4): assert, llm, teachThread, { test, before, after }
+### Community 143 - "identity.js"
+Cohesion: 0.42
+Nodes (10): botName(), brand, corpusSection(), defaultIdentity(), IDENTITY(), isDefaultBot(), makerLine(), memoryPair() (+2 more)
 
 ### Community 144 - "routing.js"
 Cohesion: 0.33
@@ -793,6 +800,10 @@ Nodes (3): db, log, programs
 ### Community 145 - "shop.test.js"
 Cohesion: 0.33
 Nodes (5): assert, DATA, ITEMS, shop, { test }
+
+### Community 146 - "SidebarNav.tsx"
+Cohesion: 0.24
+Nodes (9): isActive(), Item, MAIN, MobileNavLink(), MobileProgramNav(), NavLink(), ProgramNav(), SECONDARY (+1 more)
 
 ### Community 147 - "Dedicated → Shared Migration"
 Cohesion: 0.33
@@ -866,13 +877,17 @@ Nodes (3): decideReopenSpike(), detectReopenSpike(), reopenSeverity()
 Cohesion: 0.67
 Nodes (3): detectFaqClusters(), faqFingerprint(), faqSeverity()
 
-### Community 179 - "retention.test.js"
-Cohesion: 0.33
-Nodes (5): assert, db, programs, retention, { test, before, after }
+### Community 179 - "brand.js"
+Cohesion: 0.43
+Nodes (7): cmd(), envValue(), id(), name(), rawSlug(), slug(), seedFeedbackReactions()
 
 ### Community 180 - "resolutionMemory.test.js"
 Cohesion: 0.20
 Nodes (7): api, assert, db, knowledge, memory, programs, { test, before, after }
+
+### Community 181 - "programHealth.test.js"
+Cohesion: 0.29
+Nodes (5): assert, db, health, programs, { test, before, after }
 
 ### Community 182 - "boostedValue"
 Cohesion: 0.29
@@ -882,9 +897,29 @@ Nodes (7): aiChunkSignals(), applyAiBoost(), applyDomainBoost(), applyReferralBo
 Cohesion: 0.40
 Nodes (4): assert, context, db, { test }
 
+### Community 184 - "brand.test.js"
+Cohesion: 0.40
+Nodes (3): assert, brand, { test }
+
+### Community 186 - "identity.test.js"
+Cohesion: 0.40
+Nodes (3): assert, identity, { test }
+
 ### Community 187 - "chunkSection"
 Cohesion: 0.67
 Nodes (4): chunkSection(), chunkSections(), detectDomain(), shouldFlushBeforeMerge()
+
+### Community 188 - "reply.test.js"
+Cohesion: 0.40
+Nodes (3): assert, reply, { test }
+
+### Community 189 - "liveShop.test.js"
+Cohesion: 0.50
+Nodes (3): assert, shop, { test }
+
+### Community 190 - "validator.test.js"
+Cohesion: 0.50
+Nodes (3): assert, { test }, validator
 
 ## Knowledge Gaps
 - **1109 isolated node(s):** `$schema`, `builder`, `dockerfilePath`, `startCommand`, `restartPolicyType` (+1104 more)
@@ -895,9 +930,9 @@ Nodes (4): chunkSection(), chunkSections(), detectDomain(), shouldFlushBeforeMer
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `src()` connect `memKey` to `hardwire-verify.mjs`, `programClaim.ts`, `knowledge.js`?**
-  _High betweenness centrality (0.184) - this node is a cross-community bridge._
-- **Why does `WizardSession` connect `programAccess.ts` to `programClaim.ts`?**
-  _High betweenness centrality (0.035) - this node is a cross-community bridge._
+  _High betweenness centrality (0.182) - this node is a cross-community bridge._
+- **Why does `WizardSession` connect `programAccess.ts` to `session.ts`, `programClaim.ts`?**
+  _High betweenness centrality (0.031) - this node is a cross-community bridge._
 - **Why does `dropSharedLines()` connect `hardwire-setup.mjs` to `fetchSourceText`, `knowledge.test.js`, `fetchUrlSource`, `knowledge.js`?**
   _High betweenness centrality (0.021) - this node is a cross-community bridge._
 - **What connects `$schema`, `builder`, `dockerfilePath` to the rest of the system?**
@@ -905,6 +940,6 @@ _Questions this graph is uniquely positioned to answer:_
 - **Should `commands.js` be split into smaller, more focused modules?**
   _Cohesion score 0.0707070707070707 - nodes in this community are weakly interconnected._
 - **Should `db.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.05704365079365079 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.057859703020993344 - nodes in this community are weakly interconnected._
 - **Should `handlers.js` be split into smaller, more focused modules?**
-  _Cohesion score 0.09090909090909091 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.08620689655172414 - nodes in this community are weakly interconnected._

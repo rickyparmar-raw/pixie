@@ -49,7 +49,7 @@
   "47": "intent.js",
   "48": "answer.test.js",
   "49": "respond.test.js",
-  "50": "config",
+  "50": "learn.test.js",
   "51": "1. 📚 Taught Facts & Core Rules",
   "52": "chat.js",
   "53": "Handoff checklist — pixie to a new Railway account",
@@ -84,7 +84,7 @@
   "82": "retrieve.js",
   "83": "copilot.js",
   "84": "tickets.test.js",
-  "85": "sumThread.js",
+  "85": "config",
   "86": "sla.js",
   "87": "slackMessages.test.js",
   "88": "context.js",
@@ -189,5 +189,6 @@
   "187": "chunkSection",
   "188": "reply.test.js",
   "189": "liveShop.test.js",
-  "190": "validator.test.js"
+  "190": "validator.test.js",
+  "191": "firecrawl.test.js"
 }
