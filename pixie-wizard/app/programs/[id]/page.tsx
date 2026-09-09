@@ -43,12 +43,11 @@ type AuditEvent = {
   created_at: number;
 };
 
-const OPEN_STATUSES = ["open", "ai_answered", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"];
+const OPEN_STATUSES = ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"];
 const ATTENTION_STATUSES = ["waiting_for_helper", "escalated", "reopened"];
 
 // Ticket-state bars, in the order a request moves through them.
 const STATE_ORDER: Array<[key: string, label: string, tone: string]> = [
-  ["ai_answered", "Answered", "bg-mint"],
   ["waiting_for_helper", "Waiting for a helper", "bg-tang"],
   ["assigned", "Assigned", "bg-text-muted"],
   ["claimed", "Claimed", "bg-text-muted"],

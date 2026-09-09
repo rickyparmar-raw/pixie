@@ -3,8 +3,7 @@
 import type { HostedProgramRow } from "@/lib/types";
 
 // The program's support identity, used wherever the UI would otherwise say
-// "AI" — mirrors Core's aiAnsweredLabel (lib/tickets.js): the program's own
-// support name, or "Pixie" when it hasn't set one.
+// "AI" — the program's own support name, or "Pixie" when it hasn't set one.
 export function personaName(program: Pick<HostedProgramRow, "support_name"> | null | undefined): string {
   const name = program?.support_name?.trim();
   return name && name.length > 0 ? name : "Pixie";
