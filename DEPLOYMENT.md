@@ -51,8 +51,21 @@ program never touches the manifest.
 `SESSION_SECRET`, `WIZARD_ENCRYPTION_KEY` (base64 32B, AES-256-GCM envelopes),
 `HCA_*` (Hack Club Auth), `PIXIE_CORE_BASE_URL` + `PIXIE_INTERNAL_TOKEN`
 (same token as Core), `PIXIE_WORKSPACE_ID`, `BASE_URL`, `CRON_SECRET`.
-Run `supabase/migrations/*.sql` in order against a disposable project first;
-`002`/`003`/`004` are idempotent.
+Wizard database migrations are versioned under `pixie-wizard/db/migrations/` and
+run explicitly with `bun run migrate` from `pixie-wizard/`. The command uses
+`DATABASE_URL`, creates `wizard_schema_migrations`, applies pending numbered SQL
+files in one transaction, records each applied filename, and aborts on failure.
+Run it against a disposable PostgreSQL database first, then against the Wizard
+production database before deploying the Wizard service. Migrations are additive
+and idempotent; do not reset or recreate the database. The People release adds
+`wizard_people` and `wizard_global_access` through migration `001_people_access.sql`.
+
+Wizard production deployment target: Railway service `pixie-wizard`, root
+directory `pixie-wizard`, build handled by Railpack, runtime `next start`.
+Core is a separate Railway service named `pixie` and must not be redeployed for
+Wizard-only changes. Required Wizard environment includes `DATABASE_URL`,
+`SESSION_SECRET`, Hack Club Auth credentials, `PIXIE_CORE_BASE_URL`,
+`PIXIE_INTERNAL_TOKEN`, `PIXIE_WORKSPACE_ID`, `BASE_URL`, and `CRON_SECRET`.
 
 ## Health
 
