@@ -77,14 +77,13 @@
     "id": "back-to-basics",
     "name": "Back to Basics",
     "supportName": "B2B Support",
-    "posture": "passive",
+    "posture": "active",
     "scope": "program",
     "helpChannel": "C0BMHSDL597",
     "channels": [
-      "C0BMHSDL597",
-      "C0BBY3B43EJ",
-      "C0BME2TT54N"
+      "C0BMHSDL597"
     ],
+    "organizerChannel": "C0BNAHC0GSD",
     "sources": [
       {
         "name": "Back to Basics Docs",
