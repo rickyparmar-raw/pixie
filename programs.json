@@ -112,5 +112,30 @@
       "site": "https://back-to-basics-cyan.vercel.app",
       "repo": "https://github.com/K-man1/back-to-basics"
     }
+  },
+  {
+    "id": "twisted",
+    "name": "Twisted",
+    "scope": "program",
+    "posture": "active",
+    "channels": [],
+    "sources": [
+      {
+        "name": "Twisted Official FAQ and Organizer Guidance",
+        "type": "json-faq",
+        "url": "file://./twisted-faq.json"
+      }
+    ],
+    "sharedSources": false,
+    "pinnedRules": [
+      "Twisted knowledge is isolated to program_id=twisted. Never use another YSWS program's program-specific facts as fallback.",
+      "Use the Twisted Official FAQ and Organizer Guidance source before any global rule. Only use a global Hack Club or YSWS rule when it is explicitly applicable to Twisted.",
+      "The exact Twisted end date is TBD. Never substitute another program's date or infer a deadline from launch timing.",
+      "Do not answer unsupported questions about Twisted teams, exact submission location, changing project ideas, or the complete after-submission workflow. Abstain and leave the question for helpers.",
+      "Twisted pathway launch timing was valid only as of 2026-09-09 and is highly time-sensitive. Do not present that timing as current without refreshed organizer evidence.",
+      "Do not quote old fixed Twisted reward rates, laptop-hour requirements, streak multipliers, or historical launch/beta dates as current facts."
+    ],
+    "guides": [],
+    "links": {}
   }
 ]
