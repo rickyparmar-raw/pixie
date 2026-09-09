@@ -17,10 +17,12 @@ export async function getHostedProgram(id: string): Promise<HostedProgramRow | n
   return rows[0] ?? null;
 }
 
-export async function listHostedProgramsForOwner(ownerHcaId: string): Promise<HostedProgramRow[]> {
+// Accepts either identity form (HCA id or email, case-insensitive) so a
+// program whose owner_hca_id was set by email still shows up for its owner.
+export async function listHostedProgramsForOwner(identity: { hcaId: string; email: string }): Promise<HostedProgramRow[]> {
   const { rows } = await query<HostedProgramRow>(
-    `select * from hosted_programs where owner_hca_id = $1 order by created_at desc`,
-    [ownerHcaId],
+    `select * from hosted_programs where lower(owner_hca_id) in (lower($1), lower($2)) order by created_at desc`,
+    [identity.hcaId, identity.email],
   );
   return rows;
 }

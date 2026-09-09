@@ -7,7 +7,7 @@
 // requirement directly: a non-member isn't an error case, they're a reader.
 import { cache } from "react";
 import { redirect } from "next/navigation";
-import { getSession, type WizardSession } from "@/lib/session";
+import { getSession, ownsIdentifier, type WizardSession } from "@/lib/session";
 import { getHostedProgram, getHelperRow } from "@/lib/hostedPrograms";
 import type { HostedProgramRow, ProgramRelationship } from "@/lib/types";
 
@@ -16,7 +16,7 @@ export async function relationshipFor(
   session: WizardSession | null,
 ): Promise<ProgramRelationship> {
   if (!session) return "public";
-  if (program.owner_hca_id === session.hcaId) return "owner";
+  if (ownsIdentifier(program.owner_hca_id, session)) return "owner";
   if (session.slackId) {
     // Targeted single-row lookup (program + this Slack user), not the whole
     // roster — same active-only, role semantics as before.

@@ -80,6 +80,20 @@ export async function clearSessionCookie() {
   jar.delete(COOKIE);
 }
 
+// True when `identifier` names this session's account — its HCA id or its
+// email, case-insensitive. No domain match (that would be far too broad for
+// ownership). An owner_hca_id column may therefore hold either form, so an
+// owner set by email (e.g. a hand-transferred program) still resolves.
+export function ownsIdentifier(
+  identifier: string | null | undefined,
+  session: { hcaId: string; email: string },
+): boolean {
+  if (!identifier) return false;
+  const id = identifier.trim().toLowerCase();
+  if (!id) return false;
+  return id === session.hcaId.toLowerCase() || id === session.email.toLowerCase();
+}
+
 function matchesAllowlist(raw: string, identity: { hcaId: string; email: string }): boolean {
   const entries = raw
     .split(",")

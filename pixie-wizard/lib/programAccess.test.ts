@@ -26,6 +26,18 @@ test("relationshipFor: owner_hca_id match is 'owner', regardless of Slack member
   expect(await relationshipFor(program!, session({ hcaId: "H_OWNER" }))).toBe("owner");
 });
 
+test("relationshipFor: owner_hca_id may hold an email — a hand-transferred owner still resolves", async () => {
+  mock.module("@/lib/db", () => createTestDb());
+  const { query } = await import("./db");
+  const { relationshipFor } = await import("./programAccess");
+  const { getHostedProgram } = await import("./hostedPrograms");
+  await query(`insert into hosted_programs (id, workspace_id, program_name, owner_hca_id) values ($1,$2,$3,$4)`, ["p2e", "T1", "P2e", "New.Owner@Example.com"]);
+  const program = await getHostedProgram("p2e");
+  // Session's HCA id is the opaque ident! form; only the email matches the row.
+  expect(await relationshipFor(program!, session({ hcaId: "ident!zzz", email: "new.owner@example.com" }))).toBe("owner");
+  expect(await relationshipFor(program!, session({ hcaId: "ident!zzz", email: "someone.else@example.com" }))).toBe("public");
+});
+
 test("relationshipFor: an active helper row with role=organizer is 'admin'", async () => {
   mock.module("@/lib/db", () => createTestDb());
   const { query } = await import("./db");

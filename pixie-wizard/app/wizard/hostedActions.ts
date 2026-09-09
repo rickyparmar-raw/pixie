@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/session";
+import { getSession, ownsIdentifier } from "@/lib/session";
 import { creatorEligible, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
 import { sourceUrlProblem } from "@/lib/sourceUrls";
 import { getHostedProgram, listHostedChannels, updateHostedProgram, markSyncState, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow } from "@/lib/hostedPrograms";
@@ -39,7 +39,7 @@ async function requireProgramOwner(programId: string) {
   if (!session) throw new Error("Unauthorized");
   const program = await getHostedProgram(programId);
   if (!program) throw new Error("Program not found");
-  if (program.owner_hca_id !== session.hcaId) throw new Error("Only the program owner can change these settings.");
+  if (!ownsIdentifier(program.owner_hca_id, session)) throw new Error("Only the program owner can change these settings.");
   return { session, program };
 }
 
@@ -716,7 +716,7 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
   if (!programId || !rawNew) return { error: "Pick a new help channel." };
 
   const program = await getHostedProgram(programId);
-  if (!program || program.owner_hca_id !== session.hcaId) return { error: "Only the program owner can move channels." };
+  if (!program || !ownsIdentifier(program.owner_hca_id, session)) return { error: "Only the program owner can move channels." };
   const current = await listHostedChannels(programId);
   const oldHelp = current.find((c) => c.kind === "help");
   if (oldHelp && oldHelp.channel_id === rawNew) return { error: "That's already the help channel." };

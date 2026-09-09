@@ -14,7 +14,7 @@ export default async function OverviewPage() {
   const session = await getSession();
   if (!session) redirect("/");
 
-  const programs = await listHostedProgramsForOwner(session.hcaId).catch(() => []);
+  const programs = await listHostedProgramsForOwner(session).catch(() => []);
   const snapshots = (
     await Promise.all(
       programs.map(async (program) => {
