@@ -1,16 +1,16 @@
 # Graph Report - pixie  (2026-09-09)
 
 ## Corpus Check
-- 261 files · ~347,994 words
+- 261 files · ~348,072 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 3019 nodes · 5544 edges · 186 communities (173 shown, 13 thin omitted)
+- 3019 nodes · 5545 edges · 186 communities (173 shown, 13 thin omitted)
 - Extraction: 87% EXTRACTED · 13% INFERRED · 0% AMBIGUOUS · INFERRED: 739 edges (avg confidence: 0.51)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `447d2602`
+- Built from commit: `133f1bc6`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -234,7 +234,7 @@ Nodes (44): adminOnly(), adminOnlyShortcut(), answer, approveCommand(), askComma
 
 ### Community 2 - "db.js"
 Cohesion: 0.06
-Nodes (62): addTicketNote(), approvedFacts(), assignTicket(), candidateForTicket(), claimTicket(), clearTakeover(), countRecentRequests(), { Database } (+54 more)
+Nodes (62): addTicketEvent(), addTicketNote(), approvedFacts(), candidateForTicket(), claimTicket(), clearTakeover(), countRecentRequests(), { Database } (+54 more)
 
 ### Community 3 - "handlers.js"
 Cohesion: 0.09
@@ -386,7 +386,7 @@ Nodes (7): args, fs, outputDir, outputDirOnly, outputPath, path, sharp
 
 ### Community 40 - "now"
 Cohesion: 0.05
-Nodes (40): addLearnedFact(), addThreadMessage(), addTicketEvent(), claimMessage(), claimProgramChannel(), closeTicket(), escalateTicketStatus(), gapCountsByKind() (+32 more)
+Nodes (40): addLearnedFact(), addThreadMessage(), assignTicket(), claimMessage(), claimProgramChannel(), closeTicket(), escalateTicketStatus(), gapForThread() (+32 more)
 
 ### Community 41 - "llm.js"
 Cohesion: 0.19
