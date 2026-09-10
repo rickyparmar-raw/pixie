@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
-import { coreHelperStats, coreUserInfo, coreConfigured, type CoreHelperStats } from "@/lib/pixieCore";
+import { coreHelperStats, type CoreHelperStats } from "@/lib/pixieCore";
+import { resolveIdentities, identityLabel } from "@/lib/identity";
 import { PageHeader, Section, CoreError } from "@/app/_components/DashboardShell";
 
 function duration(value: number | null): string {
@@ -27,8 +28,8 @@ export default async function HelperProfilePage({ params }: { params: Promise<{ 
   }
   const helper = stats.helpers.find((entry) => entry.userId === userId);
   if (!helper) return <><PageHeader title="Helper not found" description="This helper is not part of this program." /><Link className="text-brand underline" href={`/programs/${id}/helpers`}>Back to helpers</Link></>;
-  const identity = coreConfigured() ? await coreUserInfo(userId).catch(() => null) : null;
-  const name = identity?.ok && identity.displayName ? identity.displayName : `@${userId}`;
+  const identities = await resolveIdentities([userId]);
+  const name = identityLabel(identities.get(userId), userId);
 
   return <>
     <PageHeader title={name} description={`${helper.role} · program-scoped helper profile`} />

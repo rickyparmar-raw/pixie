@@ -1,8 +1,12 @@
 // Row shapes for supabase/schema.sql.
 
 // Shared shape for useActionState-driven server actions across the app.
+// `ok` / `status` are optional — set by actions that give restrained success
+// feedback (a ticket lifecycle action confirming the new state).
 export interface ActionState {
   error: string | null;
+  ok?: boolean;
+  status?: string;
 }
 
 // A knowledge source for the bot's corpus.

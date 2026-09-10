@@ -140,12 +140,34 @@ export async function coreChannelMembership(channelId: string): Promise<{ ok: bo
   return body as { ok: boolean; hasAccess: boolean; name?: string | null; reason?: string };
 }
 
-// Display identity only — display name + avatar, nothing else. Used
-// exclusively to render the public helper roster; never pass the userId
-// this was resolved from back out alongside the result.
-export async function coreUserInfo(userId: string): Promise<{ ok: boolean; displayName?: string | null; avatarUrl?: string | null; reason?: string }> {
+export interface CoreSlackProfile {
+  slackId: string;
+  displayName: string | null;
+  realName: string | null;
+  username: string | null;
+  avatarUrl: string | null;
+}
+
+// Display identity only — the public name variants and the avatar, nothing
+// else (never email). Single-user form; prefer coreUserInfoBatch for a page
+// that renders more than one.
+export async function coreUserInfo(userId: string): Promise<{ ok: boolean } & Partial<CoreSlackProfile> & { reason?: string }> {
   const { body } = await call(`/internal/v1/slack/users/info?user=${encodeURIComponent(userId)}`);
-  return body as { ok: boolean; displayName?: string | null; avatarUrl?: string | null; reason?: string };
+  return body as { ok: boolean } & Partial<CoreSlackProfile> & { reason?: string };
+}
+
+// One round trip for every Slack id a page needs. Core dedupes, caps the
+// fan-out, and serves from a per-user cache — a warm dashboard never touches
+// Slack. Returns { [id]: profile | null }; null means unknown/deleted/bot.
+export async function coreUserInfoBatch(userIds: string[]): Promise<Record<string, CoreSlackProfile | null>> {
+  const ids = [...new Set(userIds.filter(Boolean))];
+  if (ids.length === 0) return {};
+  const body = await request<{ users: Record<string, CoreSlackProfile | null> }>(
+    "/internal/v1/slack/users/info",
+    "identity lookup failed",
+    send("POST", { userIds: ids }),
+  );
+  return body.users ?? {};
 }
 
 export async function coreMacrosList(programId: string, q = ""): Promise<unknown[]> {

@@ -1,7 +1,8 @@
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreAudit } from "@/lib/pixieCore";
+import { resolveIdentities, labelFor } from "@/lib/identity";
 import { PageHeader, CoreError, EmptyState } from "@/app/_components/DashboardShell";
-import { shortTime, userLabel } from "@/app/_components/format";
+import { shortTime } from "@/app/_components/format";
 
 type AuditEvent = {
   id: number;
@@ -42,6 +43,8 @@ export default async function AuditPage({
     .slice()
     .sort((a, b) => b.created_at - a.created_at);
 
+  const identities = await resolveIdentities(rows.map((e) => e.actor_id));
+
   return (
     <>
       <PageHeader title="Audit log" description="Append-only. Every state change, no secrets." />
@@ -61,12 +64,17 @@ export default async function AuditPage({
       ) : rows.length === 0 ? (
         <EmptyState title={needle ? "Nothing matches that filter." : "No audit events yet."} />
       ) : (
-        <ul className="divide-y divide-line border-y border-line font-mono text-xs">
+        <ul className="divide-y divide-line border-y border-line text-xs">
           {rows.map((e) => (
-            <li key={e.id} className="grid grid-cols-[4.5rem_1fr] gap-x-3 py-2 sm:grid-cols-[9rem_7rem_1fr]">
-              <span className="text-text-muted">{shortTime(e.created_at)}</span>
-              <span className="truncate text-text-muted">{e.actor_id ? userLabel(e.actor_id) : "pixie"}</span>
-              <span className="col-span-2 truncate text-text sm:col-span-1">
+            <li key={e.id} className="grid grid-cols-[4.5rem_1fr] gap-x-3 py-2 sm:grid-cols-[9rem_10rem_1fr]">
+              <span className="font-mono text-text-muted">{shortTime(e.created_at)}</span>
+              <span className="min-w-0 truncate">
+                <span className="text-text-muted">{e.actor_id ? labelFor(identities, e.actor_id) : "pixie"}</span>
+                {e.actor_id && identities.get(e.actor_id)?.label !== `@${e.actor_id}` && (
+                  <span className="ml-1 font-mono text-[0.65rem] text-text-muted/60">{e.actor_id}</span>
+                )}
+              </span>
+              <span className="col-span-2 truncate font-mono text-text sm:col-span-1">
                 {e.action}
                 {e.entity_type ? (
                   <span className="text-text-muted">

@@ -6,7 +6,7 @@ import { getSession, ownsIdentifier } from "@/lib/session";
 import { creatorEligible, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
 import { sourceUrlProblem } from "@/lib/sourceUrls";
 import { getHostedProgram, listHostedChannels, updateHostedProgram, markSyncState, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow, upsertWizardPerson, setWizardSuperadmin, setHostedHelperRole, revokeHostedHelper, isWizardSuperadmin, revokeWizardSuperadmin } from "@/lib/hostedPrograms";
-import { relationshipFor, linkedSlackSession, requireWizardSuperadmin } from "@/lib/programAccess";
+import { relationshipFor, linkedSlackSession, requireWizardSuperadmin, loadProgramContext } from "@/lib/programAccess";
 import { query } from "@/lib/db";
 import {
   syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot,
@@ -385,20 +385,29 @@ export async function hostedTicketAction(_prev: ActionState, formData: FormData)
   const ticketId = Number(formData.get("ticketId") ?? "");
   const action = String(formData.get("ticketAction") ?? "");
   if (!programId || !ticketId || !action) return { error: "Missing ticket action fields." };
+  // Wizard-side program scoping — being able to open the dashboard is not the
+  // same as being a helper on this program. Core re-checks membership against
+  // the ticket's own program too; this fails fast with a readable message.
+  const { relationship } = await loadProgramContext(programId);
+  if (relationship === "public") return { error: "You don't have helper access to this program." };
+  let status: string | undefined;
   try {
-    await coreTicketAction(ticketId, action, {
+    const result = (await coreTicketAction(ticketId, action, {
       programId,
       actorId: session.slackId,
       assigneeId: String(formData.get("assigneeId") ?? "").trim() || undefined,
       resolution: String(formData.get("resolution") ?? "").trim() || undefined,
       canonicalId: String(formData.get("canonicalId") ?? "").trim() || undefined,
       until: String(formData.get("until") ?? "").trim() || undefined,
-    });
+    })) as { ticket?: { ticket?: { status?: string } } } | undefined;
+    status = result?.ticket?.ticket?.status;
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Ticket action failed." };
   }
   revalidatePath(`/programs/${programId}/tickets/${ticketId}`);
-  return { error: null };
+  revalidatePath(`/programs/${programId}/tickets`);
+  revalidatePath(`/programs/${programId}`);
+  return { error: null, ok: true, status };
 }
 
 export async function hostedTicketReply(_prev: ActionState, formData: FormData): Promise<ActionState> {

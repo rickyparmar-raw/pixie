@@ -13,8 +13,17 @@ function ErrorLine({ state }: { state: ActionState }) {
   return <p className="border-l-2 border-brand/60 pl-3 text-sm text-brand">{state.error}</p>;
 }
 
+function DoneLine({ state }: { state: ActionState }) {
+  if (state.error || !state.ok) return null;
+  return (
+    <p className="border-l-2 border-mint/60 pl-3 text-sm text-text-muted">
+      Done{state.status ? ` — now ${state.status.replace(/_/g, " ")}` : ""}.
+    </p>
+  );
+}
+
 export function TicketActions({ programId, ticketId }: { programId: string; ticketId: number }) {
-  const [actionState, actionForm] = useActionState(hostedTicketAction, initialState);
+  const [actionState, actionForm, actionPending] = useActionState(hostedTicketAction, initialState);
   const [replyState, replyForm] = useActionState(hostedTicketReply, initialState);
   const [noteState, noteForm] = useActionState(hostedTicketNote, initialState);
 
@@ -27,15 +36,17 @@ export function TicketActions({ programId, ticketId }: { programId: string; tick
 
   return (
     <div className="space-y-6">
-      <form action={actionForm} className="flex flex-wrap gap-2">
+      <form action={actionForm} className="flex flex-wrap items-center gap-2">
         {hidden}
-        <button name="ticketAction" value="claim" className={btnPrimary}>Claim</button>
-        <button name="ticketAction" value="resolve" className={btnQuiet}>Resolve</button>
-        <button name="ticketAction" value="reopen" className={btnQuiet}>Reopen</button>
-        <button name="ticketAction" value="unclaim" className={btnQuiet}>Unclaim</button>
-        <button name="ticketAction" value="close" className={btnQuiet}>Close</button>
-        <button name="ticketAction" value="escalate" className={btnQuiet}>Escalate</button>
+        <button name="ticketAction" value="claim" disabled={actionPending} className={`${btnPrimary} disabled:opacity-50`}>Claim</button>
+        <button name="ticketAction" value="resolve" disabled={actionPending} className={`${btnQuiet} disabled:opacity-50`}>Resolve</button>
+        <button name="ticketAction" value="reopen" disabled={actionPending} className={`${btnQuiet} disabled:opacity-50`}>Reopen</button>
+        <button name="ticketAction" value="unclaim" disabled={actionPending} className={`${btnQuiet} disabled:opacity-50`}>Release</button>
+        <button name="ticketAction" value="close" disabled={actionPending} className={`${btnQuiet} disabled:opacity-50`}>Close</button>
+        <button name="ticketAction" value="escalate" disabled={actionPending} className={`${btnQuiet} disabled:opacity-50`}>Escalate</button>
+        {actionPending && <span className="text-xs text-text-muted">Working…</span>}
         <ErrorLine state={actionState} />
+        <DoneLine state={actionState} />
       </form>
 
       <form action={replyForm} className="max-w-2xl space-y-3">
@@ -68,9 +79,9 @@ export function TicketActions({ programId, ticketId }: { programId: string; tick
           <input id="canonicalId" name="canonicalId" placeholder="123" className={`${inputClass} font-mono`} />
         </div>
         <div className="flex flex-wrap gap-2">
-          <button name="ticketAction" value="assign" className={btnQuiet}>Assign</button>
-          <button name="ticketAction" value="duplicate" className={btnQuiet}>Duplicate</button>
-          <button name="ticketAction" value="snooze" className={btnQuiet}>Snooze 24h</button>
+          <button name="ticketAction" value="assign" disabled={actionPending} className={`${btnQuiet} disabled:opacity-50`}>Assign</button>
+          <button name="ticketAction" value="duplicate" disabled={actionPending} className={`${btnQuiet} disabled:opacity-50`}>Duplicate</button>
+          <button name="ticketAction" value="snooze" disabled={actionPending} className={`${btnQuiet} disabled:opacity-50`}>Snooze 24h</button>
         </div>
         <input type="hidden" name="until" value={String(Date.now() + 24 * 60 * 60 * 1000)} />
       </form>

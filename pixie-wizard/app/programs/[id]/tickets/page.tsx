@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreTicketSearch } from "@/lib/pixieCore";
+import { resolveIdentities, labelFor } from "@/lib/identity";
 import { PageHeader, CoreError, StatusDot, EmptyState } from "@/app/_components/DashboardShell";
-import { timeAgo, userLabel } from "@/app/_components/format";
+import { timeAgo } from "@/app/_components/format";
+import { TicketResolveButton } from "./TicketResolveButton";
+
+const RESOLVABLE_STATUSES = new Set(["open", "waiting_for_helper", "assigned", "escalated", "reopened", "claimed"]);
 
 type TicketRow = {
   id: number;
@@ -67,6 +71,7 @@ export default async function TicketsPage({
   }
   const pages = Math.max(Math.ceil(total / LIMIT), 1);
   const base = { status: query.status, q: query.q, assignee: query.assignee };
+  const identities = await resolveIdentities(rows.flatMap((t) => [t.requester_id, t.assignee_id]));
 
   return (
     <>
@@ -122,26 +127,27 @@ export default async function TicketsPage({
       ) : (
         <ul className="divide-y divide-line border-y border-line">
           {rows.map((t) => (
-            <li key={t.id}>
-              <Link href={`/programs/${id}/tickets/${t.id}`} className="group grid gap-x-4 gap-y-1 py-3 sm:grid-cols-[1fr_auto]">
-                <div className="min-w-0">
-                  <p className="truncate text-sm text-text group-hover:text-brand">
-                    <span className="font-mono text-xs text-text-muted">#{t.id}</span> {t.summary || t.question}
-                  </p>
-                  <p className="mt-0.5 truncate font-mono text-xs text-text-muted">
-                    {userLabel(t.requester_id)}
-                    {t.category ? ` · ${t.category}` : ""}
-                    {t.priority && t.priority !== "normal" ? ` · ${t.priority}` : ""}
-                  </p>
-                </div>
-                <div className="flex items-center gap-4 sm:flex-col sm:items-end sm:gap-0.5">
-                  <StatusDot status={t.status}>{t.status.replace(/_/g, " ")}</StatusDot>
-                  <span className="font-mono text-xs text-text-muted">
-                    {t.assignee_id ? `${userLabel(t.assignee_id)} · ` : ""}
-                    {timeAgo(t.created_at)}
-                  </span>
-                </div>
+            <li key={t.id} className="grid gap-x-4 gap-y-1 py-3 sm:grid-cols-[1fr_auto]">
+              <Link href={`/programs/${id}/tickets/${t.id}`} className="group min-w-0">
+                <p className="truncate text-sm text-text group-hover:text-brand">
+                  <span className="font-mono text-xs text-text-muted">#{t.id}</span> {t.summary || t.question}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-text-muted">
+                  {labelFor(identities, t.requester_id)}
+                  {t.category ? ` · ${t.category}` : ""}
+                  {t.priority && t.priority !== "normal" ? ` · ${t.priority}` : ""}
+                </p>
               </Link>
+              <div className="flex items-center gap-4 sm:flex-col sm:items-end sm:gap-1">
+                <StatusDot status={t.status}>{t.status.replace(/_/g, " ")}</StatusDot>
+                <span className="text-xs text-text-muted">
+                  {t.assignee_id ? `${labelFor(identities, t.assignee_id)} · ` : ""}
+                  {timeAgo(t.created_at)}
+                </span>
+                {RESOLVABLE_STATUSES.has(t.status) && (
+                  <TicketResolveButton programId={id} ticketId={t.id} />
+                )}
+              </div>
             </li>
           ))}
         </ul>

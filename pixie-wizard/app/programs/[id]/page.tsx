@@ -3,7 +3,8 @@ import Link from "next/link";
 import { getPublicProgramProfile, listVisibleHelperIdentityKeys } from "@/lib/hostedPrograms";
 import { loadProgramContext } from "@/lib/programAccess";
 import { PublicProfile } from "./PublicProfile";
-import { coreAnalytics, coreSlackChannels, coreUserInfo, coreTicketSearch, coreAudit } from "@/lib/pixieCore";
+import { coreAnalytics, coreSlackChannels, coreTicketSearch, coreAudit } from "@/lib/pixieCore";
+import { resolveIdentities, labelFor } from "@/lib/identity";
 import {
   PageHeader,
   Section,
@@ -15,7 +16,7 @@ import {
   DataRow,
   EmptyState,
 } from "@/app/_components/DashboardShell";
-import { personaName, formatDuration, timeAgo, userLabel } from "@/app/_components/format";
+import { personaName, formatDuration, timeAgo } from "@/app/_components/format";
 import type { PublicHelperIdentity } from "@/lib/types";
 
 function healthLabel(status: string, sync: string): string {
@@ -30,6 +31,7 @@ type Ticket = {
   question: string | null;
   summary: string | null;
   status: string;
+  requester_id: string;
   assignee_id: string | null;
   created_at: number;
 };
@@ -80,18 +82,11 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
       helpChannelDisplay = match ? `#${match.name}` : profile.publicHelpChannelId;
     }
 
-    const roster: PublicHelperIdentity[] = (
-      await Promise.allSettled(
-        identityKeys.map(async ({ slackUserId, role }) => {
-          try {
-            const info = await coreUserInfo(slackUserId);
-            return { role, displayName: info.ok ? info.displayName ?? null : null, avatarUrl: info.ok ? info.avatarUrl ?? null : null };
-          } catch {
-            return { role, displayName: null, avatarUrl: null };
-          }
-        }),
-      )
-    ).map((r, i) => (r.status === "fulfilled" ? r.value : { role: identityKeys[i].role, displayName: null, avatarUrl: null }));
+    const rosterIdentities = await resolveIdentities(identityKeys.map((k) => k.slackUserId));
+    const roster: PublicHelperIdentity[] = identityKeys.map(({ slackUserId, role }) => {
+      const found = rosterIdentities.get(slackUserId);
+      return { role, displayName: found?.displayName ?? found?.realName ?? null, avatarUrl: found?.avatarUrl ?? null };
+    });
 
     return <PublicProfile profile={profile} helpChannelDisplay={helpChannelDisplay} roster={roster} />;
   }
@@ -127,6 +122,12 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
     auditR.status === "fulfilled"
       ? ((auditR.value ?? []) as AuditEvent[]).sort((a, b) => b.created_at - a.created_at).slice(0, 8)
       : [];
+
+  const identities = await resolveIdentities([
+    ...events.map((e) => e.actor_id),
+    ...attention.map((t) => t.requester_id),
+    ...attention.map((t) => t.assignee_id),
+  ]);
 
   const gapCount = Object.values((analytics?.gapCounts ?? {}) as Record<string, number>).reduce((a, b) => a + b, 0);
   const sourceCount = Array.isArray(program.sources) ? program.sources.length : 0;
@@ -209,7 +210,11 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
                         href={`/programs/${id}/tickets/${t.id}`}
                         lead={`#${t.id}`}
                         title={t.summary || t.question || "Ticket"}
-                        sub={<span className="font-mono">{statusShort(t.status)} · {timeAgo(t.created_at)}</span>}
+                        sub={
+                          <span>
+                            {statusShort(t.status)} · {labelFor(identities, t.requester_id)} · {timeAgo(t.created_at)}
+                          </span>
+                        }
                       />
                     </li>
                   ))}
@@ -242,7 +247,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
             ) : (
               <ul className="divide-y divide-line border-t border-line text-sm">
                 {events.map((e) => {
-                  const a = activityLine(e, persona);
+                  const a = activityLine(e, persona, identities);
                   return (
                     <li key={e.id} className="flex items-baseline gap-3 py-2">
                       <span className="w-10 shrink-0 font-mono text-xs text-text-muted">{timeAgo(e.created_at)}</span>
@@ -297,13 +302,17 @@ function statusShort(s: string): string {
 
 // Turn a Core audit row into a ledger line: a ticket/entity ref, a plain
 // verb, and who did it. Never throws on an unfamiliar shape.
-function activityLine(e: AuditEvent, persona: string): { ref: string; verb: string; who: string } {
+function activityLine(
+  e: AuditEvent,
+  persona: string,
+  identities: Map<string, { label: string }>,
+): { ref: string; verb: string; who: string } {
   const ref = e.entity_id ? (e.entity_type === "ticket" ? `#${e.entity_id}` : e.entity_id) : "";
   const verb = e.action
     .replace(/^[a-z]+\./, "")
     .replace(/^ai[_ ]/, "")
     .replace(/[._]/g, " ")
     .trim();
-  const who = e.actor_id ? userLabel(e.actor_id) : persona;
+  const who = e.actor_id ? (identities.get(e.actor_id)?.label ?? `@${e.actor_id}`) : persona;
   return { ref, verb, who };
 }

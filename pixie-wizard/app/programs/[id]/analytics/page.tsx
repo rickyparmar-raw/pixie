@@ -1,7 +1,8 @@
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreAnalytics } from "@/lib/pixieCore";
+import { resolveIdentities, labelFor } from "@/lib/identity";
 import { PageHeader, Section, CoreError, SignalRail, MiniBar, BarList, EmptyState } from "@/app/_components/DashboardShell";
-import { personaName, formatDuration, userLabel } from "@/app/_components/format";
+import { personaName, formatDuration } from "@/app/_components/format";
 
 type Analytics = {
   created: number;
@@ -47,6 +48,10 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
 
   const escalated = a.byStatus.escalated ?? 0;
   const resolved = a.byStatus.resolved ?? 0;
+  const identities = await resolveIdentities([
+    ...(a.helperLoad ?? []).map((h) => h.userId),
+    ...(a.helperResolved ?? []).map((h) => h.userId),
+  ]);
 
   // response-time comparison shares one scale
   const times: Array<[string, number | null]> = [
@@ -123,8 +128,8 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
           ) : (
             <ul className="space-y-3">
               {helpers.map((h) => (
-                <li key={h.userId} className="grid grid-cols-[8rem_1fr_auto] items-center gap-3 text-sm">
-                  <span className="truncate font-mono text-xs text-text-muted">{userLabel(h.userId)}</span>
+                <li key={h.userId} className="grid grid-cols-[9rem_1fr_auto] items-center gap-3 text-sm">
+                  <span className="truncate text-xs text-text-muted">{labelFor(identities, h.userId)}</span>
                   <span className="flex h-1.5 overflow-hidden rounded-full bg-line/50">
                     <span className="bg-tang" style={{ width: `${(h.open / helperMax) * 100}%` }} />
                     <span className="bg-mint" style={{ width: `${(h.resolved / helperMax) * 100}%` }} />

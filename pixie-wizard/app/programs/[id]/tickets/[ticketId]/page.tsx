@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreTicketDetail, coreMacrosList } from "@/lib/pixieCore";
+import { resolveIdentities, labelFor } from "@/lib/identity";
 import { Section, CoreError, StatusDot, EmptyState } from "@/app/_components/DashboardShell";
-import { shortTime, userLabel } from "@/app/_components/format";
+import { shortTime } from "@/app/_components/format";
 import { TicketActions } from "./TicketActions";
 import { CopilotPanel } from "./CopilotPanel";
 import { MacroSendForm, type MacroRow } from "../../macros/MacroForms";
@@ -61,9 +62,16 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     macros = [];
   }
 
+  const identities = await resolveIdentities([
+    ticket.requester_id,
+    ticket.assignee_id,
+    ...events.map((e) => e.actor_id),
+    ...notes.map((n) => n.author_id),
+  ]);
+
   const meta = [
-    `from ${userLabel(ticket.requester_id)}`,
-    ticket.assignee_id ? `assigned ${userLabel(ticket.assignee_id)}` : null,
+    `from ${labelFor(identities, ticket.requester_id)}`,
+    ticket.assignee_id ? `assigned ${labelFor(identities, ticket.assignee_id)}` : null,
     ticket.category,
     ticket.priority && ticket.priority !== "normal" ? ticket.priority : null,
     typeof ticket.ai_confidence === "number" ? `AI confidence ${Math.round(ticket.ai_confidence * 100)}%` : null,
@@ -102,7 +110,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
                   <div className="pb-4">
                     <p className="text-sm text-text">
                       {(e.event_type || e.kind || "event").replace(/_/g, " ")}{" "}
-                      {e.actor_id && <span className="font-mono text-xs text-text-muted">{userLabel(e.actor_id)}</span>}{" "}
+                      {e.actor_id && <span className="text-xs text-text-muted">{labelFor(identities, e.actor_id)}</span>}{" "}
                       <span className="font-mono text-xs text-text-muted">{shortTime(e.created_at)}</span>
                     </p>
                     {(e.detail || e.note) && <p className="mt-1 text-sm text-text-muted">{e.detail || e.note}</p>}
@@ -121,8 +129,8 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
               {notes.map((n) => (
                 <li key={n.id} className="border-l-2 border-line pl-3">
                   <p className="text-text">{n.body}</p>
-                  <p className="mt-1 font-mono text-xs text-text-muted">
-                    {userLabel(n.author_id)} · {shortTime(n.created_at)}
+                  <p className="mt-1 text-xs text-text-muted">
+                    {labelFor(identities, n.author_id)} · {shortTime(n.created_at)}
                   </p>
                 </li>
               ))}

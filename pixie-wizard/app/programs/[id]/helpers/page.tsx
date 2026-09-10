@@ -2,8 +2,8 @@ import { requireProgramMembership } from "@/lib/programAccess";
 import Link from "next/link";
 import { listHostedHelpers } from "@/lib/hostedPrograms";
 import { coreHelpers, coreRoutingRecommend, coreHelperStats, type CoreHelperStats } from "@/lib/pixieCore";
+import { resolveIdentities, labelFor } from "@/lib/identity";
 import { PageHeader, Section, CoreError, EmptyState } from "@/app/_components/DashboardShell";
-import { userLabel } from "@/app/_components/format";
 import { HelperAddForm, HelperVisibilityToggle } from "./HelperForms";
 
 type Helper = { user_id: string; helper_source: string; role: string; active: number };
@@ -43,6 +43,11 @@ export default async function HelpersPage({ params }: { params: Promise<{ id: st
     .map((h) => ({ ...h, stats: statById.get(h.user_id) }))
     .sort((a, b) => (b.stats?.totals.resolved ?? 0) - (a.stats?.totals.resolved ?? 0));
 
+  const identities = await resolveIdentities([
+    ...roster.map((h) => h.user_id),
+    ...recs.map((r) => r.userId),
+  ]);
+
   return (
     <>
       <PageHeader title="Helpers" description="Who can take a ticket, and what they're carrying." />
@@ -59,7 +64,7 @@ export default async function HelpersPage({ params }: { params: Promise<{ id: st
               {roster.map((h) => (
                 <li key={h.user_id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5 text-sm">
                   <span className="min-w-0">
-                  <Link className="font-mono text-brand underline" href={`/programs/${id}/helpers/${encodeURIComponent(h.user_id)}`}>{userLabel(h.user_id)}</Link>{" "}
+                    <Link className="text-brand underline" href={`/programs/${id}/helpers/${encodeURIComponent(h.user_id)}`}>{labelFor(identities, h.user_id)}</Link>{" "}
                     <span className="font-mono text-xs text-text-muted">
                       {h.role}
                       {h.helper_source ? ` · via ${h.helper_source}` : ""}
@@ -80,7 +85,7 @@ export default async function HelpersPage({ params }: { params: Promise<{ id: st
             <ul className="space-y-1.5 text-sm">
               {recs.map((r) => (
                 <li key={r.userId} className="flex flex-wrap items-baseline gap-x-2">
-                  <span className="font-mono text-text">{userLabel(r.userId)}</span>
+                  <span className="text-text">{labelFor(identities, r.userId)}</span>
                   <span className="font-mono text-xs text-text-muted">score {r.score}</span>
                   <span className="text-xs text-text-muted">· {r.reasons.join("; ")}</span>
                 </li>
