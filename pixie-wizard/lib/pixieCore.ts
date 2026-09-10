@@ -181,6 +181,48 @@ export async function coreRoutingRecommend(programId: string, category?: string)
   );
 }
 
+export type AssignmentLifecycleState = "supported" | "insufficient" | "unsupported";
+
+export interface HelperAssignmentCounts {
+  offered: number;
+  claimed: number;
+  declined: number;
+  released: number;
+  timedOut: number;
+  completedOffers: number;
+}
+
+export interface CoreHelperStats {
+  programId: string;
+  acceptRate: number | null;
+  acceptedAssignments: number;
+  completedOffers: number;
+  assignmentLifecycle: AssignmentLifecycleState;
+  helpers: Array<{
+    userId: string;
+    role: string;
+    active: boolean;
+    expertise: Array<{ tag: string; solved_count: number }>;
+    categoryResolved: Array<{ category: string; resolved: number }>;
+    totals: { assigned: number; resolved: number; open: number; reopened: number };
+    reopenRate: number | null;
+    medianFirstResponseMs: number | null;
+    medianResolutionMs: number | null;
+    helpfulCount: number;
+    unhelpfulCount: number;
+    helpfulPercentage: number | null;
+    lastActivity: number | null;
+    acceptRate: number | null;
+    assignmentLifecycle: AssignmentLifecycleState;
+    assignments: HelperAssignmentCounts;
+    recentTickets: Array<Record<string, unknown>>;
+  }>;
+}
+
+export async function coreHelperStats(programId: string): Promise<CoreHelperStats> {
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers/stats`, "helper stats failed");
+}
+
 export async function coreRoutingExpertise(programId: string, payload: Record<string, unknown>): Promise<unknown> {
   return request(
     `/internal/v1/programs/${encodeURIComponent(programId)}/routing/expertise`,
