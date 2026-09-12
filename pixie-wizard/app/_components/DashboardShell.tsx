@@ -57,16 +57,18 @@ export function DashboardShell({
         </Link>
 
         {userName && (
-          <Link href="/api/auth/logout" className="mt-4 flex shrink-0 items-center gap-2.5 border-t border-line pt-4 text-xs">
-            <span className="grid size-7 shrink-0 place-items-center rounded-full bg-brand text-[11px] font-semibold text-on-brand">
-              {userName.slice(0, 1).toUpperCase()}
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-text">{userName}</span>
-              {userEmail && <span className="block truncate text-text-muted">{userEmail}</span>}
-            </span>
-            <IconChevronRight size={14} className="shrink-0 text-text-muted" />
-          </Link>
+          <form action="/api/auth/logout" method="post" className="mt-4 shrink-0 border-t border-line pt-4">
+            <button type="submit" className="flex w-full items-center gap-2.5 text-left text-xs">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-brand text-[11px] font-semibold text-on-brand">
+                {userName.slice(0, 1).toUpperCase()}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-text">{userName}</span>
+                {userEmail && <span className="block truncate text-text-muted">{userEmail}</span>}
+              </span>
+              <IconChevronRight size={14} className="shrink-0 text-text-muted" />
+            </button>
+          </form>
         )}
       </aside>
 

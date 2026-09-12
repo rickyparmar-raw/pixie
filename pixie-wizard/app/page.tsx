@@ -219,7 +219,7 @@ function Hero({ devBypass }: { devBypass: boolean }) {
       </div>
 
       <div style={{ position: "absolute", left: 735, top: 474, width: 281, height: 72, borderRadius: 14, background: "#fff", boxShadow: "0 10px 26px rgba(20,30,15,0.10)" }}>
-        <Slack size={26} />
+        <div style={{ position: "absolute", left: 20, top: 20 }}><Slack size={26} /></div>
         <div style={{ position: "absolute", left: 63, top: 21, display: "flex", alignItems: "baseline", gap: 9 }}><span style={{ fontWeight: 700, fontSize: 15 }}>jamie</span><span style={{ fontSize: 12.5, color: "#8A8A84" }}>11:03 AM</span></div>
         <div style={{ position: "absolute", left: 63, top: 41, fontSize: 16.5, color: "#1A1A1A", whiteSpace: "nowrap" }}>can i change this after review?</div>
       </div>

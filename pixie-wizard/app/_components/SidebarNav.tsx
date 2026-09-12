@@ -64,6 +64,7 @@ function NavLink({
   return (
     <Link
       href={href}
+      prefetch={false}
       aria-current={active ? "page" : undefined}
       className={`flex items-center gap-2.5 border-l-2 py-1.5 pl-3 text-[13px] transition-colors ${
         active
@@ -93,6 +94,7 @@ function MobileNavLink({ href, label, exact }: { href: string; label: string; ex
   return (
     <Link
       href={href}
+      prefetch={false}
       aria-current={active ? "page" : undefined}
       className={`whitespace-nowrap border-b-2 pb-1.5 text-xs transition-colors ${
         active ? "border-brand text-text" : "border-transparent text-text-muted"

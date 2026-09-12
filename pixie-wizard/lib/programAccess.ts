@@ -72,18 +72,9 @@ export async function linkedSlackSession(): Promise<(WizardSession & { slackId: 
 // can't see it" any louder than the profile already does on purpose.
 export async function requireProgramMembership(programId: string): Promise<ProgramMembership> {
   const { session, program, relationship } = await loadProgramContext(programId);
-  if (!session) {
-    console.warn(`[requireProgramMembership] no session for program ${programId} — redirecting to /`);
-    redirect("/");
-  }
-  if (!program) {
-    console.warn(`[requireProgramMembership] program ${programId} not found — redirecting to /programs`);
-    redirect("/programs");
-  }
-  if (relationship === "public") {
-    console.warn(`[requireProgramMembership] ${session.hcaId} is not a member of ${programId} — redirecting to profile`);
-    redirect(`/programs/${programId}`);
-  }
+  if (!session) redirect("/");
+  if (!program) redirect("/programs");
+  if (relationship === "public") redirect(`/programs/${programId}`);
 
   return { program, session, relationship };
 }
