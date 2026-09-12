@@ -190,15 +190,6 @@ function Hero({ devBypass }: { devBypass: boolean }) {
 
       <div style={{ position: "absolute", left: 600, top: 850, fontSize: 11.5, lineHeight: "17px", letterSpacing: "0.18em", fontWeight: 600, color: "#8E7BB6" }}>BUILT FOR<br />PROGRAMS THAT<br />MOVE THINGS FORWARD.</div>
 
-      <div style={{ position: "absolute", left: 954, top: 842, fontSize: 10.5, letterSpacing: "0.16em", fontWeight: 600, color: "#6E6E68" }}>TRUSTED BY AMAZING COMMUNITIES</div>
-      <div style={{ position: "absolute", left: 950, top: 872, display: "flex", alignItems: "baseline", gap: 30, color: "#0D0D0D" }}>
-        <span style={{ fontFamily: "Poppins,sans-serif", fontWeight: 700, fontSize: 18, letterSpacing: "-0.03em" }}>hack club</span>
-        <span style={{ fontFamily: "Poppins,sans-serif", fontWeight: 800, fontSize: 21, letterSpacing: "-0.04em" }}>pixl</span>
-        <span style={{ fontFamily: "Poppins,sans-serif", fontWeight: 700, fontSize: 20, letterSpacing: "-0.01em" }}>ship</span>
-        <span style={{ fontFamily: "Poppins,sans-serif", fontWeight: 500, fontSize: 20, letterSpacing: "-0.01em" }}>sprig</span>
-        <span style={{ fontSize: 12.5, color: "#8A8A84" }}>and more...</span>
-      </div>
-
       <div style={{ position: "absolute", left: 840, top: 300, width: 158, height: 122, borderRadius: 16, background: "#2B2B2B" }} />
       <div style={{ position: "absolute", left: 866, top: 293, width: 142, height: 135, borderRadius: 14, background: "#fff", boxShadow: "0 10px 26px rgba(20,30,15,0.10)" }}>
         <div style={{ position: "absolute", left: 14, top: 14, display: "flex", alignItems: "center", gap: 9, fontSize: 14, fontWeight: 600, color: "#1A1A1A" }}>
