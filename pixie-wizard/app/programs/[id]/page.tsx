@@ -18,6 +18,8 @@ import {
 import { personaName, timeAgo } from "@/app/_components/format";
 import { IconChat, IconHand, IconCheck, IconClock, IconDoc, IconUsers } from "@/app/_components/icons";
 import type { PublicHelperIdentity } from "@/lib/types";
+import { QueuePanel } from "./QueuePanel";
+import { getMyQueue } from "./queueActions";
 
 function healthLabel(status: string, sync: string): string {
   if (sync === "pending") return "Sync pending";
@@ -95,15 +97,17 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
 
   // Member overview reads degrade independently so one Core failure does not
   // block the shell or the other useful sections.
-  const [analyticsR, ticketsR, candidatesR, helperStatsR] = await Promise.allSettled([
+  const [analyticsR, ticketsR, candidatesR, helperStatsR, myQueue] = await Promise.allSettled([
     coreAnalytics(id, 30),
     coreTicketSearch({ programId: id, limit: "60" }),
     coreKnowledgeCandidates(id),
     coreHelperStats(id),
+    getMyQueue(id),
   ]);
 
   const analytics = analyticsR.status === "fulfilled" ? (analyticsR.value as Record<string, unknown>) : null;
   const coreDown = analyticsR.status === "rejected";
+  const initialQueue = myQueue.status === "fulfilled" ? myQueue.value : { assigned: [], claimable: [] };
   const byStatus = (analytics?.byStatus ?? {}) as Record<string, number>;
   const persona = personaName(program);
 
@@ -213,6 +217,8 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
             <StatCard label="Stayed quiet" value={analytics ? Number(analytics.stale48h ?? 0) : "—"} detail="open 48h+" icon={<IconClock size={14} />} tone="text-brand" iconTone="bg-brand/15" barTone="bg-brand" />
           </div>
         )}
+
+        <QueuePanel programId={id} initial={initialQueue} hasSlack={Boolean(session.slackId)} />
 
         <div className="grid items-start gap-6 lg:grid-cols-[1.55fr_1fr]">
           <Section
