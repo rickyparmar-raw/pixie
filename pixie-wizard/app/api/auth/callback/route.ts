@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { isAllowed, setSessionCookie } from "@/lib/session";
 import { timeoutFetch } from "@/lib/timeoutFetch";
-import { listHostedProgramsForOwner, listProgramAccessForPerson } from "@/lib/hostedPrograms";
-import { isSuperadminSession } from "@/lib/programAccess";
+import { isSuperadminSession, ownProgramPath } from "@/lib/programAccess";
 
 const HCA_BASE_URL = "https://auth.hackclub.com";
 
@@ -97,18 +96,12 @@ export async function GET(req: NextRequest) {
   // or helper paid for that Core round trip just to get bounced onward.
   // /programs (the cross-program directory) is superadmin-only, so a normal
   // owner/helper goes straight to their own program instead of bouncing
-  // through a page that would just redirect them again.
-  const who = { hcaId: identity.id, email };
-  let destination = "/wizard";
-  if (await isSuperadminSession(who)) {
-    destination = "/programs";
-  } else {
-    const [owned, helping] = await Promise.all([
-      listHostedProgramsForOwner(who).catch(() => []),
-      listProgramAccessForPerson(identity.id).catch(() => []),
-    ]);
-    if (owned[0]) destination = `/programs/${owned[0].id}`;
-    else if (helping[0]) destination = `/programs/${helping[0].id}`;
-  }
+  // through a page that would just redirect them again. Shares ownProgramPath
+  // with the in-app redirect (requireWizardSuperadmin) so there is exactly
+  // one place that decides "does this account have a program" — the two
+  // paths silently disagreeing (one recognized Slack-added helpers, the
+  // other didn't) is what caused a real working helper to see "invite-only."
+  const who = { hcaId: identity.id, email, slackId: identity.slack_id ?? null };
+  const destination = (await isSuperadminSession(who)) ? "/programs" : await ownProgramPath(who);
   return NextResponse.redirect(`${process.env.BASE_URL}${destination}`);
 }

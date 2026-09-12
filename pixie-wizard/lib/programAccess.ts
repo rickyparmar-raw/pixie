@@ -14,6 +14,7 @@ import {
   isWizardSuperadmin,
   listHostedProgramsForOwner,
   listProgramAccessForPerson,
+  listProgramsForHelperSlackId,
 } from "@/lib/hostedPrograms";
 import type { HostedProgramRow, ProgramRelationship } from "@/lib/types";
 
@@ -96,9 +97,20 @@ export async function isSuperadminSession(identity: { hcaId: string; email: stri
 // bouncing to "/" gives a signed-in person zero signal about what just
 // happened, which is exactly what a real user hit and reported as "sign-in
 // is broken" when it was actually just a silent, unexplained redirect.
-export async function ownProgramPath(identity: { hcaId: string; email: string }): Promise<string> {
+//
+// Helper lookup checks session.slackId against hosted_program_helpers
+// directly FIRST — the same thing relationshipFor()/getHelperRow() check for
+// actual per-program access — before falling back to the wizard_people-
+// bridged listProgramAccessForPerson(). A helper added the normal way (by
+// Slack ID, via addHostedHelper) has no wizard_people row, so the bridged
+// query alone reported a real, working helper as having zero access.
+export async function ownProgramPath(identity: { hcaId: string; email: string; slackId?: string | null }): Promise<string> {
   const owned = await listHostedProgramsForOwner(identity).catch(() => []);
   if (owned[0]) return `/programs/${owned[0].id}`;
+  if (identity.slackId) {
+    const helpingBySlack = await listProgramsForHelperSlackId(identity.slackId).catch(() => []);
+    if (helpingBySlack[0]) return `/programs/${helpingBySlack[0].id}`;
+  }
   const helping = await listProgramAccessForPerson(identity.hcaId).catch(() => []);
   if (helping[0]) return `/programs/${helping[0].id}`;
   return "/wizard";

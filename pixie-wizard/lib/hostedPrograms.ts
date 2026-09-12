@@ -339,6 +339,24 @@ export async function listProgramAccessForPerson(hcaId: string): Promise<Array<H
   return rows;
 }
 
+// The wizard_people bridge above only covers helpers explicitly granted
+// through the superadmin People & access page. A helper added directly by
+// Slack ID (the normal path — see addHostedHelper) never gets a wizard_people
+// row, so listProgramAccessForPerson silently reports them as having no
+// program access even though relationshipFor()/getHelperRow() — the actual
+// per-program access check — would recognize them immediately via
+// session.slackId. This queries hosted_program_helpers directly, the same
+// way, so "does this account help on anything" agrees with "can this account
+// open its program."
+export async function listProgramsForHelperSlackId(slackUserId: string): Promise<Array<HostedProgramRow & { role: string }>> {
+  const { rows } = await query<HostedProgramRow & { role: string }>(
+    `select p.*, h.role from hosted_programs p join hosted_program_helpers h on h.program_id = p.id
+     where lower(h.slack_user_id) = lower($1) and h.active = true order by p.program_name asc`,
+    [slackUserId],
+  );
+  return rows;
+}
+
 export async function setWizardSuperadmin(hcaId: string, actorHcaId: string, granted: boolean): Promise<void> {
   if (granted) await query(`insert into wizard_global_access (hca_id, role, granted_by_hca_id) values ($1, 'superadmin', $2) on conflict (hca_id) do update set role = 'superadmin', granted_by_hca_id = excluded.granted_by_hca_id`, [hcaId, actorHcaId]);
   else await query(`delete from wizard_global_access where hca_id = $1`, [hcaId]);
