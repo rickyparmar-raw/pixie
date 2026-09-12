@@ -31,6 +31,7 @@ const MAIN: Item[] = [
   ["people", "People", IconUsers],
   ["macros", "Macros", IconLog],
   ["analytics", "Analytics", IconBars],
+  ["usage", "Quota & usage", IconBars],
   ["radar", "Support radar", IconRadar],
   ["incidents", "Incidents", IconAlert],
 ];

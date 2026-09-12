@@ -51,6 +51,91 @@ async function request<T>(path: string, fallback: string, init?: RequestInit): P
   return body as T;
 }
 
+export interface CoreUsageParams {
+  from: string;
+  to: string;
+  interval?: "hour" | "day";
+}
+
+export interface CoreUsageMetric {
+  requests: number;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens: number;
+  costCents: number | null;
+}
+export interface CoreUsageSummary extends CoreUsageMetric {
+  latencyMs: number | null;
+  errors: number;
+  rateLimited: number;
+  groundedAnswers: number;
+  fallbacks: number;
+  suppressed: number;
+}
+
+export interface CoreUsageAggregate extends CoreUsageMetric {
+  programId: string;
+  from: string;
+  to: string;
+  precision: "exact" | "estimated" | "unavailable";
+  summary: CoreUsageSummary;
+  timeseries: Array<CoreUsageMetric & { at: string }>;
+  operation: Array<CoreUsageMetric & { name: string }>;
+  provider: Array<CoreUsageMetric & { name: string }>;
+  model: Array<CoreUsageMetric & { provider: string; name: string }>;
+  topConsumers: Array<CoreUsageMetric & { consumerId: string }>;
+  recent: Array<{
+    at: string;
+    operation: string;
+    provider: string;
+    model: string;
+    consumerId: string | null;
+    requestId: string | null;
+    status: string;
+    latencyMs: number | null;
+    rateLimited: boolean;
+    retryCount: number;
+  }>;
+}
+
+const nonNegative = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
+const metric = (value: unknown): value is CoreUsageMetric => {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Partial<CoreUsageMetric>;
+  return [row.requests, row.inputTokens, row.outputTokens, row.cachedInputTokens].every(nonNegative)
+    && (row.costCents === null || nonNegative(row.costCents));
+};
+const rows = (value: unknown): value is unknown[] => Array.isArray(value) && value.every((row) => row && typeof row === "object");
+
+function isUsageAggregate(value: unknown, programId: string, params: CoreUsageParams): value is CoreUsageAggregate {
+  if (!value || typeof value !== "object") return false;
+  const row = value as Partial<CoreUsageAggregate>;
+  return row.programId === programId && row.from === params.from && row.to === params.to
+    && metric(row.summary) && [row.requests, row.inputTokens, row.outputTokens, row.cachedInputTokens].every(nonNegative)
+    && (row.costCents === null || nonNegative(row.costCents)) && rows(row.timeseries)
+    && rows(row.operation) && rows(row.provider) && rows(row.model)
+    && rows(row.topConsumers) && rows(row.recent)
+    && (row.precision === "exact" || row.precision === "estimated" || row.precision === "unavailable");
+}
+
+export async function coreUsage(programId: string, params: CoreUsageParams): Promise<CoreUsageAggregate> {
+  const from = Date.parse(params.from);
+  const to = Date.parse(params.to);
+  if (!programId || !params.from || !params.to || !Number.isFinite(from) || !Number.isFinite(to) || from >= to) {
+    throw new Error("usage range is invalid");
+  }
+  const query = new URLSearchParams({ from: params.from, until: params.to });
+  if (params.interval) query.set("interval", params.interval);
+  const body = await request<unknown>(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/usage?${query}`,
+    "usage aggregation failed",
+  );
+  if (!isUsageAggregate(body, programId, params)) throw new Error("usage aggregation returned an invalid response");
+  return body;
+}
+
+export const coreUsageAggregate = coreUsage;
+
 function send(method: string, payload: Record<string, unknown>): RequestInit {
   return { method, body: JSON.stringify(payload) };
 }
