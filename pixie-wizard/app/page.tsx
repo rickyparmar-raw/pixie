@@ -289,6 +289,10 @@ function HowItWorks() {
     <div id="how-it-works" ref={sectionRef} style={{ position: "relative", width: 1920, height: 1600, background: "#F7F4E9" }}>
       <svg width="1920" height="1600" viewBox="0 0 1920 1600" style={{ position: "absolute", top: 0, left: 0 }} aria-hidden="true">
         <path d="M1560,0 C1660,8 1760,26 1840,64 C1875,82 1900,90 1920,86 L1920,0 Z" fill="#1C3324" />
+        {/* Fills the gap between the dark wedge and where the animated ribbon
+            below emerges from it — without this, the ribbon's stroke doesn't
+            reach the wedge's edge and cream shows through between them. */}
+        <path d="M1790,35 C1890,45 1950,110 1930,180 C1912,242 1820,290 1710,270 C1615,253 1560,190 1590,125 C1615,72 1710,25 1790,35 Z" fill="#1C3324" />
         <path d="M1850,0 C1700,119 1550,155 1400,219 C1150,320 950,302 800,421 C650,539 620,640 700,731 C760,804 860,832 920,923" fill="none" stroke="#A6E263" strokeWidth="140" strokeLinecap="round" pathLength="1000" strokeDasharray="1000" strokeDashoffset={ribbonOffset} />
         <path d="M920,923 C860,1000 750,1050 600,1080 C400,1120 200,1160 150,1230 C120,1280 140,1340 200,1380 C300,1420 450,1440 600,1460" fill="none" stroke="#A6E263" strokeWidth="140" strokeLinecap="round" pathLength="1000" strokeDasharray="1000" strokeDashoffset={ribbonOffset} />
         <path d="M920,923 C1020,1000 1150,1040 1280,1080 C1380,1110 1430,1140 1450,1190" fill="none" stroke="#C9AEF0" strokeWidth="100" strokeLinecap="round" pathLength="1000" strokeDasharray="1000" strokeDashoffset={branchOffset} />
