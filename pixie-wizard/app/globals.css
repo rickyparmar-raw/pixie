@@ -119,16 +119,22 @@ body {
   mask-image: linear-gradient(to bottom, #000 45%, transparent 92%);
 }
 
-.pixie-panel { border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-panel); }
-.pixie-input { width: 100%; border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-panel-2); color: var(--color-text); padding: 9px 12px; font-size: 13px; outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; }
-.pixie-input::placeholder { color: var(--color-text-muted); }
-.pixie-input:focus { border-color: var(--color-brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand) 20%, transparent); }
+/* @layer components so a utility class on the same element (e.g. `pl-8` to
+   make room for a leading icon) always wins over these defaults — plain,
+   unlayered rules would otherwise beat Tailwind's utility layer regardless
+   of class order, silently ignoring any override placed alongside them. */
+@layer components {
+  .pixie-panel { border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-panel); }
+  .pixie-input { width: 100%; border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-panel-2); color: var(--color-text); padding: 9px 12px; font-size: 13px; outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; }
+  .pixie-input::placeholder { color: var(--color-text-muted); }
+  .pixie-input:focus { border-color: var(--color-brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand) 20%, transparent); }
 
-.pixie-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 34px; border-radius: var(--radius); border: 1px solid transparent; padding: 7px 13px; font-size: 13px; font-weight: 500; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
-.pixie-button-primary { background: var(--color-brand); color: var(--color-on-brand); }
-.pixie-button-primary:hover { background: color-mix(in srgb, var(--color-brand) 85%, white); }
-.pixie-button-quiet { border-color: var(--color-line); color: var(--color-text-muted); background: transparent; }
-.pixie-button-quiet:hover { color: var(--color-text); border-color: color-mix(in srgb, var(--color-line), var(--color-text) 35%); }
+  .pixie-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 34px; border-radius: var(--radius); border: 1px solid transparent; padding: 7px 13px; font-size: 13px; font-weight: 500; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
+  .pixie-button-primary { background: var(--color-brand); color: var(--color-on-brand); }
+  .pixie-button-primary:hover { background: color-mix(in srgb, var(--color-brand) 85%, white); }
+  .pixie-button-quiet { border-color: var(--color-line); color: var(--color-text-muted); background: transparent; }
+  .pixie-button-quiet:hover { color: var(--color-text); border-color: color-mix(in srgb, var(--color-line), var(--color-text) 35%); }
+}
 
 /* The pixel-art Pixie mark — keep the pixels crisp at every size, never
    let the browser smooth it into mush. */
