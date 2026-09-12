@@ -121,8 +121,8 @@ function HeroBackdrop() {
       <path d="M172 509 C208 499 248 496 284 498" fill="none" stroke="#93DB4F" strokeWidth="6" strokeLinecap="round" />
       <path d="M786 240 C776 278 800 316 836 331" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
       <path d="M836 331 L822 322 M836 331 L826 315" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M1132 272 C1118 236 1128 209 1150 197" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M1150 197 L1134 199 M1150 197 L1142 210" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M1132 272 C1124 245 1145 218 1190 206" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
+      <path d="M1190 206 L1175 204 M1190 206 L1181 217" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
       <path d="M779 556 C776 600 812 630 860 629" fill="none" stroke="#A98BE8" strokeWidth="2.4" strokeLinecap="round" />
       <path d="M860 629 L845 622 M860 629 L846 636" fill="none" stroke="#A98BE8" strokeWidth="2.4" strokeLinecap="round" />
       <path d="M1206 626 L1252 626" fill="none" stroke="#A98BE8" strokeWidth="2.4" strokeLinecap="round" />
