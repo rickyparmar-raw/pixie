@@ -472,10 +472,10 @@ function DesktopLanding({ devBypass }: { devBypass: boolean }) {
 }
 
 const MOBILE_STEPS = [
-  { n: 1, tone: "#8FD94F", title: "Ask in Slack", body: "Ask your question in your program’s Slack, just like you normally would." },
-  { n: 2, tone: "#BEE3F7", title: "Check your sources", body: "Pixie searches your program docs, guides, and past answers to find the most relevant information." },
-  { n: 3, tone: "#F6B896", title: "Verify the evidence", body: "Pixie checks if the sources actually support the answer. If they don’t, it won’t guess." },
-  { n: 4, tone: "#8FD94F", title: "Answer or hand off", body: "If Pixie finds a clear answer, you’ll get a helpful reply with a source. If not, a human helper takes over." },
+  { n: 1, tone: "#8FD94F", bg: "#E3F6D2", title: "Ask in Slack", body: "Ask your question in your program’s Slack, just like you normally would." },
+  { n: 2, tone: "#BEE3F7", bg: "#D3ECFA", title: "Check your sources", body: "Pixie searches your program docs, guides, and past answers to find the most relevant information." },
+  { n: 3, tone: "#F6B896", bg: "#FBDDC7", title: "Verify the evidence", body: "Pixie checks if the sources actually support the answer. If they don’t, it won’t guess." },
+  { n: 4, tone: "#8FD94F", bg: "#E3F6D2", title: "Answer or hand off", body: "If Pixie finds a clear answer, you’ll get a helpful reply with a source. If not, a human helper takes over." },
 ];
 
 function MobileButton({ href, children, primary }: { href: string; children: ReactNode; primary?: boolean }) {
@@ -512,30 +512,49 @@ function MobileLanding({ devBypass }: { devBypass: boolean }) {
         <a href={LOGIN_HREF} style={{ height: 38, padding: "0 16px", borderRadius: 19, background: "#0B0B0B", color: "#fff", display: "flex", alignItems: "center", fontSize: 13.5, fontWeight: 700 }}>Open Pixie</a>
       </header>
 
-      <section style={{ padding: "12px 20px 40px" }}>
-        <p style={{ fontSize: 10.5, letterSpacing: "0.28em", fontWeight: 600, color: "#33493A", margin: "0 0 14px" }}>SUPPORT THAT UNDERSTANDS YOUR WORLD</p>
-        <h1 style={{ fontFamily: HEAD_FONT, fontWeight: 800, fontSize: "clamp(38px,10vw,52px)", lineHeight: 1.05, letterSpacing: "-0.03em", color: "#0D2114", margin: "0 0 16px" }}>Support, without the guessing.</h1>
-        <p style={{ fontSize: 16, lineHeight: 1.5, color: "#1A1A1A", margin: "0 0 24px" }}>
+      <section style={{ position: "relative", overflow: "hidden", padding: "12px 20px 36px" }}>
+        <svg width="220" height="220" viewBox="0 0 220 220" style={{ position: "absolute", top: -60, right: -70 }} aria-hidden="true">
+          <path d="M210,90 C222,140 190,190 130,205 C80,218 30,195 15,150 C0,105 20,55 65,30 C115,3 190,20 205,55 C210,66 208,80 210,90 Z" fill="#A6E263" opacity="0.55" />
+        </svg>
+
+        <p style={{ position: "relative", fontSize: 10.5, letterSpacing: "0.28em", fontWeight: 600, color: "#33493A", margin: "0 0 14px" }}>SUPPORT THAT UNDERSTANDS YOUR WORLD</p>
+        <h1 style={{ position: "relative", fontFamily: HEAD_FONT, fontWeight: 800, fontSize: "clamp(38px,10vw,52px)", lineHeight: 1.05, letterSpacing: "-0.03em", color: "#0D2114", margin: "0 0 16px" }}>Support, without the guessing.</h1>
+        <p style={{ position: "relative", fontSize: 16, lineHeight: 1.5, color: "#1A1A1A", margin: "0 0 24px" }}>
           <strong>Pixie</strong> answers <strong>support</strong> questions in Slack using your program&apos;s own docs. If the evidence isn&apos;t there, it stays <strong>quiet and gets a human.</strong>
         </p>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ position: "relative", display: "flex", flexDirection: "column", gap: 10 }}>
           <MobileButton href={LOGIN_HREF} primary>Open Pixie <Arrow color="#fff" /></MobileButton>
           <MobileButton href="#how-it-works-m">See how it works</MobileButton>
           {devBypass && <a href="/api/auth/dev-login" style={{ fontSize: 12.5, color: "#6E6E68", textAlign: "center", marginTop: 2 }}>Dev sign-in</a>}
         </div>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "10px 20px", marginTop: 26, fontSize: 13 }}>
+        <div style={{ position: "relative", display: "flex", flexWrap: "wrap", gap: "10px 20px", marginTop: 26, fontSize: 13 }}>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}><Slack size={18} />Works in Slack</span>
           <span style={{ display: "flex", alignItems: "center", gap: 8 }}><Doc size={16} />Uses your docs</span>
           <span>Built for communities</span>
+        </div>
+
+        <div style={{ position: "relative", marginTop: 28, borderRadius: 16, background: "#fff", boxShadow: "0 10px 26px rgba(20,30,15,0.08)", padding: "14px 16px", display: "flex", gap: 12, alignItems: "flex-start" }}>
+          <Slack size={22} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+              <span style={{ fontWeight: 700, fontSize: 14.5 }}>jamie</span>
+              <span style={{ fontSize: 11.5, color: "#8A8A84" }}>11:03 AM</span>
+            </div>
+            <p style={{ margin: "3px 0 0", fontSize: 14.5, color: "#1A1A1A" }}>can i change this after review?</p>
+          </div>
+        </div>
+        <div style={{ position: "relative", marginTop: 10, marginLeft: 24, display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#4A4A45" }}>
+          <img src="/pixie-hero.png" alt="" width={22} height={22} className="pixel-art" style={{ flex: "none" }} />
+          Pixie stays quiet and gets a human when it&apos;s not sure.
         </div>
       </section>
 
       <section id="how-it-works-m" style={{ padding: "36px 20px", background: "#fff" }}>
         <p style={{ fontSize: 10.5, letterSpacing: "0.24em", fontWeight: 600, color: "#33493A", margin: "0 0 10px" }}>HOW IT WORKS</p>
         <h2 style={{ fontFamily: HEAD_FONT, fontWeight: 800, fontSize: 26, lineHeight: 1.15, color: "#0D2114", margin: "0 0 24px" }}>A question &rarr; a better answer.</h2>
-        <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           {MOBILE_STEPS.map((step) => (
-            <div key={step.n} style={{ display: "flex", gap: 14 }}>
+            <div key={step.n} style={{ display: "flex", gap: 14, borderRadius: 18, background: step.bg, padding: 16 }}>
               <span style={{ flex: "none", width: 36, height: 36, borderRadius: "50%", background: step.tone, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: HEAD_FONT, fontWeight: 800, fontSize: 15, color: "#0D2114" }}>{step.n}</span>
               <div>
                 <h3 style={{ fontFamily: HEAD_FONT, fontWeight: 700, fontSize: 17, color: "#0D2114", margin: "0 0 4px" }}>{step.title}</h3>
@@ -546,15 +565,23 @@ function MobileLanding({ devBypass }: { devBypass: boolean }) {
         </div>
       </section>
 
-      <section style={{ padding: "36px 20px 44px", background: "#E3F1CB" }}>
-        <h2 style={{ fontFamily: HEAD_FONT, fontWeight: 800, fontSize: 26, lineHeight: 1.2, color: "#0D2114", margin: "0 0 12px" }}>
+      <section style={{ position: "relative", overflow: "hidden", padding: "36px 20px 44px", background: "#E3F1CB" }}>
+        <svg width="170" height="170" viewBox="0 0 170 170" style={{ position: "absolute", bottom: -50, right: -50 }} aria-hidden="true">
+          <path d="M160,80 C168,120 140,158 95,166 C55,173 15,152 6,112 C-3,72 15,32 55,15 C100,-4 150,15 160,50 C164,60 158,70 160,80 Z" fill="#CDB8F7" opacity="0.6" />
+        </svg>
+        <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+          <img src="/pixie-hero.png" alt="" width={32} height={32} className="pixel-art" />
+        </div>
+        <h2 style={{ position: "relative", fontFamily: HEAD_FONT, fontWeight: 800, fontSize: 26, lineHeight: 1.2, color: "#0D2114", margin: "0 0 12px" }}>
           Knows when <span style={{ color: "#5AA02C" }}>not to answer.</span>
         </h2>
-        <p style={{ fontSize: 15, lineHeight: 1.5, color: "#1A1A1A", margin: "0 0 20px" }}>
+        <p style={{ position: "relative", fontSize: 15, lineHeight: 1.5, color: "#1A1A1A", margin: "0 0 20px" }}>
           Pixie only answers when it&apos;s confident and can back it up. When it&apos;s not sure, it stays quiet and gets a real human to help.
         </p>
-        <MobileButton href={LOGIN_HREF} primary>Learn more <Arrow color="#fff" /></MobileButton>
-        <p style={{ marginTop: 20, fontSize: 12.5, color: "#5A6B57" }}>Made by Ricky</p>
+        <div style={{ position: "relative" }}>
+          <MobileButton href={LOGIN_HREF} primary>Learn more <Arrow color="#fff" /></MobileButton>
+        </div>
+        <p style={{ position: "relative", marginTop: 20, fontSize: 12.5, color: "#5A6B57" }}>Made by Ricky</p>
       </section>
     </div>
   );
