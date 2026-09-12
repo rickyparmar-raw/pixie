@@ -117,7 +117,6 @@ function HeroBackdrop() {
     <svg width="1672" height="941" viewBox="0 0 1672 941" style={{ position: "absolute", top: 0, left: 0 }} aria-hidden="true">
       <path d="M1600 -30 C1500 40 1560 130 1470 200 C1350 292 1130 250 960 300 C850 332 800 368 825 412 C852 458 970 448 1075 495 C1210 555 1270 605 1360 660 C1440 708 1550 728 1700 715" fill="none" stroke="#A6E263" strokeWidth="120" strokeLinecap="round" />
       <path d="M1672 25 C1590 65 1560 150 1562 225 C1564 300 1608 348 1672 358 Z" fill="#A6E263" />
-      <path d="M1672 665 C1600 660 1540 680 1500 715 C1462 760 1440 820 1400 870 C1380 895 1365 918 1358 941 L1672 941 Z" fill="#1C3324" />
       <path d="M178 519 C216 501 264 498 304 503" fill="none" stroke="#93DB4F" strokeWidth="11" strokeLinecap="round" />
       <path d="M172 509 C208 499 248 496 284 498" fill="none" stroke="#93DB4F" strokeWidth="6" strokeLinecap="round" />
       <path d="M786 240 C776 278 800 316 836 331" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
@@ -131,7 +130,6 @@ function HeroBackdrop() {
       <path d="M994 266 L1000 284 M1016 262 L1014 280 M976 286 L992 296 M1040 290 L1024 298 M1036 316 L1020 312" fill="none" stroke="#111" strokeWidth="2.6" strokeLinecap="round" />
       <path d="M1592 496 L1606 484 M1587 517 L1603 511 M1591 538 L1603 530" fill="none" stroke="#111" strokeWidth="2.8" strokeLinecap="round" />
       <path d="M1600 124 C1603 140 1607 144 1621 148 C1607 152 1603 156 1600 172 C1597 156 1593 152 1579 148 C1593 144 1597 140 1600 124 Z" fill="#8FD94F" />
-      <path d="M1592 764 L1592 800 M1574 782 L1610 782 M1580 770 L1604 794 M1604 770 L1580 794" fill="none" stroke="#FFFFFF" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   );
 }
@@ -436,6 +434,32 @@ function SeamConnector() {
   );
 }
 
+// Bridges Hero's decorative green swoosh (which gets clipped at Hero's
+// bottom-right corner) with the how-it-works ribbon that starts just below
+// it, so the two read as one continuous green form instead of two ribbons
+// that happen to be near each other.
+// A bold, deliberately different-colored blob dropped ON TOP of both green
+// ribbons (Hero's swoosh and the how-it-works ribbon start) — not trying to
+// color-match and hide the seam between them, just covering it with its own
+// confident shape. Rendered after HowItWorks in the tree so it paints above
+// that section's ribbon too, while its `top` still targets the seam area.
+function RibbonCover() {
+  return (
+    <svg
+      width="520"
+      height="520"
+      viewBox="0 0 520 520"
+      style={{ position: "absolute", top: 840, left: 1780 }}
+      aria-hidden="true"
+    >
+      <path
+        d="M520,140 C540,250 470,370 360,430 C250,490 120,470 55,380 C-10,290 15,150 120,75 C225,0 360,-20 450,30 C495,55 510,90 520,140 Z"
+        fill="#CDB8F7"
+      />
+    </svg>
+  );
+}
+
 function DesktopLanding({ devBypass }: { devBypass: boolean }) {
   const scale = useScale();
   return (
@@ -444,6 +468,7 @@ function DesktopLanding({ devBypass }: { devBypass: boolean }) {
         <div style={{ position: "relative", width: 1920, height: 1080, overflow: "hidden" }}><Hero devBypass={devBypass} /></div>
         <SeamConnector />
         <HowItWorks />
+        <RibbonCover />
         <ClosingCta />
       </div>
     </div>
