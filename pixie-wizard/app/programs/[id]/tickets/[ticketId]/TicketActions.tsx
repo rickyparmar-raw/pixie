@@ -51,7 +51,7 @@ export function TicketActions({ programId, ticketId }: { programId: string; tick
 
       <form action={replyForm} className="max-w-2xl space-y-3">
         <h2 className="text-sm font-medium text-text">Reply to requester</h2>
-        <p className="text-xs text-text-muted">Sends into the Slack thread as your program support identity, not as you personally.</p>
+        <p className="text-xs text-text-muted">Sends into the Slack thread as your program support identity, with a "sent by @you" line so the thread knows who replied.</p>
         {hidden}
         <textarea name="replyText" rows={4} required placeholder="Grounded in the docs. Helpers send, Pixie delivers." className={inputClass} />
         <SubmitButton pendingLabel="Sending…">Send reply</SubmitButton>
