@@ -1,12 +1,15 @@
 import Link from "next/link";
 import { WorkspaceNav, ProgramNav, MobileProgramNav } from "./SidebarNav";
 import { ThemeToggle } from "./ThemeToggle";
+import { IconSearch, IconBell, IconChevronRight, IconDoc } from "./icons";
 
 export function DashboardShell({
   children,
   programId,
   programName,
   crumb = "Overview",
+  userName,
+  userEmail,
 }: {
   children: React.ReactNode;
   programId?: string;
@@ -14,44 +17,87 @@ export function DashboardShell({
   // Second breadcrumb segment for workspace-level pages (no program in scope).
   // Ignored when programName is set — that always wins the crumb.
   crumb?: string;
+  // Signed-in user, for the sidebar profile footer. Omitted entirely (not a
+  // placeholder) when a caller hasn't threaded the session through yet.
+  userName?: string;
+  userEmail?: string;
 }) {
   return (
     <div className="min-h-screen bg-ink text-text">
-      <aside className="fixed inset-y-0 left-0 z-10 hidden w-[240px] border-r border-line bg-ink px-3 py-5 lg:block">
-        <Link href="/overview" className="flex items-center gap-2 pl-1 text-sm">
-          <img src="/pixie-mark.png" alt="" width={20} height={20} className="pixel-art size-5 shrink-0" />
-          pixie
+      <aside className="fixed inset-y-0 left-0 z-10 hidden w-[240px] flex-col border-r border-line bg-ink px-3 py-5 lg:flex">
+        <div className="min-h-0 flex-1 overflow-y-auto">
+          <Link href="/overview" className="flex items-center gap-1.5 pl-1 font-heading text-lg font-extrabold tracking-tight text-text">
+            pixie
+            <span className="mb-2.5 size-[6px] rounded-full bg-brand" aria-hidden="true" />
+          </Link>
+
+          <p className="mt-8 pl-1 text-[11px] text-text-muted">Workspace</p>
+          <WorkspaceNav />
+
+          {programId && (
+            <>
+              <div className="my-5 border-t border-line" />
+              <div className="flex items-center gap-2 pl-1 text-xs">
+                <span className="grid size-5 shrink-0 place-items-center rounded-[3px] bg-panel-2 text-[9px] text-text-muted">
+                  {programName?.slice(0, 2).toUpperCase()}
+                </span>
+                <span className="truncate text-text">{programName}</span>
+              </div>
+              <p className="mt-5 pl-1 text-[11px] text-text-muted">Program</p>
+              <ProgramNav programId={programId} />
+            </>
+          )}
+        </div>
+
+        <Link
+          href={programId ? `/programs/${programId}/knowledge` : "/programs"}
+          className="pixie-button pixie-button-quiet mt-6 shrink-0 justify-start gap-2 text-xs"
+        >
+          <IconDoc size={14} /> View docs
         </Link>
 
-        <p className="mt-8 pl-1 text-[11px] text-text-muted">Workspace</p>
-        <WorkspaceNav />
-
-        {programId && (
-          <>
-            <div className="my-5 border-t border-line" />
-            <div className="flex items-center gap-2 pl-1 text-xs">
-              <span className="grid size-5 shrink-0 place-items-center rounded-[3px] bg-panel-2 text-[9px] text-text-muted">
-                {programName?.slice(0, 2).toUpperCase()}
-              </span>
-              <span className="truncate text-text">{programName}</span>
-            </div>
-            <p className="mt-5 pl-1 text-[11px] text-text-muted">Program</p>
-            <ProgramNav programId={programId} />
-          </>
+        {userName && (
+          <Link href="/api/auth/logout" className="mt-4 flex shrink-0 items-center gap-2.5 border-t border-line pt-4 text-xs">
+            <span className="grid size-7 shrink-0 place-items-center rounded-full bg-brand text-[11px] font-semibold text-on-brand">
+              {userName.slice(0, 1).toUpperCase()}
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-text">{userName}</span>
+              {userEmail && <span className="block truncate text-text-muted">{userEmail}</span>}
+            </span>
+            <IconChevronRight size={14} className="shrink-0 text-text-muted" />
+          </Link>
         )}
       </aside>
 
       <div className="lg:pl-[240px]">
-        <header className="flex min-h-[64px] flex-wrap items-center gap-x-6 gap-y-3 border-b border-line px-6 py-3.5 lg:px-8">
+        <header className="flex min-h-[64px] flex-wrap items-center gap-x-4 gap-y-3 border-b border-line px-6 py-3.5 lg:px-8">
           <div className="text-xs text-text-muted">
             <Link href="/overview" className="text-text hover:text-brand">pixie</Link>
             <span className="px-2 text-text-muted/50">/</span>
             {programName ?? crumb}
           </div>
-          <Link href="/wizard?mode=hosted" className="ml-auto text-xs text-text-muted hover:text-text">
-            New program
-          </Link>
-          <ThemeToggle />
+
+          {programId && (
+            <form action={`/programs/${programId}/tickets`} className="order-3 w-full lg:order-none lg:ml-2 lg:max-w-xs lg:flex-1">
+              <label className="relative block">
+                <IconSearch size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
+                <input name="q" type="search" placeholder="Search tickets…" className="pixie-input pl-8 text-xs" />
+              </label>
+            </form>
+          )}
+
+          <div className="ml-auto flex items-center gap-3">
+            <Link href="/wizard?mode=hosted" className="text-xs text-text-muted hover:text-text">
+              New program
+            </Link>
+            <ThemeToggle />
+            {programId && (
+              <Link href={`/programs/${programId}/incidents`} aria-label="Incidents" className="grid size-7 place-items-center rounded-[5px] text-text-muted transition-colors hover:text-text">
+                <IconBell size={15} />
+              </Link>
+            )}
+          </div>
           {programId && <MobileProgramNav programId={programId} />}
         </header>
         <main className="mx-auto max-w-[1080px] px-6 py-10 lg:px-10">{children}</main>
@@ -132,6 +178,37 @@ export function MetricCard({
       <p className="text-xs text-text-muted">{label}</p>
       <p className={`mt-1 font-mono text-xl tabular-nums ${tone}`}>{value}</p>
       {detail && <p className="mt-1 text-[11px] text-text-muted">{detail}</p>}
+    </div>
+  );
+}
+
+// The bordered, icon-chip variant for a dashboard's top-of-page stat row —
+// MetricCard's denser cousin for a surface that wants a card, not a bare
+// number. `iconTone` sets the chip's background; keep it a low-alpha mix of
+// the same token `tone` uses so the two always pair (see StatCard callers).
+export function StatCard({
+  label,
+  value,
+  detail,
+  icon,
+  tone = "text-text",
+  iconTone = "bg-panel-2",
+}: {
+  label: string;
+  value: string | number;
+  detail?: string;
+  icon: React.ReactNode;
+  tone?: string;
+  iconTone?: string;
+}) {
+  return (
+    <div className="pixie-panel p-4">
+      <div className="flex items-center gap-2.5">
+        <span className={`grid size-7 shrink-0 place-items-center rounded-full ${iconTone} ${tone}`}>{icon}</span>
+        <p className="text-[13px] text-text-muted">{label}</p>
+      </div>
+      <p className={`mt-3 font-heading text-2xl font-semibold tabular-nums ${tone}`}>{value}</p>
+      {detail && <p className="mt-1 text-xs text-text-muted">{detail}</p>}
     </div>
   );
 }

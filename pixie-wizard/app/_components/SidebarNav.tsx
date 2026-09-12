@@ -2,29 +2,43 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { ComponentType } from "react";
+import {
+  IconHome,
+  IconGrid,
+  IconUsers,
+  IconChat,
+  IconDoc,
+  IconRadar,
+  IconAlert,
+  IconBars,
+  IconLog,
+  IconClock,
+  IconGear,
+} from "./icons";
 
 // Small client island so the sidebar can show which route is active without
 // making the whole shell a client component. Just links + usePathname — no
 // state, no effects.
 
-type Item = [slug: string, label: string];
+type Item = [slug: string, label: string, Icon: ComponentType<{ size?: number; className?: string }>];
 
 const MAIN: Item[] = [
-  ["tickets", "Tickets"],
-  ["knowledge", "Knowledge"],
-  ["gaps", "FAQ gaps"],
-  ["helpers", "Helpers"],
-  ["people", "People"],
-  ["macros", "Macros"],
-  ["analytics", "Analytics"],
-  ["radar", "Support radar"],
-  ["incidents", "Incidents"],
+  ["tickets", "Tickets", IconChat],
+  ["knowledge", "Knowledge", IconDoc],
+  ["gaps", "FAQ gaps", IconAlert],
+  ["helpers", "Helpers", IconUsers],
+  ["people", "People", IconUsers],
+  ["macros", "Macros", IconLog],
+  ["analytics", "Analytics", IconBars],
+  ["radar", "Support radar", IconRadar],
+  ["incidents", "Incidents", IconAlert],
 ];
 
 const SECONDARY: Item[] = [
-  ["audit", "Audit"],
-  ["retention", "Retention"],
-  ["settings", "Settings"],
+  ["audit", "Audit", IconLog],
+  ["retention", "Retention", IconClock],
+  ["settings", "Settings", IconGear],
 ];
 
 function isActive(pathname: string, href: string, exact: boolean): boolean {
@@ -32,19 +46,32 @@ function isActive(pathname: string, href: string, exact: boolean): boolean {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-function NavLink({ href, label, exact, muted }: { href: string; label: string; exact: boolean; muted?: boolean }) {
+function NavLink({
+  href,
+  label,
+  exact,
+  muted,
+  Icon,
+}: {
+  href: string;
+  label: string;
+  exact: boolean;
+  muted?: boolean;
+  Icon: ComponentType<{ size?: number; className?: string }>;
+}) {
   const pathname = usePathname();
   const active = isActive(pathname ?? "", href, exact);
   return (
     <Link
       href={href}
       aria-current={active ? "page" : undefined}
-      className={`block border-l-2 py-1.5 pl-3 text-[13px] transition-colors ${
+      className={`flex items-center gap-2.5 border-l-2 py-1.5 pl-3 text-[13px] transition-colors ${
         active
           ? "border-brand text-text"
           : `border-transparent hover:text-text ${muted ? "text-text-muted/70" : "text-text-muted"}`
       }`}
     >
+      <Icon size={14} className="shrink-0" />
       {label}
     </Link>
   );
@@ -53,9 +80,9 @@ function NavLink({ href, label, exact, muted }: { href: string; label: string; e
 export function WorkspaceNav() {
   return (
     <nav className="mt-3 space-y-0.5">
-      <NavLink href="/overview" label="Overview" exact />
-      <NavLink href="/programs" label="Programs" exact />
-      <NavLink href="/people" label="People & access" exact />
+      <NavLink href="/overview" label="Overview" exact Icon={IconHome} />
+      <NavLink href="/programs" label="Programs" exact Icon={IconGrid} />
+      <NavLink href="/people" label="People & access" exact Icon={IconUsers} />
     </nav>
   );
 }
@@ -94,14 +121,14 @@ export function ProgramNav({ programId }: { programId: string }) {
   return (
     <>
       <nav className="mt-2 space-y-0.5">
-        <NavLink href={base} label="Overview" exact />
-        {MAIN.map(([slug, label]) => (
-          <NavLink key={slug} href={`${base}/${slug}`} label={label} exact={false} />
+        <NavLink href={base} label="Overview" exact Icon={IconHome} />
+        {MAIN.map(([slug, label, Icon]) => (
+          <NavLink key={slug} href={`${base}/${slug}`} label={label} exact={false} Icon={Icon} />
         ))}
       </nav>
       <nav className="mt-4 space-y-0.5">
-        {SECONDARY.map(([slug, label]) => (
-          <NavLink key={slug} href={`${base}/${slug}`} label={label} exact={false} muted />
+        {SECONDARY.map(([slug, label, Icon]) => (
+          <NavLink key={slug} href={`${base}/${slug}`} label={label} exact={false} Icon={Icon} muted />
         ))}
       </nav>
     </>

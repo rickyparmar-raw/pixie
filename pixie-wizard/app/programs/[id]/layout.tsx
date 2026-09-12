@@ -19,5 +19,9 @@ export default async function ProgramLayout({ children, params }: { children: Re
 
   if (relationship === "public") return <>{children}</>;
 
-  return <DashboardShell programId={id} programName={program.program_name}>{children}</DashboardShell>;
+  return (
+    <DashboardShell programId={id} programName={program.program_name} userName={session.name} userEmail={session.email}>
+      {children}
+    </DashboardShell>
+  );
 }
