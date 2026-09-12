@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { isAllowed, setSessionCookie } from "@/lib/session";
 import { timeoutFetch } from "@/lib/timeoutFetch";
+import { listHostedProgramsForOwner, listProgramAccessForPerson } from "@/lib/hostedPrograms";
 
 const HCA_BASE_URL = "https://auth.hackclub.com";
 
@@ -79,5 +80,17 @@ export async function GET(req: NextRequest) {
     name,
     slackId: identity.slack_id ?? null,
   });
-  return NextResponse.redirect(`${process.env.BASE_URL}/wizard`);
+
+  // /wizard is the *create a new hosted program* flow — for a creator-
+  // eligible account it fetches every Slack channel from Core before it can
+  // render anything. Sending every login through it meant a returning owner
+  // or helper paid for that Core round trip just to get bounced onward.
+  // Anyone who already has a program goes straight to the directory instead;
+  // only a genuinely new, programless account lands on /wizard.
+  const [owned, helping] = await Promise.all([
+    listHostedProgramsForOwner({ hcaId: identity.id, email }).catch(() => []),
+    listProgramAccessForPerson(identity.id).catch(() => []),
+  ]);
+  const destination = owned.length > 0 || helping.length > 0 ? "/programs" : "/wizard";
+  return NextResponse.redirect(`${process.env.BASE_URL}${destination}`);
 }
