@@ -369,7 +369,7 @@ export function DataRow({
     </div>
   );
   return href ? (
-    <Link href={href} className="group block">
+    <Link href={href} prefetch={false} className="group block">
       {body}
     </Link>
   ) : (
