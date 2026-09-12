@@ -24,8 +24,8 @@ export default async function WizardPage() {
           admin needs to enable it before you can create one. Ask whoever runs Pixie for
           your workspace.
         </p>
-        <Link href="/programs" className="pixie-button pixie-button-quiet mx-auto mt-6">
-          Go to programs
+        <Link href="/" className="pixie-button pixie-button-quiet mx-auto mt-6">
+          Back to pixie.support
         </Link>
       </main>
     );

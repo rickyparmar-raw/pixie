@@ -91,14 +91,17 @@ export async function isSuperadminSession(identity: { hcaId: string; email: stri
 
 // Where a non-superadmin lands instead of a workspace-level page they can't
 // use: their own program, if they have one (owned first, then a helper
-// role), otherwise the marketing home — there's nothing else in the wizard
-// for an account with zero program access.
+// role). An account with neither goes to /wizard, not the marketing home —
+// /wizard is what actually explains why (the invite-only message), whereas
+// bouncing to "/" gives a signed-in person zero signal about what just
+// happened, which is exactly what a real user hit and reported as "sign-in
+// is broken" when it was actually just a silent, unexplained redirect.
 export async function ownProgramPath(identity: { hcaId: string; email: string }): Promise<string> {
   const owned = await listHostedProgramsForOwner(identity).catch(() => []);
   if (owned[0]) return `/programs/${owned[0].id}`;
   const helping = await listProgramAccessForPerson(identity.hcaId).catch(() => []);
   if (helping[0]) return `/programs/${helping[0].id}`;
-  return "/";
+  return "/wizard";
 }
 
 // Workspace-level pages (overview, the program directory, people & access)
