@@ -409,6 +409,7 @@ function ClosingCta() {
         <Arrow color="#fff" />
       </a>
       <svg width="30" height="30" viewBox="0 0 30 30" style={{ position: "absolute", left: 1660, top: 330 }} aria-hidden="true"><path d="M15 0L18 12L30 15L18 18L15 30L12 18L0 15L12 12Z" fill="#2E4A32" /></svg>
+      <div style={{ position: "absolute", left: 70, top: 388, fontSize: 12.5, color: "#5A6B57" }}>Made by Ricky</div>
     </div>
   );
 }
@@ -558,6 +559,7 @@ function MobileLanding({ devBypass }: { devBypass: boolean }) {
           Pixie only answers when it&apos;s confident and can back it up. When it&apos;s not sure, it stays quiet and gets a real human to help.
         </p>
         <MobileButton href={LOGIN_HREF} primary>Learn more <Arrow color="#fff" /></MobileButton>
+        <p style={{ marginTop: 20, fontSize: 12.5, color: "#5A6B57" }}>Made by Ricky</p>
       </section>
     </div>
   );
