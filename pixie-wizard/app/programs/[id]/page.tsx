@@ -46,7 +46,10 @@ type Ticket = {
 const OPEN_STATUSES = ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"];
 const ATTENTION_STATUSES = ["waiting_for_helper", "escalated", "reopened"];
 
-// Ticket-state bars, in the order a request moves through them.
+// Ticket-state bars, in the order a request moves through them — resolved
+// last, since it's where the pipeline ends. Included here (unlike the
+// "needs attention" list) so the card reads as a full picture of the last
+// 30 days instead of just the handful of states that happen to be nonzero.
 const STATE_ORDER: Array<[key: string, label: string, tone: string]> = [
   ["waiting_for_helper", "Waiting for a helper", "bg-tang"],
   ["assigned", "Assigned", "bg-text-muted"],
@@ -54,6 +57,7 @@ const STATE_ORDER: Array<[key: string, label: string, tone: string]> = [
   ["escalated", "Escalated", "bg-brand"],
   ["reopened", "Reopened", "bg-brand"],
   ["open", "Unanswered", "bg-text-muted"],
+  ["resolved", "Resolved", "bg-mint"],
 ];
 
 export default async function ProgramPage({ params }: { params: Promise<{ id: string }> }) {
@@ -210,7 +214,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
           </div>
         )}
 
-        <div className="grid gap-6 lg:grid-cols-[1.55fr_1fr]">
+        <div className="grid items-start gap-6 lg:grid-cols-[1.55fr_1fr]">
           <Section
             bordered
             title="Support activity"
