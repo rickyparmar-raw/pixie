@@ -35,10 +35,17 @@ export async function GET(req: NextRequest) {
   const expected = jar.get("pixie_wizard_oauth_state")?.value;
   jar.delete("pixie_wizard_oauth_state");
 
-  const fail = (reason: string) =>
-    NextResponse.redirect(`${process.env.BASE_URL}/?error=${reason}`);
+  // Every branch logs its reason (no secrets — ids/emails/status codes only)
+  // so a failed sign-in is diagnosable from Railway logs instead of just
+  // being "it redirected me to the homepage" with no further signal.
+  const fail = (reason: string, detail?: string) => {
+    console.warn(`[auth/callback] failed: ${reason}${detail ? ` — ${detail}` : ""}`);
+    return NextResponse.redirect(`${process.env.BASE_URL}/?error=${reason}`);
+  };
 
-  if (!code || !state || !expected || state !== expected) return fail("state");
+  if (!code || !state || !expected || state !== expected) {
+    return fail("state", `code=${Boolean(code)} state=${Boolean(state)} expected=${Boolean(expected)} match=${state === expected}`);
+  }
 
   const tokenRes = await timeoutFetch(`${HCA_BASE_URL}/oauth/token`, {
     method: "POST",
@@ -52,7 +59,7 @@ export async function GET(req: NextRequest) {
     }),
   });
 
-  if (!tokenRes.ok) return fail("token");
+  if (!tokenRes.ok) return fail("token", `HCA /oauth/token returned ${tokenRes.status}`);
 
   const tokens = (await tokenRes.json()) as HackClubTokenResponse;
 
@@ -60,12 +67,14 @@ export async function GET(req: NextRequest) {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
 
-  if (!meRes.ok) return fail("identity");
+  if (!meRes.ok) return fail("identity", `HCA /api/v1/me returned ${meRes.status}`);
 
   const me = (await meRes.json()) as HackClubMeResponse;
   const identity = me.identity;
   const email = identity.primary_email;
-  if (!email) return fail("denied");
+  if (!email) {
+    return fail("no-email", `hca identity ${identity.id} has no primary_email (verification_status=${identity.verification_status ?? "unknown"})`);
+  }
 
   const fullName = [identity.first_name, identity.last_name]
     .filter(Boolean)
@@ -73,7 +82,7 @@ export async function GET(req: NextRequest) {
     .trim();
   const name = fullName || email;
 
-  if (!isAllowed({ hcaId: identity.id, email })) return fail("denied");
+  if (!isAllowed({ hcaId: identity.id, email })) return fail("not-allowed", `${identity.id} is not on PIXIE_WIZARD_ALLOWLIST`);
 
   await setSessionCookie({
     hcaId: identity.id,

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 
 // Marketing home. Ported from the Claude Design canvas (pixie-landing-prototype).
 // This is a committed light-mode brand artifact — like most marketing pages, it
@@ -214,7 +215,7 @@ function Hero({ devBypass }: { devBypass: boolean }) {
         <svg width="24" height="30" viewBox="0 0 24 30" style={{ position: "absolute", left: -14, top: 56 }} aria-hidden="true"><path d="M24 3 C11 8 1 16 3 23 C5 29 15 30 24 27 Z" fill="#E3F6D2" /></svg>
       </div>
 
-      <div style={{ position: "absolute", left: 735, top: 474, width: 281, height: 72, borderRadius: 14, background: "#fff", boxShadow: "0 10px 26px rgba(20,30,15,0.10)" }}>
+      <div style={{ position: "absolute", left: 735, top: 474, width: 360, height: 72, borderRadius: 14, background: "#fff", boxShadow: "0 10px 26px rgba(20,30,15,0.10)" }}>
         <div style={{ position: "absolute", left: 20, top: 20 }}><Slack size={26} /></div>
         <div style={{ position: "absolute", left: 63, top: 21, display: "flex", alignItems: "baseline", gap: 9 }}><span style={{ fontWeight: 700, fontSize: 15 }}>jamie</span><span style={{ fontSize: 12.5, color: "#8A8A84" }}>11:03 AM</span></div>
         <div style={{ position: "absolute", left: 63, top: 41, fontSize: 16.5, color: "#1A1A1A", whiteSpace: "nowrap" }}>can i change this after review?</div>
@@ -559,10 +560,46 @@ function MobileLanding({ devBypass }: { devBypass: boolean }) {
   );
 }
 
+// /api/auth/callback redirects here with ?error=<reason> on any sign-in
+// failure — without this, that redirect looked identical to just landing on
+// the homepage, so a failed sign-in gave no signal at all to the person it
+// happened to. Keys match the `fail()` reasons in that route exactly.
+const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  state: "That sign-in link expired before it finished. Please try again.",
+  token: "Hack Club Auth didn't respond. Please try again in a moment.",
+  identity: "Couldn't load your Hack Club Auth profile. Please try again.",
+  "no-email": "Your Hack Club Auth account doesn't have a verified email, which Pixie needs to sign you in. Add one to your Hack Club Auth account, then try again.",
+  "not-allowed": "This Hack Club Auth account isn't allowed to sign in here.",
+};
+
+function AuthErrorBannerContent() {
+  const params = useSearchParams();
+  const error = params.get("error");
+  if (!error) return null;
+  const message = AUTH_ERROR_MESSAGES[error] ?? "Sign-in didn't complete. Please try again.";
+  return (
+    <div style={{ position: "relative", zIndex: 50, background: "#3A1F1F", color: "#fff", fontSize: 13.5, lineHeight: 1.4, textAlign: "center", padding: "12px 20px" }}>
+      {message}{" "}
+      <a href="/api/auth/login" style={{ color: "#fff", textDecoration: "underline" }}>
+        Try again
+      </a>
+    </div>
+  );
+}
+
+function AuthErrorBanner() {
+  return (
+    <Suspense fallback={null}>
+      <AuthErrorBannerContent />
+    </Suspense>
+  );
+}
+
 export default function LandingPage() {
   const devBypass = process.env.NODE_ENV !== "production";
   return (
     <>
+      <AuthErrorBanner />
       <DesktopLanding devBypass={devBypass} />
       <MobileLanding devBypass={devBypass} />
     </>
