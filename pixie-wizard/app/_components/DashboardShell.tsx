@@ -115,7 +115,7 @@ export function DashboardShell({
           </div>
           {programId && <MobileProgramNav programId={programId} />}
         </header>
-        <main className="mx-auto max-w-[1080px] px-6 py-10 lg:px-10">{children}</main>
+        <main className="mx-auto max-w-[1440px] px-6 py-10 lg:px-10">{children}</main>
       </div>
     </div>
   );
