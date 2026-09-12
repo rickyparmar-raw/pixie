@@ -117,8 +117,7 @@ function HeroBackdrop() {
     <svg width="1672" height="941" viewBox="0 0 1672 941" style={{ position: "absolute", top: 0, left: 0 }} aria-hidden="true">
       <path d="M1600 -30 C1500 40 1560 130 1470 200 C1350 292 1130 250 960 300 C850 332 800 368 825 412 C852 458 970 448 1075 495 C1210 555 1270 605 1360 660 C1440 708 1550 728 1700 715" fill="none" stroke="#A6E263" strokeWidth="120" strokeLinecap="round" />
       <path d="M1672 25 C1590 65 1560 150 1562 225 C1564 300 1608 348 1672 358 Z" fill="#A6E263" />
-      <path d="M0 941 C-4 890 24 842 74 818 C124 794 182 800 206 838 C230 876 216 918 178 938 C140 958 60 958 0 941 Z" fill="#CDB8F7" />
-      <path d="M1672 665 C1600 660 1540 680 1500 715 C1460 750 1470 780 1436 800 C1408 817 1400 860 1408 900 C1412 918 1418 932 1428 941 L1672 941 Z" fill="#1C3324" />
+      <path d="M1672 665 C1600 660 1540 680 1500 715 C1462 760 1440 820 1400 870 C1380 895 1365 918 1358 941 L1672 941 Z" fill="#1C3324" />
       <path d="M178 519 C216 501 264 498 304 503" fill="none" stroke="#93DB4F" strokeWidth="11" strokeLinecap="round" />
       <path d="M172 509 C208 499 248 496 284 498" fill="none" stroke="#93DB4F" strokeWidth="6" strokeLinecap="round" />
       <path d="M786 240 C776 278 800 316 836 331" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
@@ -290,7 +289,6 @@ function HowItWorks() {
     <div id="how-it-works" ref={sectionRef} style={{ position: "relative", width: 1920, height: 1600, background: "#F7F4E9" }}>
       <svg width="1920" height="1600" viewBox="0 0 1920 1600" style={{ position: "absolute", top: 0, left: 0 }} aria-hidden="true">
         <path d="M1560,0 C1660,8 1760,26 1840,64 C1875,82 1900,90 1920,86 L1920,0 Z" fill="#1C3324" />
-        <path d="M340,0 C410,18 510,42 610,38 C670,35 715,18 755,0 Z" fill="#CDB8F7" />
         <path d="M1850,0 C1700,119 1550,155 1400,219 C1150,320 950,302 800,421 C650,539 620,640 700,731 C760,804 860,832 920,923" fill="none" stroke="#A6E263" strokeWidth="140" strokeLinecap="round" pathLength="1000" strokeDasharray="1000" strokeDashoffset={ribbonOffset} />
         <path d="M920,923 C860,1000 750,1050 600,1080 C400,1120 200,1160 150,1230 C120,1280 140,1340 200,1380 C300,1420 450,1440 600,1460" fill="none" stroke="#A6E263" strokeWidth="140" strokeLinecap="round" pathLength="1000" strokeDasharray="1000" strokeDashoffset={ribbonOffset} />
         <path d="M920,923 C1020,1000 1150,1040 1280,1080 C1380,1110 1430,1140 1450,1190" fill="none" stroke="#C9AEF0" strokeWidth="100" strokeLinecap="round" pathLength="1000" strokeDasharray="1000" strokeDashoffset={branchOffset} />
@@ -418,12 +416,34 @@ function ClosingCta() {
   );
 }
 
+// Bridges the Hero/HowItWorks seam: each section draws its background in its
+// own clipped SVG, so a shape that should read as one continuous form (not
+// two shapes that happen to abut) has to actually live here instead, as a
+// single path that bleeds across the boundary unclipped.
+function SeamConnector() {
+  return (
+    <svg
+      width="720"
+      height="260"
+      viewBox="0 0 720 260"
+      style={{ position: "absolute", top: 920, left: 0 }}
+      aria-hidden="true"
+    >
+      <path
+        d="M0,260 L0,140 C15,55 130,5 270,20 C380,32 460,60 500,95 C525,117 515,140 480,150 C430,163 340,150 260,155 C180,159 90,180 0,195 Z"
+        fill="#CDB8F7"
+      />
+    </svg>
+  );
+}
+
 function DesktopLanding({ devBypass }: { devBypass: boolean }) {
   const scale = useScale();
   return (
     <div className="hidden lg:block" style={{ position: "relative", width: "100%", height: DESIGN_HEIGHT * scale, overflow: "hidden", background: "#F7F4E9" }}>
-      <div style={{ width: DESIGN_WIDTH, transform: `scale(${scale})`, transformOrigin: "top left", fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", color: "#101010" }}>
+      <div style={{ position: "relative", width: DESIGN_WIDTH, transform: `scale(${scale})`, transformOrigin: "top left", fontFamily: "'Helvetica Neue',Helvetica,Arial,sans-serif", color: "#101010" }}>
         <div style={{ position: "relative", width: 1920, height: 1080, overflow: "hidden" }}><Hero devBypass={devBypass} /></div>
+        <SeamConnector />
         <HowItWorks />
         <ClosingCta />
       </div>
