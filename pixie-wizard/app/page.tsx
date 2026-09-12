@@ -201,7 +201,6 @@ function Hero({ devBypass }: { devBypass: boolean }) {
       </div>
       <div style={{ position: "absolute", left: 822, top: 368, width: 44, height: 44, borderRadius: "50%", background: "#8FD94F", display: "flex", alignItems: "center", justifyContent: "center" }}><Check stroke="#0D2114" size={20} /></div>
 
-      <div style={{ position: "absolute", left: 1163, top: 146, transform: "rotate(-5deg)", fontFamily: SCRIBBLE_FONT, fontSize: 17, lineHeight: "26px", letterSpacing: "0.02em", color: "#111" }}>GROUNDED<br />IN YOUR DOCS.</div>
       <div style={{ position: "absolute", left: 1211, top: 210, width: 42, height: 34, borderRadius: 17, background: "#fff", boxShadow: "0 6px 14px rgba(20,30,15,0.14)", display: "flex", alignItems: "center", justifyContent: "center" }}><Check stroke="#5AA02C" size={17} /></div>
 
       <div style={{ position: "absolute", left: 1073, top: 272, width: 279, height: 140, borderRadius: 18, background: "#E3F6D2" }}>
@@ -245,8 +244,6 @@ function Hero({ devBypass }: { devBypass: boolean }) {
         </div>
         <div style={{ position: "absolute", right: 16, top: 82 }}><Arrow color="#3A3358" /></div>
       </div>
-
-      <div style={{ position: "absolute", left: 1424, top: 477, transform: "rotate(-5deg)", fontFamily: SCRIBBLE_FONT, fontSize: 17, lineHeight: "26px", letterSpacing: "0.02em", color: "#111" }}>SOME QUESTIONS<br />NEED A HUMAN.</div>
     </div>
   );
 }
@@ -410,7 +407,6 @@ function ClosingCta() {
   return (
     <div style={{ position: "relative", width: 1920, height: 420, background: "#F7F4E9", overflow: "hidden" }}>
       <svg width="1920" height="420" viewBox="0 0 1920 420" style={{ position: "absolute", top: 0, left: 0 }} aria-hidden="true"><path d="M0,70 C420,10 900,100 1920,30 L1920,420 L0,420 Z" fill="#E3F1CB" /></svg>
-      <div style={{ position: "absolute", left: 70, top: 64, transform: "rotate(-4deg)", fontFamily: SCRIBBLE_FONT, fontSize: 18, lineHeight: "26px", letterSpacing: "0.02em", color: "#111" }}>BETTER<br />COMMUNITIES<br />BUILD MORE.</div>
       <div style={{ position: "absolute", left: 240, top: 150, width: 520, fontFamily: HEAD_FONT, fontWeight: 800, fontSize: 56, lineHeight: "62px", letterSpacing: "-0.02em", color: "#0D2114" }}>Knows when <span style={{ color: "#5AA02C" }}>not to<br />answer.</span></div>
       <div style={{ position: "absolute", left: 840, top: 172, width: 440, fontSize: 17, lineHeight: "25px", color: "#1A1A1A" }}>Pixie only answers when it&apos;s confident and can back it up. When it&apos;s not sure, it stays quiet and gets a real human to help. That&apos;s better support for everyone.</div>
       <a href="#how-it-works" style={{ position: "absolute", left: 840, top: 274, width: 172, height: 52, borderRadius: 26, background: "#0B0B0B", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", gap: 12, fontSize: 15.5, fontWeight: 700 }}>
