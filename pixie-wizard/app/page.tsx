@@ -478,6 +478,52 @@ const MOBILE_STEPS = [
   { n: 4, tone: "#8FD94F", bg: "#E3F6D2", title: "Answer or hand off", body: "If Pixie finds a clear answer, you’ll get a helpful reply with a source. If not, a human helper takes over." },
 ];
 
+// Mobile's parallel to the desktop's scroll-progress reveal system: the
+// desktop ties opacity/offset continuously to how far a section has scrolled
+// through the viewport (see useSectionProgress/reveal above), which needs a
+// tall absolutely-positioned canvas to make sense of. Mobile's normal-flow
+// stacked layout doesn't have that canvas, so it gets the idiomatic
+// alternative instead — each block fades and slides up once when it first
+// enters view, via IntersectionObserver. Respects prefers-reduced-motion the
+// same way the desktop version does.
+function Reveal({ children, delay = 0 }: { children: ReactNode; delay?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setVisible(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.2, rootMargin: "0px 0px -40px 0px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? "translateY(0)" : "translateY(20px)",
+        transition: `opacity 550ms ease ${delay}ms, transform 550ms ease ${delay}ms`,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function MobileButton({ href, children, primary }: { href: string; children: ReactNode; primary?: boolean }) {
   return (
     <a
@@ -533,34 +579,38 @@ function MobileLanding({ devBypass }: { devBypass: boolean }) {
           <span>Built for communities</span>
         </div>
 
-        <div style={{ position: "relative", marginTop: 28, borderRadius: 16, background: "#fff", boxShadow: "0 10px 26px rgba(20,30,15,0.08)", padding: "14px 16px", display: "flex", gap: 12, alignItems: "flex-start" }}>
-          <Slack size={22} />
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-              <span style={{ fontWeight: 700, fontSize: 14.5 }}>jamie</span>
-              <span style={{ fontSize: 11.5, color: "#8A8A84" }}>11:03 AM</span>
+        <Reveal delay={150}>
+          <div style={{ position: "relative", marginTop: 28, borderRadius: 16, background: "#fff", boxShadow: "0 10px 26px rgba(20,30,15,0.08)", padding: "14px 16px", display: "flex", gap: 12, alignItems: "flex-start" }}>
+            <Slack size={22} />
+            <div style={{ minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontWeight: 700, fontSize: 14.5 }}>jamie</span>
+                <span style={{ fontSize: 11.5, color: "#8A8A84" }}>11:03 AM</span>
+              </div>
+              <p style={{ margin: "3px 0 0", fontSize: 14.5, color: "#1A1A1A" }}>can i change this after review?</p>
             </div>
-            <p style={{ margin: "3px 0 0", fontSize: 14.5, color: "#1A1A1A" }}>can i change this after review?</p>
           </div>
-        </div>
-        <div style={{ position: "relative", marginTop: 10, marginLeft: 24, display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#4A4A45" }}>
-          <img src="/pixie-hero.png" alt="" width={22} height={22} className="pixel-art" style={{ flex: "none" }} />
-          Pixie stays quiet and gets a human when it&apos;s not sure.
-        </div>
+          <div style={{ position: "relative", marginTop: 10, marginLeft: 24, display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: "#4A4A45" }}>
+            <img src="/pixie-hero.png" alt="" width={22} height={22} className="pixel-art" style={{ flex: "none" }} />
+            Pixie stays quiet and gets a human when it&apos;s not sure.
+          </div>
+        </Reveal>
       </section>
 
       <section id="how-it-works-m" style={{ padding: "36px 20px", background: "#fff" }}>
         <p style={{ fontSize: 10.5, letterSpacing: "0.24em", fontWeight: 600, color: "#33493A", margin: "0 0 10px" }}>HOW IT WORKS</p>
         <h2 style={{ fontFamily: HEAD_FONT, fontWeight: 800, fontSize: 26, lineHeight: 1.15, color: "#0D2114", margin: "0 0 24px" }}>A question &rarr; a better answer.</h2>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          {MOBILE_STEPS.map((step) => (
-            <div key={step.n} style={{ display: "flex", gap: 14, borderRadius: 18, background: step.bg, padding: 16 }}>
-              <span style={{ flex: "none", width: 36, height: 36, borderRadius: "50%", background: step.tone, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: HEAD_FONT, fontWeight: 800, fontSize: 15, color: "#0D2114" }}>{step.n}</span>
-              <div>
-                <h3 style={{ fontFamily: HEAD_FONT, fontWeight: 700, fontSize: 17, color: "#0D2114", margin: "0 0 4px" }}>{step.title}</h3>
-                <p style={{ fontSize: 14.5, lineHeight: 1.45, color: "#1A1A1A", margin: 0 }}>{step.body}</p>
+          {MOBILE_STEPS.map((step, i) => (
+            <Reveal key={step.n} delay={i * 100}>
+              <div style={{ display: "flex", gap: 14, borderRadius: 18, background: step.bg, padding: 16 }}>
+                <span style={{ flex: "none", width: 36, height: 36, borderRadius: "50%", background: step.tone, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: HEAD_FONT, fontWeight: 800, fontSize: 15, color: "#0D2114" }}>{step.n}</span>
+                <div>
+                  <h3 style={{ fontFamily: HEAD_FONT, fontWeight: 700, fontSize: 17, color: "#0D2114", margin: "0 0 4px" }}>{step.title}</h3>
+                  <p style={{ fontSize: 14.5, lineHeight: 1.45, color: "#1A1A1A", margin: 0 }}>{step.body}</p>
+                </div>
               </div>
-            </div>
+            </Reveal>
           ))}
         </div>
       </section>
@@ -569,6 +619,7 @@ function MobileLanding({ devBypass }: { devBypass: boolean }) {
         <svg width="170" height="170" viewBox="0 0 170 170" style={{ position: "absolute", bottom: -50, right: -50 }} aria-hidden="true">
           <path d="M160,80 C168,120 140,158 95,166 C55,173 15,152 6,112 C-3,72 15,32 55,15 C100,-4 150,15 160,50 C164,60 158,70 160,80 Z" fill="#CDB8F7" opacity="0.6" />
         </svg>
+        <Reveal>
         <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
           <img src="/pixie-hero.png" alt="" width={32} height={32} className="pixel-art" />
         </div>
@@ -582,6 +633,7 @@ function MobileLanding({ devBypass }: { devBypass: boolean }) {
           <MobileButton href={LOGIN_HREF} primary>Learn more <Arrow color="#fff" /></MobileButton>
         </div>
         <p style={{ position: "relative", marginTop: 20, fontSize: 12.5, color: "#5A6B57" }}>Made by Ricky</p>
+        </Reveal>
       </section>
     </div>
   );
