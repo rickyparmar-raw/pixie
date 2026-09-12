@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { loadProgramContext } from "@/lib/programAccess";
+import { loadProgramContext, isSuperadminSession } from "@/lib/programAccess";
 import { DashboardShell } from "@/app/_components/DashboardShell";
 
 // Only checks that a session exists and the program is real — NOT
@@ -19,8 +19,16 @@ export default async function ProgramLayout({ children, params }: { children: Re
 
   if (relationship === "public") return <>{children}</>;
 
+  const isSuperadmin = await isSuperadminSession(session);
+
   return (
-    <DashboardShell programId={id} programName={program.program_name} userName={session.name} userEmail={session.email}>
+    <DashboardShell
+      programId={id}
+      programName={program.program_name}
+      userName={session.name}
+      userEmail={session.email}
+      showWorkspaceNav={isSuperadmin}
+    >
       {children}
     </DashboardShell>
   );

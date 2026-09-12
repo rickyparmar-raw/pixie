@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { isAllowed, setSessionCookie } from "@/lib/session";
 import { timeoutFetch } from "@/lib/timeoutFetch";
 import { listHostedProgramsForOwner, listProgramAccessForPerson } from "@/lib/hostedPrograms";
+import { isSuperadminSession } from "@/lib/programAccess";
 
 const HCA_BASE_URL = "https://auth.hackclub.com";
 
@@ -85,12 +86,20 @@ export async function GET(req: NextRequest) {
   // eligible account it fetches every Slack channel from Core before it can
   // render anything. Sending every login through it meant a returning owner
   // or helper paid for that Core round trip just to get bounced onward.
-  // Anyone who already has a program goes straight to the directory instead;
-  // only a genuinely new, programless account lands on /wizard.
-  const [owned, helping] = await Promise.all([
-    listHostedProgramsForOwner({ hcaId: identity.id, email }).catch(() => []),
-    listProgramAccessForPerson(identity.id).catch(() => []),
-  ]);
-  const destination = owned.length > 0 || helping.length > 0 ? "/programs" : "/wizard";
+  // /programs (the cross-program directory) is superadmin-only, so a normal
+  // owner/helper goes straight to their own program instead of bouncing
+  // through a page that would just redirect them again.
+  const who = { hcaId: identity.id, email };
+  let destination = "/wizard";
+  if (await isSuperadminSession(who)) {
+    destination = "/programs";
+  } else {
+    const [owned, helping] = await Promise.all([
+      listHostedProgramsForOwner(who).catch(() => []),
+      listProgramAccessForPerson(identity.id).catch(() => []),
+    ]);
+    if (owned[0]) destination = `/programs/${owned[0].id}`;
+    else if (helping[0]) destination = `/programs/${helping[0].id}`;
+  }
   return NextResponse.redirect(`${process.env.BASE_URL}${destination}`);
 }

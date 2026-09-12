@@ -1,7 +1,6 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import { DashboardShell, PageHeader, Section, MetricCard, StatusBadge } from "@/app/_components/DashboardShell";
-import { getSession } from "@/lib/session";
+import { requireWizardSuperadmin } from "@/lib/programAccess";
 import { listHostedProgramsForOwner } from "@/lib/hostedPrograms";
 import { coreAnalytics } from "@/lib/pixieCore";
 import { summarizeAnalytics, type AnalyticsSnapshot } from "@/lib/dashboardMetrics";
@@ -10,9 +9,10 @@ function percent(value: number, total: number): string {
   return total ? `${Math.round((value / total) * 100)}%` : "0%";
 }
 
+// Cross-program view — superadmin-only. Anyone else only ever needs the one
+// program they actually work on; see requireWizardSuperadmin.
 export default async function OverviewPage() {
-  const session = await getSession();
-  if (!session) redirect("/");
+  const session = await requireWizardSuperadmin();
 
   const programs = await listHostedProgramsForOwner(session).catch(() => []);
   const snapshots = (

@@ -10,6 +10,7 @@ export function DashboardShell({
   crumb = "Overview",
   userName,
   userEmail,
+  showWorkspaceNav = true,
 }: {
   children: React.ReactNode;
   programId?: string;
@@ -21,18 +22,30 @@ export function DashboardShell({
   // placeholder) when a caller hasn't threaded the session through yet.
   userName?: string;
   userEmail?: string;
+  // Overview/Programs/People are superadmin-only (see requireWizardSuperadmin)
+  // — showing them to anyone else would just be a nav item that redirects the
+  // moment it's clicked. Defaults true because every workspace-level page
+  // that renders this shell directly is itself already superadmin-gated;
+  // the one caller that isn't (the per-program layout, used by everyone)
+  // passes the real value explicitly.
+  showWorkspaceNav?: boolean;
 }) {
+  const homeHref = programId ? `/programs/${programId}` : "/overview";
   return (
     <div className="min-h-screen bg-ink text-text">
       <aside className="fixed inset-y-0 left-0 z-10 hidden w-[240px] flex-col border-r border-line bg-ink px-3 py-5 lg:flex">
         <div className="min-h-0 flex-1 overflow-y-auto">
-          <Link href="/overview" className="flex items-center gap-1.5 pl-1 font-heading text-lg font-extrabold tracking-tight text-text">
+          <Link href={homeHref} className="flex items-center gap-1.5 pl-1 font-heading text-lg font-extrabold tracking-tight text-text">
             pixie
             <span className="mb-2.5 size-[7px] rounded-full bg-gradient-to-br from-brand to-mint" aria-hidden="true" />
           </Link>
 
-          <p className="mt-8 pl-1 text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted/70">Workspace</p>
-          <WorkspaceNav />
+          {showWorkspaceNav && (
+            <>
+              <p className="mt-8 pl-1 text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted/70">Workspace</p>
+              <WorkspaceNav />
+            </>
+          )}
 
           {programId && (
             <>
@@ -75,7 +88,7 @@ export function DashboardShell({
       <div className="lg:pl-[240px]">
         <header className="flex min-h-[64px] flex-wrap items-center gap-x-4 gap-y-3 border-b border-line px-6 py-3.5 lg:px-8">
           <div className="text-xs text-text-muted">
-            <Link href="/overview" className="text-text hover:text-brand">pixie</Link>
+            <Link href={homeHref} className="text-text hover:text-brand">pixie</Link>
             <span className="px-2 text-text-muted/50">/</span>
             {programName ?? crumb}
           </div>

@@ -8,7 +8,13 @@
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { getSession, ownsIdentifier, type WizardSession } from "@/lib/session";
-import { getHostedProgram, getHelperRow, isWizardSuperadmin } from "@/lib/hostedPrograms";
+import {
+  getHostedProgram,
+  getHelperRow,
+  isWizardSuperadmin,
+  listHostedProgramsForOwner,
+  listProgramAccessForPerson,
+} from "@/lib/hostedPrograms";
 import type { HostedProgramRow, ProgramRelationship } from "@/lib/types";
 
 export async function relationshipFor(
@@ -79,9 +85,28 @@ export async function requireProgramMembership(programId: string): Promise<Progr
   return { program, session, relationship };
 }
 
+export async function isSuperadminSession(identity: { hcaId: string; email: string }): Promise<boolean> {
+  return (await isWizardSuperadmin(identity.hcaId)) || (await isWizardSuperadmin(identity.email));
+}
+
+// Where a non-superadmin lands instead of a workspace-level page they can't
+// use: their own program, if they have one (owned first, then a helper
+// role), otherwise the marketing home — there's nothing else in the wizard
+// for an account with zero program access.
+export async function ownProgramPath(identity: { hcaId: string; email: string }): Promise<string> {
+  const owned = await listHostedProgramsForOwner(identity).catch(() => []);
+  if (owned[0]) return `/programs/${owned[0].id}`;
+  const helping = await listProgramAccessForPerson(identity.hcaId).catch(() => []);
+  if (helping[0]) return `/programs/${helping[0].id}`;
+  return "/";
+}
+
+// Workspace-level pages (overview, the program directory, people & access)
+// are superadmin-only — everyone else only ever needs the one program they
+// actually work on, not a cross-program view.
 export async function requireWizardSuperadmin(): Promise<WizardSession> {
   const session = await getSession();
   if (!session) redirect("/");
-  if (!(await isWizardSuperadmin(session.hcaId)) && !(await isWizardSuperadmin(session.email))) redirect("/overview");
+  if (!(await isSuperadminSession(session))) redirect(await ownProgramPath(session));
   return session;
 }

@@ -1,8 +1,6 @@
-import { redirect } from "next/navigation";
 import Link from "next/link";
-import { getSession } from "@/lib/session";
 import { listActiveHostedPrograms } from "@/lib/hostedPrograms";
-import { relationshipFor } from "@/lib/programAccess";
+import { relationshipFor, requireWizardSuperadmin } from "@/lib/programAccess";
 import { DashboardShell, PageHeader, StatusBadge } from "@/app/_components/DashboardShell";
 import type { ProgramRelationship } from "@/lib/types";
 
@@ -20,12 +18,10 @@ const ACTION_LABEL: Record<ProgramRelationship, string> = {
   public: "View →",
 };
 
-// The directory: every active hosted program is discoverable by anyone
-// signed in. Membership only changes what the destination renders and which
-// action label this row shows — it never hides a program.
+// The directory — superadmin-only. Everyone else only ever needs the one
+// program they actually work on; see requireWizardSuperadmin.
 export default async function ProgramsIndex() {
-  const session = await getSession();
-  if (!session) redirect("/");
+  const session = await requireWizardSuperadmin();
 
   const programs = await listActiveHostedPrograms().catch(() => []);
   const withRelationship = await Promise.all(
