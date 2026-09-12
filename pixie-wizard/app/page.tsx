@@ -117,7 +117,7 @@ function HeroBackdrop() {
     <svg width="1672" height="941" viewBox="0 0 1672 941" style={{ position: "absolute", top: 0, left: 0 }} aria-hidden="true">
       <path d="M1600 -30 C1500 40 1560 130 1470 200 C1350 292 1130 250 960 300 C850 332 800 368 825 412 C852 458 970 448 1075 495 C1210 555 1270 605 1360 660 C1440 708 1550 728 1700 715" fill="none" stroke="#A6E263" strokeWidth="120" strokeLinecap="round" />
       <path d="M1672 25 C1590 65 1560 150 1562 225 C1564 300 1608 348 1672 358 Z" fill="#A6E263" />
-      <path d="M410 941 C398 852 470 792 590 768 C695 747 800 758 862 800 C918 838 928 892 908 941 Z" fill="#CDB8F7" />
+      <path d="M0 941 C-4 890 24 842 74 818 C124 794 182 800 206 838 C230 876 216 918 178 938 C140 958 60 958 0 941 Z" fill="#CDB8F7" />
       <path d="M1672 665 C1600 660 1540 680 1500 715 C1460 750 1470 780 1436 800 C1408 817 1400 860 1408 900 C1412 918 1418 932 1428 941 L1672 941 Z" fill="#1C3324" />
       <path d="M178 519 C216 501 264 498 304 503" fill="none" stroke="#93DB4F" strokeWidth="11" strokeLinecap="round" />
       <path d="M172 509 C208 499 248 496 284 498" fill="none" stroke="#93DB4F" strokeWidth="6" strokeLinecap="round" />
@@ -129,8 +129,6 @@ function HeroBackdrop() {
       <path d="M860 629 L845 622 M860 629 L846 636" fill="none" stroke="#A98BE8" strokeWidth="2.4" strokeLinecap="round" />
       <path d="M1206 626 L1252 626" fill="none" stroke="#A98BE8" strokeWidth="2.4" strokeLinecap="round" />
       <path d="M1252 626 L1243 620 M1252 626 L1243 632" fill="none" stroke="#A98BE8" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M70 786 C70 826 84 852 104 864" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
-      <path d="M104 864 L89 862 M104 864 L98 851" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
       <path d="M994 266 L1000 284 M1016 262 L1014 280 M976 286 L992 296 M1040 290 L1024 298 M1036 316 L1020 312" fill="none" stroke="#111" strokeWidth="2.6" strokeLinecap="round" />
       <path d="M1592 496 L1606 484 M1587 517 L1603 511 M1591 538 L1603 530" fill="none" stroke="#111" strokeWidth="2.8" strokeLinecap="round" />
       <path d="M1600 124 C1603 140 1607 144 1621 148 C1607 152 1603 156 1600 172 C1597 156 1593 152 1579 148 C1593 144 1597 140 1600 124 Z" fill="#8FD94F" />
@@ -186,10 +184,6 @@ function Hero({ devBypass }: { devBypass: boolean }) {
         </div>
       </div>
 
-      <div style={{ position: "absolute", left: 118, top: 838, transform: "rotate(-6deg)", fontFamily: SCRIBBLE_FONT, fontSize: 19, lineHeight: "32px", letterSpacing: "0.02em", color: "#111" }}>REAL ANSWERS.<br />HAPPIER COMMUNITIES.</div>
-
-      <div style={{ position: "absolute", left: 600, top: 850, fontSize: 11.5, lineHeight: "17px", letterSpacing: "0.18em", fontWeight: 600, color: "#8E7BB6" }}>BUILT FOR<br />PROGRAMS THAT<br />MOVE THINGS FORWARD.</div>
-
       <div style={{ position: "absolute", left: 840, top: 300, width: 158, height: 122, borderRadius: 16, background: "#2B2B2B" }} />
       <div style={{ position: "absolute", left: 866, top: 293, width: 142, height: 135, borderRadius: 14, background: "#fff", boxShadow: "0 10px 26px rgba(20,30,15,0.10)" }}>
         <div style={{ position: "absolute", left: 14, top: 14, display: "flex", alignItems: "center", gap: 9, fontSize: 14, fontWeight: 600, color: "#1A1A1A" }}>
@@ -224,9 +218,6 @@ function Hero({ devBypass }: { devBypass: boolean }) {
         <svg width="24" height="30" viewBox="0 0 24 30" style={{ position: "absolute", left: -14, top: 56 }} aria-hidden="true"><path d="M24 3 C11 8 1 16 3 23 C5 29 15 30 24 27 Z" fill="#E3F6D2" /></svg>
       </div>
 
-      <div style={{ position: "absolute", left: 1417, top: 152, width: 182, height: 200, borderRadius: 8, background: "#FDFCF7", transform: "rotate(-4deg)", boxShadow: "0 14px 34px rgba(20,30,15,0.10)" }} />
-      <div style={{ position: "absolute", left: 1461, top: 188, transform: "rotate(-4deg)", fontFamily: SCRIBBLE_FONT, fontSize: 17, lineHeight: "26px", letterSpacing: "0.02em", color: "#111" }}>YOUR<br />KNOWLEDGE.<br /><br style={{ lineHeight: "6px" }} />REAL ANSWERS.<br />HAPPIER<br />PEOPLE.</div>
-
       <div style={{ position: "absolute", left: 735, top: 474, width: 281, height: 72, borderRadius: 14, background: "#fff", boxShadow: "0 10px 26px rgba(20,30,15,0.10)" }}>
         <Slack size={26} />
         <div style={{ position: "absolute", left: 63, top: 21, display: "flex", alignItems: "baseline", gap: 9 }}><span style={{ fontWeight: 700, fontSize: 15 }}>jamie</span><span style={{ fontSize: 12.5, color: "#8A8A84" }}>11:03 AM</span></div>
@@ -256,8 +247,6 @@ function Hero({ devBypass }: { devBypass: boolean }) {
       </div>
 
       <div style={{ position: "absolute", left: 1424, top: 477, transform: "rotate(-5deg)", fontFamily: SCRIBBLE_FONT, fontSize: 17, lineHeight: "26px", letterSpacing: "0.02em", color: "#111" }}>SOME QUESTIONS<br />NEED A HUMAN.</div>
-
-      <div style={{ position: "absolute", left: 1518, top: 806, transform: "rotate(-8deg)", fontFamily: SCRIBBLE_FONT, fontSize: 18, lineHeight: "26px", letterSpacing: "0.02em", color: "#FFFFFF" }}>GOOD<br />SUPPORT<br />GOES FAR.</div>
     </div>
   );
 }
@@ -428,7 +417,6 @@ function ClosingCta() {
         <span>Learn more</span>
         <Arrow color="#fff" />
       </a>
-      <div style={{ position: "absolute", left: 1560, top: 56, transform: "rotate(4deg)", fontFamily: SCRIBBLE_FONT, fontSize: 18, lineHeight: "26px", letterSpacing: "0.02em", color: "#2E4A32", textAlign: "right" }}>SAME QUESTIONS.<br />BRIGHTER FUTURES.</div>
       <svg width="30" height="30" viewBox="0 0 30 30" style={{ position: "absolute", left: 1660, top: 330 }} aria-hidden="true"><path d="M15 0L18 12L30 15L18 18L15 30L12 18L0 15L12 12Z" fill="#2E4A32" /></svg>
     </div>
   );
