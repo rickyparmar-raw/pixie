@@ -1,34 +1,75 @@
 @import "tailwindcss";
 
+/* Pixie brand: warm cream + pixel-green, the same system the marketing site
+   uses. Tokens are declared once here and consumed everywhere else as
+   `bg-ink` / `text-text-muted` / `border-line` / `var(--color-brand)` — every
+   page re-themes just by these values changing, no per-page edits needed. */
 @theme {
-  --color-brand: #ef5b70;
-  --color-brand-dim: #bd4054;
-  --color-mint: #73d4b4;
-  --color-tang: #c99b58;
-  --color-ink: #0b0e13;
-  --color-panel: #10141c;
-  --color-panel-2: #131821;
-  --color-line: #252d39;
-  --color-text: #d7dbe4;
-  --color-text-muted: #717b8d;
+  --color-brand: #5aa02c;
+  --color-brand-dim: #457c21;
+  --color-mint: #2f9e6e;
+  --color-tang: #b5763d;
+  --color-ink: #f7f4e9;
+  --color-panel: #fffdf7;
+  --color-panel-2: #f0eee4;
+  --color-line: #e4dfd0;
+  --color-text: #16241a;
+  --color-text-muted: #6e6e68;
+  --color-on-brand: #0d1f11;
   --radius: 6px;
-  /* Two voices. Sans (Inter) carries product copy and headings; mono
-     (JetBrains) is reserved for operational text — ticket ids, timestamps,
-     states, source keys, metric figures. Both faces are loaded in layout.tsx
-     and set the matching CSS variable on <html>. */
+  /* Three voices. Heading (Poppins) matches the marketing site's display
+     type; sans (Inter) carries product copy; mono (JetBrains) is reserved
+     for operational text — ticket ids, timestamps, states, source keys,
+     metric figures. All three are loaded in layout.tsx and set as CSS
+     variables on <html>. */
   --font-sans:
     "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     sans-serif;
   --font-heading:
-    "Space Grotesk", "Inter", ui-sans-serif, system-ui, sans-serif;
+    "Poppins", "Inter", ui-sans-serif, system-ui, sans-serif;
   --font-mono-heading:
     "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas,
     monospace;
   --font-mono: var(--font-mono-heading);
 }
 
+/* Light is the default brand voice. Dark keeps the same green/brand hues,
+   lightened where they need to read against a dark ground, over a deep
+   green-black ground instead of pure black — a dark reading of the same
+   palette, not a different theme. Explicit `data-theme` wins either
+   direction; `prefers-color-scheme` is the unset-preference fallback. */
 :root {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --color-brand: #8fd94f;
+    --color-brand-dim: #6fb536;
+    --color-mint: #6bd9a3;
+    --color-tang: #e8b98c;
+    --color-ink: #12201a;
+    --color-panel: #17271f;
+    --color-panel-2: #1c2f26;
+    --color-line: #2c4438;
+    --color-text: #edf4e8;
+    --color-text-muted: #8fa396;
+  }
+}
+
+:root[data-theme="dark"] {
   color-scheme: dark;
+  --color-brand: #8fd94f;
+  --color-brand-dim: #6fb536;
+  --color-mint: #6bd9a3;
+  --color-tang: #e8b98c;
+  --color-ink: #12201a;
+  --color-panel: #17271f;
+  --color-panel-2: #1c2f26;
+  --color-line: #2c4438;
+  --color-text: #edf4e8;
+  --color-text-muted: #8fa396;
 }
 
 * {
@@ -49,10 +90,10 @@ body {
 
 ::selection {
   background: var(--color-brand);
-  color: #0b0e13;
+  color: var(--color-on-brand);
 }
 
-/* Headings — Space Grotesk. Distinctive but not decorative; never mono (a
+/* Headings — Poppins. Distinctive but not decorative; never mono (a
    heading is product copy, not machine output). */
 .font-heading {
   font-family: var(--font-heading);
@@ -68,7 +109,7 @@ body {
   background-image:
     radial-gradient(
       circle at 1px 1px,
-      rgba(231, 233, 238, 0.07) 1px,
+      color-mix(in srgb, var(--color-text) 12%, transparent) 1px,
       transparent 0
     );
   background-size: 20px 20px;
@@ -80,14 +121,14 @@ body {
 
 .pixie-panel { border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-panel); }
 .pixie-input { width: 100%; border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-panel-2); color: var(--color-text); padding: 9px 12px; font-size: 13px; outline: none; transition: border-color 150ms ease, box-shadow 150ms ease; }
-.pixie-input::placeholder { color: #4e5868; }
+.pixie-input::placeholder { color: var(--color-text-muted); }
 .pixie-input:focus { border-color: var(--color-brand); box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-brand) 20%, transparent); }
 
 .pixie-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 34px; border-radius: var(--radius); border: 1px solid transparent; padding: 7px 13px; font-size: 13px; font-weight: 500; transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease; }
-.pixie-button-primary { background: var(--color-brand); color: #0b0e13; }
-.pixie-button-primary:hover { background: #f2707f; }
+.pixie-button-primary { background: var(--color-brand); color: var(--color-on-brand); }
+.pixie-button-primary:hover { background: color-mix(in srgb, var(--color-brand) 85%, white); }
 .pixie-button-quiet { border-color: var(--color-line); color: var(--color-text-muted); background: transparent; }
-.pixie-button-quiet:hover { color: var(--color-text); border-color: #3a4556; }
+.pixie-button-quiet:hover { color: var(--color-text); border-color: color-mix(in srgb, var(--color-line), var(--color-text) 35%); }
 
 /* The pixel-art Pixie mark — keep the pixels crisp at every size, never
    let the browser smooth it into mush. */

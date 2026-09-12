@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { WorkspaceNav, ProgramNav, MobileProgramNav } from "./SidebarNav";
+import { ThemeToggle } from "./ThemeToggle";
 
 export function DashboardShell({
   children,
@@ -50,6 +51,7 @@ export function DashboardShell({
           <Link href="/wizard?mode=hosted" className="ml-auto text-xs text-text-muted hover:text-text">
             New program
           </Link>
+          <ThemeToggle />
           {programId && <MobileProgramNav programId={programId} />}
         </header>
         <main className="mx-auto max-w-[1080px] px-6 py-10 lg:px-10">{children}</main>
