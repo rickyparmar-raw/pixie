@@ -144,25 +144,48 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
 
   return (
     <>
-      <div className="mb-10 flex flex-wrap items-start justify-between gap-6 border-b border-line pb-8">
-        <div>
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] uppercase tracking-[0.16em] text-text-muted">
-            <span>{greetingWord(new Date().getHours())}, {firstName}</span>
-            <StatusBadge status={healthLabel(program.status, program.core_sync_state)} />
+      <div className="relative -mx-6 mb-10 overflow-hidden px-6 pb-8 lg:-mx-10 lg:px-10">
+        <svg
+          aria-hidden
+          viewBox="0 0 320 240"
+          className="pointer-events-none absolute -right-16 -top-16 hidden h-[240px] w-[320px] opacity-90 sm:block dark:opacity-70"
+        >
+          <path
+            d="M303,86 C312,116 296,152 266,172 C236,192 190,196 154,186 C118,176 84,150 74,118 C64,86 78,48 108,28 C138,8 184,4 222,14 C260,24 294,56 303,86 Z"
+            fill="var(--color-mint)"
+          />
+          <path
+            d="M120,150 C138,142 160,146 168,164 C176,182 166,204 146,210 C126,216 102,208 94,190 C86,172 102,158 120,150 Z"
+            fill="var(--color-brand)"
+            opacity="0.9"
+          />
+        </svg>
+        <div className="relative flex flex-wrap items-start justify-between gap-6 border-b border-line pb-8">
+          <div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium uppercase tracking-[0.16em] text-text-muted">
+              <span>{greetingWord(new Date().getHours())}, {firstName}</span>
+              <StatusBadge status={healthLabel(program.status, program.core_sync_state)} />
+            </div>
+            <h1 className="font-heading mt-2 max-w-lg text-[28px] font-semibold leading-[1.15] tracking-tight text-text sm:text-[34px]">
+              Here&apos;s what&apos;s happening with {program.program_name}&apos;s support today.
+            </h1>
+            <p className="mt-2.5 max-w-md text-sm text-text-muted">
+              {persona} keeps {program.program_name} moving with real answers, not more noise.
+            </p>
           </div>
-          <h1 className="font-heading mt-2 max-w-lg text-[26px] font-semibold leading-tight text-text sm:text-[30px]">
-            Here&apos;s what&apos;s happening with {program.program_name}&apos;s support today.
-          </h1>
-          <p className="mt-2 max-w-md text-sm text-text-muted">
-            {persona} keeps {program.program_name} moving with real answers, not more noise.
-          </p>
+          {mascotLine && (
+            <div className="flex items-start gap-3">
+              <img src="/pixie-hero.png" alt="" width={48} height={48} className="pixel-art size-12 shrink-0" />
+              <div className="relative max-w-[220px] rounded-xl border border-line bg-panel px-3.5 py-2.5 text-[13px] leading-snug text-text shadow-[0_8px_20px_-10px_rgba(20,30,15,0.25)]">
+                <span
+                  aria-hidden
+                  className="absolute -left-1.5 top-4 size-3 rotate-45 border-b border-l border-line bg-panel"
+                />
+                {mascotLine}
+              </div>
+            </div>
+          )}
         </div>
-        {mascotLine && (
-          <div className="flex items-start gap-3">
-            <img src="/pixie-hero.png" alt="" width={48} height={48} className="pixel-art size-12 shrink-0" />
-            <div className="pixie-panel max-w-[220px] bg-panel-2 px-3.5 py-2.5 text-[13px] leading-snug text-text">{mascotLine}</div>
-          </div>
-        )}
       </div>
 
       {program.core_sync_state === "pending" && (
@@ -180,10 +203,10 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         {coreDown && <CoreError message="Some support metrics are unavailable right now." />}
         {(!coreDown || ticketsR.status === "fulfilled") && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <StatCard label="Open tickets" value={analytics ? openCount : "—"} icon={<IconChat size={14} />} />
-            <StatCard label="Waiting for a helper" value={analytics ? waitingCount : "—"} icon={<IconHand size={14} />} tone="text-tang" iconTone="bg-tang/15" />
-            <StatCard label="Resolved today" value={resolvedToday ?? "—"} icon={<IconCheck size={14} />} tone="text-mint" iconTone="bg-mint/15" />
-            <StatCard label="Stayed quiet" value={analytics ? Number(analytics.stale48h ?? 0) : "—"} detail="open 48h+" icon={<IconClock size={14} />} tone="text-brand" iconTone="bg-brand/15" />
+            <StatCard label="Open tickets" value={analytics ? openCount : "—"} icon={<IconChat size={14} />} barTone="bg-text-muted/30" />
+            <StatCard label="Waiting for a helper" value={analytics ? waitingCount : "—"} icon={<IconHand size={14} />} tone="text-tang" iconTone="bg-tang/15" barTone="bg-tang" />
+            <StatCard label="Resolved today" value={resolvedToday ?? "—"} icon={<IconCheck size={14} />} tone="text-mint" iconTone="bg-mint/15" barTone="bg-mint" />
+            <StatCard label="Stayed quiet" value={analytics ? Number(analytics.stale48h ?? 0) : "—"} detail="open 48h+" icon={<IconClock size={14} />} tone="text-brand" iconTone="bg-brand/15" barTone="bg-brand" />
           </div>
         )}
 

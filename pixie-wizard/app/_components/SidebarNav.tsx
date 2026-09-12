@@ -66,13 +66,13 @@ function NavLink({
       href={href}
       prefetch={false}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-2.5 border-l-2 py-1.5 pl-3 text-[13px] transition-colors ${
+      className={`flex items-center gap-2.5 rounded-md py-1.5 pl-2.5 pr-2 text-[13px] transition-colors ${
         active
-          ? "border-brand text-text"
-          : `border-transparent hover:text-text ${muted ? "text-text-muted/70" : "text-text-muted"}`
+          ? "bg-brand/12 font-medium text-text"
+          : `hover:bg-panel-2/70 hover:text-text ${muted ? "text-text-muted/70" : "text-text-muted"}`
       }`}
     >
-      <Icon size={14} className="shrink-0" />
+      <Icon size={14} className={`shrink-0 ${active ? "text-brand" : ""}`} />
       {label}
     </Link>
   );

@@ -28,22 +28,22 @@ export function DashboardShell({
         <div className="min-h-0 flex-1 overflow-y-auto">
           <Link href="/overview" className="flex items-center gap-1.5 pl-1 font-heading text-lg font-extrabold tracking-tight text-text">
             pixie
-            <span className="mb-2.5 size-[6px] rounded-full bg-brand" aria-hidden="true" />
+            <span className="mb-2.5 size-[7px] rounded-full bg-gradient-to-br from-brand to-mint" aria-hidden="true" />
           </Link>
 
-          <p className="mt-8 pl-1 text-[11px] text-text-muted">Workspace</p>
+          <p className="mt-8 pl-1 text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted/70">Workspace</p>
           <WorkspaceNav />
 
           {programId && (
             <>
               <div className="my-5 border-t border-line" />
               <div className="flex items-center gap-2 pl-1 text-xs">
-                <span className="grid size-5 shrink-0 place-items-center rounded-[3px] bg-panel-2 text-[9px] text-text-muted">
+                <span className="grid size-5 shrink-0 place-items-center rounded-[6px] bg-gradient-to-br from-brand/25 to-mint/25 text-[9px] font-semibold text-text">
                   {programName?.slice(0, 2).toUpperCase()}
                 </span>
                 <span className="truncate text-text">{programName}</span>
               </div>
-              <p className="mt-5 pl-1 text-[11px] text-text-muted">Program</p>
+              <p className="mt-5 pl-1 text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted/70">Program</p>
               <ProgramNav programId={programId} />
             </>
           )}
@@ -152,7 +152,12 @@ export function Section({
     <section className={bordered ? "pixie-panel p-5" : undefined}>
       {(title || actions) && (
         <div className="flex items-baseline justify-between gap-4">
-          {title && <h2 className="text-sm font-medium text-text">{title}</h2>}
+          {title && (
+            <h2 className="flex items-center gap-2 text-sm font-medium text-text">
+              <span className="size-1.5 shrink-0 rounded-full bg-brand" aria-hidden />
+              {title}
+            </h2>
+          )}
           {actions}
         </div>
       )}
@@ -195,6 +200,7 @@ export function StatCard({
   icon,
   tone = "text-text",
   iconTone = "bg-panel-2",
+  barTone = "bg-line",
 }: {
   label: string;
   value: string | number;
@@ -202,15 +208,20 @@ export function StatCard({
   icon: React.ReactNode;
   tone?: string;
   iconTone?: string;
+  // The thin top accent's color — pass the solid form of `tone` (e.g.
+  // "bg-tang" alongside "text-tang") so the card reads as one color story
+  // at a glance, not just from its icon chip.
+  barTone?: string;
 }) {
   return (
-    <div className="pixie-panel p-4">
+    <div className="pixie-panel group relative overflow-hidden p-4 transition-shadow hover:shadow-[0_6px_20px_-8px_rgba(20,30,15,0.18)]">
+      <span className={`absolute inset-x-0 top-0 h-[3px] ${barTone}`} aria-hidden />
       <div className="flex items-center gap-2.5">
         <span className={`grid size-7 shrink-0 place-items-center rounded-full ${iconTone} ${tone}`}>{icon}</span>
         <p className="text-[13px] text-text-muted">{label}</p>
       </div>
-      <p className={`mt-3 font-heading text-2xl font-semibold tabular-nums ${tone}`}>{value}</p>
-      {detail && <p className="mt-1 text-xs text-text-muted">{detail}</p>}
+      <p className={`mt-3 font-heading text-[28px] font-semibold leading-none tabular-nums ${tone}`}>{value}</p>
+      {detail && <p className="mt-2 text-xs text-text-muted">{detail}</p>}
     </div>
   );
 }
@@ -361,7 +372,7 @@ export function DataRow({
   sub?: React.ReactNode;
 }) {
   const body = (
-    <div className="flex items-baseline gap-3 py-2">
+    <div className="-mx-2.5 flex items-baseline gap-3 rounded-md px-2.5 py-2 transition-colors group-hover:bg-panel-2/70">
       {lead != null && <span className="shrink-0 font-mono text-xs text-text-muted">{lead}</span>}
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm text-text group-hover:text-brand">{title}</span>
