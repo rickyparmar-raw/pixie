@@ -295,6 +295,13 @@ No completion claim is valid until those blockers are resolved and each
 remaining legacy-authoritative subsystem has passed characterization,
 differential, integration, and (where applicable) visual parity gates.
 
+### `38617b6` — ticket hardening, Wizard read expansion, visual fixtures
+
+- Core ticket repository now covers notes, helpers, audit packing with differential parity vs db.js/audit.js (14 tests in ticket-repository.test.js). Production ticket mutations remain legacy-owned; no switch yet.
+- Wizard repository directly owns owner/active/channels/helpers/pending-sync reads with parity tests; overview and programs pages read through the repository with identical props/markup.
+- Visual harness now has deterministic seed.sql, dependency-free core-stub.mjs, and runbook README.md; snapshots still require disposable Postgres + stub + Wizard orchestration.
+- Focused verification: Core ticket/persistence/cache 36 pass; Wizard repository/access/contracts 8 pass; typecheck pass; Playwright lists 72 tests; stub smoke passes.
+
 ## Known Risks
 
 - The current checkout contains extensive unrelated dirty work.
