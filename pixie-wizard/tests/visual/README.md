@@ -1,7 +1,7 @@
 # Visual regression fixtures
 
 Deterministic Postgres seed + local Core stub behind
-`tests/visual/wizard.visual.spec.ts`. App UI files are **not** touched by
+`tests/visual/screenshots.visual.ts`. App UI files are **not** touched by
 this setup — only `tests/visual/*`, `playwright.config.ts`, and (already
 present) `@playwright/test` are in scope.
 
@@ -9,7 +9,7 @@ present) `@playwright/test` are in scope.
 
 | File | Purpose |
 |---|---|
-| `wizard.visual.spec.ts` | Screenshot spec: 18 routes × 4 projects. Freezes the browser clock to 2026-01-15T10:00:00Z and pins the theme per project; data determinism comes from the seed + stub below. |
+| `screenshots.visual.ts` | Screenshot spec: 18 routes × 4 projects. Freezes the browser clock to 2026-01-15T10:00:00Z and pins the theme per project; data determinism comes from the seed + stub below. |
 | `seed.sql` | One fixture program (`visual-program`, owner `dev-local`, `status=active`) with channels, helpers, people, audit, and entitlement rows. Fixed IDs/timestamps; idempotent (deletes before inserting). |
 | `core-stub.mjs` | Local HTTP stub for Core `/internal/v1/*` reads. Fixed JSON, `Authorization: Bearer` check, zero external calls (pure `node:http`, no deps). Read-only: mutations → `501`, unknown paths → `404`. |
 

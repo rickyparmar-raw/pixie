@@ -348,6 +348,19 @@ differential, integration, and (where applicable) visual parity gates.
 - Focused verification: Core ticket/persistence/cache/API 64 pass; Wizard
   repository/access/contracts 8 pass; typecheck pass; Playwright lists 73.
 
+### Current repair cycle — critic BLOCKER/HIGH resolution (continued)
+
+- Fixed the Bun/Playwright collision the harness introduced: visual specs are
+  now `screenshots.visual.ts`/`auth.setup.ts` with an explicit Playwright
+  `testMatch`, so `bun test` ignores them. Full suite improved from 3 fail /
+  3 errors to 2 fail / 2 errors; the remainder is the single pre-existing Bun
+  loader conflict around the `coreUsage` named export (both files pass in
+  isolation, 6/6).
+- Pre-existing quirks intentionally preserved and documented: unconditional
+  legacy transitions, reopened-claim UI/DB mismatch, terminal states outside
+  `CLOSED`, program-only search scope, and `listWizardPeople` full-directory
+  semantics (now bounded at 200 rows as a DoS guard).
+
 ## Known Risks
 
 - The current checkout contains extensive unrelated dirty work.
