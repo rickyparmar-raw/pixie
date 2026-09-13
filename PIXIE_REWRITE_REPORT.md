@@ -361,6 +361,23 @@ differential, integration, and (where applicable) visual parity gates.
   `CLOSED`, program-only search scope, and `listWizardPeople` full-directory
   semantics (now bounded at 200 rows as a DoS guard).
 
+### Support-pipeline slice gates (this checkpoint)
+
+- Quality, L1 contract, L2 boundaries, full `npm test`, and conformity pass
+  for the slice (intent boundary, context builder, matrix, trace, store
+  reunification).
+- L3 residual findings triaged as pre-existing/out-of-slice: the floating
+  async in `respond.js` is the long-standing placeholder/ticket-ready pattern
+  (untouched by this slice — changing its timing would alter Slack behavior);
+  `JSON.parse` sites in `db.js` row mapping predate the slice and parse
+  internally-written JSON; thread transcripts are intentionally non-durable
+  (privacy architecture — file reopen is proven for dedupe/cache in
+  `persistence.test.js`, and the reunification is covered by round-trip tests).
+- Next stages per plan: retrieval/knowledge/grounding/model-transport
+  migration behind the trace harness, then ticket projections, helper
+  routing, incidents/radar/SLA/retention, remaining Wizard
+  repositories/actions, and visual snapshot capture.
+
 ### Support-pipeline parity and first authority switches
 
 - Contextual-question parity matrix (`lib/contextualSupport.test.js`, 11
