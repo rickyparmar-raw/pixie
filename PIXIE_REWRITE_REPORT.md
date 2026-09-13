@@ -210,6 +210,30 @@ around the current `coreUsage` export and process-wide module mocks. The new
 page imports. These failures remain a baseline/tooling issue until the test
 loader is repaired without changing runtime contracts.
 
+### `7734bd5` — ticket/repository seams and Core usage contract restoration
+
+Added the typed-by-contract Core ticket repository and transition tests. Restored
+the existing metadata-only Core usage exports/routes that the current usage
+tests assert. The ticket repository remains an additive production candidate;
+authorization, Slack card projection, and lifecycle side effects remain in the
+legacy ticket service until differential coverage is complete.
+
+### `972147c` — visual harness and Core contract restoration
+
+Added a Playwright visual-harness skeleton covering the Wizard route matrix and
+desktop/mobile light/dark projects. Added the `@playwright/test` dependency in
+the isolated branch. Baseline snapshots, real PostgreSQL fixtures, and a
+deterministic Core HTTP fixture are still required before the visual gate can
+pass.
+
+### `990f814` and `1c016df` — Wizard read authority switches
+
+The program layout now loads its program row through the repository-backed
+context loader. The repository directly owns parameterized program reads,
+active-program listing, and the literal public-profile projection queries.
+Existing relationship/redirect semantics and rendered UI remain unchanged.
+Focused repository/access tests, typecheck, and build pass.
+
 ## Known Risks
 
 - The current checkout contains extensive unrelated dirty work.
