@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { DashboardShell, PageHeader, Section, MetricCard, StatusBadge } from "@/app/_components/DashboardShell";
 import { requireWizardSuperadmin } from "@/lib/programAccess";
-import { listHostedProgramsForOwner } from "@/lib/hostedPrograms";
+import { hostedProgramRepository } from "@/lib/repositories/hostedProgramRepository";
 import { coreAnalytics } from "@/lib/pixieCore";
 import { summarizeAnalytics, type AnalyticsSnapshot } from "@/lib/dashboardMetrics";
 
@@ -14,7 +14,7 @@ function percent(value: number, total: number): string {
 export default async function OverviewPage() {
   const session = await requireWizardSuperadmin();
 
-  const programs = await listHostedProgramsForOwner(session).catch(() => []);
+  const programs = await hostedProgramRepository.listHostedProgramsForOwner(session).catch(() => []);
   const snapshots = (
     await Promise.all(
       programs.map(async (program) => {

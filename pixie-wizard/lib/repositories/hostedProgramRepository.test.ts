@@ -5,10 +5,20 @@ test("hosted repository preserves public projection, helper roles, and tenant-sc
   mock.module("@/lib/db", () => createTestDb());
   const { query } = await import("../db");
   const { hostedProgramRepository: repository } = await import("./hostedProgramRepository");
-  const { getHostedProgram: legacyGetHostedProgram, listActiveHostedPrograms: legacyListActive, getPublicProgramProfile: legacyPublicProfile } = await import("../hostedPrograms");
+  const {
+    getHostedProgram: legacyGetHostedProgram,
+    listActiveHostedPrograms: legacyListActive,
+    getPublicProgramProfile: legacyPublicProfile,
+    listHostedProgramsForOwner: legacyOwnerList,
+    listHostedChannels: legacyChannels,
+    listHostedHelpers: legacyHelpers,
+    getHelperRow: legacyHelperRow,
+    listHostedProgramsPendingSync: legacyPendingSync,
+  } = await import("../hostedPrograms");
 
   await repository.insertHostedProgram({ id: "repo-a", workspaceId: "tenant-a", programName: "A", ownerHcaId: "H_A", ownerSlackId: null });
   await repository.insertHostedProgram({ id: "repo-b", workspaceId: "tenant-b", programName: "B", ownerHcaId: "H_B", ownerSlackId: null });
+  await repository.insertHostedProgram({ id: "repo-email", workspaceId: "tenant-a", programName: "E", ownerHcaId: "owner@example.com", ownerSlackId: null });
   await repository.claimHostedChannels({ workspaceId: "tenant-a", programId: "repo-a", channels: [{ id: "C_SHARED", kind: "help" }], claimedByHcaId: "H_A" });
   expect((await repository.claimHostedChannels({ workspaceId: "tenant-b", programId: "repo-b", channels: [{ id: "C_SHARED", kind: "help" }], claimedByHcaId: "H_B" })).ok).toBe(true);
 
@@ -18,6 +28,31 @@ test("hosted repository preserves public projection, helper roles, and tenant-sc
   expect(await repository.getPublicProgramProfile("repo-a")).toEqual(await legacyPublicProfile("repo-a"));
   expect((await repository.getHelperRow("repo-a", "U_HELPER"))?.role).toBe("organizer");
   expect(await repository.getPublicProgramProfile("repo-a")).toMatchObject({ id: "repo-a", programName: "A", roster: [{ role: "organizer" }] });
+
+  // Owner list parity — exact row shapes and created_at desc ordering, plus
+  // the case-insensitive HCA-id-or-email identity form.
+  expect(await repository.listHostedProgramsForOwner({ hcaId: "H_A", email: "a@example.com" })).toEqual(
+    await legacyOwnerList({ hcaId: "H_A", email: "a@example.com" }),
+  );
+  expect(await repository.listHostedProgramsForOwner({ hcaId: "h_a", email: "H_A" })).toEqual(
+    await legacyOwnerList({ hcaId: "h_a", email: "H_A" }),
+  );
+  expect(await repository.listHostedProgramsForOwner({ hcaId: "H_OTHER", email: "OWNER@example.com" })).toEqual(
+    await legacyOwnerList({ hcaId: "H_OTHER", email: "OWNER@example.com" }),
+  );
+  expect((await repository.listHostedProgramsForOwner({ hcaId: "H_OTHER", email: "owner@example.com" })).map((r) => r.id)).toContain("repo-email");
+
+  // Channels / helpers parity — exact row shapes and tenant predicates.
+  expect(await repository.listHostedChannels("repo-a")).toEqual(await legacyChannels("repo-a"));
+  expect(await repository.listHostedHelpers("repo-a")).toEqual(await legacyHelpers("repo-a"));
+  expect(await repository.getHelperRow("repo-a", "U_HELPER")).toEqual(await legacyHelperRow("repo-a", "U_HELPER"));
+  expect(await repository.getHelperRow("repo-a", "U_MISSING")).toEqual(await legacyHelperRow("repo-a", "U_MISSING"));
+
+  // Pending-sync parity — anything not confirmed synced, oldest-first.
+  expect(await repository.listHostedProgramsPendingSync()).toEqual(await legacyPendingSync());
+  await query(`update hosted_programs set core_sync_state = 'synced', updated_at = now() where id = $1`, ["repo-b"]);
+  expect(await repository.listHostedProgramsPendingSync()).toEqual(await legacyPendingSync());
+  expect((await repository.listHostedProgramsPendingSync()).map((r) => r.id).sort()).toEqual(["repo-a", "repo-email"].sort());
 
   const { rows } = await query<{ workspace_id: string; channel_id: string }>("select workspace_id, channel_id from hosted_program_channels order by workspace_id");
   expect(rows).toEqual([{ workspace_id: "tenant-a", channel_id: "C_SHARED" }, { workspace_id: "tenant-b", channel_id: "C_SHARED" }]);

@@ -34,7 +34,7 @@ import {
   type ChannelClaim,
 } from "@/lib/programClaim";
 import { query } from "@/lib/db";
-import type { HostedProgramRow } from "@/lib/types";
+import type { HostedProgramChannel, HostedProgramHelper, HostedProgramRow } from "@/lib/types";
 
 // This boundary deliberately delegates to the current production modules. It
 // gives the next migration a typed seam without creating a second data-access
@@ -79,7 +79,13 @@ export const hostedProgramRepository: HostedProgramRepository = {
     const { rows } = await query<HostedProgramRow>(`select * from hosted_programs where id = $1`, [id]);
     return rows[0] ?? null;
   },
-  listHostedProgramsForOwner,
+  async listHostedProgramsForOwner(identity) {
+    const { rows } = await query<HostedProgramRow>(
+      `select * from hosted_programs where lower(owner_hca_id) in (lower($1), lower($2)) order by created_at desc`,
+      [identity.hcaId, identity.email],
+    );
+    return rows;
+  },
   async listActiveHostedPrograms() {
     const { rows } = await query<HostedProgramRow>(`select * from hosted_programs where status = 'active' order by program_name asc`);
     return rows;
@@ -97,15 +103,40 @@ export const hostedProgramRepository: HostedProgramRepository = {
     return { id: row.id, programName: row.program_name, description: row.program_description ?? null, supportName: row.support_name, iconUrl: row.icon_url, status: row.status, publicHelpChannelId: helpChannel.rows[0]?.channel_id ?? null, publicSourceCount: publicSources.length, roster: roster.rows };
   },
   listVisibleHelperIdentityKeys,
-  listHostedProgramsPendingSync,
+  async listHostedProgramsPendingSync() {
+    const { rows } = await query<HostedProgramRow>(
+      `select * from hosted_programs where core_sync_state <> 'synced' order by updated_at asc`,
+    );
+    return rows;
+  },
   updateHostedProgram,
   markSyncState,
-  listHostedChannels,
+  async listHostedChannels(programId) {
+    const { rows } = await query<HostedProgramChannel>(
+      `select * from hosted_program_channels where program_id = $1`,
+      [programId],
+    );
+    return rows;
+  },
   logHostedAudit,
   listHostedAudit,
   addHostedHelper,
-  listHostedHelpers,
-  getHelperRow,
+  async listHostedHelpers(programId) {
+    const { rows } = await query<HostedProgramHelper>(
+      `select * from hosted_program_helpers where program_id = $1 and active = true`,
+      [programId],
+    );
+    return rows;
+  },
+  async getHelperRow(programId, slackUserId) {
+    const { rows } = await query<HostedProgramHelper>(
+      `select * from hosted_program_helpers
+     where program_id = $1 and slack_user_id = $2 and active = true
+     limit 1`,
+      [programId, slackUserId],
+    );
+    return rows[0] ?? null;
+  },
   setHelperVisibility,
   setHostedHelperRole,
   revokeHostedHelper,

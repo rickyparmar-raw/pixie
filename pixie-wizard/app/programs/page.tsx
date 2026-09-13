@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listActiveHostedPrograms } from "@/lib/hostedPrograms";
+import { hostedProgramRepository } from "@/lib/repositories/hostedProgramRepository";
 import { relationshipFor, requireWizardSuperadmin } from "@/lib/programAccess";
 import { DashboardShell, PageHeader, StatusBadge } from "@/app/_components/DashboardShell";
 import type { ProgramRelationship } from "@/lib/types";
@@ -23,7 +23,7 @@ const ACTION_LABEL: Record<ProgramRelationship, string> = {
 export default async function ProgramsIndex() {
   const session = await requireWizardSuperadmin();
 
-  const programs = await listActiveHostedPrograms().catch(() => []);
+  const programs = await hostedProgramRepository.listActiveHostedPrograms().catch(() => []);
   const withRelationship = await Promise.all(
     programs.map(async (p) => ({ program: p, relationship: await relationshipFor(p, session) })),
   );
