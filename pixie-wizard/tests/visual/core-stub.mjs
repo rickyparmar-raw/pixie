@@ -90,22 +90,16 @@ const TICKETS = [
   },
 ];
 
-const TICKET_DETAIL = {
-  id: 1001,
-  program_id: PROGRAM,
-  question: "How do I submit my project for review?",
-  summary: "How to submit a project for review",
-  status: "open",
-  requester_id: "U_VISUAL_REQUESTER",
-  assignee_id: null,
-  category: "shipping",
-  priority: "normal",
-  created_at: T0 - 2 * HOUR,
-  messages: [
-    { id: 1, author_id: "U_VISUAL_REQUESTER", body: "How do I submit my project for review?", created_at: T0 - 2 * HOUR },
-  ],
-  notes: [],
-};
+function ticketDetail(ticket) {
+  return {
+    ...ticket,
+    program_id: PROGRAM,
+    messages: [
+      { id: ticket.id * 10 + 1, author_id: ticket.requester_id, body: ticket.question, created_at: ticket.created_at },
+    ],
+    notes: [],
+  };
+}
 
 const CANDIDATES = [
   {
@@ -499,7 +493,7 @@ const server = http.createServer(async (req, res) => {
     if ((m = path.match(/^\/internal\/v1\/tickets\/(\d+)$/)) && method === "GET") {
       const ticket = TICKETS.find((t) => t.id === Number(m[1]));
       if (!ticket) return send(res, 404, { error: "ticket not found" });
-      return send(res, 200, ticket.id === TICKET_DETAIL.id ? TICKET_DETAIL : ticket);
+      return send(res, 200, ticketDetail(ticket));
     }
 
     // -- incident reads ------------------------------------------------------

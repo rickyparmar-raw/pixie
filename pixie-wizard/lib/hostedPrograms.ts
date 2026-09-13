@@ -74,7 +74,7 @@ export async function getPublicProgramProfile(id: string): Promise<PublicProgram
     [id],
   );
 
-  const publicSources = Array.isArray(row.sources) ? row.sources.filter((s) => s.public === true) : [];
+  const publicSources = Array.isArray(row.sources) ? row.sources.filter((s) => !!s && typeof s === "object" && (s as { public?: unknown }).public === true) : [];
 
   return {
     id: row.id,
@@ -112,7 +112,7 @@ export async function listVisibleHelperIdentityKeys(
 // not newest-first where a noisy recent failure could starve an old one.
 export async function listHostedProgramsPendingSync(): Promise<HostedProgramRow[]> {
   const { rows } = await query<HostedProgramRow>(
-    `select * from hosted_programs where core_sync_state <> 'synced' order by updated_at asc`,
+    `select * from hosted_programs where (core_sync_state <> 'synced' or core_sync_state is null) order by updated_at asc`,
   );
   return rows;
 }
@@ -148,6 +148,11 @@ const JSONB_PROGRAM_COLUMNS = new Set(["sensitive_categories", "sources", "guide
 
 export async function updateHostedProgram(id: string, patch: Partial<HostedProgramRow>): Promise<HostedProgramRow> {
   const entries = Object.entries(patch).filter(([col]) => UPDATABLE_PROGRAM_COLUMNS.has(col));
+  if (entries.length === 0) {
+    const current = await getHostedProgram(id);
+    if (!current) throw new Error(`hosted program ${id} not found`);
+    return current;
+  }
   const sets: string[] = [];
   const params: unknown[] = [];
   for (const [col, value] of entries) {
@@ -320,7 +325,7 @@ export async function upsertWizardPerson(input: { hcaId: string; email: string; 
 export async function listWizardPeople(search = ""): Promise<WizardPerson[]> {
   const q = `%${search.trim().toLowerCase()}%`;
   const { rows } = await query<WizardPerson>(
-    `select * from wizard_people where lower(display_name) like $1 or lower(email) like $1 or lower(hca_id) like $1 or lower(coalesce(slack_user_id, '')) like $1 order by display_name asc`, [q],
+    `select * from wizard_people where lower(display_name) like $1 or lower(email) like $1 or lower(hca_id) like $1 or lower(coalesce(slack_user_id, '')) like $1 order by display_name asc limit 200`, [q],
   );
   return rows;
 }

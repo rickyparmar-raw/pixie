@@ -302,6 +302,28 @@ differential, integration, and (where applicable) visual parity gates.
 - Visual harness now has deterministic seed.sql, dependency-free core-stub.mjs, and runbook README.md; snapshots still require disposable Postgres + stub + Wizard orchestration.
 - Focused verification: Core ticket/persistence/cache 36 pass; Wizard repository/access/contracts 8 pass; typecheck pass; Playwright lists 72 tests; stub smoke passes.
 
+### Current repair cycle — critic BLOCKER/HIGH resolution
+
+- Ticket repository now matches legacy `markDuplicateTicket` (unconditional
+  overwrite) and adds the missing `reopenResolved` guarded variant; `waiting`
+  keeps the legacy `open/reopened/escalated` predicate. Added `cardTs`,
+  `ackTs`, `triage`, `firstResponse`, `search`, and `ticketsForProgram` ports
+  with tenant verification, clamped limits, and audit-failure logging; removed
+  the dead `update()` helper.
+- `addEvent` now rejects cross-tenant writes instead of inserting orphan rows;
+  `getByThreadTs`/`list`/`create` mirror the legacy workspace fallback chain so
+  program-only callers keep legacy visibility.
+- Wizard `updateHostedProgram({})` is a no-op read; directory listing is capped
+  at 200 rows; public profiles tolerate null/malformed sources; pending-sync
+  queries include never-synced rows. None of these change legitimate behavior.
+- Visual harness now has auth setup with storage state, an explicit per-project
+  theme, a frozen clock, loud auth-redirect failure, and full-shape ticket
+  details for every fixture. Snapshot capture still requires disposable
+  Postgres + stub + Wizard orchestration.
+- Focused verification: Core ticket 15 pass; Core ticket/persistence/cache/API
+  63 pass; Wizard repository/access/contracts 8 pass; typecheck pass;
+  Playwright lists 73 tests.
+
 ## Known Risks
 
 - The current checkout contains extensive unrelated dirty work.

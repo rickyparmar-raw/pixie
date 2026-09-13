@@ -54,6 +54,22 @@ test("hosted repository preserves public projection, helper roles, and tenant-sc
   expect(await repository.listHostedProgramsPendingSync()).toEqual(await legacyPendingSync());
   expect((await repository.listHostedProgramsPendingSync()).map((r) => r.id).sort()).toEqual(["repo-a", "repo-email"].sort());
 
+  // Failed sync-state rows stay queued (the predicate must not narrow to pending only).
+  await query(`update hosted_programs set core_sync_state = 'failed' where id = $1`, ["repo-a"]);
+  expect((await repository.listHostedProgramsPendingSync()).map((r) => r.id)).toContain("repo-a");
+  expect(await repository.listHostedProgramsPendingSync()).toEqual(await legacyPendingSync());
+
+  // Null/malformed sources never crash the public profile.
+  await query(`update hosted_programs set sources = '[null]' where id = 'repo-a'`);
+  expect((await repository.getPublicProgramProfile("repo-a"))?.publicSourceCount).toBe(0);
+  expect(await repository.getPublicProgramProfile("repo-a")).toEqual(await legacyPublicProfile("repo-a"));
+
+  // Empty/disallowed patches are a no-op read, never a timestamp bump.
+  const { updateHostedProgram } = await import("../hostedPrograms");
+  const before = await repository.getHostedProgram("repo-a");
+  expect(await updateHostedProgram("repo-a", {})).toEqual(before);
+
+
   const { rows } = await query<{ workspace_id: string; channel_id: string }>("select workspace_id, channel_id from hosted_program_channels order by workspace_id");
   expect(rows).toEqual([{ workspace_id: "tenant-a", channel_id: "C_SHARED" }, { workspace_id: "tenant-b", channel_id: "C_SHARED" }]);
 });

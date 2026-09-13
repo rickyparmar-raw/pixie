@@ -16,9 +16,26 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
   projects: [
-    { name: "desktop-light", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 1000 }, colorScheme: "light" } },
-    { name: "desktop-dark", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 1000 }, colorScheme: "dark" } },
-    { name: "mobile-light", use: { ...devices["iPhone 13"], viewport: { width: 390, height: 844 }, colorScheme: "light" } },
-    { name: "mobile-dark", use: { ...devices["iPhone 13"], viewport: { width: 390, height: 844 }, colorScheme: "dark" } },
+    { name: "setup", testMatch: /auth\.setup\.ts/ },
+    {
+      name: "desktop-light",
+      dependencies: ["setup"],
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 1000 }, colorScheme: "light", storageState: "tests/visual/.auth.json" },
+    },
+    {
+      name: "desktop-dark",
+      dependencies: ["setup"],
+      use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 1000 }, colorScheme: "dark", storageState: "tests/visual/.auth.json" },
+    },
+    {
+      name: "mobile-light",
+      dependencies: ["setup"],
+      use: { ...devices["iPhone 13"], viewport: { width: 390, height: 844 }, colorScheme: "light", storageState: "tests/visual/.auth.json" },
+    },
+    {
+      name: "mobile-dark",
+      dependencies: ["setup"],
+      use: { ...devices["iPhone 13"], viewport: { width: 390, height: 844 }, colorScheme: "dark", storageState: "tests/visual/.auth.json" },
+    },
   ],
 });

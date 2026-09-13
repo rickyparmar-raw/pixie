@@ -23,7 +23,10 @@ test("reads go through hostedProgramRepository with direct parameterized SQL", (
   // the public-projection allowlist — no delegation for these five reads.
   expect(repository).toContain("lower(owner_hca_id) in (lower($1), lower($2))");
   expect(repository).toContain("order by created_at desc");
-  expect(repository).toContain("core_sync_state <> 'synced'");
+  expect(repository).toContain("core_sync_state is null");
+  // NULL sync-state rows are pending, never silently dropped.
+  const legacy = readFileSync(join(root, "lib/hostedPrograms.ts"), "utf8");
+  expect(legacy).toContain("core_sync_state is null");
   expect(repository).toContain("order by updated_at asc");
   expect(repository).toContain("from hosted_program_channels where program_id = $1");
   expect(repository).toContain("from hosted_program_helpers where program_id = $1 and active = true");
