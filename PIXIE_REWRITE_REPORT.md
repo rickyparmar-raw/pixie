@@ -182,6 +182,34 @@ and preserves explicit dispositions for silence, reply, escalation, and human
 defer. Planner tests pass independently; the existing `lib/respond.js` path is
 still the only production path.
 
+### `9062b06` — answer differential bridge
+
+Added legacy observation adaptation, normalized effect traces, capture/no-op
+effect sinks, and pure differential comparison helpers. No Slack, model, or
+database side effects are duplicated; `respond.js` remains the production
+owner.
+
+### `21587bf` — Wizard Core sync contract
+
+Added typed validation for partial Wizard-to-Core program sync payloads behind
+the existing `syncProgramToCore()` façade. Existing Core endpoint paths,
+payload keys, status handling, routes, actions, and UI remain unchanged.
+Focused Wizard validation/Core/reconciliation tests pass: 14 tests, 44
+assertions. Wizard typecheck and production build pass.
+
+### Current regression snapshot
+
+- Core: 1,383 passing, 5 failing, 2 errors.
+- Wizard: 96 passing, 2 failing, 2 errors.
+- Wizard typecheck: passing.
+- Wizard production build: passing.
+
+The remaining Wizard errors are the pre-existing Bun module-loader conflict
+around the current `coreUsage` export and process-wide module mocks. The new
+`coreUsage.ts` façade is additive and does not change the existing bridge or
+page imports. These failures remain a baseline/tooling issue until the test
+loader is repaired without changing runtime contracts.
+
 ## Known Risks
 
 - The current checkout contains extensive unrelated dirty work.
