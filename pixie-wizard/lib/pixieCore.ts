@@ -8,6 +8,7 @@
 
 import { timeoutFetch, REQUEST_TIMEOUT_MS } from "@/lib/timeoutFetch";
 import { coreFetchErrorMessage } from "@/lib/pixieCoreErrors";
+import { validateCoreProgramSyncPatch, type CoreProgramSyncPatch } from "@/lib/coreContracts";
 
 // Read at call time, not import time: Next evaluates this module during
 // prerender when env vars may be absent, and db.ts already takes the same
@@ -141,6 +142,8 @@ function send(method: string, payload: Record<string, unknown>): RequestInit {
 }
 
 export async function syncProgramToCore(programId: string, payload: Record<string, unknown>): Promise<{ ok: boolean; error?: string }> {
+  const validation = validateCoreProgramSyncPatch(programId, payload);
+  if (!validation.ok) return { ok: false, error: validation.error.message };
   try {
     const { status, body } = await call(`/internal/v1/programs/${encodeURIComponent(programId)}`, {
       method: "PUT",
