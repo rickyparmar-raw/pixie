@@ -403,6 +403,49 @@ differential, integration, and (where applicable) visual parity gates.
 - Focused verification: matrix/trace/intent/context/respond suites 161 pass,
   context/db/copilot suites 78 pass, broader pipeline suites 280 pass.
 
+### Knowledge/freshness and model-boundary migration checkpoint
+
+- Retrieval remains the existing production behavior, now composed from the
+  previously-characterized tokenize, chunk, score, and select stages. Its
+  differential suite pins ranking order, exact scores, source exclusion, and
+  selection behavior; this checkpoint intentionally makes no retrieval or
+  grounding policy change.
+- `lib/sourcePolicy.js` now owns pure source-cache identity, dynamic-source,
+  freshness, eligibility, and shop-source exclusion decisions. `knowledge.js`
+  remains the I/O owner for source refresh and cache rows, delegating only the
+  decision logic. Fresh/stale/unavailable behavior and exact-claim eligibility
+  are pinned against the former behavior.
+- `lib/modelTelemetry.js` now owns model usage normalization, provider/cost
+  attribution, and usage recording. `llm.js` remains the model transport and
+  retains its retry, fallback, streaming, and wire behavior. Differential
+  transport tests cover 429, 5xx, timeout, empty-completion, 401, and streaming
+  recovery paths.
+- Prompt text is frozen by a named/unnamed, help/non-help, grounded/ungrounded
+  parity matrix. Terminal intent/UNCLEAR interpretation lives in the pure
+  `lib/disposition.js` boundary while responder I/O, ticket behavior, metrics,
+  and streaming sequencing remain legacy-authoritative.
+- Grounded answer authorization is isolated in `lib/answerAuthorization.js`.
+  It delegates to the existing grounding validator and freshness view rather
+  than introducing a second retrieval, evidence, or source-authority path.
+- Store ownership is explicitly tested: one transient thread store seen through
+  both context and db compatibility views; one program-isolated answer-cache
+  read/write/invalidation path; one source-cache key scheme; one memoized corpus
+  and retrieval index per program; and one telemetry writer. These checks are
+  the anti-split-brain gate for this checkpoint.
+
+### Verification snapshot — knowledge/model checkpoint
+
+- Focused migration, parity, and ownership suites: 87 passing, 0 failing.
+- Wizard suite: 1529 passing, 0 failing.
+- Wizard typecheck and production build: passing.
+- Root suite: 1529 passing, 1 environmental failure. The isolated failure is
+  `lib/link.test.js`'s public-domain DNS assertion: this environment returns
+  `EAI_AGAIN` resolving `github.com`, and the SSRF guard correctly fails closed.
+  The migrated files do not touch `lib/link.js` or its test.
+- Static migration gate: `git diff --check` passes. The offline Railway
+  migration-diff verification passes. No deployment, merge, main checkout, or
+  original worktree was modified.
+
 ### Test-isolation repair — full suites green
 
 - Root cause of the remaining full-suite failures: Bun `mock.module` patches
