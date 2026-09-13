@@ -234,6 +234,67 @@ active-program listing, and the literal public-profile projection queries.
 Existing relationship/redirect semantics and rendered UI remain unchanged.
 Focused repository/access tests, typecheck, and build pass.
 
+### `cc2b8fd` — checkpoint quality repairs
+
+Replaced the remaining silent catches surfaced by the checkpoint quality scan
+in the affected Core web/API files with observable debug/warn logging. No
+external response or product behavior was intentionally changed.
+
+## Current Production Authority Status
+
+### Switched or partially switched
+
+- Core cache callers use the persistence port; the default adapter remains the
+  existing SQLite implementation until the storage replacement is proven.
+- Wizard program-layout reads use the repository-backed program context loader.
+- Wizard hosted-program repository directly owns program reads, active lists,
+  and public-profile projection queries while preserving the existing SQL
+  allowlist and row shapes.
+- Core typed sync validation is active behind the existing Core bridge façade.
+
+### Still legacy-authoritative
+
+- Slack transport and event handlers.
+- Full answer/responder orchestration and effect execution.
+- Retrieval, knowledge, source freshness, grounding, deterministic tools, and
+  model transport.
+- Ticket Slack projections, authorization, helper routing, assignment lifecycle,
+  and all ticket mutations outside the additive repository.
+- Core SQLite implementation and schema lifecycle.
+- Core web/API implementation beyond the restored usage contract.
+- Wizard server actions, most repository reads/writes, authentication/RBAC
+  façades, Core synchronization orchestration, and all UI page implementations.
+- Wizard UI visual baselines have not yet been captured because the harness
+  still needs deterministic real PostgreSQL and Core HTTP fixtures.
+
+The rewrite is therefore **not complete**. The legacy implementation remains
+production-authoritative in multiple required subsystems, as intentionally
+recorded here instead of being hidden behind additive wrappers.
+
+## Gate Snapshot
+
+Focused current checkpoints:
+
+- Core ticket/usage/API route selection: 31 passing.
+- Wizard repository/access selection: 4 passing.
+- Wizard Core sync/usage selection: 14 passing.
+- Wizard typecheck: passing.
+- Wizard production build: passing.
+
+Full-suite baseline/tooling blockers remain:
+
+- Core full suite has existing failures/errors around baseline usage/test-loader
+  state and pre-existing behavior fixtures.
+- Wizard full suite has the process-wide Bun module-loader conflict around the
+  `coreUsage` named export tests.
+- Visual baseline capture requires a disposable real PostgreSQL instance,
+  deterministic seed data, a local Core HTTP fixture, and baseline/rewrite
+  server orchestration.
+
+No completion claim is valid until those blockers are resolved and each
+remaining legacy-authoritative subsystem has passed characterization,
+differential, integration, and (where applicable) visual parity gates.
+
 ## Known Risks
 
 - The current checkout contains extensive unrelated dirty work.
