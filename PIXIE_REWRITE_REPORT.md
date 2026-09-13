@@ -142,6 +142,46 @@ Before replacing a subsystem, capture current behavior for:
   proven unrelated and preserved in the report.
 - Code-quality, Gauntlet, conformity, and completion gates pass.
 
+## Rewrite Checkpoints
+
+### `f530d86` — typed Core parity contracts
+
+Added additive, side-effect-free Core contracts for normalized Slack events,
+answer dispositions, runtime configuration shape, ticket transitions, and
+declarative Slack effects. Added 5 characterization tests with 23 assertions.
+
+### `5a81cdc` — legacy Core contract adapters
+
+Added adapters for current Bolt event shapes, eligibility/intent results, and
+SQLite ticket rows. Added 3 adapter parity tests; the original runtime remains
+the production oracle.
+
+### `4909b44` — SQLite persistence boundary
+
+Added a CommonJS persistence factory and legacy SQLite adapter. Added restart,
+atomic dedupe, program/channel ownership, and tenant-boundary characterization
+coverage. Existing schema and migration code remain authoritative.
+
+### `d620834` — answer-cache migration
+
+Migrated the cache module behind the persistence boundary without changing cache
+keys, counters, freshness, stale handling, tenant scope, or restart behavior.
+Focused cache/warm/tenancy tests pass: 35 tests.
+
+### `0a245b5` — runtime configuration projection
+
+Added an additive runtime-config projection over the existing `programs.js`
+resolver. Existing precedence and workspace/channel routing remain authoritative.
+Focused runtime/program/routing/workspace/tenancy tests pass: 55 tests.
+
+### Current answer-planner stage — additive
+
+Added a pure typed answer planner under `core/application/` with no Slack,
+database, model, or environment imports. It emits declarative answer effects
+and preserves explicit dispositions for silence, reply, escalation, and human
+defer. Planner tests pass independently; the existing `lib/respond.js` path is
+still the only production path.
+
 ## Known Risks
 
 - The current checkout contains extensive unrelated dirty work.
