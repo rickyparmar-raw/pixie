@@ -1,0 +1,162 @@
+# Pixie Internal Rewrite
+
+Status: baseline and characterization phase.
+
+This branch is an isolated rewrite worktree. The original checkout and its
+uncommitted changes remain untouched.
+
+## Backup
+
+Backup directory:
+
+```text
+/tmp/opencode/pixie-backup-20260913T010152Z
+```
+
+Artifacts:
+
+- `repository.bundle`
+- `worktree.tar.gz`
+- `SHA256SUMS`
+- `status.txt`
+- `recent-log.txt`
+
+## Worktree
+
+```text
+/tmp/opencode/pixie-rewrite
+branch: pixie-internal-rewrite
+base: 37964de
+```
+
+## Existing Architecture
+
+### Pixie Core
+
+- Bun/CommonJS Slack service rooted at `index.js`.
+- Socket Mode Slack Bolt transport.
+- SQLite runtime state through `lib/db.js` and `lib/schema.js`.
+- Answer pipeline through `lib/handlers.js`, `lib/respond.js`, `lib/intent.js`,
+  `lib/lookup.js`, `lib/answer.js`, and `lib/llm.js`.
+- Retrieval/knowledge through `lib/knowledge.js`, `lib/retrieve.js`, and
+  `lib/sourceGuard.js`.
+- Tickets, helper routing, incidents, radar, retention, commands, guides, and
+  learning are separate domain areas with shared DB/runtime seams.
+- Core web and Wizard bridge are served by `lib/web/serve.js` and assembled by
+  `lib/web/api.js`.
+
+### Pixie Wizard
+
+- Next.js App Router application under `pixie-wizard/`.
+- Signed HMAC session cookie in `lib/session.ts`.
+- Program authorization in `lib/programAccess.ts`.
+- PostgreSQL control-plane access in `lib/db.ts` and `lib/hostedPrograms.ts`.
+- Server-only Core bridge in `lib/pixieCore.ts`.
+- Server Actions in `app/wizard/hostedActions.ts`.
+- Existing dashboard shell and visual primitives in
+  `app/_components/DashboardShell.tsx`.
+- Program pages are individually membership-gated; the program layout is not
+  the authorization boundary.
+
+## Frozen Contracts
+
+- Slack event routing, commands, reactions, action IDs, message wording,
+  threading, silence, escalation, and helper routing.
+- Core `/internal/v1/*` paths, methods, payloads, response shapes, status codes,
+  auth, and error semantics.
+- SQLite table/column semantics, migration order, timestamps, dedupe atomicity,
+  retention, and restart behavior.
+- PostgreSQL hosted-program IDs, workspace/channel ownership, helper roles,
+  audit semantics, sync states, and entitlements.
+- All Wizard routes, navigation, page copy, components, colors, spacing,
+  typography, responsive behavior, theme behavior, loading/error/empty states,
+  and visual geometry.
+
+## Baseline Evidence
+
+The repository baseline is not green before rewrite work.
+
+### Core
+
+- `bun test`: 1,273 passing, 10 failing, 7 errors in the isolated baseline.
+- Existing failures include cache/model-state coupling and baseline test-runner
+  errors. They must be classified, not silently changed.
+
+### Wizard
+
+- `bun test`: 23 passing, 7 failing, 7 errors in the isolated baseline.
+- Existing failures include process-wide Bun module-loading/mock behavior.
+- `npm run typecheck` and `npm run build` require installed dependencies and are
+  separate gates.
+
+### Visual
+
+- No formal Wizard browser or screenshot regression suite exists.
+- The landing prototype is untracked in the original checkout and is preserved
+  in the backup rather than copied into this Git worktree.
+- Visual parity cannot be claimed until a controlled baseline is restored and a
+  browser screenshot harness exists.
+
+## Characterization Matrix
+
+Before replacing a subsystem, capture current behavior for:
+
+- configuration normalization and provider key selection;
+- program/workspace/channel routing and isolation;
+- intent, eligibility, silence, grounding, and escalation;
+- retrieval ranking, source freshness, cache, warming, and dynamic shop rules;
+- model request/retry/fallback behavior;
+- Slack placeholders, edits, final messages, blocks, reactions, and commands;
+- ticket creation, idempotence, transitions, permissions, routing, and audit;
+- helper expertise/ranking and assignment lifecycle;
+- incidents, radar, SLA, analytics, retention, and reports;
+- SQLite migration/restart/WAL/dedupe behavior;
+- Wizard sessions, relationships, server actions, Core bridge, and page states;
+- PostgreSQL program/channel/helper/audit/entitlement behavior;
+- browser route redirects, forms, empty states, errors, and screenshots.
+
+## Rewrite Order
+
+1. Freeze baseline fixtures and classify existing failures.
+2. Extract pure Core contracts behind adapters.
+3. Normalize Slack transport to application events/effects.
+4. Introduce typed program/runtime configuration projections.
+5. Add persistence repositories over the existing SQLite implementation.
+6. Separate knowledge ownership, retrieval, answer planning, model transport,
+   and public rendering.
+7. Formalize the existing Core internal API without changing its wire contract.
+8. Rewrite Wizard control-plane services behind the current PostgreSQL schema.
+9. Add browser/screenshot parity coverage without changing UI composition.
+10. Remove old implementations only after dual-path parity verification.
+
+## Required Gates
+
+- Characterization tests pass against the current implementation.
+- New implementation matches behavior/output/API/data fixtures.
+- Existing SQLite and PostgreSQL data remain readable and writable.
+- Program/workspace isolation is unchanged.
+- Slack sends remain deterministic and at-most-once.
+- Wizard screenshots and accessibility trees match controlled baselines.
+- Core and Wizard typecheck/build pass.
+- Full Core and Wizard tests pass, or every pre-existing failure is explicitly
+  proven unrelated and preserved in the report.
+- Code-quality, Gauntlet, conformity, and completion gates pass.
+
+## Known Risks
+
+- The current checkout contains extensive unrelated dirty work.
+- Several shared files combine feature work with unrelated edits.
+- Core and Wizard duplicate program/API contracts.
+- Tenant isolation is application-enforced rather than database RLS-enforced.
+- SQLite migration ordering and dedupe atomicity are behavior-critical.
+- Existing baseline tests are not fully green.
+- No formal Wizard visual regression infrastructure exists.
+- The tracked Core database/WAL and local source files may contain sensitive
+  operational data and must never become rewrite fixtures or commits.
+
+## Rewrite Decision
+
+The rewrite must proceed as a strangler migration behind frozen contracts.
+Greenfield replacement of the whole repository in one pass is prohibited by
+the parity requirement because it would make behavior differences impossible to
+attribute or roll back.
