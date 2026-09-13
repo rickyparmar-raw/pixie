@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 4901",
     "typecheck": "tsc --noEmit",
-    "test": "bun test",
+    "test": "for f in lib/*.test.ts; do bun test \"$f\" || exit 1; done",
     "migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {

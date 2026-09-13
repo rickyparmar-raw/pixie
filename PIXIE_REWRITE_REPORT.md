@@ -361,6 +361,22 @@ differential, integration, and (where applicable) visual parity gates.
   `CLOSED`, program-only search scope, and `listWizardPeople` full-directory
   semantics (now bounded at 200 rows as a DoS guard).
 
+### Test-isolation repair — full suites green
+
+- Root cause of the remaining full-suite failures: Bun `mock.module` patches
+  are process-wide and `mock.restore()` does not clear them for subsequently
+  loaded test files (proven with a minimal two-file reproduction), so one
+  file's `@/lib/pixieCore` mock leaked into `pixieCoreUsage`/`quota` tests.
+  Unrelated Playwright visual specs were also being loaded by `bun test`.
+- Fix is runner-level only, no product or test-semantics change:
+  `pixie-wizard` runs one Bun process per test file, and the root runner is
+  scoped to `core lib` (the Wizard suite has its own runner; nothing is
+  skipped).
+- Results: root `npm test` 1414 pass / 0 fail (exit 0); Wizard `npm test`
+  passes across all 16 test files (exit 0); typecheck and production build
+  pass. The visual specs were renamed to `screenshots.visual.ts` with an
+  explicit Playwright `testMatch` so `bun test` ignores them.
+
 ## Known Risks
 
 - The current checkout contains extensive unrelated dirty work.
