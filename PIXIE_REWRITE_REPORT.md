@@ -361,6 +361,31 @@ differential, integration, and (where applicable) visual parity gates.
   `CLOSED`, program-only search scope, and `listWizardPeople` full-directory
   semantics (now bounded at 200 rows as a DoS guard).
 
+### Support-pipeline parity and first authority switches
+
+- Contextual-question parity matrix (`lib/contextualSupport.test.js`, 11
+  tests): Hardwire tier questions, Pixl submission questions, hardware-then-
+  software follow-ups, and negatives (unrelated channel, chatter, unsupported,
+  cross-program fact) pinned at retrieval, corpus-scoping, and disposition
+  levels with fixture inline sources and a protocol-correct scripted model.
+- Differential trace (`lib/supportTrace.js`, 5 tests): program resolution,
+  channel classification, eligibility, thread context, retrieval query/results,
+  source freshness, intent, grounding, disposition, and effects recorded per
+  stage through current production functions; rewrites must reproduce entries.
+- `lib/supportIntent.js` owns the HELP_ONLY gate (respond.js delegates);
+  forceVerdict plus an override registry give the future program-level
+  proactive-intent toggle its plug-in point with zero behavior change today.
+- `lib/supportContext.js` owns context prompts, recall gating, and referential
+  resolution (respond.js delegates, exports preserved).
+- Real regression fixed: the transient-context migration had split thread
+  storage into two maps (`context.js` transientThreads vs `db.js`
+  ephemeralThreadMessages) with no production writer left on the db side, so
+  bare referential follow-ups, copilot transcripts, and resolution-memory
+  extraction silently read empty history. Reunited on the single store at the
+  pre-rewrite durable bound; TTL and `{role, content, user_id}` shapes kept.
+- Focused verification: matrix/trace/intent/context/respond suites 161 pass,
+  context/db/copilot suites 78 pass, broader pipeline suites 280 pass.
+
 ### Test-isolation repair — full suites green
 
 - Root cause of the remaining full-suite failures: Bun `mock.module` patches
