@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { loadProgramContext, isSuperadminSession } from "@/lib/programAccess";
+import { isSuperadminSession } from "@/lib/programAccess";
+import { loadProgramContextFromRepository } from "@/lib/services/programAccessService";
 import { DashboardShell } from "@/app/_components/DashboardShell";
 
 // Only checks that a session exists and the program is real — NOT
@@ -13,7 +14,7 @@ export default async function ProgramLayout({ children, params }: { children: Re
   const { id } = await params;
   // Same three reads the page will need — resolved once, request-scoped, and
   // reused there via loadProgramContext / requireProgramMembership.
-  const { session, program, relationship } = await loadProgramContext(id);
+  const { session, program, relationship } = await loadProgramContextFromRepository(id);
   if (!session) redirect("/");
   if (!program) redirect("/programs");
 

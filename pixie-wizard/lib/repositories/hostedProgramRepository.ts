@@ -33,6 +33,8 @@ import {
   insertHostedProgram,
   type ChannelClaim,
 } from "@/lib/programClaim";
+import { query } from "@/lib/db";
+import type { HostedProgramRow } from "@/lib/types";
 
 // This boundary deliberately delegates to the current production modules. It
 // gives the next migration a typed seam without creating a second data-access
@@ -73,7 +75,10 @@ export interface HostedProgramRepository {
 export type { ChannelClaim };
 
 export const hostedProgramRepository: HostedProgramRepository = {
-  getHostedProgram,
+  async getHostedProgram(id) {
+    const { rows } = await query<HostedProgramRow>(`select * from hosted_programs where id = $1`, [id]);
+    return rows[0] ?? null;
+  },
   listHostedProgramsForOwner,
   listActiveHostedPrograms,
   getPublicProgramProfile,

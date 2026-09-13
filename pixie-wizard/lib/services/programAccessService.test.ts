@@ -20,3 +20,9 @@ test("access service is a parity seam over the authoritative access façade", as
   await expect(programAccessService.requireProgramMembership("missing")).rejects.toThrow("redirect boundary");
   expect(await programAccessService.requireWizardSuperadmin()).toBe(session);
 });
+
+test("program layout uses the repository-backed context loader", async () => {
+  const source = await Bun.file(new URL("../../app/programs/[id]/layout.tsx", import.meta.url)).text();
+  expect(source).toContain("loadProgramContextFromRepository");
+  expect(source).not.toContain("loadProgramContext(id)");
+});

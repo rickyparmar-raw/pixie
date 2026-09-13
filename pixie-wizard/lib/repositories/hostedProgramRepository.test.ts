@@ -5,6 +5,7 @@ test("hosted repository preserves public projection, helper roles, and tenant-sc
   mock.module("@/lib/db", () => createTestDb());
   const { query } = await import("../db");
   const { hostedProgramRepository: repository } = await import("./hostedProgramRepository");
+  const { getHostedProgram: legacyGetHostedProgram } = await import("../hostedPrograms");
 
   await repository.insertHostedProgram({ id: "repo-a", workspaceId: "tenant-a", programName: "A", ownerHcaId: "H_A", ownerSlackId: null });
   await repository.insertHostedProgram({ id: "repo-b", workspaceId: "tenant-b", programName: "B", ownerHcaId: "H_B", ownerSlackId: null });
@@ -12,6 +13,7 @@ test("hosted repository preserves public projection, helper roles, and tenant-sc
   expect((await repository.claimHostedChannels({ workspaceId: "tenant-b", programId: "repo-b", channels: [{ id: "C_SHARED", kind: "help" }], claimedByHcaId: "H_B" })).ok).toBe(true);
 
   await repository.addHostedHelper({ programId: "repo-a", slackUserId: "U_HELPER", role: "organizer" });
+  expect(await repository.getHostedProgram("repo-a")).toEqual(await legacyGetHostedProgram("repo-a"));
   expect((await repository.getHelperRow("repo-a", "U_HELPER"))?.role).toBe("organizer");
   expect(await repository.getPublicProgramProfile("repo-a")).toMatchObject({ id: "repo-a", programName: "A", roster: [{ role: "organizer" }] });
 
