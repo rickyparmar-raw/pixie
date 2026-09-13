@@ -70,6 +70,18 @@ test("hosted repository preserves public projection, helper roles, and tenant-sc
   expect(await updateHostedProgram("repo-a", {})).toEqual(before);
 
 
+  // Suspended programs expose no helper identity keys.
+  await repository.insertHostedProgram({ id: "repo-suspended", workspaceId: "tenant-a", programName: "S", ownerHcaId: "H_A", ownerSlackId: null });
+  await repository.addHostedHelper({ programId: "repo-suspended", slackUserId: "U_SUSP", role: "helper" });
+  const { listVisibleHelperIdentityKeys, logHostedAudit, listHostedAudit } = await import("../hostedPrograms");
+  await updateHostedProgram("repo-suspended", { status: "suspended" });
+  expect(await listVisibleHelperIdentityKeys("repo-suspended")).toEqual([]);
+  expect(await repository.getPublicProgramProfile("repo-suspended")).toBeNull();
+
+  // Audit listing clamps extreme limits instead of scanning unbounded.
+  await logHostedAudit({ programId: "repo-a", actorHcaId: "H_A", action: "audit.clamp" });
+  expect((await listHostedAudit("repo-a", 10_000)).length).toBeGreaterThanOrEqual(1);
+
   const { rows } = await query<{ workspace_id: string; channel_id: string }>("select workspace_id, channel_id from hosted_program_channels order by workspace_id");
   expect(rows).toEqual([{ workspace_id: "tenant-a", channel_id: "C_SHARED" }, { workspace_id: "tenant-b", channel_id: "C_SHARED" }]);
 });

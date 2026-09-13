@@ -98,9 +98,11 @@ export async function listVisibleHelperIdentityKeys(
   programId: string,
 ): Promise<Array<{ slackUserId: string; role: "owner" | "organizer" | "helper" }>> {
   const { rows } = await query<{ slack_user_id: string; role: "owner" | "organizer" | "helper" }>(
-    `select slack_user_id, role from hosted_program_helpers
-     where program_id = $1 and active = true and visible_on_profile = true
-     order by role`,
+    `select h.slack_user_id, h.role from hosted_program_helpers h
+     join hosted_programs p on p.id = h.program_id
+     where h.program_id = $1 and h.active = true and h.visible_on_profile = true
+       and p.status = 'active'
+     order by h.role`,
     [programId],
   );
   return rows.map((r) => ({ slackUserId: r.slack_user_id, role: r.role }));
@@ -227,9 +229,10 @@ export async function logHostedAudit(input: {
 }
 
 export async function listHostedAudit(programId: string, limit = 100): Promise<unknown[]> {
+  const safeLimit = Math.min(Math.max(Math.floor(Number(limit) || 100), 1), 500);
   const { rows } = await query(
     `select * from hosted_audit_events where program_id = $1 order by created_at desc limit $2`,
-    [programId, limit],
+    [programId, safeLimit],
   );
   return rows;
 }

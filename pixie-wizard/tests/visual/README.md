@@ -9,7 +9,7 @@ present) `@playwright/test` are in scope.
 
 | File | Purpose |
 |---|---|
-| `wizard.visual.spec.ts` | Screenshot spec: 18 routes × 4 projects. Do not add clock or data mocking here; determinism comes from the seed + stub below. |
+| `wizard.visual.spec.ts` | Screenshot spec: 18 routes × 4 projects. Freezes the browser clock to 2026-01-15T10:00:00Z and pins the theme per project; data determinism comes from the seed + stub below. |
 | `seed.sql` | One fixture program (`visual-program`, owner `dev-local`, `status=active`) with channels, helpers, people, audit, and entitlement rows. Fixed IDs/timestamps; idempotent (deletes before inserting). |
 | `core-stub.mjs` | Local HTTP stub for Core `/internal/v1/*` reads. Fixed JSON, `Authorization: Bearer` check, zero external calls (pure `node:http`, no deps). Read-only: mutations → `501`, unknown paths → `404`. |
 
@@ -178,6 +178,7 @@ rows (it deletes that program’s rows first) — but verify with
 - **Usage window echoes “now”.** The usage page queries `from=<now-30d>`
   to `to=<now>`; the stub echoes the window and returns fixed metrics, so
   only the window label can move between runs minutes apart.
-- The spec pins `pixie-theme` from `prefers-color-scheme` per project but
-  does not mock the clock or fonts — keep the same machine/fonts for both
-  captures.
+- The spec pins `pixie-theme` explicitly per project and freezes the browser
+  clock, but does not mock fonts — keep the same machine/fonts for both
+  captures. Server-rendered `new Date()` calls still use server time, so run
+  baseline and rewrite captures back-to-back.

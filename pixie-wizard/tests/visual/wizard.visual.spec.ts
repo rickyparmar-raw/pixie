@@ -44,6 +44,10 @@ for (const [name, route] of routes) {
     await expect(page).not.toHaveURL(/\/api\/auth\/login/, { timeout: 5000 }).catch(() => {
       throw new Error(`visual route ${route} redirected to login; is the auth setup project running and dev-login reachable?`);
     });
+    // Fail loudly on an unseeded database instead of baselining empty states.
+    if (route === "/programs" || route.startsWith("/programs/visual-program")) {
+      await expect(page.getByText("Visual Program").first()).toBeVisible({ timeout: 10000 });
+    }
     await expect(page).toHaveScreenshot(`${name}.png`, { animations: "disabled", caret: "hide", scale: "css" });
   });
 }

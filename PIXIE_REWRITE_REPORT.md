@@ -324,6 +324,30 @@ differential, integration, and (where applicable) visual parity gates.
   63 pass; Wizard repository/access/contracts 8 pass; typecheck pass;
   Playwright lists 73 tests.
 
+### Current repair cycle — critic BLOCKER/HIGH resolution
+
+- Ticket repository now matches legacy `markDuplicateTicket` (unconditional
+  overwrite) and adds the missing `reopenResolved` guarded variant plus
+  `cardTs`, `ackTs`, `triage`, `firstResponse`, `search`, and
+  `ticketsForProgram` ports. Transitions write both event and audit rows like
+  legacy `recordTransition`; `addEvent` rejects cross-tenant writes;
+  `get`/`getByThreadTs`/`list`/`create` mirror the legacy workspace fallback
+  chain; limits are clamped; dead code removed.
+- Pre-existing product quirks intentionally preserved and documented:
+  unconditional `reopen`/`close`/`snooze`/`escalate`/`unclaim` transitions,
+  reopened-claim mismatch between card UI and DB guard, and terminal states
+  outside `CLOSED` keeping open affordances. Program-only `search` keeps the
+  legacy dashboard contract.
+- Wizard `updateHostedProgram({})` is a no-op read; directory listing capped at
+  200; helper identity keys require an active program; pending-sync includes
+  never-synced rows; public profiles tolerate malformed sources.
+- Visual harness asserts seeded content on program routes, freezes the browser
+  clock, pins themes per project, and returns full-shape ticket details for
+  every fixture. Snapshot capture still requires disposable Postgres + stub +
+  Wizard orchestration.
+- Focused verification: Core ticket/persistence/cache/API 64 pass; Wizard
+  repository/access/contracts 8 pass; typecheck pass; Playwright lists 73.
+
 ## Known Risks
 
 - The current checkout contains extensive unrelated dirty work.
