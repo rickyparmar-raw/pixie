@@ -61,14 +61,17 @@ if (!pixl) {
   process.exit(1);
 }
 
-db.saveProgram({ ...pixl, categories: PIXL_CATEGORIES });
-programs.invalidate();
-const saved = programs.get("pixl");
-if (!saved.categories) {
-  console.error("category rules did not persist — check the programs.categories migration ran.");
+// Pixl is file-configured and has no row in the programs table. Calling
+// saveProgram here would create one, and since a DB row wins over the file
+// outright, every later edit to programs.json would silently stop applying.
+// So the rules live in programs.json (see PIXL_CATEGORIES below for the exact
+// block) and this script only verifies they arrived.
+if (!pixl.categories) {
+  console.error("pixl has no category rules. Add this to its programs.json entry, then redeploy:\n");
+  console.error(`  "categories": ${JSON.stringify(PIXL_CATEGORIES, null, 2).split("\n").join("\n  ")}\n`);
   process.exit(1);
 }
-console.log(`pixl categories: ${require("../lib/ticketCategory").configuredCategories(saved.categories).join(", ")}`);
+console.log(`pixl categories: ${require("../lib/ticketCategory").configuredCategories(pixl.categories).join(", ")}`);
 
 /* ---------------------------------------------------------- expertise ---- */
 

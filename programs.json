@@ -3,6 +3,15 @@
     "id": "pixl",
     "name": "Pixl",
     "supportName": "Pixie",
+    "categories": {
+      "byChannel": {},
+      "byKeyword": [
+        { "category": "review", "match": ["review", "reviewed", "reviewer", "reviewing", "resubmit", "rejected", "approved", "queue", "fraud"] },
+        { "category": "ops", "match": ["payout", "payouts", "shipping", "shipped", "customs", "grant", "fulfillment", "multiplier", "store", "order", "address"] },
+        { "category": "support", "match": ["journal", "journals", "hackatime", "hours", "repo", "submit", "submission"] }
+      ],
+      "fallback": "support"
+    },
     "posture": "passive",
     "scope": "program",
     "helpChannel": "C0B6STY9G5N",
