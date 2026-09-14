@@ -140,11 +140,7 @@ export function PageHeader({
         <h1 className="font-heading text-[26px] font-semibold leading-[1.15] tracking-tight text-text sm:text-[30px]">
           {title}
         </h1>
-        {/* The landing's scribble, carried inside. */}
-        <svg aria-hidden width="54" height="7" viewBox="0 0 54 7" className="mt-1.5 text-brand">
-          <path d="M1 5.2 C10 2.4 24 1.4 37 2.2 C44 2.6 49 3.4 53 4.6" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
-        </svg>
-        {description && <p className="mt-3 max-w-prose text-sm leading-relaxed text-text-muted">{description}</p>}
+        {description && <p className="mt-2.5 max-w-prose text-sm leading-relaxed text-text-muted">{description}</p>}
       </div>
       {actions && <div className="shrink-0">{actions}</div>}
     </div>
