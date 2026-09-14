@@ -4,6 +4,7 @@
     "name": "Pixl",
     "supportName": "Pixie",
     "helperPing": true,
+    "ticketVisibility": "dashboard",
     "categories": {
       "byChannel": {},
       "byKeyword": [
