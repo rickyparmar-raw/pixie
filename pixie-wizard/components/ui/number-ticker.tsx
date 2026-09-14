@@ -23,10 +23,7 @@ export function NumberTicker({
   ...props
 }: NumberTickerProps) {
   const ref = useRef<HTMLSpanElement>(null)
-  // A counting number is decorative motion over information that is already
-  // on screen, so an explicit reduced-motion preference skips straight to the
-  // figure. The CSS duration override in globals.css cannot reach this — the
-  // count is driven by a JS spring, not a CSS transition.
+  // CSS override cannot reach a JS spring.
   const reduceMotion = useReducedMotion()
   const motionValue = useMotionValue(direction === "down" ? value : startValue)
   const springValue = useSpring(motionValue, {
@@ -69,8 +66,7 @@ export function NumberTicker({
   return (
     <span
       ref={ref}
-      // No colour or tracking of its own: callers set the tone, and a ticker
-      // that painted itself black/white would fight every themed figure.
+      // Callers set the tone.
       className={cn("inline-block tabular-nums", className)}
       {...props}
     >

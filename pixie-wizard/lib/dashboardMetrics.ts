@@ -1,6 +1,4 @@
-// One row per day of the analytics window, zero-filled by Core. `aiOnly` and
-// `human` are disjoint slices of `questions`; the remainder is still waiting
-// on a first reply.
+// Zero-filled daily row; aiOnly and human are disjoint.
 export type VolumeDay = {
   date: string;
   questions: number;
@@ -57,10 +55,7 @@ export function summarizeAnalytics(rows: readonly AnalyticsSnapshot[]): Dashboar
   }, { questions: 0, aiAnswered: 0, escalated: 0, openTickets: 0, resolved: 0, stale: 0, faqGaps: 0, activeIncidents: 0 });
 }
 
-// Stacks every program's daily series onto one timeline for the cross-program
-// view. Programs are keyed by date rather than by index because a program
-// activated mid-window has a shorter series, and zipping by position would
-// silently shift its history.
+// Merge by date, not by index.
 export function mergeDailySeries(rows: readonly AnalyticsSnapshot[]): VolumeDay[] {
   const byDate = new Map<string, VolumeDay>();
   for (const row of rows) {

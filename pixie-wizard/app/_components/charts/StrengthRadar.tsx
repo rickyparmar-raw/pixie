@@ -8,14 +8,11 @@ import { RadarLabels } from "@/components/charts/radar-labels";
 
 export type Strength = { tag: string; resolved: number; replies: number };
 
-// A radar needs three axes before it is a shape rather than a line, and more
-// than six turns the labels into a wheel of text.
+// Three axes minimum, six maximum.
 const MIN_AXES = 3;
 const MAX_AXES = 6;
 
-// Routing weights a resolution far above a reply, so the shape has to as well
-// — otherwise a helper who answers everything and closes nothing reads as the
-// strongest person on the roster.
+// Same weighting routing uses.
 const REPLY_WEIGHT = 0.2;
 
 export function StrengthRadar({ strengths }: { strengths: readonly Strength[] }) {
@@ -29,8 +26,7 @@ export function StrengthRadar({ strengths }: { strengths: readonly Strength[] })
 
   const metrics = scored.map((s) => ({ key: s.tag, label: s.tag }));
   const peak = scored[0].weight;
-  // Scaled against this helper's own best category: the chart answers "what
-  // are they strongest at", not "how do they rank against everyone".
+  // Scaled to their own best category.
   const values: Record<string, number> = {};
   for (const s of scored) values[s.tag] = Math.round((s.weight / peak) * 100);
 
@@ -38,10 +34,7 @@ export function StrengthRadar({ strengths }: { strengths: readonly Strength[] })
 
   return (
     <div className="flex flex-wrap items-center gap-x-12 gap-y-8">
-      {/* Everything except the shape is set to recede: no level numbers
-          running through the middle, no vertex dots, thin grid. The default
-          60px margin leaves a 70px plot radius at this size, which turns any
-          shape into a dot. */}
+      {/* Chrome recedes; default margin is too large. */}
       <RadarChart
         data={[{ label: "Strengths", color: "var(--chart-1)", values }]}
         metrics={metrics}

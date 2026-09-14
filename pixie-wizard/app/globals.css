@@ -1,8 +1,6 @@
 @import "tailwindcss";
 
-/* `dark:` follows Pixie's own theme resolution, not Tailwind's default bare
-   `prefers-color-scheme` — otherwise the explicit theme toggle silently
-   fails to reach any `dark:` utility. */
+/* `dark:` follows Pixie's theme, not bare prefers-color-scheme. */
 @custom-variant dark {
   @media (prefers-color-scheme: dark) {
     &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) { @slot; }
@@ -152,17 +150,9 @@ body {
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; } }
 
-/* Chart tokens the Bklit components read. Each one resolves to a Pixie token
-   rather than carrying its own palette, so the charts re-theme with the rest
-   of the product — light, dark, and any future ground — without a second set
-   of values to keep in sync. Series order is fixed (brand, then the two
-   status hues, then neutrals) and never reassigned per chart, so a colour
-   always means the same thing across the dashboard. */
+/* Chart tokens, all resolving to Pixie tokens. Series order is fixed. */
 :root {
-  /* Verified for colour-vision deficiency: the worst adjacent pair separates
-     by OKLab dE 10 (deuteranopia), above the dE 8 floor. Mint stays out of
-     this ramp on purpose — it means "resolved" everywhere else in the
-     product, and it sits too close to brand (dE 9) to double as a series. */
+  /* CVD-checked: worst pair dE 10. Mint excluded, too close to brand. */
   --chart-1: var(--color-brand);
   --chart-2: var(--color-tang);
   --chart-3: var(--color-text-muted);
@@ -176,7 +166,7 @@ body {
   --chart-crosshair: var(--color-text-muted);
   --chart-grid: var(--color-line);
   --chart-brush-border: var(--color-line);
-  /* Inverted chip: dark bubble on the light theme, light bubble on dark. */
+  /* Inverted chip. */
   --chart-tooltip-background: var(--color-text);
   --chart-tooltip-foreground: var(--color-ink);
   --chart-tooltip-muted: color-mix(in srgb, var(--color-ink) 60%, var(--color-text));
@@ -190,16 +180,14 @@ body {
   --chart-segment-background: var(--color-panel-2);
   --chart-segment-line: var(--color-line);
   --chart-label: var(--color-text-muted);
-  /* Sequential ramp — one hue, light to dark, off the panel it sits on. */
+  /* Sequential ramp. */
   --chart-scale-01: color-mix(in srgb, var(--color-brand) 12%, var(--color-panel));
   --chart-scale-02: color-mix(in srgb, var(--color-brand) 30%, var(--color-panel));
   --chart-scale-03: color-mix(in srgb, var(--color-brand) 52%, var(--color-panel));
   --chart-scale-04: color-mix(in srgb, var(--color-brand) 74%, var(--color-panel));
   --chart-scale-05: var(--color-brand);
   --chart-scale-pattern-color: var(--color-panel-2);
-  /* A few Bklit internals reach for bare shadcn names (the ring track uses
-     `var(--border)`). Undefined, they resolve to black on both themes, so
-     they are aliased here rather than patched at each call site. */
+  /* shadcn names some internals still reach for. */
   --border: var(--color-line);
   --foreground: var(--color-text);
   --muted-foreground: var(--color-text-muted);

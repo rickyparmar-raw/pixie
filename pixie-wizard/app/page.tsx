@@ -113,10 +113,7 @@ function Check({ stroke = "#0D2114", size = 20 }: { stroke?: string; size?: numb
   );
 }
 
-// Hover lives in state rather than a `:hover` rule because every style on this
-// canvas is inline. Deliberately small: a warmer black, a 1px lift, and the
-// arrow moving about as far as a nudge would carry it. The point is that the
-// button acknowledges the cursor, not that it performs.
+// Inline styles, so hover lives in state.
 function CtaLink({
   href,
   label,

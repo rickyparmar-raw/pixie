@@ -11,9 +11,7 @@ export type OutcomeRate = {
   detail: string;
 };
 
-// Independent rates, not slices of one total — each ring runs its own 0-100
-// track, so an outer ring being longer means a higher rate, never a bigger
-// share. The centre reads the hovered ring and falls back to the first.
+// Independent rates, each on its own 0-100 track.
 export function OutcomeRings({ rates }: { rates: readonly OutcomeRate[] }) {
   const data = rates.map((rate) => ({
     label: rate.label,

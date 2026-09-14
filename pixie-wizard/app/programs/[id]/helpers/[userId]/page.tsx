@@ -32,9 +32,7 @@ export default async function HelperProfilePage({ params }: { params: Promise<{ 
   const identities = await resolveIdentities([userId]);
   const name = identityLabel(identities.get(userId), userId);
 
-  // Two independent views of the same work — resolutions are counted from
-  // ticket events, replies from the routing table — so they are merged by
-  // category rather than assumed to cover the same set of tags.
+  // Two sources, merged by category.
   const byTag = new Map<string, Strength>();
   for (const entry of helper.categoryResolved) {
     byTag.set(entry.category, { tag: entry.category, resolved: entry.resolved, replies: 0 });

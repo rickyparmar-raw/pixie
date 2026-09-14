@@ -6,15 +6,11 @@ import { PieSlice } from "@/components/charts/pie-slice";
 
 export type Share = { label: string; value: number; color?: string };
 
-// The ramp has five slots and the legend has to stay readable, so anything
-// past the biggest four folds into one "Other" wedge rather than minting new
-// hues — a pie with nine near-identical greys tells you nothing.
+// Past the biggest four folds into "Other".
 const MAX_SLICES = 5;
 const RAMP = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)", "var(--chart-5)"];
 
-// Caller order is preserved, never re-sorted by size: colour is assigned by
-// position, so re-ranking slices every render would repaint an entity as its
-// volume moved and quietly change what a colour means between two loads.
+// Caller order preserved; colour follows position.
 function fold(shares: readonly Share[]): Share[] {
   const present = shares.filter((share) => share.value > 0);
   if (present.length <= MAX_SLICES) return present;

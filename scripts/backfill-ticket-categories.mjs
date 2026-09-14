@@ -1,13 +1,5 @@
-// Backfill ticket categories, and optionally rebuild helper expertise from the
-// history that produces.
-//
-// Why this exists: nothing set ticket.category until classification landed, so
-// every existing ticket is NULL and every accrued expertise row sits under the
-// single tag "general". Routing's specialist bonus matches a helper's tag
-// against the ticket's category, so until this runs over the backlog, a program
-// that has just configured rules still routes as if nobody has a speciality.
-//
-// Dry-run by default. Nothing is written without --apply.
+// Backfill ticket categories; optionally rebuild expertise.
+// Dry run unless --apply.
 //
 //   bun scripts/backfill-ticket-categories.mjs --program pixl
 //   bun scripts/backfill-ticket-categories.mjs --program pixl --apply
@@ -89,7 +81,7 @@ if (!apply) {
   process.exit(0);
 }
 
-// Read back post-backfill so the rebuild sees the categories just written.
+// Read back post-backfill.
 const byTicket = new Map(
   db.handle().query("SELECT id, category FROM tickets WHERE program_id = ?").all(programId)
     .map((row) => [row.id, row.category || "general"]),
@@ -99,11 +91,7 @@ const events = db.handle()
   .query("SELECT ticket_id, actor_id, event_type FROM ticket_events WHERE program_id = ? AND event_type IN ('resolved','helper_reply')")
   .all(programId);
 
-// Observed history is authoritative for counts. Declared tags a helper has but
-// never worked in are left untouched — they keep their 0s and still earn the
-// flat category-match bonus.
-// Nested rather than a composite string key: a user id and a category joined
-// by any separator is a collision waiting for the first category containing it.
+// Observed counts win. Nested keys avoid separator collisions.
 const observed = new Map();
 for (const event of events) {
   if (!event.actor_id) continue;

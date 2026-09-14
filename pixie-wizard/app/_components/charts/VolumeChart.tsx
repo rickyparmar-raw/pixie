@@ -8,10 +8,7 @@ import { XAxis } from "@/components/charts/x-axis";
 import { ChartTooltip } from "@/components/charts/tooltip";
 import type { VolumeDay } from "@/lib/dashboardMetrics";
 
-// `human` is a subset of `questions`, so the two areas nest rather than
-// compete: the green band is everything that came in, the orange band inside
-// it is the part a person had to pick up. Never stack these — stacking would
-// double-count the same tickets.
+// Nested, not stacked: human is a subset of questions.
 const SERIES = [
   { key: "questions", label: "Questions", color: "var(--chart-1)" },
   { key: "human", label: "Needed a person", color: "var(--chart-2)" },
@@ -35,8 +32,7 @@ export function VolumeChart({
   }
 
   const points = data.map((day) => ({
-    // Parsed as UTC to match the keys Core buckets by; a bare `new Date(day)`
-    // would land on the previous evening in western timezones.
+    // UTC, matching Core's keys.
     date: new Date(`${day.date}T00:00:00Z`),
     questions: day.questions,
     human: day.human,
@@ -52,10 +48,7 @@ export function VolumeChart({
           </span>
         ))}
       </figcaption>
-      {/* The floor matters: at phone width a wide aspect ratio leaves less
-          height than the axis and margins need, and visx then emits negative
-          rect heights. min-height overrides the ratio only where it would
-          collapse. */}
+      {/* Floor stops negative heights at phone width. */}
       <AreaChart data={points} aspectRatio={aspectRatio} className="min-h-[190px]" margin={{ left: 8, right: 8 }}>
         <Grid horizontal />
         {SERIES.map((series) => (

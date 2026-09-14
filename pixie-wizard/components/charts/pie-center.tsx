@@ -76,10 +76,7 @@ export function PieCenter({
     return null;
   }
 
-  // The render prop owns both states — it is handed `isHovered` precisely so
-  // it can draw a resting value too. Deferring to the default centre at rest
-  // (upstream gated this on `hoveredData`) both ignores the caller and
-  // re-introduces the NumberFlow SSR hydration mismatch on first paint.
+  // Render prop owns both states.
   if (children) {
     return (
       <div
