@@ -18,6 +18,8 @@ import {
 import { personaName, timeAgo } from "@/app/_components/format";
 import { IconChat, IconHand, IconCheck, IconClock, IconDoc, IconUsers } from "@/app/_components/icons";
 import type { PublicHelperIdentity } from "@/lib/types";
+import type { VolumeDay } from "@/lib/dashboardMetrics";
+import { VolumeChart } from "@/app/_components/charts/VolumeChart";
 import { QueuePanel } from "./QueuePanel";
 import { getMyQueue } from "./queueActions";
 
@@ -109,6 +111,7 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
   const coreDown = analyticsR.status === "rejected";
   const initialQueue = myQueue.status === "fulfilled" ? myQueue.value : { assigned: [], claimable: [] };
   const byStatus = (analytics?.byStatus ?? {}) as Record<string, number>;
+  const daily = (analytics?.daily ?? []) as VolumeDay[];
   const persona = personaName(program);
 
   const questions = Number(analytics?.created ?? 0);
@@ -219,6 +222,12 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         )}
 
         <QueuePanel programId={id} initial={initialQueue} hasSlack={Boolean(session.slackId)} />
+
+        {analyticsR.status === "fulfilled" && (
+          <Section bordered title="Question volume" description="Last 30 days, by the day each question arrived.">
+            <VolumeChart data={daily} aspectRatio="4 / 1" />
+          </Section>
+        )}
 
         <div className="grid items-start gap-6 lg:grid-cols-[1.55fr_1fr]">
           <Section

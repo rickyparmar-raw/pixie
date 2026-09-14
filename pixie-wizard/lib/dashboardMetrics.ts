@@ -1,3 +1,13 @@
+// One row per day of the analytics window, zero-filled by Core. `aiOnly` and
+// `human` are disjoint slices of `questions`; the remainder is still waiting
+// on a first reply.
+export type VolumeDay = {
+  date: string;
+  questions: number;
+  aiOnly: number;
+  human: number;
+};
+
 export type AnalyticsSnapshot = {
   programId: string;
   created: number;

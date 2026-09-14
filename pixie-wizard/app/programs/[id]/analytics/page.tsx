@@ -3,6 +3,9 @@ import { coreAnalytics } from "@/lib/pixieCore";
 import { resolveIdentities, labelFor } from "@/lib/identity";
 import { PageHeader, Section, CoreError, SignalRail, MiniBar, BarList, EmptyState } from "@/app/_components/DashboardShell";
 import { personaName, formatDuration } from "@/app/_components/format";
+import { VolumeChart } from "@/app/_components/charts/VolumeChart";
+import { OutcomeRings } from "@/app/_components/charts/OutcomeRings";
+import type { VolumeDay } from "@/lib/dashboardMetrics";
 
 type Analytics = {
   created: number;
@@ -16,6 +19,7 @@ type Analytics = {
   duplicateRate: number;
   byStatus: Record<string, number>;
   byCategory: Array<{ category: string; n: number }>;
+  daily: VolumeDay[];
   helperLoad: Array<{ userId: string; openAssigned: number }>;
   helperResolved: Array<{ userId: string; resolved: number }>;
   medianFirstResponseMs: number | null;
@@ -74,7 +78,9 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
       />
 
       <div className="space-y-12">
-        <Section title="Volume">
+        <Section title="Volume" description="Every question that arrived, and the share a person had to pick up.">
+          <VolumeChart data={a.daily ?? []} aspectRatio="3 / 1" />
+          <div className="mt-8 border-t border-line pt-7">
           <SignalRail
             stages={[
               { label: "Questions", value: a.created },
@@ -88,6 +94,7 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
             {Math.round(a.deflectionRate * 100)}% of resolved tickets never needed a person.{" "}
             {a.stale48h > 0 && `${a.stale48h} open past 48h.`}
           </p>
+          </div>
         </Section>
 
         <Section title="Response time" description="Median, per stage of the handoff.">
@@ -98,16 +105,17 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
           </BarList>
         </Section>
 
-        <Section title="Outcomes">
-          <div className="grid grid-cols-2 gap-x-8 gap-y-4 sm:grid-cols-4">
-            <Rate label="Deflection" value={a.deflectionRate} tone="text-mint" />
-            <Rate label="Reopened" value={a.reopenRate} tone={a.reopenRate > 0.1 ? "text-tang" : "text-text"} />
-            <Rate label="Duplicates" value={a.duplicateRate} />
-            <div>
-              <p className="font-mono text-xl tabular-nums text-text">{a.humanHandled}</p>
-              <p className="mt-1 text-xs text-text-muted">Handled by a person</p>
-            </div>
-          </div>
+        <Section title="Outcomes" description="Three independent rates — each ring runs its own 0-100 track.">
+          <OutcomeRings
+            rates={[
+              { label: "Deflection", pct: pct(a.deflectionRate), color: "var(--chart-1)", detail: "resolved with no person" },
+              { label: "Reopened", pct: pct(a.reopenRate), color: "var(--chart-2)", detail: "came back after closing" },
+              { label: "Duplicates", pct: pct(a.duplicateRate), color: "var(--chart-3)", detail: "already asked" },
+            ]}
+          />
+          <p className="mt-7 border-t border-line pt-5 text-xs text-text-muted">
+            <span className="font-mono text-sm text-text">{a.humanHandled}</span> of {a.created} handled by a person.
+          </p>
         </Section>
 
         <Section title="By category">
@@ -147,13 +155,8 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
   );
 }
 
-function Rate({ label, value, tone = "text-text" }: { label: string; value: number; tone?: string }) {
-  return (
-    <div>
-      <p className={`font-mono text-xl tabular-nums ${tone}`}>{Math.round((value ?? 0) * 100)}%</p>
-      <p className="mt-1 text-xs text-text-muted">{label}</p>
-    </div>
-  );
+function pct(rate: number): number {
+  return Math.round((rate ?? 0) * 100);
 }
 
 function mergeHelpers(
