@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "@/app/_components/Select";
+
 import { useState } from "react";
 import { hostedRadarAction } from "@/app/wizard/hostedActions";
 import { btnPrimary, btnQuiet } from "@/app/wizard/_components/formStyles";
@@ -59,11 +61,7 @@ export function RadarSignalControls({ programId, signalId, status }: { programId
       )}
       {status !== "suppressed" && status !== "resolved" && (
         <>
-          <select value={duration} onChange={(e) => setDuration(e.target.value as "1h" | "24h" | "7d")} className="rounded-md border border-line bg-panel-2 px-2 py-1.5 text-xs text-text">
-            <option value="1h">1h</option>
-            <option value="24h">24h</option>
-            <option value="7d">7d</option>
-          </select>
+          <Select name="duration" defaultValue={duration} className="w-[86px]" ariaLabel="Duration" onValueChange={(v) => setDuration(v as "1h" | "24h" | "7d")} options={[{ value: "1h", label: "1h" }, { value: "24h", label: "24h" }, { value: "7d", label: "7d" }]} />
           <button disabled={busy} onClick={() => act("suppress")} className={btnQuiet}>Suppress</button>
         </>
       )}

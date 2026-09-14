@@ -1,7 +1,7 @@
 import { requireProgramMembership } from "@/lib/programAccess";
 import { listHostedHelpers } from "@/lib/hostedPrograms";
 import { resolveIdentities, labelFor } from "@/lib/identity";
-import { DashboardShell, PageHeader, Section, EmptyState } from "@/app/_components/DashboardShell";
+import { PageHeader, Section, EmptyState } from "@/app/_components/DashboardShell";
 import { PersonGrantForm } from "@/app/people/PersonGrantForm";
 import { PersonAccessActions } from "./PersonAccessActions";
 
@@ -13,7 +13,7 @@ export default async function ProgramPeoplePage({ params }: { params: Promise<{ 
   // its own if Core is down or doesn't know the user.
   const identities = await resolveIdentities(helpers.map((h) => h.slack_user_id));
 
-  return <DashboardShell programId={id} programName={program.program_name}>
+  return <>
     <PageHeader title="People" description="Program-scoped access. Visibility never changes permissions." />
     <div className="space-y-12">
       <Section title="Roster">
@@ -41,5 +41,5 @@ export default async function ProgramPeoplePage({ params }: { params: Promise<{ 
       </Section>
       {(relationship === "owner" || relationship === "admin") && <Section title="Add person"><PersonGrantForm programId={id} /></Section>}
     </div>
-  </DashboardShell>;
+  </>;
 }

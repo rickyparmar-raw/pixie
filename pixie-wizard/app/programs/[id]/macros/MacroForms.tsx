@@ -1,5 +1,7 @@
 "use client";
 
+import { Select } from "@/app/_components/Select";
+
 import { useActionState } from "react";
 import { hostedMacroSave, hostedMacroDelete, hostedMacroSend } from "@/app/wizard/hostedActions";
 import type { ActionState } from "@/lib/types";
@@ -34,12 +36,16 @@ export function MacroCreateForm({ programId }: { programId: string }) {
       </div>
       <input name="macroDescription" placeholder="When to use it (optional)" aria-label="Description" className={inputClass} />
       <textarea name="macroContent" rows={3} placeholder="Approved reply. {requester} {ticket_id} {program} {status} {helper} interpolate." aria-label="Content" className={inputClass} />
-      <select name="macroTransition" defaultValue="" aria-label="On-send transition" className={inputClass}>
-        <option value="">No ticket transition on send</option>
-        <option value="resolved">Resolve ticket on send</option>
-        <option value="closed">Close ticket on send</option>
-        <option value="snoozed">Snooze 24h on send</option>
-      </select>
+      <Select
+        name="macroTransition"
+        ariaLabel="On-send transition"
+        options={[
+          { value: "", label: "No ticket transition on send" },
+          { value: "resolved", label: "Resolve ticket on send" },
+          { value: "closed", label: "Close ticket on send" },
+          { value: "snoozed", label: "Snooze 24h on send" },
+        ]}
+      />
       <button type="submit" className={btnPrimary}>Save macro</button>
       <ErrorLine state={state} />
     </form>
@@ -70,12 +76,7 @@ export function MacroSendForm({ programId, ticketId, macros }: { programId: stri
     <form action={formAction} className="flex gap-2">
       <input type="hidden" name="programId" value={programId} />
       <input type="hidden" name="ticketId" value={ticketId} />
-      <select name="macroId" defaultValue="" aria-label="Macro" className={inputClass}>
-        <option value="" disabled>Send a macro…</option>
-        {macros.map((m) => (
-          <option key={m.id} value={m.id}>{m.trigger} — {m.name}</option>
-        ))}
-      </select>
+      <Select name="macroId" ariaLabel="Macro" options={macros.map((m) => ({ value: String(m.id), label: `${m.trigger} — ${m.name}` }))} />
       <button type="submit" className={btnQuiet}>Send</button>
       <ErrorLine state={state} />
     </form>

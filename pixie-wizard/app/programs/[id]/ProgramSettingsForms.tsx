@@ -5,6 +5,7 @@ import { saveHostedSettings, saveHostedSources } from "@/app/wizard/hostedAction
 import type { ActionState } from "@/lib/types";
 import { SubmitButton } from "@/app/wizard/_components/SubmitButton";
 import { inputClass, labelClass } from "@/app/wizard/_components/formStyles";
+import { Select } from "@/app/_components/Select";
 import type { HostedProgramRow } from "@/lib/types";
 
 const initialState: ActionState = { error: null };
@@ -61,18 +62,28 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="posture" className={labelClass}>Posture</label>
-            <select id="posture" name="posture" defaultValue={program.posture} className={inputClass}>
-              <option value="active">Active</option>
-              <option value="passive">Passive</option>
-              <option value="muted">Muted</option>
-            </select>
+            <Select
+              id="posture"
+              name="posture"
+              defaultValue={program.posture}
+              options={[
+                { value: "active", label: "Active" },
+                { value: "passive", label: "Passive" },
+                { value: "muted", label: "Muted" },
+              ]}
+            />
           </div>
           <div>
             <label htmlFor="scope" className={labelClass}>Answer scope</label>
-            <select id="scope" name="scope" defaultValue={program.scope} className={inputClass}>
-              <option value="program">Program only</option>
-              <option value="any">Anything</option>
-            </select>
+            <Select
+              id="scope"
+              name="scope"
+              defaultValue={program.scope}
+              options={[
+                { value: "program", label: "Program only" },
+                { value: "any", label: "Anything" },
+              ]}
+            />
           </div>
         </div>
 
@@ -96,11 +107,16 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
 
         <div>
           <label htmlFor="incidentMode" className={labelClass}>When an incident is active</label>
-          <select id="incidentMode" name="incidentMode" defaultValue={program.incident_mode} className={inputClass}>
-            <option value="ANSWER_AND_TRACK">Answer with the known issue, track affected threads</option>
-            <option value="ANSWER_ONLY">Answer with the known issue only</option>
-            <option value="NORMAL_TICKET">Always open a normal ticket</option>
-          </select>
+          <Select
+            id="incidentMode"
+            name="incidentMode"
+            defaultValue={program.incident_mode}
+            options={[
+              { value: "ANSWER_AND_TRACK", label: "Answer with the known issue, track affected threads" },
+              { value: "ANSWER_ONLY", label: "Answer with the known issue only" },
+              { value: "NORMAL_TICKET", label: "Always open a normal ticket" },
+            ]}
+          />
           <p className="mt-1 text-xs text-text-muted">Applies only while an incident is declared active on Support radar.</p>
         </div>
 
@@ -139,12 +155,17 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
           </div>
         ))}
         <div className="grid grid-cols-[110px_1fr] gap-2">
-          <select name="sourceType" defaultValue="url" className={inputClass} aria-label="Source type">
-            <option value="url">Web docs</option>
-            <option value="github-dir">GitHub dir</option>
-            <option value="gdoc">Google Doc</option>
-            <option value="json-faq">JSON FAQ</option>
-          </select>
+          <Select
+            name="sourceType"
+            defaultValue="url"
+            ariaLabel="Source type"
+            options={[
+              { value: "url", label: "Web docs" },
+              { value: "github-dir", label: "GitHub dir" },
+              { value: "gdoc", label: "Google Doc" },
+              { value: "json-faq", label: "JSON FAQ" },
+            ]}
+          />
           <input name="sourceUrl" placeholder="https://… (add another)" className={inputClass} />
         </div>
         <FormError state={sourcesState} />

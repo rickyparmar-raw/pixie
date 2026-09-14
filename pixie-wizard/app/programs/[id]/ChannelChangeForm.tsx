@@ -5,6 +5,7 @@ import { hostedChannelsUpdate } from "@/app/wizard/hostedActions";
 import type { ActionState } from "@/lib/types";
 import { inputClass, labelClass, btnQuiet } from "@/app/wizard/_components/formStyles";
 import type { CoreChannel } from "@/lib/pixieCore";
+import { Select } from "@/app/_components/Select";
 
 const initialState: ActionState = { error: null };
 
@@ -15,12 +16,7 @@ export function ChannelChangeForm({ programId, channels }: { programId: string; 
       <input type="hidden" name="programId" value={programId} />
       <label htmlFor="newHelpChannelId" className={labelClass}>Move help channel (verifies access, keeps history)</label>
       <div className="flex gap-2">
-        <select id="newHelpChannelId" name="newHelpChannelId" defaultValue="" aria-label="New help channel" className={inputClass}>
-          <option value="" disabled>Choose a channel…</option>
-          {channels.map((c) => (
-            <option key={c.id} value={c.id}>#{c.name} {c.isMember ? "· Pixie has access" : "· invite @Pixie"}</option>
-          ))}
-        </select>
+        <Select id="newHelpChannelId" name="newHelpChannelId" ariaLabel="New help channel" options={channels.map((c) => ({ value: c.id, label: `#${c.name}` }))} />
         <button type="submit" className={btnQuiet}>Move</button>
       </div>
       <input name="newHelpChannelIdRaw" placeholder="…or paste a channel ID" aria-label="Raw channel ID" className={`${inputClass} font-mono`} />
