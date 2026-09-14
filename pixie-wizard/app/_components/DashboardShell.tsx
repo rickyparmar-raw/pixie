@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { WorkspaceNav, ProgramNav, MobileProgramNav } from "./SidebarNav";
 import { ThemeToggle } from "./ThemeToggle";
+import { Figure } from "./Figure";
 import { IconSearch, IconBell, IconChevronRight, IconDoc } from "./icons";
 
 export function DashboardShell({
@@ -196,7 +197,7 @@ export function MetricCard({
   return (
     <div>
       <p className="text-xs text-text-muted">{label}</p>
-      <p className={`mt-1 font-mono text-xl tabular-nums ${tone}`}>{value}</p>
+      <p className={`mt-1 font-mono text-xl tabular-nums ${tone}`}><Figure value={value} /></p>
       {detail && <p className="mt-1 text-[11px] text-text-muted">{detail}</p>}
     </div>
   );
@@ -233,7 +234,7 @@ export function StatCard({
         <span className={`grid size-7 shrink-0 place-items-center rounded-full ${iconTone} ${tone}`}>{icon}</span>
         <p className="text-[13px] text-text-muted">{label}</p>
       </div>
-      <p className={`mt-3 font-heading text-[28px] font-semibold leading-none tabular-nums ${tone}`}>{value}</p>
+      <p className={`mt-3 font-heading text-[28px] font-semibold leading-none tabular-nums ${tone}`}><Figure value={value} /></p>
       {detail && <p className="mt-2 text-xs text-text-muted">{detail}</p>}
     </div>
   );

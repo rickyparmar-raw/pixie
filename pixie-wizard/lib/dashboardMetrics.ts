@@ -10,6 +10,7 @@ export type VolumeDay = {
 
 export type AnalyticsSnapshot = {
   programId: string;
+  daily?: VolumeDay[];
   created: number;
   aiAnswered: number;
   humanHandled: number;
@@ -54,4 +55,22 @@ export function summarizeAnalytics(rows: readonly AnalyticsSnapshot[]): Dashboar
       activeIncidents: totals.activeIncidents + activeIncidents,
     };
   }, { questions: 0, aiAnswered: 0, escalated: 0, openTickets: 0, resolved: 0, stale: 0, faqGaps: 0, activeIncidents: 0 });
+}
+
+// Stacks every program's daily series onto one timeline for the cross-program
+// view. Programs are keyed by date rather than by index because a program
+// activated mid-window has a shorter series, and zipping by position would
+// silently shift its history.
+export function mergeDailySeries(rows: readonly AnalyticsSnapshot[]): VolumeDay[] {
+  const byDate = new Map<string, VolumeDay>();
+  for (const row of rows) {
+    for (const day of row.daily ?? []) {
+      const merged = byDate.get(day.date) ?? { date: day.date, questions: 0, aiOnly: 0, human: 0 };
+      merged.questions += day.questions;
+      merged.aiOnly += day.aiOnly;
+      merged.human += day.human;
+      byDate.set(day.date, merged);
+    }
+  }
+  return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }

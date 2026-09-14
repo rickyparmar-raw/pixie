@@ -5,6 +5,7 @@ import { PageHeader, Section, CoreError, SignalRail, MiniBar, BarList, EmptyStat
 import { personaName, formatDuration } from "@/app/_components/format";
 import { VolumeChart } from "@/app/_components/charts/VolumeChart";
 import { OutcomeRings } from "@/app/_components/charts/OutcomeRings";
+import { SharePie } from "@/app/_components/charts/SharePie";
 import type { VolumeDay } from "@/lib/dashboardMetrics";
 
 type Analytics = {
@@ -65,8 +66,6 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
   ];
   const timeMax = Math.max(1, ...times.map(([, v]) => v ?? 0));
 
-  const catMax = Math.max(1, ...a.byCategory.map((c) => c.n));
-
   const helpers = mergeHelpers(a.helperLoad, a.helperResolved);
   const helperMax = Math.max(1, ...helpers.map((h) => h.open + h.resolved));
 
@@ -118,15 +117,15 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
           </p>
         </Section>
 
-        <Section title="By category">
+        <Section title="What they asked about" description="Share of questions by category.">
           {a.byCategory.length === 0 ? (
             <EmptyState title="No categorised tickets yet." />
           ) : (
-            <BarList>
-              {a.byCategory.map((c) => (
-                <MiniBar key={c.category} label={c.category} value={c.n} max={catMax} tone="bg-text-muted" />
-              ))}
-            </BarList>
+            <SharePie
+              shares={a.byCategory.map((c) => ({ label: c.category, value: c.n }))}
+              centerLabel="Questions"
+              unit="categorised questions"
+            />
           )}
         </Section>
 

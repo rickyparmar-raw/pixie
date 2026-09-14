@@ -183,6 +183,12 @@ body {
   --chart-marker-background: var(--color-panel-2);
   --chart-marker-border: var(--color-line);
   --chart-marker-foreground: var(--color-text);
+  --chart-marker-badge-background: var(--color-text);
+  --chart-marker-badge-foreground: var(--color-ink);
+  --chart-indicator-color: var(--chart-1);
+  --chart-indicator-secondary-color: var(--chart-2);
+  --chart-segment-background: var(--color-panel-2);
+  --chart-segment-line: var(--color-line);
   --chart-label: var(--color-text-muted);
   /* Sequential ramp — one hue, light to dark, off the panel it sits on. */
   --chart-scale-01: color-mix(in srgb, var(--color-brand) 12%, var(--color-panel));
