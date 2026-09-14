@@ -4,6 +4,7 @@ import { coreHelperStats, type CoreHelperStats } from "@/lib/pixieCore";
 import { resolveIdentities, identityLabel } from "@/lib/identity";
 import { PageHeader, Section, CoreError } from "@/app/_components/DashboardShell";
 import { StrengthRadar, type Strength } from "@/app/_components/charts/StrengthRadar";
+import { HelperRadar } from "@/app/_components/charts/HelperRadar";
 
 function duration(value: number | null): string {
   if (value === null) return "Unavailable";
@@ -32,6 +33,46 @@ export default async function HelperProfilePage({ params }: { params: Promise<{ 
   const identities = await resolveIdentities([userId]);
   const name = identityLabel(identities.get(userId), userId);
 
+  // Five fixed axes, each 0-100, scored against the rest of this roster so a
+  // program with 20 tickets and one with 20,000 both read as a shape.
+  const roster = stats.helpers;
+  const topResolved = Math.max(1, ...roster.map((h) => h.totals.resolved));
+  const responses = roster.map((h) => h.medianFirstResponseMs).filter((v): v is number => v !== null && v > 0);
+  const slowest = responses.length ? Math.max(...responses) : null;
+  const categoryCount = new Set(roster.flatMap((h) => h.categoryResolved.map((c) => c.category))).size;
+  const covered = helper.categoryResolved.length;
+
+  const pct = (n: number) => Math.max(0, Math.min(100, Math.round(n * 100)));
+  const dimensions = [
+    {
+      key: "volume", label: "Volume",
+      score: pct(helper.totals.resolved / topResolved),
+      detail: `${helper.totals.resolved} resolved`,
+    },
+    {
+      key: "speed", label: "Speed",
+      score: helper.medianFirstResponseMs === null || slowest === null
+        ? null
+        : pct(1 - helper.medianFirstResponseMs / slowest),
+      detail: duration(helper.medianFirstResponseMs),
+    },
+    {
+      key: "breadth", label: "Breadth",
+      score: categoryCount ? pct(covered / categoryCount) : null,
+      detail: `${covered} of ${categoryCount || 0} areas`,
+    },
+    {
+      key: "reliability", label: "Reliability",
+      score: helper.reopenRate === null ? null : pct(1 - helper.reopenRate),
+      detail: helper.reopenRate === null ? "no data" : `${percent(helper.reopenRate)} reopened`,
+    },
+    {
+      key: "followThrough", label: "Follow-through",
+      score: helper.acceptRate === null ? null : pct(helper.acceptRate),
+      detail: helper.acceptRate === null ? "too few offers" : `${helper.assignments.claimed}/${helper.assignments.completedOffers} taken`,
+    },
+  ];
+
   // Two sources, merged by category.
   const byTag = new Map<string, Strength>();
   for (const entry of helper.categoryResolved) {
@@ -50,6 +91,9 @@ export default async function HelperProfilePage({ params }: { params: Promise<{ 
     <PageHeader title={name} description={`${helper.role} · program-scoped helper profile`} />
     <div className="space-y-10">
       <p><Link className="text-brand underline" href={`/programs/${id}/helpers`}>Back to helpers</Link></p>
+      <Section title="Profile" description="Five measures, each scored against the rest of this program's helpers.">
+        <HelperRadar dimensions={dimensions} />
+      </Section>
       <Section title="Specialties" description="What this helper actually works on — counted from stored tickets, never declared.">
         {strengths.length >= 3 ? (
           <StrengthRadar strengths={strengths} />

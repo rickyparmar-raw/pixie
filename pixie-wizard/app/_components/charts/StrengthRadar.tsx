@@ -45,7 +45,7 @@ export function StrengthRadar({ strengths }: { strengths: readonly Strength[] })
         <RadarGrid showLabels={false} strokeOpacity={0.3} />
         <RadarAxis strokeOpacity={0.25} />
         <RadarLabels fontSize={11} offset={14} />
-        <RadarArea index={0} showPoints={false} />
+        <RadarArea index={0} showPoints={false} showGlow={false} />
       </RadarChart>
 
       <div className="min-w-[12rem] flex-1">
