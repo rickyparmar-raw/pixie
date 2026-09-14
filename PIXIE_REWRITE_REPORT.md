@@ -271,6 +271,41 @@ The rewrite is therefore **not complete**. The legacy implementation remains
 production-authoritative in multiple required subsystems, as intentionally
 recorded here instead of being hidden behind additive wrappers.
 
+## Pixl support regression repair — 2026-09-14
+
+- Root cause and first divergent stage: compact thread context correctly held
+  the parent question, but `lookup.retrievalQuery()` selected the virtual
+  current follow-up as the latest user turn and omitted the parent from the
+  retrieval query. `how long?` therefore became `how long? Pixl` rather than
+  retaining the parent duration/end-date referent.
+- Exact fix: query construction now selects the newest distinct preceding user
+  turn; support tracing accepts a bounded supplied thread fixture through the
+  same compact-context selector used in production.
+- Program-context fix: for a resolved program with exactly one timeline
+  milestone, a timing question now uses that program identity rather than
+  requiring an exact program-name spelling. This answers `when did pixel
+  start?` from Pixl's configured timeline without a text replacement.
+- Authorization/fallback audit: an authorized candidate from a fresh approved
+  source reaches the final Slack renderer as its own text; the fallback is not
+  emitted after that success. Unsupported, malformed, stale-dynamic, and
+  cross-program evidence remain fail-closed under the existing grounding and
+  authorization tests.
+- Source truth: the configured Pixl corpus loader produced the approved
+  `Program timeline` section containing the official Pixl release date,
+  August 18, 2026. The random Slack reply was not ingested or used.
+- Fallback semantics: the existing mention fallback remains for genuine
+  ungrounded ALWAYS-mode requests. It is not used after an authorized reply;
+  grounded-required paths still stay silent when authorization fails.
+- Added regression coverage: parent/current compact context and retrieval
+  query, thread-fixture trace parity, typo-independent single-program timeline
+  resolution, and final Slack text after authorization.
+- Focused verification: 222 tests across context, trace, retrieval, grounding,
+  authorization, timeline, and responder suites passed.
+- Full Core verification: `bun test core lib` completed with 1,533 passing and
+  1 pre-existing unrelated failure (`isBlockedHost allows public domain names`);
+  this repair's focused suites are green. No Wizard contract changed, so the
+  Wizard suite was not rerun for this Core-only repair.
+
 ## Gate Snapshot
 
 Focused current checkpoints:
