@@ -3,6 +3,7 @@
     "id": "pixl",
     "name": "Pixl",
     "supportName": "Pixie",
+    "helperPing": true,
     "categories": {
       "byChannel": {},
       "byKeyword": [
