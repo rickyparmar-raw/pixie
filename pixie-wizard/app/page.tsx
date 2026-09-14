@@ -2,8 +2,6 @@
 
 import { Suspense, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
-import { motion, useReducedMotion } from "motion/react";
-import { BlurFade } from "@/components/ui/blur-fade";
 
 // Marketing home. Ported from the Claude Design canvas (pixie-landing-prototype).
 // This is a committed light-mode brand artifact — like most marketing pages, it
@@ -172,51 +170,13 @@ function CtaLink({
   );
 }
 
-// One headline line. The values match BlurFade's so the hero and the rest of
-// the page move in the same vocabulary rather than two competing ones.
-function HeadlineLine({ children, delay }: { children: ReactNode; delay: number }) {
-  const reduceMotion = useReducedMotion();
-  return (
-    <motion.span
-      style={{ display: "block" }}
-      initial={{ y: 8, opacity: 0, filter: "blur(6px)" }}
-      animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
-      transition={{ delay: reduceMotion ? 0 : delay, duration: reduceMotion ? 0 : 0.42, ease: "easeOut" }}
-    >
-      {children}
-    </motion.span>
-  );
-}
-
 function HeroBackdrop() {
-  const drawn = useReducedMotion() ?? false;
   return (
     <svg width="1672" height="941" viewBox="0 0 1672 941" style={{ position: "absolute", top: 0, left: 0 }} aria-hidden="true">
       <path d="M1600 -30 C1500 40 1560 130 1470 200 C1350 292 1130 250 960 300 C850 332 800 368 825 412 C852 458 970 448 1075 495 C1210 555 1270 605 1360 660 C1440 708 1550 728 1700 715" fill="none" stroke="#A6E263" strokeWidth="120" strokeLinecap="round" />
       <path d="M1672 25 C1590 65 1560 150 1562 225 C1564 300 1608 348 1672 358 Z" fill="#A6E263" />
-      {/* The underline is drawn, not faded in — it reads as a hand marking the
-          word after you've finished reading it, which is the whole point of a
-          scribble. Starts once the third headline line has landed. */}
-      <motion.path
-        d="M178 519 C216 501 264 498 304 503"
-        fill="none"
-        stroke="#93DB4F"
-        strokeWidth="11"
-        strokeLinecap="round"
-        initial={{ pathLength: drawn ? 1 : 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{ delay: drawn ? 0 : 0.58, duration: drawn ? 0 : 0.4, ease: "easeOut" }}
-      />
-      <motion.path
-        d="M172 509 C208 499 248 496 284 498"
-        fill="none"
-        stroke="#93DB4F"
-        strokeWidth="6"
-        strokeLinecap="round"
-        initial={{ pathLength: drawn ? 1 : 0 }}
-        animate={{ pathLength: 1 }}
-        transition={{ delay: drawn ? 0 : 0.72, duration: drawn ? 0 : 0.34, ease: "easeOut" }}
-      />
+      <path d="M178 519 C216 501 264 498 304 503" fill="none" stroke="#93DB4F" strokeWidth="11" strokeLinecap="round" />
+      <path d="M172 509 C208 499 248 496 284 498" fill="none" stroke="#93DB4F" strokeWidth="6" strokeLinecap="round" />
       <path d="M786 240 C776 278 800 316 836 331" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
       <path d="M836 331 L822 322 M836 331 L826 315" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
       <path d="M1132 272 C1124 245 1145 218 1190 206" fill="none" stroke="#111" strokeWidth="2.4" strokeLinecap="round" />
@@ -253,46 +213,31 @@ function Hero({ devBypass }: { devBypass: boolean }) {
       />
 
       <div style={{ position: "absolute", left: 96, top: 128, fontSize: 11.5, letterSpacing: "0.305em", fontWeight: 600, color: "#33493A" }}>SUPPORT THAT UNDERSTANDS YOUR WORLD</div>
-      {/* Line by line rather than all at once: the headline is three beats of
-          one sentence, and revealing it in those beats is the only reason to
-          animate it at all. */}
-      <h1 style={{ position: "absolute", left: 92, top: 152, margin: 0, fontFamily: HEAD_FONT, fontWeight: 800, fontSize: 106, lineHeight: "110px", letterSpacing: "-0.03em", color: "#0D2114" }}>
-        <HeadlineLine delay={0.05}>Support,</HeadlineLine>
-        <HeadlineLine delay={0.15}>without the</HeadlineLine>
-        <HeadlineLine delay={0.25}>guessing.</HeadlineLine>
-      </h1>
+      <h1 style={{ position: "absolute", left: 92, top: 152, margin: 0, fontFamily: HEAD_FONT, fontWeight: 800, fontSize: 106, lineHeight: "110px", letterSpacing: "-0.03em", color: "#0D2114" }}>Support,<br />without the<br />guessing.</h1>
 
-      {/* The reveal wrapper carries the absolute position, not the child: an
-          animating transform makes an element the containing block for its
-          absolutely-positioned descendants, so a positioned child inside would
-          jump to a different origin the moment the animation started. */}
-      <BlurFade delay={0.34} style={{ position: "absolute", left: 96, top: 545, width: 420 }}>
-        <p style={{ margin: 0, fontSize: 18.5, lineHeight: "25px", color: "#1A1A1A" }}>
-          <strong style={{ fontWeight: 700 }}>Pixie</strong> answers <strong style={{ fontWeight: 700 }}>support</strong> questions in Slack<br />
-          using your program&apos;s own docs. If the<br />
-          evidence isn&apos;t there, it stays <strong style={{ fontWeight: 700 }}>quiet and<br />gets a human.</strong>
-        </p>
-      </BlurFade>
+      <p style={{ position: "absolute", left: 96, top: 545, margin: 0, width: 420, fontSize: 18.5, lineHeight: "25px", color: "#1A1A1A" }}>
+        <strong style={{ fontWeight: 700 }}>Pixie</strong> answers <strong style={{ fontWeight: 700 }}>support</strong> questions in Slack<br />
+        using your program&apos;s own docs. If the<br />
+        evidence isn&apos;t there, it stays <strong style={{ fontWeight: 700 }}>quiet and<br />gets a human.</strong>
+      </p>
 
-      <BlurFade delay={0.42} style={{ position: "absolute", left: 96, top: 671 }}>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <CtaLink
-            href={LOGIN_HREF}
-            label="Open Pixie"
-            arrow
-            style={{ width: 174, height: 51, borderRadius: 26, fontSize: 16, fontWeight: 700 }}
-          />
-          <CtaLink
-            href="#how-it-works"
-            label="See how it works"
-            variant="secondary"
-            style={{ width: 192, height: 51, borderRadius: 26, border: "1.5px solid #12261A", fontSize: 16, fontWeight: 700 }}
-          />
-          {devBypass && (
-            <a href="/api/auth/dev-login" style={{ fontSize: 13, color: "#6E6E68" }}>Dev sign-in</a>
-          )}
-        </div>
-      </BlurFade>
+      <div style={{ position: "absolute", left: 96, top: 671, display: "flex", gap: 12, alignItems: "center" }}>
+        <CtaLink
+          href={LOGIN_HREF}
+          label="Open Pixie"
+          arrow
+          style={{ width: 174, height: 51, borderRadius: 26, fontSize: 16, fontWeight: 700 }}
+        />
+        <CtaLink
+          href="#how-it-works"
+          label="See how it works"
+          variant="secondary"
+          style={{ width: 192, height: 51, borderRadius: 26, border: "1.5px solid #12261A", fontSize: 16, fontWeight: 700 }}
+        />
+        {devBypass && (
+          <a href="/api/auth/dev-login" style={{ fontSize: 13, color: "#6E6E68" }}>Dev sign-in</a>
+        )}
+      </div>
 
       <div style={{ position: "absolute", left: 96, top: 756, display: "flex", alignItems: "center", gap: 31, fontSize: 13.5, color: "#1A1A1A" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 11 }}><Slack /><span>Works in Slack</span></div>
