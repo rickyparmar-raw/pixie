@@ -135,10 +135,16 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="mb-8 flex items-start justify-between gap-6">
+    <div className="mb-10 flex items-start justify-between gap-6 border-b border-line pb-6">
       <div>
-        <h1 className="font-heading text-xl text-text">{title}</h1>
-        {description && <p className="mt-1.5 max-w-prose text-sm text-text-muted">{description}</p>}
+        <h1 className="font-heading text-[26px] font-semibold leading-[1.15] tracking-tight text-text sm:text-[30px]">
+          {title}
+        </h1>
+        {/* The landing's scribble, carried inside. */}
+        <svg aria-hidden width="54" height="7" viewBox="0 0 54 7" className="mt-1.5 text-brand">
+          <path d="M1 5.2 C10 2.4 24 1.4 37 2.2 C44 2.6 49 3.4 53 4.6" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" />
+        </svg>
+        {description && <p className="mt-3 max-w-prose text-sm leading-relaxed text-text-muted">{description}</p>}
       </div>
       {actions && <div className="shrink-0">{actions}</div>}
     </div>
@@ -167,7 +173,7 @@ export function Section({
       {(title || actions) && (
         <div className="flex items-baseline justify-between gap-4">
           {title && (
-            <h2 className="flex items-center gap-2 text-sm font-medium text-text">
+            <h2 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-text-muted">
               <span className="size-1.5 shrink-0 rounded-full bg-brand" aria-hidden />
               {title}
             </h2>
@@ -175,8 +181,8 @@ export function Section({
           {actions}
         </div>
       )}
-      {description && <p className="mt-1 max-w-prose text-xs text-text-muted">{description}</p>}
-      <div className={title || description ? "mt-4" : undefined}>{children}</div>
+      {description && <p className="mt-2 max-w-prose text-[13px] leading-relaxed text-text-muted">{description}</p>}
+      <div className={title || description ? "mt-5" : undefined}>{children}</div>
     </section>
   );
 }
@@ -196,8 +202,8 @@ export function MetricCard({
 }) {
   return (
     <div>
-      <p className="text-xs text-text-muted">{label}</p>
-      <p className={`mt-1 font-mono text-xl tabular-nums ${tone}`}><Figure value={value} /></p>
+      <p className={`font-mono text-[28px] leading-none tabular-nums ${tone}`}><Figure value={value} /></p>
+      <p className="mt-2.5 text-[13px] text-text">{label}</p>
       {detail && <p className="mt-1 text-[11px] text-text-muted">{detail}</p>}
     </div>
   );
@@ -408,9 +414,12 @@ export function DataRow({
 // isn't. No illustration, no confetti.
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="py-1 text-sm">
-      <p className="text-text">{title}</p>
-      {hint ? <p className="mt-1 text-text-muted">{hint}</p> : null}
+    <div className="flex items-start gap-3 py-2 text-sm">
+      <img src="/pixie-hero.png" alt="" width={28} height={28} className="pixel-art mt-0.5 size-7 shrink-0 opacity-80" />
+      <div>
+        <p className="text-text">{title}</p>
+        {hint ? <p className="mt-1 text-text-muted">{hint}</p> : null}
+      </div>
     </div>
   );
 }

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreHelperStats, type CoreHelperStats } from "@/lib/pixieCore";
 import { resolveIdentities, identityLabel } from "@/lib/identity";
-import { PageHeader, Section, CoreError } from "@/app/_components/DashboardShell";
+import { PageHeader, Section, CoreError, EmptyState, StatusDot } from "@/app/_components/DashboardShell";
 import { StrengthRadar, type Strength } from "@/app/_components/charts/StrengthRadar";
 import { HelperRadar } from "@/app/_components/charts/HelperRadar";
 
@@ -119,44 +119,77 @@ export default async function HelperProfilePage({ params }: { params: Promise<{ 
         <p className="mt-5 text-xs text-text-muted">Declared tags: {helper.expertise.length ? helper.expertise.map((entry) => entry.tag).join(", ") : "none"}.</p>
       </Section>
       <Section title="Stats">
-        <dl className="grid gap-4 sm:grid-cols-3">
-          {[["Resolved", helper.totals.resolved], ["Open load", helper.totals.open], ["Median first response", duration(helper.medianFirstResponseMs)], ["Median resolution", duration(helper.medianResolutionMs)], ["Reopen rate", percent(helper.reopenRate)], ["Helpful", percent(helper.helpfulPercentage)], ["Last active", helper.lastActivity ? new Date(helper.lastActivity).toLocaleString() : "Unavailable"]].map(([label, value]) => <div key={String(label)}><dt className="text-xs text-text-muted">{label}</dt><dd className="mt-1 font-mono text-sm text-text">{String(value)}</dd></div>)}
+        <dl className="grid grid-cols-2 gap-x-8 gap-y-7 sm:grid-cols-4">
+          {[
+            ["Resolved", String(helper.totals.resolved)],
+            ["Open load", String(helper.totals.open)],
+            ["First response", duration(helper.medianFirstResponseMs)],
+            ["Resolution", duration(helper.medianResolutionMs)],
+            ["Reopen rate", percent(helper.reopenRate)],
+            ["Helpful", percent(helper.helpfulPercentage)],
+            ["Last active", helper.lastActivity ? new Date(helper.lastActivity).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "—"],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <dd className="font-mono text-[26px] leading-none tabular-nums text-text">{value}</dd>
+              <dt className="mt-2.5 text-[13px] text-text-muted">{label}</dt>
+            </div>
+          ))}
         </dl>
       </Section>
       <Section title="Recent tickets" description="Only tickets assigned or resolved by this helper in this program.">
-        {helper.recentTickets.length ? <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="font-mono text-xs uppercase text-text-muted"><tr><th className="py-2">Ticket</th><th>Category</th><th>State</th><th>Assigned</th><th>First response</th><th>Resolution</th><th>Reopened</th></tr></thead><tbody>{helper.recentTickets.map((ticket) => <tr key={String(ticket.id)} className="border-t border-line"><td className="py-2">#{String(ticket.id)}</td><td>{String(ticket.category)}</td><td>{String(ticket.status)}</td><td>{ticket.assignedAt ? new Date(Number(ticket.assignedAt)).toLocaleDateString() : "-"}</td><td>{ticket.firstResponseAt ? new Date(Number(ticket.firstResponseAt)).toLocaleDateString() : "-"}</td><td>{ticket.resolvedAt ? new Date(Number(ticket.resolvedAt)).toLocaleDateString() : "-"}</td><td>{ticket.reopened ? "yes" : "no"}</td></tr>)}</tbody></table></div> : <p className="text-sm text-text-muted">No ticket history yet.</p>}
+        {helper.recentTickets.length ? (
+          <ul className="divide-y divide-line">
+            {helper.recentTickets.map((ticket) => (
+              <li key={String(ticket.id)} className="flex items-baseline justify-between gap-4 py-3">
+                <div className="min-w-0">
+                  <span className="font-mono text-xs text-text-muted">#{String(ticket.id)}</span>
+                  <span className="ml-2.5 text-sm text-text">{String(ticket.category)}</span>
+                  {ticket.reopened ? <span className="ml-2 text-[11px] text-tang">reopened</span> : null}
+                </div>
+                <div className="flex shrink-0 items-baseline gap-4 text-[11px] text-text-muted">
+                  <StatusDot status={String(ticket.status)} />
+                  <span className="font-mono tabular-nums">
+                    {ticket.resolvedAt
+                      ? new Date(Number(ticket.resolvedAt)).toLocaleDateString()
+                      : ticket.assignedAt
+                        ? new Date(Number(ticket.assignedAt)).toLocaleDateString()
+                        : "—"}
+                  </span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <EmptyState title="No ticket history yet." hint="Tickets this helper is assigned or resolves show up here." />
+        )}
       </Section>
-      <Section title="Assignments" description="Explicit claim / decline / release / timeout lifecycle — not a performance ranking. Counts are raw; the rate needs a few completed offers before it means anything.">
-        <dl className="grid gap-4 sm:grid-cols-3">
+      <Section title="Assignments" description="Claim, decline, release and timeout — a lifecycle, not a ranking.">
+        <div className="flex flex-wrap items-baseline gap-x-10 gap-y-5">
           <div>
-            <dt className="text-xs text-text-muted">Offered</dt>
-            <dd className="mt-1 font-mono text-sm text-text">{helper.assignments.offered}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-text-muted">Claimed</dt>
-            <dd className="mt-1 font-mono text-sm text-text">{helper.assignments.claimed}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-text-muted">Declined</dt>
-            <dd className="mt-1 font-mono text-sm text-text">{helper.assignments.declined}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-text-muted">Released</dt>
-            <dd className="mt-1 font-mono text-sm text-text">{helper.assignments.released}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-text-muted">Timed out</dt>
-            <dd className="mt-1 font-mono text-sm text-text">{helper.assignments.timedOut}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-text-muted">Accept rate</dt>
-            <dd className="mt-1 font-mono text-sm text-text">
+            <p className="font-mono text-[26px] leading-none tabular-nums text-text">
+              {helper.acceptRate === null ? "—" : percent(helper.acceptRate)}
+            </p>
+            <p className="mt-2.5 text-[13px] text-text">
               {helper.acceptRate === null
-                ? "Not enough data"
-                : `${percent(helper.acceptRate)} · ${helper.assignments.claimed}/${helper.assignments.completedOffers}`}
-            </dd>
+                ? "Accept rate — not enough data"
+                : `Accept rate · ${helper.assignments.claimed} of ${helper.assignments.completedOffers}`}
+            </p>
           </div>
-        </dl>
+          <dl className="flex flex-wrap gap-x-7 gap-y-2 text-xs text-text-muted">
+            {[
+              ["Offered", helper.assignments.offered],
+              ["Claimed", helper.assignments.claimed],
+              ["Declined", helper.assignments.declined],
+              ["Released", helper.assignments.released],
+              ["Timed out", helper.assignments.timedOut],
+            ].map(([label, n]) => (
+              <div key={String(label)} className="flex items-baseline gap-1.5">
+                <dd className="font-mono tabular-nums text-text">{String(n)}</dd>
+                <dt>{String(label).toLowerCase()}</dt>
+              </div>
+            ))}
+          </dl>
+        </div>
         <p className="mt-4 text-xs text-text-muted">
           {helper.assignmentLifecycle === "supported"
             ? `Rate = claimed offers ÷ completed offers (${helper.assignments.completedOffers} completed).`

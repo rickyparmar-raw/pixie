@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, type ComponentPropsWithoutRef } from "react"
-import { useInView, useMotionValue, useReducedMotion, useSpring } from "motion/react"
+import { useMotionValue, useReducedMotion, useSpring } from "motion/react"
 
 import { cn } from "@/lib/utils"
 
@@ -23,6 +23,7 @@ export function NumberTicker({
   ...props
 }: NumberTickerProps) {
   const ref = useRef<HTMLSpanElement>(null)
+  // Animates on mount, not on scroll: an offscreen card must not show a false zero.
   // CSS override cannot reach a JS spring.
   const reduceMotion = useReducedMotion()
   const motionValue = useMotionValue(direction === "down" ? value : startValue)
@@ -30,14 +31,13 @@ export function NumberTicker({
     damping: 60,
     stiffness: 100,
   })
-  const isInView = useInView(ref, { once: true, margin: "0px" })
 
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | null = null
 
     if (reduceMotion) {
       motionValue.jump(direction === "down" ? startValue : value)
-    } else if (isInView) {
+    } else {
       timer = setTimeout(() => {
         motionValue.set(direction === "down" ? startValue : value)
       }, delay * 1000)
@@ -48,7 +48,7 @@ export function NumberTicker({
         clearTimeout(timer)
       }
     }
-  }, [motionValue, isInView, delay, value, direction, startValue, reduceMotion])
+  }, [motionValue, delay, value, direction, startValue, reduceMotion])
 
   useEffect(
     () =>
