@@ -26,6 +26,8 @@ function Toggle({ name, label, defaultChecked }: { name: string; label: string; 
 
 export function ProgramSettingsForms({ program }: { program: HostedProgramRow }) {
   const [settingsState, settingsAction] = useActionState(saveHostedSettings, initialState);
+  // Routing flags live in the settings JSON blob, not in their own columns.
+  const programSettings = (program.settings ?? {}) as Record<string, unknown>;
   const [sourcesState, sourcesAction] = useActionState(saveHostedSources, initialState);
 
   return (
@@ -78,11 +80,18 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
           <Toggle name="aiAnswers" label="AI answers on" defaultChecked={program.ai_answers} />
           <Toggle name="ticketsEnabled" label="Human tickets on" defaultChecked={program.tickets_enabled} />
           <Toggle name="autoEscalate" label="Auto-escalate when unsure" defaultChecked={program.auto_escalate} />
-          <Toggle name="autoAssign" label="Auto-assign to the recommended helper" />
+          <Toggle name="autoAssign" label="Auto-assign to the recommended helper" defaultChecked={programSettings.autoAssign === true} />
+          <Toggle
+            name="helperPing"
+            label="@-mention the best-matched helper in the thread"
+            defaultChecked={programSettings.helperPing === true}
+          />
           <Toggle name="publicTicketsEnabled" label="Auto-open tickets from the public help channel" defaultChecked={program.public_tickets_enabled} />
         </div>
         <p className="text-xs text-text-muted">
-          Helpers can toggle public tickets live with <code>/pixie-program tickets on|off</code> in the channel.
+          With @-mentions on, a ticket Pixie can&apos;t answer asks one helper by name and says why it picked
+          them — most &ldquo;reviews&rdquo; questions resolved, most replies on the topic. Off, the ticket waits in the
+          queue silently. Helpers can toggle public tickets live with <code>/pixie-program tickets on|off</code> in the channel.
         </p>
 
         <div>

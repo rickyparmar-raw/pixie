@@ -309,7 +309,7 @@ export interface CoreHelperStats {
     userId: string;
     role: string;
     active: boolean;
-    expertise: Array<{ tag: string; solved_count: number }>;
+    expertise: Array<{ tag: string; solved_count: number; reply_count: number }>;
     categoryResolved: Array<{ category: string; resolved: number }>;
     totals: { assigned: number; resolved: number; open: number; reopened: number };
     reopenRate: number | null;

@@ -305,6 +305,7 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
     if (iconProb) return { error: `Invalid icon URL: ${iconProb}` };
   }
   const autoAssign = flagOn(formData, "autoAssign", false);
+  const helperPing = flagOn(formData, "helperPing", false);
   const VALID_INCIDENT_MODES = ["ANSWER_ONLY", "ANSWER_AND_TRACK", "NORMAL_TICKET"] as const;
   const rawIncidentMode = String(formData.get("incidentMode") ?? program.incident_mode);
   const incidentMode = (VALID_INCIDENT_MODES as readonly string[]).includes(rawIncidentMode)
@@ -326,6 +327,7 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
       ...((program.settings as Record<string, unknown>) || {}),
       ...(programDescription ? { description: programDescription } : {}),
       autoAssign,
+      helperPing,
     },
   };
   const updated = await updateHostedProgram(programId, patch);
@@ -345,6 +347,7 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
     incidentMode: updated.incident_mode,
     publicTicketsEnabled: updated.public_tickets_enabled,
     autoAssign,
+    helperPing,
     sensitiveCategories: String(formData.get("sensitiveCategories") ?? "").split(",").map((t) => t.trim()).filter(Boolean),
     sources: updated.sources,
     sla: Object.fromEntries(Object.entries(sla).filter(([, v]) => v !== null)),

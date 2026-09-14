@@ -3,6 +3,7 @@ import { requireProgramMembership } from "@/lib/programAccess";
 import { coreHelperStats, type CoreHelperStats } from "@/lib/pixieCore";
 import { resolveIdentities, identityLabel } from "@/lib/identity";
 import { PageHeader, Section, CoreError } from "@/app/_components/DashboardShell";
+import { StrengthRadar, type Strength } from "@/app/_components/charts/StrengthRadar";
 
 function duration(value: number | null): string {
   if (value === null) return "Unavailable";
@@ -31,15 +32,49 @@ export default async function HelperProfilePage({ params }: { params: Promise<{ 
   const identities = await resolveIdentities([userId]);
   const name = identityLabel(identities.get(userId), userId);
 
+  // Two independent views of the same work — resolutions are counted from
+  // ticket events, replies from the routing table — so they are merged by
+  // category rather than assumed to cover the same set of tags.
+  const byTag = new Map<string, Strength>();
+  for (const entry of helper.categoryResolved) {
+    byTag.set(entry.category, { tag: entry.category, resolved: entry.resolved, replies: 0 });
+  }
+  for (const entry of helper.expertise) {
+    const found = byTag.get(entry.tag) ?? { tag: entry.tag, resolved: 0, replies: 0 };
+    found.replies = entry.reply_count ?? 0;
+    byTag.set(entry.tag, found);
+  }
+  const strengths = [...byTag.values()]
+    .filter((s) => s.resolved > 0 || s.replies > 0)
+    .sort((a, b) => b.resolved + b.replies * 0.2 - (a.resolved + a.replies * 0.2));
+
   return <>
     <PageHeader title={name} description={`${helper.role} · program-scoped helper profile`} />
     <div className="space-y-10">
       <p><Link className="text-brand underline" href={`/programs/${id}/helpers`}>Back to helpers</Link></p>
-      <Section title="Specialties" description="Observed resolutions are counted by category. Declared tags are shown separately.">
-        <div className="space-y-2">
-          {helper.categoryResolved.length ? helper.categoryResolved.map((entry) => <div key={entry.category} className="flex justify-between border-b border-line py-2 text-sm"><span>{entry.category}</span><span className="font-mono text-text-muted">{entry.resolved} resolutions</span></div>) : <p className="text-sm text-text-muted">No observed resolution data yet.</p>}
-        </div>
-        <p className="mt-4 text-xs text-text-muted">Declared tags: {helper.expertise.length ? helper.expertise.map((entry) => entry.tag).join(", ") : "none"}.</p>
+      <Section title="Specialties" description="What this helper actually works on — counted from stored tickets, never declared.">
+        {strengths.length >= 3 ? (
+          <StrengthRadar strengths={strengths} />
+        ) : (
+          <div className="space-y-2">
+            {strengths.length ? (
+              strengths.map((entry) => (
+                <div key={entry.tag} className="flex justify-between border-b border-line py-2 text-sm last:border-0">
+                  <span>{entry.tag}</span>
+                  <span className="font-mono text-text-muted">
+                    <span className="text-text">{entry.resolved}</span> resolved · {entry.replies} replied
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-text-muted">Nothing observed yet — specialties appear once this helper answers or resolves tickets.</p>
+            )}
+            {strengths.length > 0 && (
+              <p className="pt-2 text-xs text-text-muted">A radar appears here once there are three categories to compare.</p>
+            )}
+          </div>
+        )}
+        <p className="mt-5 text-xs text-text-muted">Declared tags: {helper.expertise.length ? helper.expertise.map((entry) => entry.tag).join(", ") : "none"}.</p>
       </Section>
       <Section title="Stats">
         <dl className="grid gap-4 sm:grid-cols-3">

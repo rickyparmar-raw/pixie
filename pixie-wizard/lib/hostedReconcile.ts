@@ -42,6 +42,7 @@ function buildSyncPayload(
     incidentMode: program.incident_mode,
     publicTicketsEnabled: program.public_tickets_enabled,
     autoAssign: settings.autoAssign === true,
+    helperPing: settings.helperPing === true,
     sources: program.sources,
     claimedBy: program.owner_slack_id,
     workspace_id: program.workspace_id,
