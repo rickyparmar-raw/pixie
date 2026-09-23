@@ -17,7 +17,7 @@ import {
   coreTestQuestion,
 } from "@/lib/pixieCore";
 import { validateActivationGuards, isValidSlackChannelId } from "@/lib/activationGuards";
-import { BEHAVIOR_FIELDS, effectiveBehavior } from "@/lib/types";
+import { BEHAVIOR_FIELDS, behaviorFlag, effectiveBehavior } from "@/lib/types";
 import type { ActionState, ProgramBehavior, RuntimeStatus } from "@/lib/types";
 import type { DocSource } from "@/lib/types";
 
@@ -103,7 +103,8 @@ function parseBehaviorForm(formData: FormData, stored: ProgramBehavior | null | 
   const out: ProgramBehavior = { main: {}, help: {} };
   for (const f of BEHAVIOR_FIELDS) {
     const raw = formData.get(`behavior.${f.section}.${f.key}`);
-    const value = raw === "on" ? true : raw === "off" ? false : effective[f.section][f.key as keyof typeof effective.main];
+    const fallback = behaviorFlag(effective[f.section], f.key);
+    const value = raw === "on" ? true : raw === "off" ? false : fallback;
     (out[f.section] as Record<string, boolean>)[f.key] = value;
   }
   return out;

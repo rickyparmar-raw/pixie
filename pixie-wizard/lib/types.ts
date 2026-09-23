@@ -128,6 +128,12 @@ export const BEHAVIOR_FIELDS: BehaviorField[] = [
   { section: "help", key: "expertiseRouting", label: "Route to helpers by expertise", help: "Pick the pinged helper from their listed topics.", defaultOn: true },
 ];
 
+// Untyped read of one toggle — catalog keys are plain strings at runtime,
+// the section interfaces stay strict.
+export function behaviorFlag(section: MainBehavior | HelpBehavior, key: string): boolean {
+  return (section as unknown as Record<string, unknown>)[key] === true;
+}
+
 // Effective behavior: stored partial over the documented defaults. Mirrors
 // Core's behaviorFor() for the dashboard's own rendering (Core remains the
 // authority at answer time).

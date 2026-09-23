@@ -5,6 +5,7 @@ import { saveHostedSettings, saveHostedSources } from "@/app/wizard/hostedAction
 import type { ActionState } from "@/lib/types";
 import {
   BEHAVIOR_FIELDS,
+  behaviorFlag,
   effectiveBehavior,
   type BehaviorSection,
   type HelpBehavior,
@@ -41,7 +42,7 @@ export function BehaviorToggles({ value, onChange }: { value: BehaviorValue; onC
           <legend className="text-sm font-medium text-text">{section === "main" ? "Main channel" : "Help channel"}</legend>
           <div className="mt-2.5 space-y-2.5">
             {BEHAVIOR_FIELDS.filter((f) => f.section === section).map((f) => {
-              const on = value[section][f.key as keyof (MainBehavior & HelpBehavior)] as boolean;
+              const on = behaviorFlag(value[section], f.key);
               return (
                 <label key={f.key} className="flex gap-3 rounded-md border border-line px-3 py-3">
                   <input
@@ -76,7 +77,7 @@ export function BehaviorHiddenInputs({ value }: { value: BehaviorValue }) {
             key={`${section}.${f.key}`}
             type="hidden"
             name={`behavior.${section}.${f.key}`}
-            value={value[section][f.key as keyof (MainBehavior & HelpBehavior)] ? "on" : "off"}
+            value={behaviorFlag(value[section], f.key) ? "on" : "off"}
           />
         )),
       )}
