@@ -44,6 +44,11 @@ function buildSyncPayload(
     sharedSources: settings.sharedSources === false,
     autoAssign: settings.autoAssign === true,
     helperPing: settings.helperPing === true,
+    // Behavior toggles + runtime state (migration 003). Rows predating the
+    // migration surface undefined here — Core merges onto its documented
+    // defaults and treats a missing status as live, same as before.
+    behavior: program.behavior ?? {},
+    status: program.runtime_status ?? "sandbox",
     sources: program.sources,
     claimedBy: program.owner_slack_id,
     workspace_id: program.workspace_id,

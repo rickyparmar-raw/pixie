@@ -44,6 +44,100 @@ export type DeploymentMode = "hosted_shared" | "dedicated_legacy" | "self_hosted
 
 export type HostedProgramStatus = "active" | "suspended" | "archived";
 
+// Core-facing runtime state (programs.status in Core's lib/programModel.js),
+// a different axis from the admin lifecycle above: a program can be live yet
+// suspended, or sandbox yet active. Every wizard-created program starts as
+// "sandbox" and flips to "live" only via the deliberate launch action.
+export type RuntimeStatus = "sandbox" | "live" | "paused";
+
+// Per-role behavior toggles, synced to Core's programs.behavior JSON. Partial
+// on the wire: keys the dashboard never saved fall back to Core's documented
+// defaults (see BEHAVIOR_DEFAULTS below, mirroring MAIN/HELP_DEFAULTS).
+export interface MainBehavior {
+  enabled: boolean;
+  ambientProgramReplies: boolean;
+  mentionReplies: boolean;
+  generalMentionChat: boolean;
+  commandsEnabled: boolean;
+  ticketsEnabled: boolean;
+  helperEscalationEnabled: boolean;
+}
+
+export interface HelpBehavior {
+  enabled: boolean;
+  aiReplies: boolean;
+  ticketsEnabled: boolean;
+  autoCreateTickets: boolean;
+  escalateUnknown: boolean;
+  helperPings: boolean;
+  expertiseRouting: boolean;
+}
+
+export interface ProgramBehavior {
+  main?: Partial<MainBehavior>;
+  help?: Partial<HelpBehavior>;
+}
+
+export const MAIN_BEHAVIOR_DEFAULTS: MainBehavior = {
+  enabled: true,
+  ambientProgramReplies: true,
+  mentionReplies: true,
+  generalMentionChat: true,
+  commandsEnabled: true,
+  ticketsEnabled: false,
+  helperEscalationEnabled: false,
+};
+
+export const HELP_BEHAVIOR_DEFAULTS: HelpBehavior = {
+  enabled: true,
+  aiReplies: true,
+  ticketsEnabled: true,
+  autoCreateTickets: true,
+  escalateUnknown: true,
+  helperPings: true,
+  expertiseRouting: true,
+};
+
+export type BehaviorSection = "main" | "help";
+
+export interface BehaviorField {
+  section: BehaviorSection;
+  key: string;
+  label: string;
+  help: string;
+  defaultOn: boolean;
+}
+
+// Plain-English labels + one-line help, never env var names. Grouped Main
+// channel / Help channel for the settings page and the onboarding wizard's
+// behavior step (both render this same list).
+export const BEHAVIOR_FIELDS: BehaviorField[] = [
+  { section: "main", key: "enabled", label: "Pixie is active in the main channel", help: "Master switch for everything in this section.", defaultOn: true },
+  { section: "main", key: "ambientProgramReplies", label: "Answer program questions without being mentioned", help: "Pixie replies to on-topic questions it sees in the main channel.", defaultOn: true },
+  { section: "main", key: "mentionReplies", label: "Reply when mentioned", help: "Pixie answers when someone mentions it by name.", defaultOn: true },
+  { section: "main", key: "generalMentionChat", label: "Chat about anything when mentioned", help: "Off-topic mentions get a brief reply instead of silence.", defaultOn: true },
+  { section: "main", key: "commandsEnabled", label: "Respond to slash commands", help: "Lets members use Pixie commands in this channel.", defaultOn: true },
+  { section: "main", key: "ticketsEnabled", label: "Open tickets from the main channel", help: "Unanswered main-channel questions become helper tickets.", defaultOn: false },
+  { section: "main", key: "helperEscalationEnabled", label: "Ping helpers for unanswered questions", help: "Ask a helper by name when Pixie cannot answer here.", defaultOn: false },
+  { section: "help", key: "enabled", label: "Support is on in the help channel", help: "Master switch for everything in this section.", defaultOn: true },
+  { section: "help", key: "aiReplies", label: "Answer questions with AI", help: "Pixie answers from your docs when it has a grounded answer.", defaultOn: true },
+  { section: "help", key: "ticketsEnabled", label: "Track questions as tickets", help: "Help-channel questions get a ticket helpers can claim.", defaultOn: true },
+  { section: "help", key: "autoCreateTickets", label: "Create a ticket for every question", help: "Even answered questions stay visible in the helper queue.", defaultOn: true },
+  { section: "help", key: "escalateUnknown", label: "Escalate when unsure", help: "Questions Pixie cannot answer go to helpers instead of getting a guess.", defaultOn: true },
+  { section: "help", key: "helperPings", label: "Ping helpers on hard questions", help: "Mention a helper by name when a ticket needs a human.", defaultOn: true },
+  { section: "help", key: "expertiseRouting", label: "Route to helpers by expertise", help: "Pick the pinged helper from their listed topics.", defaultOn: true },
+];
+
+// Effective behavior: stored partial over the documented defaults. Mirrors
+// Core's behaviorFor() for the dashboard's own rendering (Core remains the
+// authority at answer time).
+export function effectiveBehavior(stored: ProgramBehavior | null | undefined): { main: MainBehavior; help: HelpBehavior } {
+  return {
+    main: { ...MAIN_BEHAVIOR_DEFAULTS, ...(stored?.main ?? {}) },
+    help: { ...HELP_BEHAVIOR_DEFAULTS, ...(stored?.help ?? {}) },
+  };
+}
+
 export interface HostedProgramRow {
   id: string;
   workspace_id: string;
@@ -59,6 +153,10 @@ export interface HostedProgramRow {
   owner_slack_id: string | null;
   deployment_mode: DeploymentMode;
   status: HostedProgramStatus;
+  // Core-facing runtime state (migration 003). Rows predating the migration
+  // read as "sandbox" until the launch action moves them.
+  runtime_status: RuntimeStatus;
+  behavior: ProgramBehavior;
   ai_answers: boolean;
   tickets_enabled: boolean;
   auto_escalate: boolean;

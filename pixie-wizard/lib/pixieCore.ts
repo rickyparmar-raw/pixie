@@ -415,3 +415,29 @@ export async function coreAudit(programId: string): Promise<unknown[]> {
 export async function coreHelpersSync(programId: string, payload: Record<string, unknown>): Promise<unknown> {
   return request(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers`, "helpers sync failed", send("PUT", payload));
 }
+
+export type TestQuestionExpectedAction = "reply" | "silence" | "ticket+helper";
+
+export interface TestQuestionResult {
+  ok: boolean;
+  programId: string;
+  role: "help" | "main";
+  intent: string | null;
+  sources: string[];
+  grounded: boolean;
+  expectedAction: TestQuestionExpectedAction;
+  answerPreview: string | null;
+}
+
+// Sandbox probe for onboarding step 6: retrieval + grounded-answer preview
+// with no Slack or ticket side effects on the Core side.
+export async function coreTestQuestion(
+  programId: string,
+  payload: { question: string; role?: "help" | "main" },
+): Promise<TestQuestionResult> {
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/test-question`,
+    "test question failed",
+    send("POST", payload),
+  );
+}

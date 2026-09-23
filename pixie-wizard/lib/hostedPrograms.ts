@@ -140,11 +140,13 @@ const UPDATABLE_PROGRAM_COLUMNS = new Set([
   "milestones",
   "settings",
   "status",
+  "behavior",
+  "runtime_status",
   "core_sync_state",
   "core_sync_error",
   "core_synced_at",
 ]);
-const JSONB_PROGRAM_COLUMNS = new Set(["sensitive_categories", "sources", "guides", "milestones", "settings"]);
+const JSONB_PROGRAM_COLUMNS = new Set(["sensitive_categories", "sources", "guides", "milestones", "settings", "behavior"]);
 
 export async function updateHostedProgram(id: string, patch: Partial<HostedProgramRow>): Promise<HostedProgramRow> {
   const entries = Object.entries(patch).filter(([col]) => UPDATABLE_PROGRAM_COLUMNS.has(col));
