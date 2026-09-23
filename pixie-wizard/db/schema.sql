@@ -178,3 +178,10 @@ create table if not exists wizard_global_access (
   granted_by_hca_id text,
   granted_at timestamptz not null default now()
 );
+
+-- Mirrors migrations 003/004 so fresh databases (and the in-memory pools used
+-- locally and in tests) have the same columns as migrated deployments.
+alter table hosted_programs add column if not exists behavior jsonb not null default '{}'::jsonb;
+alter table hosted_programs add column if not exists runtime_status text not null default 'sandbox'
+  check (runtime_status in ('sandbox', 'live', 'paused'));
+alter table hosted_program_helpers add column if not exists eligible_for_pings boolean not null default true;

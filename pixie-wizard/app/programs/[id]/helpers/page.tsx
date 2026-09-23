@@ -61,7 +61,7 @@ export default async function HelpersPage({ params }: { params: Promise<{ id: st
                       <span className="font-mono text-xs text-text-muted">
                         {h.role}
                         {h.source ? ` · via ${h.source}` : ""}
-                        {!h.active && " · paused"}
+                        {h.pingEligible === false && " · pings paused"}
                       </span>
                     </span>
                     <span className="font-mono text-xs tabular-nums text-text-muted">
@@ -86,7 +86,7 @@ export default async function HelpersPage({ params }: { params: Promise<{ id: st
                       categorySuggestions={categories}
                     />
                     {canManage && (
-                      <HelperAvailabilityToggle programId={id} slackUserId={h.userId} active={h.active} />
+                      <HelperAvailabilityToggle programId={id} slackUserId={h.userId} active={h.pingEligible !== false} />
                     )}
                   </div>
                 </li>

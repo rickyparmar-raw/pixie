@@ -1109,7 +1109,8 @@ export async function createSandboxProgram(input: SandboxCreateInput): Promise<S
   // the program row and its sync state below are the source of truth.
   const coreMembers = [...new Set([...(session.slackId ? [session.slackId] : []), ...helpers.map((h) => h.slackUserId)])];
   if (coreMembers.length > 0) {
-    await coreHelpersSync(slug, { actorId: coreMembers[0], members: coreMembers, source: "manual" }).catch(() => null);
+    const pingIneligible = helpers.filter((h) => h.eligibleForPings === false).map((h) => h.slackUserId);
+    await coreHelpersSync(slug, { actorId: coreMembers[0], members: coreMembers, source: "manual", pingIneligible }).catch(() => null);
     for (const h of helpers) {
       if (h.expertise.length > 0) {
         await coreRoutingExpertise(slug, { actorId: coreMembers[0], userId: h.slackUserId, tags: h.expertise }).catch(() => null);

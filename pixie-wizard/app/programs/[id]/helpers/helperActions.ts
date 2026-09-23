@@ -2,15 +2,15 @@
 
 import { revalidatePath } from "next/cache";
 import { linkedSlackSession, loadProgramContext } from "@/lib/programAccess";
-import { addHostedHelper, revokeHostedHelper } from "@/lib/hostedPrograms";
+import { setHostedHelperPingEligibility } from "@/lib/hostedPrograms";
 import { coreHelperSetActive, coreRoutingExpertise } from "@/lib/pixieCore";
 import type { ActionState } from "@/lib/types";
 
-// Availability toggle: whether a helper is eligible for pings, routing and
-// assignment. Dual-writes like hostedHelperSave: Core's program_helpers is
-// what routing and the ping path actually consult; the wizard row keeps the
-// dashboard roster consistent. Owner/admin only — Core re-checks helper
-// membership regardless, but flipping someone else's availability is a
+// Ping toggle: whether a helper is offered tickets and pinged automatically.
+// A paused helper stays on the roster (commands, manual assignment). Core's
+// program_helpers.ping_eligible is what routing consults; the wizard row's
+// eligible_for_pings mirrors it for the dashboard. Owner/admin only — Core
+// re-checks membership regardless, but changing someone else's pings is a
 // management action, not a helper one.
 export async function setHelperAvailabilityAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const session = await linkedSlackSession();
@@ -24,12 +24,8 @@ export async function setHelperAvailabilityAction(_prev: ActionState, formData: 
     return { error: "Only the program owner or an admin can change availability." };
   }
   try {
-    if (active) {
-      await addHostedHelper({ programId, slackUserId: userId, role: "helper", helperSource: "manual" }).catch(() => null);
-    } else {
-      await revokeHostedHelper(programId, userId).catch(() => null);
-    }
-    await coreHelperSetActive(programId, { userId, active, actorId: session.slackId });
+    await setHostedHelperPingEligibility(programId, userId, active).catch(() => null);
+    await coreHelperSetActive(programId, { userId, pingEligible: active, actorId: session.slackId });
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Availability update failed." };
   }

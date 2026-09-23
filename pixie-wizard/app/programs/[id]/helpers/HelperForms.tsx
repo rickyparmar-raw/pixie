@@ -26,7 +26,7 @@ export function HelperAvailabilityToggle({
       <input type="hidden" name="programId" value={programId} />
       <input type="hidden" name="helperUserId" value={slackUserId} />
       <input type="hidden" name="active" value={active ? "false" : "true"} />
-      <button type="submit" className={btnQuiet} title={active ? "Stop pings and assignments" : "Resume pings and assignments"}>
+      <button type="submit" className={btnQuiet} title={active ? "Stop automatic ticket offers and pings" : "Resume automatic ticket offers and pings"}>
         {active ? "Pause pings" : "Resume pings"}
       </button>
       {state.error && <span className="text-xs text-brand">{state.error}</span>}

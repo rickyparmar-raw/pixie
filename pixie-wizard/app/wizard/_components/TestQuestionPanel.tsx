@@ -10,6 +10,7 @@ const ACTION_LABEL: Record<TestQuestionResult["expectedAction"], string> = {
   reply: "Pixie would reply",
   silence: "Pixie would stay silent",
   "ticket+helper": "Pixie would open a ticket and ping a helper",
+  uncertain: "Pixie would say it can't verify that, without guessing",
 };
 
 // Wizard step 6: "Ask a test question" against the sandbox program. Calls

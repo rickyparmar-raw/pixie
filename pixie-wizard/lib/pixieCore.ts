@@ -508,6 +508,7 @@ export interface DashboardHelperRosterEntry {
   userId: string;
   role: string;
   active: boolean;
+  pingEligible?: boolean;
   source: string;
   expertise: Array<{ tag: string; solved_count: number; reply_count: number }>;
   categoryResolved: Array<{ category: string; resolved: number }>;
@@ -527,7 +528,7 @@ export async function coreHelperRoster(programId: string): Promise<{
 
 export async function coreHelperSetActive(
   programId: string,
-  payload: { userId: string; active: boolean; actorId: string },
+  payload: { userId: string; actorId: string; active?: boolean; pingEligible?: boolean },
 ): Promise<unknown> {
   return request(
     `/internal/v1/programs/${encodeURIComponent(programId)}/helpers/active`,
@@ -544,13 +545,17 @@ export async function coreHelpersSync(programId: string, payload: Record<string,
   return request(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers`, "helpers sync failed", send("PUT", payload));
 }
 
-export type TestQuestionExpectedAction = "reply" | "silence" | "ticket+helper";
+export type TestQuestionExpectedAction = "reply" | "silence" | "ticket+helper" | "uncertain";
 
 export interface TestQuestionResult {
   ok: boolean;
   programId: string;
-  role: "help" | "main";
+  role: "help" | "main" | "organizer";
+  addressed?: boolean;
   intent: string | null;
+  engaged?: boolean;
+  classifierError?: string | null;
+  reason?: string;
   sources: string[];
   grounded: boolean;
   expectedAction: TestQuestionExpectedAction;
@@ -561,7 +566,7 @@ export interface TestQuestionResult {
 // with no Slack or ticket side effects on the Core side.
 export async function coreTestQuestion(
   programId: string,
-  payload: { question: string; role?: "help" | "main" },
+  payload: { question: string; role?: "help" | "main"; addressed?: boolean },
 ): Promise<TestQuestionResult> {
   return request(
     `/internal/v1/programs/${encodeURIComponent(programId)}/test-question`,

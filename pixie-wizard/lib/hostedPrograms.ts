@@ -266,6 +266,15 @@ export async function addHostedHelper(input: {
   return rows[0];
 }
 
+// Mirror of Core program_helpers.ping_eligible for the dashboard roster.
+// Tolerates a DB without migration 004 (no column yet): nothing to mirror.
+export async function setHostedHelperPingEligibility(programId: string, slackUserId: string, eligible: boolean): Promise<void> {
+  await query(
+    `update hosted_program_helpers set eligible_for_pings = $3 where program_id = $1 and slack_user_id = $2`,
+    [programId, slackUserId, eligible],
+  ).catch(() => undefined);
+}
+
 export async function listHostedHelpers(programId: string): Promise<HostedProgramHelper[]> {
   const { rows } = await query<HostedProgramHelper>(
     `select * from hosted_program_helpers where program_id = $1 and active = true`,
