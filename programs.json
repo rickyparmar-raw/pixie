@@ -20,6 +20,7 @@
       "fallback": "general_support"
     },
     "posture": "passive",
+    "behavior": { "main": { "generalMentionChat": true } },
     "ticketsEnabled": false,
     "scope": "program",
     "helpChannel": "C0B6STY9G5N",
