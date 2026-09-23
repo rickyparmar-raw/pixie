@@ -1,48 +1,29 @@
 import { requireProgramMembership } from "@/lib/programAccess";
-import { coreAnalytics } from "@/lib/pixieCore";
+import { coreDashboardMetrics, type DashboardMetrics } from "@/lib/pixieCore";
 import { resolveIdentities, labelFor } from "@/lib/identity";
 import { PageHeader, Section, CoreError, SignalRail, MiniBar, BarList, EmptyState } from "@/app/_components/DashboardShell";
 import { personaName, formatDuration } from "@/app/_components/format";
 import { VolumeChart } from "@/app/_components/charts/VolumeChart";
 import { OutcomeRings } from "@/app/_components/charts/OutcomeRings";
 import { SharePie } from "@/app/_components/charts/SharePie";
-import type { VolumeDay } from "@/lib/dashboardMetrics";
 
-type Analytics = {
-  created: number;
-  aiAnswered: number;
-  humanHandled: number;
-  deflected: number;
-  deflectionRate: number;
-  reopened: number;
-  reopenRate: number;
-  duplicates: number;
-  duplicateRate: number;
-  byStatus: Record<string, number>;
-  byCategory: Array<{ category: string; n: number }>;
-  daily: VolumeDay[];
-  helperLoad: Array<{ userId: string; openAssigned: number }>;
-  helperResolved: Array<{ userId: string; resolved: number }>;
-  medianFirstResponseMs: number | null;
-  medianFirstHumanResponseMs: number | null;
-  medianResolveMs: number | null;
-  stale48h: number;
-};
-
+// Every figure is Core-counted from stored tickets/ticket_events/metrics
+// rows (lib/web/dashboardApi.js metricsOverview) — never estimated, scoped
+// to this program's window.
 export default async function AnalyticsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { program } = await requireProgramMembership(id);
   const persona = personaName(program);
 
-  let a: Analytics | null = null;
+  let m: DashboardMetrics | null = null;
   let loadError: string | null = null;
   try {
-    a = (await coreAnalytics(id, 30)) as unknown as Analytics;
+    m = await coreDashboardMetrics(id, 30);
   } catch (err) {
     loadError = err instanceof Error ? err.message : "Analytics are unavailable.";
   }
 
-  if (loadError || !a) {
+  if (loadError || !m) {
     return (
       <>
         <PageHeader title="Analytics" description="Every figure is counted from stored tickets, never estimated." />
@@ -51,98 +32,107 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
     );
   }
 
-  const escalated = a.byStatus.escalated ?? 0;
-  const resolved = a.byStatus.resolved ?? 0;
-  const identities = await resolveIdentities([
-    ...(a.helperLoad ?? []).map((h) => h.userId),
-    ...(a.helperResolved ?? []).map((h) => h.userId),
-  ]);
+  const identities = await resolveIdentities((m.helpers ?? []).map((h) => h.userId));
 
-  // response-time comparison shares one scale
+  // Response-time comparison shares one scale.
   const times: Array<[string, number | null]> = [
-    ["First reply", a.medianFirstResponseMs],
-    ["First human reply", a.medianFirstHumanResponseMs],
-    ["Time to resolve", a.medianResolveMs],
+    ["First reply · median", m.firstResponse.medianMs],
+    ["First reply · average", m.firstResponse.averageMs],
+    ["Time to resolve · median", m.resolution.medianMs],
+    ["Time to resolve · average", m.resolution.averageMs],
   ];
   const timeMax = Math.max(1, ...times.map(([, v]) => v ?? 0));
 
-  const helpers = mergeHelpers(a.helperLoad, a.helperResolved);
-  const helperMax = Math.max(1, ...helpers.map((h) => h.open + h.resolved));
+  const helperMax = Math.max(1, ...m.helpers.map((h) => h.openAssigned + h.resolved));
+  const blockPct = m.grounding.blockRate === null ? 0 : Math.round(m.grounding.blockRate * 100);
+  const answerTotal = m.answers.pixieAnswered + m.answers.humanHandled;
 
   return (
     <>
       <PageHeader
         title="Analytics"
-        description="Last 30 days. Every figure is counted from stored tickets, never estimated."
+        description={`Last ${m.windowDays} days. Every figure is counted from stored tickets, never estimated.`}
       />
 
       <div className="space-y-12">
-        <Section title="Volume" description="Every question that arrived, and the share a person had to pick up.">
-          <VolumeChart data={a.daily ?? []} aspectRatio="3 / 1" />
+        <Section title="Volume" description="Every question that arrived, and where it sits now.">
+          <VolumeChart data={m.volumeByDay ?? []} aspectRatio="3 / 1" />
           <div className="mt-8 border-t border-line pt-7">
           <SignalRail
             stages={[
-              { label: "Questions", value: a.created },
-              { label: `${persona} answered`, value: a.aiAnswered },
-              { label: "Needed a person", value: a.humanHandled, tone: "text-tang" },
-              { label: "Escalated", value: escalated, tone: "text-brand" },
-              { label: "Resolved", value: resolved, tone: "text-mint" },
+              { label: "Questions", value: m.created },
+              { label: "Open now", value: m.openTickets },
+              { label: "Waiting for helper", value: m.waitingForHelper, tone: "text-tang" },
+              { label: `${persona} answered`, value: m.answers.pixieAnswered },
+              { label: "Needed a person", value: m.answers.humanHandled, tone: "text-brand" },
             ]}
           />
-          <p className="mt-5 text-xs text-text-muted">
-            {Math.round(a.deflectionRate * 100)}% of resolved tickets never needed a person.{" "}
-            {a.stale48h > 0 && `${a.stale48h} open past 48h.`}
-          </p>
           </div>
         </Section>
 
-        <Section title="Response time" description="Median, per stage of the handoff.">
+        <Section title="Response time" description="Median and average, per stage of the handoff.">
           <BarList>
             {times.map(([label, v]) => (
               <MiniBar key={label} label={label} value={v ?? 0} max={timeMax} tone="bg-text-muted" display={formatDuration(v)} />
             ))}
           </BarList>
-        </Section>
-
-        <Section title="Outcomes" description="Three independent rates — each ring runs its own 0-100 track.">
-          <OutcomeRings
-            rates={[
-              { label: "Deflection", pct: pct(a.deflectionRate), color: "var(--chart-1)", detail: "resolved with no person" },
-              { label: "Reopened", pct: pct(a.reopenRate), color: "var(--chart-2)", detail: "came back after closing" },
-              { label: "Duplicates", pct: pct(a.duplicateRate), color: "var(--chart-3)", detail: "already asked" },
-            ]}
-          />
-          <p className="mt-7 border-t border-line pt-5 text-xs text-text-muted">
-            <span className="font-mono text-sm text-text">{a.humanHandled}</span> of {a.created} handled by a person.
+          <p className="mt-5 text-xs text-text-muted">
+            {m.firstResponse.n} answered · {m.resolution.n} resolved in window.
           </p>
         </Section>
 
-        <Section title="What they asked about" description="Share of questions by category.">
-          {a.byCategory.length === 0 ? (
-            <EmptyState title="No categorised tickets yet." />
+        <Section title="Who answered" description="Share of questions Pixie carried alone vs handed to a person.">
+          {answerTotal === 0 ? (
+            <EmptyState title="No answered questions yet." />
           ) : (
             <SharePie
-              shares={a.byCategory.map((c) => ({ label: c.category, value: c.n }))}
-              centerLabel="Questions"
-              unit="categorised questions"
+              shares={[
+                { label: `${persona} answered`, value: m.answers.pixieAnswered },
+                { label: "Human handled", value: m.answers.humanHandled },
+              ]}
+              centerLabel="Answers"
+              unit="answered questions"
             />
           )}
         </Section>
 
-        <Section title="Helper workload" description="Open assigned, and resolved in the last 30 days.">
-          {helpers.length === 0 ? (
+        <Section
+          title="Grounding blocks"
+          description="Replies Pixie withheld for lack of grounded docs — silent ungrounded/gap rows plus Jev-permitted generations the grounding gate rejected."
+        >
+          <OutcomeRings
+            rates={[
+              { label: "Blocked", pct: blockPct, color: "var(--chart-2)", detail: `${m.grounding.blocked} of ${m.grounding.blocked + m.grounding.answered} replies` },
+            ]}
+          />
+          {Object.keys(m.grounding.byReason).length > 0 && (
+            <ul className="mt-7 space-y-1.5 border-t border-line pt-5 font-mono text-xs text-text-muted">
+              {Object.entries(m.grounding.byReason)
+                .sort(([, a], [, b]) => b - a)
+                .map(([reason, n]) => (
+                  <li key={reason} className="flex justify-between gap-4">
+                    <span>{reason}</span>
+                    <span className="tabular-nums">{n}</span>
+                  </li>
+                ))}
+            </ul>
+          )}
+        </Section>
+
+        <Section title="Helper workload" description="Open assigned, and resolved in window.">
+          {m.helpers.length === 0 ? (
             <EmptyState title="No helper activity yet." />
           ) : (
             <ul className="space-y-3">
-              {helpers.map((h) => (
+              {m.helpers.map((h) => (
                 <li key={h.userId} className="grid grid-cols-[9rem_1fr_auto] items-center gap-3 text-sm">
                   <span className="truncate text-xs text-text-muted">{labelFor(identities, h.userId)}</span>
                   <span className="flex h-1.5 overflow-hidden rounded-full bg-line/50">
-                    <span className="bg-tang" style={{ width: `${(h.open / helperMax) * 100}%` }} />
+                    <span className="bg-tang" style={{ width: `${(h.openAssigned / helperMax) * 100}%` }} />
                     <span className="bg-mint" style={{ width: `${(h.resolved / helperMax) * 100}%` }} />
                   </span>
                   <span className="font-mono text-xs tabular-nums text-text-muted">
-                    <span className="text-tang">{h.open}</span> open · <span className="text-mint">{h.resolved}</span> resolved
+                    <span className="text-tang">{h.openAssigned}</span> open · <span className="text-mint">{h.resolved}</span> resolved
                   </span>
                 </li>
               ))}
@@ -152,22 +142,4 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
       </div>
     </>
   );
-}
-
-function pct(rate: number): number {
-  return Math.round((rate ?? 0) * 100);
-}
-
-function mergeHelpers(
-  load: Array<{ userId: string; openAssigned: number }>,
-  resolved: Array<{ userId: string; resolved: number }>,
-): Array<{ userId: string; open: number; resolved: number }> {
-  const map = new Map<string, { userId: string; open: number; resolved: number }>();
-  for (const l of load) map.set(l.userId, { userId: l.userId, open: l.openAssigned, resolved: 0 });
-  for (const r of resolved) {
-    const e = map.get(r.userId) ?? { userId: r.userId, open: 0, resolved: 0 };
-    e.resolved = r.resolved;
-    map.set(r.userId, e);
-  }
-  return [...map.values()].sort((x, y) => y.open + y.resolved - (x.open + x.resolved));
 }

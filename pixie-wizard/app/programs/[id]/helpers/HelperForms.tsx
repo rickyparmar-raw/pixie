@@ -2,10 +2,78 @@
 
 import { useActionState } from "react";
 import { hostedHelperSave, setHelperVisibilityAction } from "@/app/wizard/hostedActions";
+import { setHelperAvailabilityAction, setHelperExpertiseAction } from "./helperActions";
 import type { ActionState } from "@/lib/types";
-import { inputClass, labelClass, btnPrimary } from "@/app/wizard/_components/formStyles";
+import { inputClass, labelClass, btnPrimary, btnQuiet } from "@/app/wizard/_components/formStyles";
 
 const initialState: ActionState = { error: null };
+
+// Availability switch: eligible for pings, routing and assignment, or
+// parked with history intact. Owner/admin only — the page decides whether
+// to render this, and setHelperAvailabilityAction re-checks server-side.
+export function HelperAvailabilityToggle({
+  programId,
+  slackUserId,
+  active,
+}: {
+  programId: string;
+  slackUserId: string;
+  active: boolean;
+}) {
+  const [state, formAction] = useActionState(setHelperAvailabilityAction, initialState);
+  return (
+    <form action={formAction} className="flex flex-wrap items-center gap-2">
+      <input type="hidden" name="programId" value={programId} />
+      <input type="hidden" name="helperUserId" value={slackUserId} />
+      <input type="hidden" name="active" value={active ? "false" : "true"} />
+      <button type="submit" className={btnQuiet} title={active ? "Stop pings and assignments" : "Resume pings and assignments"}>
+        {active ? "Pause pings" : "Resume pings"}
+      </button>
+      {state.error && <span className="text-xs text-brand">{state.error}</span>}
+    </form>
+  );
+}
+
+// Per-helper expertise editor. The datalist suggests the program's own
+// categories; free text stays allowed because real expertise ("pcb reflow")
+// rarely matches a category name exactly.
+export function HelperExpertiseForm({
+  programId,
+  slackUserId,
+  tags,
+  categorySuggestions,
+}: {
+  programId: string;
+  slackUserId: string;
+  tags: string[];
+  categorySuggestions: string[];
+}) {
+  const [state, formAction] = useActionState(setHelperExpertiseAction, initialState);
+  const listId = `expertise-${slackUserId.replace(/[^A-Za-z0-9]/g, "")}`;
+  return (
+    <form action={formAction} className="flex max-w-md flex-wrap items-center gap-2">
+      <input type="hidden" name="programId" value={programId} />
+      <input type="hidden" name="helperUserId" value={slackUserId} />
+      <input
+        name="helperTags"
+        defaultValue={tags.join(", ")}
+        placeholder="ordering, verification, pcb"
+        list={categorySuggestions.length > 0 ? listId : undefined}
+        aria-label={`Expertise tags for ${slackUserId}`}
+        className={`${inputClass} min-w-0 flex-1 text-xs`}
+      />
+      {categorySuggestions.length > 0 && (
+        <datalist id={listId}>
+          {categorySuggestions.map((c) => (
+            <option key={c} value={c} />
+          ))}
+        </datalist>
+      )}
+      <button type="submit" className={btnQuiet}>Save tags</button>
+      {state.error && <span className="w-full text-xs text-brand">{state.error}</span>}
+    </form>
+  );
+}
 
 // Owner/admin only — the page decides whether to render this at all, and
 // setHelperVisibilityAction() re-checks that server-side regardless, since a
