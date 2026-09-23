@@ -41,3 +41,10 @@ The visual contract is the published Pixie Wizard prototype at `pixiewiz-lxzqyyj
 
 - The prototype uses mock chart data. Wizard charts may only render data returned by Pixie Core and otherwise render an explicit empty state.
 - The prototype avatar image is replaced by a URL-backed identity preview until Wizard storage is configured; image bytes are never stored in normal database rows.
+
+## 8. Public landing
+
+- The public route uses graphite `#0e100f`, warm cream `#fffce1`, Pixie lime `#b7ffa3`, evidence yellow `#e8ff38`, and handoff violet `#a78bfa`. It is the technical, dark-mode counterpart to the operational dashboard.
+- Reusable primitives are the `button`, eyebrow, ticket card, decision card, dashboard fixture, and helper route node. Fixture labels mirror tickets, analytics, and helpers that Pixie actually has.
+- Motion is explanatory: GSAP reveals scenes, pins the evidence decision only on desktop, draws system connectors, and scrubs the kinetic confidence tape. `gsap.matchMedia()` removes pinning and the tape scrub on smaller viewports; reduced motion keeps every scene visible without scrub or parallax.
+- Source order follows the support story, real links carry navigation, and color is paired with text status.

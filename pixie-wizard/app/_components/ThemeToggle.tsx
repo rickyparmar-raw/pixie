@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-// Persisted, no-FOUC theme toggle. The blocking script in layout.tsx already
-// stamps `data-theme` on <html> before paint; this component only owns the
-// button and keeps localStorage + the attribute in sync after that.
+// Persists the selected theme and applies it after hydration. The server keeps
+// the light palette as the stable first render because localStorage is client-only.
 
 type Theme = "light" | "dark";
 
@@ -19,7 +18,10 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
   const [theme, setTheme] = useState<Theme | null>(null);
 
   useEffect(() => {
-    setTheme(currentTheme());
+    const stored = window.localStorage.getItem("pixie-theme");
+    const next = stored === "light" || stored === "dark" ? stored : currentTheme();
+    document.documentElement.setAttribute("data-theme", next);
+    setTheme(next);
   }, []);
 
   function toggle() {

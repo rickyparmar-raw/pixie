@@ -8,13 +8,19 @@
     "categories": {
       "byChannel": {},
       "byKeyword": [
-        { "category": "review", "match": ["review", "reviewed", "reviewer", "reviewing", "resubmit", "rejected", "approved", "queue", "fraud"] },
-        { "category": "ops", "match": ["payout", "payouts", "shipping", "shipped", "customs", "grant", "fulfillment", "multiplier", "store", "order", "address"] },
-        { "category": "support", "match": ["journal", "journals", "hackatime", "hours", "repo", "submit", "submission"] }
+        { "category": "ai_policy", "match": ["ai", "chatgpt", "copilot", "vibe coding", "vibecoding", "ai-generated", "aigenerated", "ai disclosure", "ai policy", "ai percentage"] },
+        { "category": "review", "match": ["review", "reviewed", "reviewer", "reviewing", "resubmit", "resubmission", "rejected", "rejection", "approved", "approval", "queue", "fraud", "first pass", "second pass", "deflated", "deflation", "deflating"] },
+        { "category": "journals_hours", "match": ["journal", "journals", "journaling", "hackatime", "wakatime", "devlog", "dev log", "count as hours", "counts as hours", "counted as hours", "count toward", "counts toward", "count towards", "counts towards", "count in the hours", "counts in the hours", "count for hours", "research time", "learning time", "double dip", "double count", "double counting", "time tracking", "logged time", "log time", "lapse", "timelapse", "how many hours", "uncommitted session", "uncommitted work", "uncommitted coding"] },
+        { "category": "shop_orders", "match": ["shop", "my order", "ordered", "order status", "order number", "tracking number", "track my order", "grant", "shipped", "shipping", "customs", "payout", "payouts", "reward", "rewards", "redeem", "checkout", "cart", "delivery", "package", "inventory", "in stock", "out of stock", "fulfillment", "when does this ship", "when will this ship", "has this shipped", "when will it ship"] },
+        { "category": "hardware", "match": ["hardware", "pcb", "cad", "solder", "soldering", "breadboard", "microcontroller", "esp32", "arduino", "raspberry pi", "circuit", "schematic", "3d print", "3d printing", "firmware", "wiring", "component", "sensor", "bom"] },
+        { "category": "account_platform", "match": ["dashboard", "website", "log in", "login", "signing in", "sign in", "account", "password", "can't access", "page not loading", "isn't loading", "not loading", "site down", "site is down", "broken link"] },
+        { "category": "project_requirements", "match": ["project idea", "can i make", "can i build", "what counts as a project", "does this count as a project", "demo requirement", "readme", "originality", "plagiarism", "roblox", "self hosted", "self-hosted", "cli project", "game engine", "hand drawn", "hand-drawn", "handwritten", "submit", "submission", "repo", "github"] },
+        { "category": "program_ops", "match": ["deadline", "end date", "launch date", "milestone", "when does pixl end", "program end", "extension", "extended", "announcement"] }
       ],
-      "fallback": "support"
+      "fallback": "general_support"
     },
     "posture": "passive",
+    "ticketsEnabled": false,
     "scope": "program",
     "helpChannel": "C0B6STY9G5N",
     "channels": [
@@ -45,6 +51,12 @@
         "type": "text",
         "url": "file://./data/ysws-submission-guidelines.md",
         "siteUrl": "https://hackclub.gitbook.io/ysws-project-submission-guidelines"
+      },
+      {
+        "name": "Pixl Pixie Knowledge Base",
+        "type": "text",
+        "url": "file://./PIXL_PIXIE_KNOWLEDGE_BASE.md",
+        "siteUrl": "https://pixl.hackclub.com/docs"
       }
     ],
     "milestones": [
@@ -73,10 +85,12 @@
       "create-devboard"
     ],
     "pinnedRules": [
+      "PIXL END DATE: No official Pixl end date has been announced. Pixl will at least last for 4 months. If asked when Pixl ends, say the end date is not decided or announced yet and never invent a specific date.",
       "- RULE HIERARCHY & CONTRADICTION HANDLING: A specific rule always strictly beats a general rule. For example, the specific hardware rule requiring 100% original CAD, 3D models (.step), and PCB designs/schematics (0% AI, no AI allowed) strictly beats any general software AI allowance. When answering about hardware CAD or PCB, never cite or apply the general 30% software code AI allowance.",
       "- 30% AI POLICY: Software and firmware code is capped at a hard ceiling of <=30% AI code, and all AI usage must be honestly disclosed in submission notes and README. Hardware CAD, 3D models, and PCB designs must be 100% original (0% AI). Fully AI-generated projects are strictly prohibited. Exceeding the limit results in project rejection or reduced hours/payout; hiding AI is treated as fraud and leads to rejection and a permanent ban.",
       "- REFERRAL CODES: Referral codes expire in 48 hours (2 days) after being generated.",
-      "- RETURNED SUBMISSIONS: if asked whether a returned submission is a penalty or can be resubmitted, answer ONLY about resubmitting returned projects and NEVER mention reduced-hour approvals, payout deductions, or other outcomes unless the user explicitly asked about them."
+      "- RETURNED SUBMISSIONS: if asked whether a returned submission is a penalty or can be resubmitted, answer ONLY about resubmitting returned projects and NEVER mention reduced-hour approvals, payout deductions, or other outcomes unless the user explicitly asked about them.",
+      "- REVIEW STATE: You do not know internal Pixl review state, queue state, reviewer availability, fraud-review state, or the reason an individual submission is waiting unless a current authoritative source explicitly provides it. Never infer these from normal review behavior. Never predict when a specific project will be reviewed, never state a review duration/SLA/queue position as fact, and never state internal review mechanics as fact unless the exact mechanism is present in the documentation above. When uncertain, say so and let a human reviewer or organizer answer."
     ],
     "links": {
       "docs": "https://pixl.hackclub.com/docs",
@@ -127,6 +141,7 @@
   {
     "id": "twisted",
     "name": "Twisted",
+    "ticketsEnabled": false,
     "scope": "program",
     "posture": "active",
     "channels": [],
@@ -148,5 +163,74 @@
     ],
     "guides": [],
     "links": {}
+  },
+  {
+    "id": "jame-gam",
+    "name": "Jame Gam",
+    "supportName": "Jame Gam Help",
+    "posture": "active",
+    "scope": "program",
+    "deploymentMode": "hosted_shared",
+    "incidentMode": "ANSWER_AND_TRACK",
+    "supportActive": true,
+    "helpChannel": "C0C14QK28LD",
+    "organizerChannel": "C0C17F7DB38",
+    "channels": [
+      "C0C14QK28LD",
+      "C0C17F7DB38"
+    ],
+    "aiAnswers": true,
+    "ticketsEnabled": true,
+    "autoEscalate": true,
+    "autoAssign": false,
+    "publicTicketsEnabled": true,
+    "sharedSources": false,
+    "sources": [
+      {
+        "name": "Jame Gam Complete Docs",
+        "type": "text",
+        "url": "file://./data/jame-gam-complete-docs.md"
+      }
+    ],
+    "milestones": [],
+    "guides": [],
+    "pinnedRules": [
+      "Jame Gam answers use only Jame Gam Complete Docs; never borrow program-specific facts from Pixl, Hardwire, Twisted, or another YSWS.",
+      "Only the two private Jame Gam channels are in scope: C0C14QK28LD for help and C0C17F7DB38 for organizer tickets.",
+      "Never claim or answer in the public Jame Gam channels."
+    ],
+    "links": {}
+  },
+  {
+    "id": "live-ysws",
+    "name": "Live YSWS",
+    "supportName": "Live YSWS Help",
+    "posture": "active",
+    "scope": "program",
+    "deploymentMode": "hosted_shared",
+    "incidentMode": "ANSWER_AND_TRACK",
+    "supportActive": true,
+    "helpChannel": "C0C1D3RM0UC",
+    "organizerChannel": "C0C14QX86PP",
+    "channels": ["C0C1D3RM0UC", "C0C14QX86PP"],
+    "aiAnswers": true,
+    "ticketsEnabled": true,
+    "autoEscalate": true,
+    "autoAssign": false,
+    "publicTicketsEnabled": true,
+    "sharedSources": false,
+    "sources": [
+      { "name": "Live YSWS Official Site", "type": "url", "url": "https://live.hackclub.com/", "siteUrl": "https://live.hackclub.com/" },
+      { "name": "Live YSWS Official Repository", "type": "github-dir", "url": "https://api.github.com/repos/hackclub/live/contents" },
+      { "name": "Live YSWS Pixie Knowledge Base", "type": "text", "url": "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md", "siteUrl": "https://live.hackclub.com/" }
+    ],
+    "milestones": [],
+    "guides": [],
+    "pinnedRules": [
+      "Live YSWS answers use only Live-owned sources; never borrow program-specific facts from another YSWS.",
+      "Only C0C1D3RM0UC (private help) and C0C14QX86PP (private tickets) are in scope.",
+      "Never claim or answer in public channel C0BU006CTS6."
+    ],
+    "links": { "docs": "https://live.hackclub.com/", "repo": "https://github.com/hackclub/live" }
   }
 ]

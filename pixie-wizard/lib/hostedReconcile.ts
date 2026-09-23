@@ -41,6 +41,7 @@ function buildSyncPayload(
     autoEscalate: program.auto_escalate,
     incidentMode: program.incident_mode,
     publicTicketsEnabled: program.public_tickets_enabled,
+    sharedSources: settings.sharedSources === false,
     autoAssign: settings.autoAssign === true,
     helperPing: settings.helperPing === true,
     sources: program.sources,

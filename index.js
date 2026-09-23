@@ -32,6 +32,12 @@ function startKeepAlive() {
 async function startBot() {
   validate({ needsSlack: true });
   db.open();
+  require("./lib/draftSandbox").loadPersisted();
+  try {
+    require("./lib/knowledge").loadDraftPersisted();
+  } catch (e) {
+    log.debug("draft", `draft index rebuild failed: ${e.message}`);
+  }
   db.startSweeper();
 
   const app = new App({

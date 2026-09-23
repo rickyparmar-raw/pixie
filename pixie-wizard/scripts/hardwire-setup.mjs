@@ -73,7 +73,7 @@ const SOURCES = [
   },
 ];
 
-const SETTINGS = { description: DESCRIPTION, autoAssign: false };
+const SETTINGS = { description: DESCRIPTION, autoAssign: false, sharedSources: false };
 
 // ---- Core sync payload (mirrors hostedReconcile.ts buildSyncPayload) --------
 const CORE_PAYLOAD = {
@@ -92,6 +92,7 @@ const CORE_PAYLOAD = {
   autoEscalate: true,
   incidentMode: "ANSWER_AND_TRACK",
   publicTicketsEnabled: true,
+  sharedSources: false,
   autoAssign: false,
   sources: SOURCES,
   claimedBy: OWNER_SLACK_ID,

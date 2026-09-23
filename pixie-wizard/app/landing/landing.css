@@ -1,0 +1,102 @@
+/* PP Mori & GSAP 1:1 Design Tokens */
+
+@font-face {
+  font-family: 'PP Mori';
+  src: url('/PPMori-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PP Mori';
+  src: url('/PPMori-SemiBold.woff2') format('woff2');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'PP Mori';
+  src: url('/PPMori-SemiBold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --font-sans: 'PP Mori', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --bg-dark: #0e100f;
+  --text-cream: #fffce1;
+  --accent-green: #0ae448;
+  --accent-pink: #fec5fb;
+  --accent-orange: #ff8709;
+  --accent-purple: #9d95ff;
+  --accent-cyan: #00c5ff;
+  --border-subtle: rgba(255, 252, 225, 0.12);
+  --border-medium: rgba(255, 252, 225, 0.22);
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #0e100f;
+  color: #fffce1;
+  font-family: var(--font-sans);
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  font-family: inherit;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0e100f;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 252, 225, 0.2);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(10, 228, 72, 0.6);
+}
+
+/* Letter Bounce Effects */
+.hero-char {
+  display: inline-block;
+  cursor: default;
+  transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+/* Horizontal Track */
+.kinetic-track-wrapper {
+  overflow: hidden;
+  width: 100vw;
+}
+
+.kinetic-track {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+}
+
+/* Custom noise overlay helper */
+.bg-noise {
+  background-image: radial-gradient(rgba(255, 252, 225, 0.04) 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+::selection {
+  background: #0ae448;
+  color: #0e100f;
+}
