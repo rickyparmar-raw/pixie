@@ -40,6 +40,15 @@ async function startBot() {
   }
   db.startSweeper();
 
+  // A channel with two roles (main of one program, help of another; or env
+  // and program config disagreeing) makes every routing decision depend on
+  // load order. Refuse to start instead.
+  const roles = require("./lib/channelPolicy").validate();
+  if (!roles.ok) {
+    for (const e of roles.errors) log.error("config", `channel role conflict: ${e.message}`);
+    throw new Error(`channel role configuration invalid (${roles.errors.length} conflict(s))`);
+  }
+
   const app = new App({
     token: config.slack.botToken,
     appToken: config.slack.appToken,
