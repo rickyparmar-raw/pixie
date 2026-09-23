@@ -13,3 +13,13 @@ pixie.db-wal
 pixie-backup-*.tar.gz
 .env*
 .fuse_hidden*
+# Not runtime: session transcripts, screenshots, the code graph, local tooling.
+claudepixie*.txt
+claudepixiesession.txt
+cookies.txt
+graphify-out
+.playwright-mcp
+.omo
+.firecrawl
+/*.png
+pixie-landing-prototype
