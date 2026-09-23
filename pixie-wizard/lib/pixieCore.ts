@@ -408,6 +408,132 @@ export async function coreHelpers(programId: string): Promise<unknown[]> {
   return request(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers`, "helpers lookup failed");
 }
 
+// Dashboard ops clients (Core lib/web/dashboardApi.js). Every route is
+// program-scoped in the path itself: a ticket id from program A requested
+// under program B 404s in Core, so a cross-program slip fails closed here
+// instead of rendering another tenant's row.
+export interface DashboardTicketSearchParams {
+  status?: string;
+  statusGroup?: "open" | "resolved" | "all";
+  assigneeId?: string;
+  requesterId?: string;
+  category?: string;
+  priority?: string;
+  q?: string;
+  since?: string;
+  until?: string;
+  sort?: "created" | "updated" | "waiting";
+  dir?: "asc" | "desc";
+  limit?: string;
+  offset?: string;
+}
+
+export interface DashboardTicketRow {
+  id: number;
+  question: string;
+  summary: string | null;
+  status: string;
+  requester_id: string;
+  assignee_id: string | null;
+  category: string | null;
+  priority: string | null;
+  resolved_by: string | null;
+  first_responder_id: string | null;
+  notes_count: number;
+  created_at: number;
+  updated_at: number;
+  resolved_at: number | null;
+}
+
+export async function coreDashboardTicketSearch(
+  programId: string,
+  params: DashboardTicketSearchParams = {},
+): Promise<{ total: number; rows: DashboardTicketRow[] }> {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== "") query.set(key, value);
+  }
+  const suffix = query.toString() ? `?${query}` : "";
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/tickets/search${suffix}`, "ticket search failed");
+}
+
+export async function coreDashboardTicketDetail(programId: string, ticketId: number): Promise<unknown> {
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/tickets/${ticketId}`, "ticket lookup failed");
+}
+
+export interface DashboardMetrics {
+  programId: string;
+  windowDays: number;
+  created: number;
+  openTickets: number;
+  waitingForHelper: number;
+  firstResponse: { medianMs: number | null; averageMs: number | null; n: number };
+  resolution: { medianMs: number | null; averageMs: number | null; n: number };
+  volumeByDay: Array<{ date: string; questions: number; aiOnly: number; human: number }>;
+  answers: { pixieAnswered: number; humanHandled: number };
+  grounding: { blocked: number; byReason: Record<string, number>; answered: number; blockRate: number | null };
+  helpers: Array<{ userId: string; openAssigned: number; resolved: number }>;
+}
+
+export async function coreDashboardMetrics(programId: string, days = 30): Promise<DashboardMetrics> {
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/dashboard/metrics?days=${days}`, "dashboard metrics failed");
+}
+
+export interface KnowledgeSourceStatus {
+  name: string;
+  type: string | null;
+  url: string | null;
+  status: "Pending" | "Fetching" | "Processing" | "Ready" | "Error" | "Stale";
+  lastSyncedAt: number | null;
+  lastSuccessAt: number | null;
+  error: string | null;
+  chunks: number | null;
+}
+
+export async function coreKnowledgeStatus(programId: string): Promise<{ programId: string; sources: KnowledgeSourceStatus[] }> {
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/knowledge/status`, "knowledge status failed");
+}
+
+export async function coreKnowledgeRefresh(programId: string): Promise<{ started: boolean }> {
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/knowledge/refresh`,
+    "knowledge refresh failed",
+    send("POST", {}),
+  );
+}
+
+export interface DashboardHelperRosterEntry {
+  userId: string;
+  role: string;
+  active: boolean;
+  source: string;
+  expertise: Array<{ tag: string; solved_count: number; reply_count: number }>;
+  categoryResolved: Array<{ category: string; resolved: number }>;
+  openAssigned: number;
+  resolved: number;
+  helpfulPercentage: number | null;
+  lastActivity: number | null;
+}
+
+export async function coreHelperRoster(programId: string): Promise<{
+  programId: string;
+  categories: unknown;
+  helpers: DashboardHelperRosterEntry[];
+}> {
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers/roster`, "helper roster failed");
+}
+
+export async function coreHelperSetActive(
+  programId: string,
+  payload: { userId: string; active: boolean; actorId: string },
+): Promise<unknown> {
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/helpers/active`,
+    "helper availability update failed",
+    { method: "PATCH", body: JSON.stringify(payload) },
+  );
+}
+
 export async function coreAudit(programId: string): Promise<unknown[]> {
   return request(`/internal/v1/programs/${encodeURIComponent(programId)}/audit?limit=100`, "audit lookup failed");
 }

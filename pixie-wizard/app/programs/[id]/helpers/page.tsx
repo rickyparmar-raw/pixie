@@ -1,59 +1,51 @@
 import { requireProgramMembership } from "@/lib/programAccess";
 import Link from "next/link";
 import { listHostedHelpers } from "@/lib/hostedPrograms";
-import { coreHelpers, coreRoutingRecommend, coreHelperStats, type CoreHelperStats } from "@/lib/pixieCore";
+import { coreHelperRoster, coreRoutingRecommend, type DashboardHelperRosterEntry } from "@/lib/pixieCore";
 import { resolveIdentities, labelFor } from "@/lib/identity";
 import { PageHeader, Section, CoreError, EmptyState } from "@/app/_components/DashboardShell";
-import { HelperAddForm, HelperVisibilityToggle } from "./HelperForms";
+import { HelperAddForm, HelperVisibilityToggle, HelperAvailabilityToggle, HelperExpertiseForm } from "./HelperForms";
 
-type Helper = { user_id: string; helper_source: string; role: string; active: number };
 type Recommendation = { userId: string; score: number; reasons: string[] };
+
+function categorySuggestions(categories: unknown): string[] {
+  if (Array.isArray(categories)) return categories.filter((c): c is string => typeof c === "string");
+  if (categories && typeof categories === "object") return Object.keys(categories);
+  return [];
+}
 
 export default async function HelpersPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { relationship } = await requireProgramMembership(id);
-  const canManageVisibility = relationship === "owner" || relationship === "admin";
+  const canManage = relationship === "owner" || relationship === "admin";
 
-  const [wizardHelpers, coreR] = await Promise.all([
-    canManageVisibility ? listHostedHelpers(id).catch(() => []) : Promise.resolve([]),
-    Promise.allSettled([
-      coreHelpers(id) as Promise<Helper[]>,
-      coreRoutingRecommend(id) as Promise<Recommendation[]>,
-      coreHelperStats(id),
-    ]),
+  const [wizardHelpers, rosterR, recsR] = await Promise.all([
+    canManage ? listHostedHelpers(id).catch(() => []) : Promise.resolve([]),
+    coreHelperRoster(id).then(
+      (r) => ({ ok: true as const, value: r }),
+      (err: unknown) => ({ ok: false as const, error: err instanceof Error ? err.message : "The helper roster is unavailable." }),
+    ),
+    coreRoutingRecommend(id).then(
+      (value) => ({ ok: true as const, value: value as Recommendation[] }),
+      () => ({ ok: false as const, value: [] as Recommendation[] }),
+    ),
   ]);
-  const [helpersR, recsR, analyticsR] = coreR;
 
-  const loadError =
-    helpersR.status === "rejected"
-      ? helpersR.reason instanceof Error
-        ? helpersR.reason.message
-        : "The helper roster is unavailable."
-      : null;
-  const statsError = analyticsR.status === "rejected"
-    ? analyticsR.reason instanceof Error ? analyticsR.reason.message : "Helper stats are unavailable."
-    : null;
-
-  const helpers = helpersR.status === "fulfilled" ? helpersR.value.filter((h) => h.active) : [];
-  const recs = recsR.status === "fulfilled" ? recsR.value : [];
-  const stats = analyticsR.status === "fulfilled" ? analyticsR.value : null;
-  const statById = new Map<string, CoreHelperStats["helpers"][number]>(stats?.helpers.map((helper) => [helper.userId, helper]) ?? []);
-
-  const roster = helpers
-    .map((h) => ({ ...h, stats: statById.get(h.user_id) }))
-    .sort((a, b) => (b.stats?.totals.resolved ?? 0) - (a.stats?.totals.resolved ?? 0));
+  const loadError = !rosterR.ok ? rosterR.error : null;
+  const roster: DashboardHelperRosterEntry[] = rosterR.ok ? rosterR.value.helpers : [];
+  const categories = rosterR.ok ? categorySuggestions(rosterR.value.categories) : [];
+  const recs = recsR.ok ? recsR.value : [];
 
   const identities = await resolveIdentities([
-    ...roster.map((h) => h.user_id),
+    ...roster.map((h) => h.userId),
     ...recs.map((r) => r.userId),
   ]);
 
   return (
     <>
-      <PageHeader title="Helpers" description="Who can take a ticket, and what they're carrying." />
+      <PageHeader title="Helpers" description="Who can take a ticket, what they know, and what they're carrying." />
 
       {loadError && <CoreError message={loadError} />}
-      {statsError && <CoreError message={statsError} />}
 
       <div className="space-y-12">
         <Section title={`Roster${roster.length ? ` · ${roster.length}` : ""}`}>
@@ -62,18 +54,41 @@ export default async function HelpersPage({ params }: { params: Promise<{ id: st
           ) : (
             <ul className="divide-y divide-line border-y border-line">
               {roster.map((h) => (
-                <li key={h.user_id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-2.5 text-sm">
-                  <span className="min-w-0">
-                    <Link className="text-brand underline" href={`/programs/${id}/helpers/${encodeURIComponent(h.user_id)}`}>{labelFor(identities, h.user_id)}</Link>{" "}
-                    <span className="font-mono text-xs text-text-muted">
-                      {h.role}
-                      {h.helper_source ? ` · via ${h.helper_source}` : ""}
+                <li key={h.userId} className="space-y-2 py-3">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 text-sm">
+                    <span className="min-w-0">
+                      <Link className="text-brand underline" href={`/programs/${id}/helpers/${encodeURIComponent(h.userId)}`}>{labelFor(identities, h.userId)}</Link>{" "}
+                      <span className="font-mono text-xs text-text-muted">
+                        {h.role}
+                        {h.source ? ` · via ${h.source}` : ""}
+                        {!h.active && " · paused"}
+                      </span>
                     </span>
-                  </span>
-                  <span className="font-mono text-xs tabular-nums text-text-muted">
-                    {h.stats ? <><span className={h.stats.totals.open > 0 ? "text-tang" : ""}>{h.stats.totals.open}</span> open ·{" "}
-                    <span className="text-mint">{h.stats.totals.resolved}</span> resolved · {h.stats.helpfulPercentage === null ? "-" : `${Math.round(h.stats.helpfulPercentage * 100)}%`} helpful</> : "stats unavailable"}
-                  </span>
+                    <span className="font-mono text-xs tabular-nums text-text-muted">
+                      <span className={h.openAssigned > 0 ? "text-tang" : ""}>{h.openAssigned}</span> open ·{" "}
+                      <span className="text-mint">{h.resolved}</span> solved · {h.helpfulPercentage === null ? "-" : `${Math.round(h.helpfulPercentage * 100)}%`} helpful
+                    </span>
+                  </div>
+                  {(h.expertise.length > 0 || h.categoryResolved.length > 0) && (
+                    <p className="text-xs text-text-muted">
+                      {h.expertise.length > 0 && <>knows {h.expertise.map((e) => e.tag).join(", ")}</>}
+                      {h.expertise.length > 0 && h.categoryResolved.length > 0 && " · "}
+                      {h.categoryResolved.length > 0 && (
+                        <>solved {h.categoryResolved.map((c) => `${c.category} (${c.resolved})`).join(", ")}</>
+                      )}
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                    <HelperExpertiseForm
+                      programId={id}
+                      slackUserId={h.userId}
+                      tags={h.expertise.map((e) => e.tag)}
+                      categorySuggestions={categories}
+                    />
+                    {canManage && (
+                      <HelperAvailabilityToggle programId={id} slackUserId={h.userId} active={h.active} />
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
@@ -94,7 +109,7 @@ export default async function HelpersPage({ params }: { params: Promise<{ id: st
           </Section>
         )}
 
-        {canManageVisibility && wizardHelpers.length > 0 && (
+        {canManage && wizardHelpers.length > 0 && (
           <Section
             title="Public profile"
             description="Whether each helper appears on the public program roster. Never changes their permissions."

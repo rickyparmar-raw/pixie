@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
-import { coreTicketDetail, coreMacrosList } from "@/lib/pixieCore";
+import { coreDashboardTicketDetail, coreMacrosList } from "@/lib/pixieCore";
 import { resolveIdentities, labelFor } from "@/lib/identity";
 import { Section, CoreError, StatusDot, EmptyState } from "@/app/_components/DashboardShell";
-import { shortTime } from "@/app/_components/format";
+import { shortTime, formatDuration } from "@/app/_components/format";
+import { waitingMs, slackThreadUrl } from "@/lib/dashboardMetrics";
 import { TicketActions } from "./TicketActions";
 import { CopilotPanel } from "./CopilotPanel";
 import { MacroSendForm, type MacroRow } from "../../macros/MacroForms";
@@ -21,14 +22,27 @@ type TicketDetail = {
     priority: string | null;
     status: string;
     assignee_id: string | null;
+    resolved_by: string | null;
     ai_confidence: number | null;
     ai_decision: string | null;
     created_at: number;
+    updated_at: number;
     resolved_at: number | null;
   };
   events: Array<{ id: number; event_type?: string; kind?: string; actor_id: string | null; detail?: string | null; note?: string | null; created_at: number }>;
   notes: Array<{ id: number; author_id: string; body: string; created_at: number }>;
 };
+
+// Earliest helper reply in the timeline — who actually picked the ticket up
+// first, distinct from the current assignee and the resolver.
+function firstResponder(
+  events: TicketDetail["events"],
+): { actorId: string; at: number } | null {
+  const replies = events
+    .filter((e) => (e.event_type || e.kind) === "helper_reply" && e.actor_id)
+    .sort((a, b) => a.created_at - b.created_at);
+  return replies.length > 0 ? { actorId: replies[0].actor_id as string, at: replies[0].created_at } : null;
+}
 
 export default async function TicketPage({ params }: { params: Promise<{ id: string; ticketId: string }> }) {
   const { id, ticketId } = await params;
@@ -37,7 +51,9 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   let detail: TicketDetail | null = null;
   let loadError: string | null = null;
   try {
-    detail = (await coreTicketDetail(Number(ticketId), id)) as TicketDetail;
+    // Program-scoped detail: a ticket id from another program 404s here
+    // instead of rendering across the tenant boundary.
+    detail = (await coreDashboardTicketDetail(id, Number(ticketId))) as TicketDetail;
   } catch (err) {
     loadError = err instanceof Error ? err.message : "This ticket could not be loaded.";
   }
@@ -62,9 +78,13 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
     macros = [];
   }
 
+  const responder = firstResponder(events);
+
   const identities = await resolveIdentities([
     ticket.requester_id,
     ticket.assignee_id,
+    ticket.resolved_by,
+    responder?.actorId ?? null,
     ...events.map((e) => e.actor_id),
     ...notes.map((n) => n.author_id),
   ]);
@@ -72,18 +92,37 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   const meta = [
     `from ${labelFor(identities, ticket.requester_id)}`,
     ticket.assignee_id ? `assigned ${labelFor(identities, ticket.assignee_id)}` : null,
+    responder ? `first reply ${labelFor(identities, responder.actorId)}` : null,
+    ticket.resolved_by ? `resolved by ${labelFor(identities, ticket.resolved_by)}` : null,
     ticket.category,
     ticket.priority && ticket.priority !== "normal" ? ticket.priority : null,
     typeof ticket.ai_confidence === "number" ? `AI confidence ${Math.round(ticket.ai_confidence * 100)}%` : null,
     `opened ${shortTime(ticket.created_at)}`,
+    `updated ${shortTime(ticket.updated_at)}`,
+    ticket.resolved_at ? `resolved ${shortTime(ticket.resolved_at)}` : null,
+    `waiting ${formatDuration(waitingMs(ticket))}`,
   ].filter(Boolean);
+
+  const slackUrl = slackThreadUrl(ticket.channel, ticket.thread_ts);
 
   return (
     <>
       <Crumb programId={id} ticketId={String(ticket.id)} />
 
       <div className="mb-8">
-        <StatusDot status={ticket.status}>{ticket.status.replace(/_/g, " ")}</StatusDot>
+        <div className="flex flex-wrap items-center gap-3">
+          <StatusDot status={ticket.status}>{ticket.status.replace(/_/g, " ")}</StatusDot>
+          {slackUrl && (
+            <a
+              href={slackUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-mono text-xs text-brand underline"
+            >
+              Open in Slack →
+            </a>
+          )}
+        </div>
         <h1 className="mt-2 text-lg leading-snug text-text">{ticket.question}</h1>
         <p className="mt-2 font-mono text-xs text-text-muted">{meta.join("  ·  ")}</p>
         {ticket.summary && (

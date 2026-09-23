@@ -1,39 +1,36 @@
 import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
-import { coreTicketSearch } from "@/lib/pixieCore";
+import { coreDashboardTicketSearch, type DashboardTicketRow } from "@/lib/pixieCore";
 import { resolveIdentities, labelFor } from "@/lib/identity";
 import { PageHeader, CoreError, StatusDot, EmptyState } from "@/app/_components/DashboardShell";
-import { timeAgo } from "@/app/_components/format";
-import { TicketResolveButton } from "./TicketResolveButton";
+import { timeAgo, shortTime, formatDuration } from "@/app/_components/format";
+import { isOpenTicketStatus, waitingMs } from "@/lib/dashboardMetrics";
+import { TicketResolveButton, TicketReopenButton } from "./TicketResolveButton";
 
-const RESOLVABLE_STATUSES = new Set(["open", "waiting_for_helper", "assigned", "escalated", "reopened", "claimed"]);
-
-type TicketRow = {
-  id: number;
-  question: string;
-  summary: string | null;
-  status: string;
-  requester_id: string;
-  assignee_id: string | null;
-  category: string | null;
-  priority: string | null;
-  created_at: number;
-};
-
-// The filter row. Not every status — the handful an operator actually
-// filters by, in the order a request moves through them.
+// Filter tabs. "" is the unfiltered view; "open"/"resolved" are Core
+// status groups (the working set vs the done set); the rest are exact
+// ticket statuses for when an operator is hunting one lane.
 const VIEWS: Array<[value: string, label: string]> = [
   ["", "All"],
-  ["open", "Unanswered"],
+  ["open", "Open"],
   ["waiting_for_helper", "Waiting"],
   ["assigned", "Assigned"],
   ["escalated", "Escalated"],
   ["resolved", "Resolved"],
 ];
 
+const SORTS: Array<[value: string, label: string]> = [
+  ["created", "Newest"],
+  ["updated", "Recent activity"],
+  ["waiting", "Longest waiting"],
+];
+
 const LIMIT = 25;
 
-function withParams(base: Record<string, string | undefined>, patch: Record<string, string | undefined>): string {
+function withParams(
+  base: Record<string, string | undefined>,
+  patch: Record<string, string | undefined>,
+): string {
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries({ ...base, ...patch })) if (v) p.set(k, v);
   const s = p.toString();
@@ -45,39 +42,56 @@ export default async function TicketsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ status?: string; q?: string; assignee?: string; page?: string }>;
+  searchParams: Promise<{
+    status?: string;
+    q?: string;
+    assignee?: string;
+    category?: string;
+    sort?: string;
+    page?: string;
+  }>;
 }) {
   const { id } = await params;
   const query = await searchParams;
   await requireProgramMembership(id);
 
   const page = Math.max(Number(query.page) || 1, 1);
+  const sort = query.sort === "updated" || query.sort === "waiting" ? query.sort : "created";
   let total = 0;
-  let rows: TicketRow[] = [];
+  let rows: DashboardTicketRow[] = [];
   let searchError: string | null = null;
   try {
-    const res = await coreTicketSearch({
-      programId: id,
-      ...(query.status ? { status: query.status } : {}),
+    const res = await coreDashboardTicketSearch(id, {
+      // "open"/"resolved" address Core's grouped sets; exact statuses pass
+      // through as-is. The empty view sends neither.
+      ...(query.status === "open" || query.status === "resolved"
+        ? { statusGroup: query.status }
+        : query.status
+          ? { status: query.status }
+          : {}),
       ...(query.q ? { q: query.q } : {}),
       ...(query.assignee ? { assigneeId: query.assignee } : {}),
+      ...(query.category ? { category: query.category } : {}),
+      sort,
       limit: String(LIMIT),
       offset: String((page - 1) * LIMIT),
     });
     total = res.total;
-    rows = res.rows as TicketRow[];
+    rows = res.rows;
   } catch (err) {
     searchError = err instanceof Error ? err.message : "Ticket search is unavailable.";
   }
   const pages = Math.max(Math.ceil(total / LIMIT), 1);
-  const base = { status: query.status, q: query.q, assignee: query.assignee };
-  const identities = await resolveIdentities(rows.flatMap((t) => [t.requester_id, t.assignee_id]));
+  const base = { status: query.status, q: query.q, assignee: query.assignee, category: query.category, sort: query.sort };
+  const identities = await resolveIdentities(
+    rows.flatMap((t) => [t.requester_id, t.assignee_id, t.first_responder_id, t.resolved_by]),
+  );
 
   return (
     <>
       <PageHeader title="Tickets" description="Every support request Pixie has opened for this program." />
 
-      {/* filters — a text row, a search box, an optional assignee narrow */}
+      {/* filters — status tabs, then one search row: text, helper, category, sort */}
       <div className="mb-6 space-y-4">
         <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           {VIEWS.map(([value, label]) => {
@@ -105,13 +119,29 @@ export default async function TicketsPage({
             placeholder="Search questions and summaries"
             className="w-full min-w-0 rounded-[var(--radius)] border border-line bg-panel-2 px-3 py-1.5 text-sm text-text placeholder:text-text-muted focus:border-brand focus:outline-none sm:flex-1"
           />
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <input
               name="assignee"
               defaultValue={query.assignee ?? ""}
               placeholder="Assignee ID"
-              className="min-w-0 flex-1 rounded-[var(--radius)] border border-line bg-panel-2 px-2.5 py-1.5 font-mono text-xs text-text placeholder:text-text-muted focus:border-brand focus:outline-none sm:w-36 sm:flex-none"
+              className="min-w-0 flex-1 rounded-[var(--radius)] border border-line bg-panel-2 px-2.5 py-1.5 font-mono text-xs text-text placeholder:text-text-muted focus:border-brand focus:outline-none sm:w-32 sm:flex-none"
             />
+            <input
+              name="category"
+              defaultValue={query.category ?? ""}
+              placeholder="Category"
+              className="min-w-0 flex-1 rounded-[var(--radius)] border border-line bg-panel-2 px-2.5 py-1.5 text-xs text-text placeholder:text-text-muted focus:border-brand focus:outline-none sm:w-32 sm:flex-none"
+            />
+            <select
+              name="sort"
+              defaultValue={sort}
+              aria-label="Sort tickets"
+              className="rounded-[var(--radius)] border border-line bg-panel-2 px-2.5 py-1.5 text-xs text-text focus:border-brand focus:outline-none"
+            >
+              {SORTS.map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
             <button type="submit" className="pixie-button pixie-button-quiet">Search</button>
           </div>
         </form>
@@ -136,6 +166,12 @@ export default async function TicketsPage({
                   {labelFor(identities, t.requester_id)}
                   {t.category ? ` · ${t.category}` : ""}
                   {t.priority && t.priority !== "normal" ? ` · ${t.priority}` : ""}
+                  {t.first_responder_id ? ` · first reply ${labelFor(identities, t.first_responder_id)}` : ""}
+                  {t.resolved_by ? ` · resolved by ${labelFor(identities, t.resolved_by)}` : ""}
+                  {t.notes_count > 0 ? ` · ${t.notes_count} note${t.notes_count === 1 ? "" : "s"}` : ""}
+                </p>
+                <p className="mt-0.5 font-mono text-[11px] text-text-muted/70">
+                  opened {shortTime(t.created_at)} · updated {shortTime(t.updated_at)} · waiting {formatDuration(waitingMs(t))}
                 </p>
               </Link>
               <div className="flex items-center gap-4 sm:flex-col sm:items-end sm:gap-1">
@@ -144,8 +180,10 @@ export default async function TicketsPage({
                   {t.assignee_id ? `${labelFor(identities, t.assignee_id)} · ` : ""}
                   {timeAgo(t.created_at)}
                 </span>
-                {RESOLVABLE_STATUSES.has(t.status) && (
+                {isOpenTicketStatus(t.status) ? (
                   <TicketResolveButton programId={id} ticketId={t.id} />
+                ) : (
+                  <TicketReopenButton programId={id} ticketId={t.id} />
                 )}
               </div>
             </li>

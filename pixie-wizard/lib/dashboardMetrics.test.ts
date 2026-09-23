@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mergeDailySeries, summarizeAnalytics } from "./dashboardMetrics";
+import { isOpenTicketStatus, mergeDailySeries, slackThreadUrl, summarizeAnalytics, waitingMs } from "./dashboardMetrics";
 
 describe("summarizeAnalytics", () => {
   test("aggregates only authoritative per-program analytics", () => {
@@ -40,5 +40,43 @@ describe("mergeDailySeries", () => {
 
   test("returns an empty timeline when no program reports one", () => {
     expect(mergeDailySeries([{ ...base, programId: "a" }])).toEqual([]);
+  });
+});
+
+describe("isOpenTicketStatus", () => {
+  test("matches Core's OPEN_GROUP working set", () => {
+    for (const status of ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"]) {
+      expect(isOpenTicketStatus(status)).toBe(true);
+    }
+    for (const status of ["resolved", "closed", "duplicate", "snoozed", null, undefined, ""]) {
+      expect(isOpenTicketStatus(status as string)).toBe(false);
+    }
+  });
+});
+
+describe("waitingMs", () => {
+  test("open tickets wait until now, resolved tickets until resolution", () => {
+    expect(waitingMs({ created_at: 1000, resolved_at: null }, 6000)).toBe(5000);
+    expect(waitingMs({ created_at: 1000, resolved_at: 3000 }, 9000)).toBe(2000);
+  });
+
+  test("clamps skew and rejects unusable rows", () => {
+    expect(waitingMs({ created_at: 5000, resolved_at: 1000 }, 9000)).toBe(0);
+    expect(waitingMs({ created_at: null }, 9000)).toBeNull();
+    expect(waitingMs({}, 9000)).toBeNull();
+  });
+});
+
+describe("slackThreadUrl", () => {
+  test("builds a workspace-agnostic thread permalink", () => {
+    expect(slackThreadUrl("C012345", "1700000000.123456")).toBe(
+      "https://slack.com/archives/C012345/p1700000000123456",
+    );
+  });
+
+  test("rejects malformed channel and timestamp inputs", () => {
+    expect(slackThreadUrl("../x", "1700000000.1")).toBeNull();
+    expect(slackThreadUrl("C012345", "not-a-ts")).toBeNull();
+    expect(slackThreadUrl(null, "1700000000.1")).toBeNull();
   });
 });
