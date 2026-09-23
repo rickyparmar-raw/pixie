@@ -220,7 +220,9 @@ export async function coreSlackChannels(): Promise<{ ok: boolean; channels: Core
   return body as { ok: boolean; channels: CoreChannel[]; reason?: string };
 }
 
-export async function coreChannelMembership(channelId: string): Promise<{ ok: boolean; hasAccess: boolean; name?: string | null; reason?: string }> {
+export async function coreChannelMembership(
+  channelId: string,
+): Promise<{ ok: boolean; hasAccess: boolean; name?: string | null; isPrivate?: boolean; isArchived?: boolean; reason?: string }> {
   const { body } = await call(`/internal/v1/slack/membership?channel=${encodeURIComponent(channelId)}`);
   return body as { ok: boolean; hasAccess: boolean; name?: string | null; reason?: string };
 }

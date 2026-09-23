@@ -190,7 +190,11 @@ test("hostedChannelsUpdate keeps verify→claim→sync→release order with roll
   // Both the sync-fail rollback and the old-channel release are scoped to one program's row.
   const scoped = (fn.match(/delete from hosted_program_channels where workspace_id = \$1 and channel_id = \$2 and program_id = \$3/g) || []).length;
   expect(scoped).toBe(2);
-  expect(fn.includes("owner_hca_id")).toBe(true); // owner-only move, server-side
+  // DELIBERATE CHANGE (dash-onboard spec: "only the program owner/organizer
+  // can edit settings/channels/launch"): the move was owner-only
+  // (owner_hca_id); organizers may now move channels too, still server-side.
+  expect(fn.includes("requireProgramOwnerOrAdmin")).toBe(true);
+  expect(fn.includes("owner_hca_id")).toBe(false);
 });
 
 test("help-move release delete is program-scoped (cannot drop another program's channel)", async () => {
@@ -378,10 +382,13 @@ test("every management page gates server-side with requireProgramMembership (sta
 test("hostedActions mutators are server-authorized, never UI-only (static)", () => {
   const s = src("app/wizard/hostedActions.ts");
   expect(s.includes('"use server"')).toBe(true);
-  // Owner-exclusive config paths check ownership server-side.
+  // DELIBERATE CHANGE (dash-onboard spec: "only the program owner/organizer
+  // can edit settings/channels/launch"): settings/sources were owner-only
+  // (requireProgramOwner); organizers may now edit too, still server-side,
+  // and helpers/viewers are still denied inline by the same gate.
   for (const fn of ["saveHostedSettings", "saveHostedSources"]) {
     const body = s.slice(s.indexOf(`export async function ${fn}`), s.indexOf(`export async function ${fn}`) + 1200);
-    expect(body.includes("requireProgramOwner"), `${fn} must requireProgramOwner`).toBe(true);
+    expect(body.includes("requireProgramOwnerOrAdmin"), `${fn} must requireProgramOwnerOrAdmin`).toBe(true);
   }
   // Display-only roster toggle is owner-or-admin, still server-side.
   const vis = s.slice(s.indexOf("export async function setHelperVisibilityAction"));

@@ -193,6 +193,9 @@ export interface HostedProgramHelper {
   role: "helper" | "organizer" | "owner";
   active: boolean;
   visible_on_profile: boolean;
+  // Whether routing may ping this helper (migration 004). Rows predating the
+  // migration read undefined here, which means eligible — same as true.
+  eligible_for_pings?: boolean;
   added_at: string;
   removed_at?: string | null;
 }

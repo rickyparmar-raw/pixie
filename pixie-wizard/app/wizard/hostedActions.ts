@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getSession, ownsIdentifier } from "@/lib/session";
-import { creatorEligible, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
+import { creatorEligible, insertHostedProgram, claimHostedChannels, validateOrDeriveSlug, findChannelConflicts } from "@/lib/programClaim";
 import { sourceUrlProblem } from "@/lib/sourceUrls";
 import { getHostedProgram, listHostedChannels, updateHostedProgram, markSyncState, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow, upsertWizardPerson, setWizardSuperadmin, setHostedHelperRole, revokeHostedHelper, isWizardSuperadmin, revokeWizardSuperadmin } from "@/lib/hostedPrograms";
 import { relationshipFor, linkedSlackSession, requireWizardSuperadmin, loadProgramContext } from "@/lib/programAccess";
@@ -14,9 +14,11 @@ import {
   coreKnowledgePropose, coreKnowledgeReview, coreFaqPropose, coreMacroSave, coreMacroDelete,
   coreMacroSend, coreIncidentDetect, coreIncidentAction, coreIncidentNotify,
   coreRadarEvaluate, coreRadarAction, coreRetentionPolicy, coreRetentionSweep,
+  coreTestQuestion,
 } from "@/lib/pixieCore";
-import { validateActivationGuards } from "@/lib/activationGuards";
-import type { ActionState } from "@/lib/types";
+import { validateActivationGuards, isValidSlackChannelId } from "@/lib/activationGuards";
+import { BEHAVIOR_FIELDS, effectiveBehavior } from "@/lib/types";
+import type { ActionState, ProgramBehavior, RuntimeStatus } from "@/lib/types";
 import type { DocSource } from "@/lib/types";
 
 const CENTRAL_WORKSPACE = (process.env.PIXIE_WORKSPACE_ID || "default").trim() || "default";
@@ -91,6 +93,20 @@ function flagOn(formData: FormData, name: string, fallback: boolean): boolean {
   const values = formData.getAll(name).map(String);
   if (values.length === 0) return fallback;
   return values.includes("on");
+}
+
+// Behavior toggles submit as one `behavior.<section>.<key>` = on|off input
+// each (see BehaviorHiddenInputs) — fully controlled, so a missing key falls
+// back to the program's effective value rather than flipping anything.
+function parseBehaviorForm(formData: FormData, stored: ProgramBehavior | null | undefined): ProgramBehavior {
+  const effective = effectiveBehavior(stored);
+  const out: ProgramBehavior = { main: {}, help: {} };
+  for (const f of BEHAVIOR_FIELDS) {
+    const raw = formData.get(`behavior.${f.section}.${f.key}`);
+    const value = raw === "on" ? true : raw === "off" ? false : effective[f.section][f.key as keyof typeof effective.main];
+    (out[f.section] as Record<string, boolean>)[f.key] = value;
+  }
+  return out;
 }
 
 // One atomic Activate: program row → channel claims → config → Core sync.
@@ -274,12 +290,15 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
 export async function saveHostedSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const programId = String(formData.get("programId") ?? "");
   // Authorization failures render as an inline error, not the route error
-  // boundary. requireProgramOwner checks ownership of THIS program — not the
-  // creator allowlist, so an owner who predates invite-only can still save.
-  let session: Awaited<ReturnType<typeof requireProgramOwner>>["session"];
-  let program: Awaited<ReturnType<typeof requireProgramOwner>>["program"];
+  // boundary. Owner or organizer (the "admin" relationship) may edit — a
+  // plain helper or viewer gets the inline denial below. The creator
+  // allowlist is deliberately NOT consulted: managing a program you already
+  // own/administer is authorized by that membership, so an owner who
+  // predates invite-only can still save.
+  let session: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["session"];
+  let program: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["program"];
   try {
-    ({ session, program } = await requireProgramOwner(programId));
+    ({ session, program } = await requireProgramOwnerOrAdmin(programId));
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Not authorized." };
   }
@@ -311,11 +330,13 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
   const incidentMode = (VALID_INCIDENT_MODES as readonly string[]).includes(rawIncidentMode)
     ? (rawIncidentMode as (typeof VALID_INCIDENT_MODES)[number])
     : program.incident_mode;
+  const behavior = parseBehaviorForm(formData, program.behavior);
   const patch = {
     support_name: supportName,
     icon_url: iconUrl,
     reply_signature: replySignature,
     program_description: programDescription,
+    behavior,
     ai_answers: flagOn(formData, "aiAnswers", program.ai_answers),
     tickets_enabled: flagOn(formData, "ticketsEnabled", program.tickets_enabled),
     auto_escalate: flagOn(formData, "autoEscalate", program.auto_escalate),
@@ -346,6 +367,10 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
     autoEscalate: updated.auto_escalate,
     incidentMode: updated.incident_mode,
     publicTicketsEnabled: updated.public_tickets_enabled,
+    behavior: updated.behavior ?? {},
+    // Only send a status Core knows: pre-migration rows read undefined here
+    // and keep whatever Core already has instead of flipping to sandbox.
+    ...(updated.runtime_status ? { status: updated.runtime_status } : {}),
     autoAssign,
     helperPing,
     sensitiveCategories: String(formData.get("sensitiveCategories") ?? "").split(",").map((t) => t.trim()).filter(Boolean),
@@ -356,14 +381,17 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
 
   revalidatePath(`/programs/${programId}/settings`);
   revalidatePath(`/programs/${programId}`);
+  // The settings ARE saved at this point — a Core outage must read as a
+  // sync warning inline, not as a lost save. Reconcile retries the sync.
+  if (!sync.ok) return { error: `Saved, but Core sync failed: ${sync.error ?? "unknown error"}. It will retry automatically.` };
   return { error: null };
 }
 
 export async function saveHostedSources(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const programId = String(formData.get("programId") ?? "");
-  let session: Awaited<ReturnType<typeof requireProgramOwner>>["session"];
+  let session: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["session"];
   try {
-    ({ session } = await requireProgramOwner(programId));
+    ({ session } = await requireProgramOwnerOrAdmin(programId));
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Not authorized." };
   }
@@ -816,8 +844,14 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
   const rawNew = String(formData.get("newHelpChannelId") ?? formData.get("newHelpChannelIdRaw") ?? "").trim();
   if (!programId || !rawNew) return { error: "Pick a new help channel." };
 
-  const program = await getHostedProgram(programId);
-  if (!program || !ownsIdentifier(program.owner_hca_id, session)) return { error: "Only the program owner can move channels." };
+  // Owner or organizer may move channels; helpers and viewers get the inline
+  // denial instead of the route error boundary.
+  let program: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["program"];
+  try {
+    ({ program } = await requireProgramOwnerOrAdmin(programId));
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Not authorized." };
+  }
   const current = await listHostedChannels(programId);
   const oldHelp = current.find((c) => c.kind === "help");
   if (oldHelp && oldHelp.channel_id === rawNew) return { error: "That's already the help channel." };
@@ -875,6 +909,316 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
   });
   revalidatePath(`/programs/${programId}/settings`);
   return { error: null };
+}
+
+// Seven-step onboarding (wizard steps 1-5 → sandbox). Creates the program
+// row, claims channels, writes behavior/sources/helpers, and syncs to Core
+// as status sandbox — the same row→claim→rollback order activateHostedProgram
+// uses, so a claim conflict deletes the fresh row and reports the owner.
+export interface SandboxHelperInput {
+  slackUserId: string;
+  role: "helper" | "organizer";
+  expertise: string[];
+  eligibleForPings: boolean;
+}
+
+export interface SandboxSourceInput {
+  type: DocSource["type"];
+  url?: string;
+  label?: string;
+  content?: string;
+}
+
+export interface SandboxCreateInput {
+  programName: string;
+  programSlug?: string | null;
+  programDescription?: string | null;
+  supportName?: string | null;
+  iconUrl?: string | null;
+  mainChannelId?: string | null;
+  helpChannelId?: string | null;
+  behavior?: ProgramBehavior | null;
+  sources: SandboxSourceInput[];
+  helpers: SandboxHelperInput[];
+}
+
+export type SandboxCreateResult =
+  | { ok: true; programId: string; syncError?: string }
+  | { ok: false; error: string };
+
+const SLACK_USER_REGEX = /^[UW][A-Z0-9]{8,14}$/;
+
+function sanitizeSandboxBehavior(input: ProgramBehavior | null | undefined): ProgramBehavior {
+  const out: ProgramBehavior = { main: {}, help: {} };
+  for (const f of BEHAVIOR_FIELDS) {
+    const section = (input?.[f.section] ?? {}) as Record<string, unknown>;
+    (out[f.section] as Record<string, boolean>)[f.key] = section[f.key] === true;
+  }
+  return out;
+}
+
+function normalizeSandboxSources(input: SandboxSourceInput[]): { sources?: DocSource[]; error?: string } {
+  const sources: DocSource[] = [];
+  for (let i = 0; i < input.length; i++) {
+    const s = input[i];
+    const label = (s.label || "").trim();
+    if (s.type === "text") {
+      const content = (s.content || "").trim();
+      if (!content) continue; // an empty pasted-text row is "left blank", not an error
+      sources.push({ type: "text", name: label || `Pasted notes ${sources.length + 1}`, content });
+      continue;
+    }
+    const url = (s.url || "").trim();
+    if (!url) continue;
+    if (!["url", "json-faq", "gdoc", "github-dir"].includes(s.type)) return { error: `Source row ${i + 1} has an unknown type.` };
+    const problem = sourceUrlProblem(url);
+    if (problem) return { error: `Source row ${i + 1}: ${problem}` };
+    sources.push({ type: s.type, url, label: label || undefined });
+  }
+  if (sources.length === 0) return { error: "Add at least one knowledge source — a docs URL or pasted text." };
+  return { sources };
+}
+
+export async function createSandboxProgram(input: SandboxCreateInput): Promise<SandboxCreateResult> {
+  let session: Awaited<ReturnType<typeof requireHostedSession>>;
+  try {
+    session = await requireHostedSession();
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Not authorized." };
+  }
+
+  const programName = (input.programName || "").trim();
+  if (!programName) return { ok: false, error: "Program name is required." };
+  if (programName.length > 80) return { ok: false, error: "Keep the program name under 80 characters." };
+  let slug: string;
+  try {
+    slug = validateOrDeriveSlug(programName, input.programSlug);
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Bad program name or slug." };
+  }
+
+  const iconUrl = (input.iconUrl || "").trim() || null;
+  if (iconUrl) {
+    if (!iconUrl.startsWith("https://")) return { ok: false, error: "Support icon URL must be a secure https:// URL." };
+    const iconProb = sourceUrlProblem(iconUrl);
+    if (iconProb) return { ok: false, error: `Support icon URL rejected: ${iconProb}` };
+  }
+
+  const mainChannelId = (input.mainChannelId || "").trim() || null;
+  const helpChannelId = (input.helpChannelId || "").trim() || null;
+  if (!mainChannelId && !helpChannelId) return { ok: false, error: "Pick a main channel, a help channel, or both." };
+  for (const [label, id] of [["Main", mainChannelId], ["Help", helpChannelId]] as const) {
+    if (id && !isValidSlackChannelId(id)) {
+      return { ok: false, error: `Invalid ${label.toLowerCase()} channel ID format (${id}). Expected a Slack channel ID like C0123456789.` };
+    }
+  }
+  if (mainChannelId && mainChannelId === helpChannelId) {
+    return { ok: false, error: "Main channel and help channel must be different channels." };
+  }
+  const claims = [
+    ...(mainChannelId ? [{ id: mainChannelId, kind: "discussion" as const }] : []),
+    ...(helpChannelId ? [{ id: helpChannelId, kind: "help" as const }] : []),
+  ];
+
+  const normalized = normalizeSandboxSources(input.sources || []);
+  if (normalized.error) return { ok: false, error: normalized.error };
+  const sources = normalized.sources!;
+  const behavior = sanitizeSandboxBehavior(input.behavior);
+
+  const helpers: SandboxHelperInput[] = [];
+  for (const h of input.helpers || []) {
+    const slackUserId = (h.slackUserId || "").trim().toUpperCase();
+    if (!slackUserId) continue;
+    if (!SLACK_USER_REGEX.test(slackUserId)) return { ok: false, error: `Invalid helper Slack ID (${h.slackUserId}). Expected something like U01234567.` };
+    if (helpers.some((seen) => seen.slackUserId === slackUserId)) return { ok: false, error: `Helper ${slackUserId} is listed twice.` };
+    helpers.push({
+      slackUserId,
+      role: h.role === "organizer" ? "organizer" : "helper",
+      expertise: [...new Set((h.expertise || []).map((t) => t.trim()).filter(Boolean))].slice(0, 10),
+      eligibleForPings: h.eligibleForPings !== false,
+    });
+  }
+
+  // Pre-checks before any write: channel conflicts, then live Pixie
+  // membership for every claimed channel.
+  const conflict = await findChannelConflicts(CENTRAL_WORKSPACE, slug, claims.map((c) => c.id));
+  if (conflict) {
+    return { ok: false, error: `Channel <#${conflict.conflictChannel}> is already claimed by program "${conflict.ownerProgramId}". Pick a different channel.` };
+  }
+  if (coreConfigured()) {
+    for (const c of claims) {
+      let membership: Awaited<ReturnType<typeof coreChannelMembership>>;
+      try {
+        membership = await coreChannelMembership(c.id);
+      } catch {
+        return { ok: false, error: "Could not verify channel access. Pixie Core may be down; try again shortly." };
+      }
+      if (!membership.ok || !membership.hasAccess) {
+        return { ok: false, error: `Pixie is not a member of <#${c.id}>. Run /invite @Pixie there first, then retry.` };
+      }
+      if (membership.isArchived) {
+        return { ok: false, error: `Channel <#${c.id}> is archived. Please select an active channel.` };
+      }
+    }
+  }
+
+  try {
+    await insertHostedProgram({
+      id: slug,
+      workspaceId: CENTRAL_WORKSPACE,
+      programName,
+      programDescription: (input.programDescription || "").trim() || null,
+      ownerHcaId: session.hcaId,
+      ownerSlackId: session.slackId,
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not create the program." };
+  }
+
+  const claim = await claimHostedChannels({
+    workspaceId: CENTRAL_WORKSPACE,
+    programId: slug,
+    channels: claims,
+    claimedByHcaId: session.hcaId,
+  });
+  if (!claim.ok) {
+    await query(`delete from hosted_programs where id = $1 and workspace_id = $2`, [slug, CENTRAL_WORKSPACE]);
+    return { ok: false, error: `Channel <#${claim.conflictChannel}> is already owned by another program. Pick a different channel.` };
+  }
+
+  const programDescription = (input.programDescription || "").trim() || null;
+  const patched = await updateHostedProgram(slug, {
+    support_name: (input.supportName || "").trim() || `${programName} Help`,
+    icon_url: iconUrl,
+    program_description: programDescription,
+    behavior,
+    sources,
+    settings: { ...(programDescription ? { description: programDescription } : {}) },
+  });
+
+  if (session.slackId) {
+    await addHostedHelper({ programId: slug, slackUserId: session.slackId, role: "owner", helperSource: "creator" }).catch(() => null);
+  }
+  for (const h of helpers) {
+    await addHostedHelper({ programId: slug, slackUserId: h.slackUserId, role: h.role, helperSource: "manual", eligibleForPings: h.eligibleForPings }).catch(() => null);
+  }
+
+  // Best-effort Core membership + expertise so the sandbox answers with the
+  // right helpers from the first test question. Failures stay local-only;
+  // the program row and its sync state below are the source of truth.
+  const coreMembers = [...new Set([...(session.slackId ? [session.slackId] : []), ...helpers.map((h) => h.slackUserId)])];
+  if (coreMembers.length > 0) {
+    await coreHelpersSync(slug, { actorId: coreMembers[0], members: coreMembers, source: "manual" }).catch(() => null);
+    for (const h of helpers) {
+      if (h.expertise.length > 0) {
+        await coreRoutingExpertise(slug, { actorId: coreMembers[0], userId: h.slackUserId, tags: h.expertise }).catch(() => null);
+      }
+    }
+  }
+
+  await logHostedAudit({
+    programId: slug,
+    actorHcaId: session.hcaId,
+    actorSlackId: session.slackId,
+    action: "program.sandbox_created",
+    entityType: "program",
+    entityId: slug,
+    metadata: { channels: claims.map((c) => c.id), sourcesCount: sources.length, helpersCount: helpers.length },
+  });
+
+  // New programs start as sandbox — the launch step flips this to live.
+  const sync = await syncProgramToCore(slug, {
+    name: patched.program_name,
+    description: programDescription,
+    workspaceId: CENTRAL_WORKSPACE,
+    supportName: patched.support_name,
+    iconUrl: patched.icon_url,
+    helpChannel: helpChannelId ?? "",
+    channels: claims.map((c) => c.id),
+    behavior,
+    status: "sandbox",
+    sources,
+    claimedBy: session.slackId,
+    workspace_id: CENTRAL_WORKSPACE,
+    programChannels: claims,
+  });
+  await markSyncState(slug, sync, patched.core_synced_at);
+
+  if (!sync.ok) {
+    // The sandbox exists locally and reconcile retries the sync — but step 6
+    // tests against Core, so say so instead of pretending all is well.
+    return { ok: true, programId: slug, syncError: sync.error ?? "Core sync failed; it will retry automatically." };
+  }
+  return { ok: true, programId: slug };
+}
+
+// Wizard step 6: ask a test question against the sandbox. Any signed-in
+// member of the program may test; strangers get an inline error, never the
+// route boundary. Core performs retrieval + a grounded-answer attempt with
+// no Slack or ticket side effects.
+export async function askTestQuestion(input: {
+  programId: string;
+  question: string;
+  role: "help" | "main";
+}): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
+  const session = await linkedSlackSession();
+  if (!session) return { ok: false, error: "Link your Slack account to test." };
+  const { program, relationship } = await loadProgramContext(input.programId);
+  if (!program) return { ok: false, error: "Program not found." };
+  if (relationship === "public") return { ok: false, error: "You don't have access to this program." };
+  const question = (input.question || "").trim();
+  if (!question) return { ok: false, error: "Write a test question first." };
+  try {
+    const data = await coreTestQuestion(input.programId, { question, role: input.role === "main" ? "main" : "help" });
+    return { ok: true, data };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Test question failed." };
+  }
+}
+
+// Wizard step 7 + settings page: the one deliberate sandbox → live flip.
+// Owner or organizer only. Flips the local runtime_status first so a later
+// reconcile converges to live even if this sync attempt fails; a failed
+// sync still reports inline rather than silently.
+export async function launchProgramAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const programId = String(formData.get("programId") ?? "");
+  if (String(formData.get("confirm") ?? "") !== "launch") {
+    return { error: "Tick the confirmation to launch." };
+  }
+  let session: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["session"];
+  let program: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["program"];
+  try {
+    ({ session, program } = await requireProgramOwnerOrAdmin(programId));
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Not authorized." };
+  }
+  if ((program.runtime_status as RuntimeStatus | undefined) === "live") {
+    return { error: null, ok: true, status: "live" };
+  }
+  const updated = await updateHostedProgram(programId, { runtime_status: "live" });
+  await logHostedAudit({
+    programId,
+    actorHcaId: session.hcaId,
+    actorSlackId: session.slackId,
+    action: "program.launched",
+    entityType: "program",
+    entityId: programId,
+  });
+  const sync = await syncProgramToCore(programId, {
+    name: updated.program_name,
+    description: updated.program_description ?? null,
+    workspaceId: updated.workspace_id,
+    behavior: updated.behavior ?? {},
+    status: "live",
+  });
+  await markSyncState(programId, sync, updated.core_synced_at);
+  revalidatePath(`/programs/${programId}`);
+  revalidatePath(`/programs/${programId}/settings`);
+  if (!sync.ok) {
+    return { error: `Live, but Core sync failed: ${sync.error ?? "unknown error"}. It will retry automatically.` };
+  }
+  redirect(`/programs/${programId}`);
+  return { error: null, ok: true, status: "live" };
 }
 
 // Display-only toggle: whether a helper appears on the program's public
