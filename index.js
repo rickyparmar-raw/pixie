@@ -49,6 +49,17 @@ async function startBot() {
     throw new Error(`channel role configuration invalid (${roles.errors.length} conflict(s))`);
   }
 
+  try {
+    const channelPolicy = require("./lib/channelPolicy");
+    const facts = db.assignUnownedLearnedFacts((channel) => {
+      const r = channelPolicy.resolve(channel);
+      return r.role === "none" ? null : r.program?.id || null;
+    });
+    if (facts.unowned) log.info("knowledge", `legacy learned facts: ${facts.assigned} assigned to their channel's program, ${facts.remaining} left unowned (served to no program)`);
+  } catch (e) {
+    log.warn("knowledge", `legacy learned-fact ownership pass failed: ${e.message}`);
+  }
+
   const app = new App({
     token: config.slack.botToken,
     appToken: config.slack.appToken,
