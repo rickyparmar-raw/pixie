@@ -5,8 +5,13 @@
 // also discovers pixie-wizard/ tests (see bunfig.toml), so `bun test` (the
 // "test" script) means this file.
 //
+// The dashboard's tests (pixie-wizard/**/*.test.ts) need the same isolation:
+// several of them mock.module("./pixieCore"), and in one shared process that
+// mock leaks into the next file as "Export named ... not found". --wizard
+// runs those, one process each, with cwd pixie-wizard; --all runs both.
+//
 // Usage:
-//   bun scripts/run-tests.mjs [--filter <substring>] [--junit <dir>] [--concurrency N]
+//   bun scripts/run-tests.mjs [--wizard|--all] [--filter <substring>] [--junit <dir>] [--concurrency N]
 import { readdirSync, mkdirSync } from "node:fs";
 import { spawn } from "node:child_process";
 import path from "node:path";
@@ -14,13 +19,15 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = path.join(ROOT, "lib");
+const WIZARD = path.join(ROOT, "pixie-wizard");
 
-function collectTests(dir) {
+function collectTests(dir, suffix = ".test.js") {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "node_modules" || entry.name === ".next") continue;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...collectTests(full));
-    else if (entry.isFile() && entry.name.endsWith(".test.js")) out.push(full);
+    if (entry.isDirectory()) out.push(...collectTests(full, suffix));
+    else if (entry.isFile() && entry.name.endsWith(suffix)) out.push(full);
   }
   return out.sort();
 }
@@ -50,13 +57,14 @@ function hermeticEnv() {
 function runOne(file, junitDir) {
   return new Promise((resolve) => {
     const rel = path.relative(ROOT, file);
-    const args = ["test", file];
+    const inWizard = file.startsWith(WIZARD + path.sep);
+    const args = ["test", inWizard ? `./${path.relative(WIZARD, file)}` : file];
     if (junitDir) {
-      const out = path.join(junitDir, `${rel.replaceAll(path.sep, "__").replace(/\.test\.js$/, "")}.xml`);
+      const out = path.join(junitDir, `${rel.replaceAll(path.sep, "__").replace(/\.test\.[jt]s$/, "")}.xml`);
       args.push("--reporter=junit", `--reporter-outfile=${out}`);
     }
     const start = Date.now();
-    const child = spawn("bun", args, { cwd: ROOT, env: hermeticEnv(), stdio: "pipe" });
+    const child = spawn("bun", args, { cwd: inWizard ? WIZARD : ROOT, env: hermeticEnv(), stdio: "pipe" });
     let output = "";
     child.stdout.on("data", (d) => { output += d; });
     child.stderr.on("data", (d) => { output += d; });
@@ -70,13 +78,15 @@ function runOne(file, junitDir) {
 }
 
 function parseArgs(argv) {
-  const opts = { filter: null, junit: null, concurrency: 4 };
+  const opts = { filter: null, junit: null, concurrency: 4, lib: true, wizard: false };
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === "--filter") opts.filter = argv[++i] ?? null;
+    if (argv[i] === "--wizard") Object.assign(opts, { lib: false, wizard: true });
+    else if (argv[i] === "--all") Object.assign(opts, { lib: true, wizard: true });
+    else if (argv[i] === "--filter") opts.filter = argv[++i] ?? null;
     else if (argv[i] === "--junit") opts.junit = argv[++i] ?? null;
     else if (argv[i] === "--concurrency") opts.concurrency = Math.max(1, Number(argv[++i]) || 4);
     else if (argv[i] === "--help" || argv[i] === "-h") {
-      console.log("usage: bun scripts/run-tests.mjs [--filter <substring>] [--junit <dir>] [--concurrency N]");
+      console.log("usage: bun scripts/run-tests.mjs [--wizard|--all] [--filter <substring>] [--junit <dir>] [--concurrency N]");
       process.exit(0);
     }
   }
@@ -84,7 +94,10 @@ function parseArgs(argv) {
 }
 
 const opts = parseArgs(process.argv.slice(2));
-let files = collectTests(LIB);
+let files = [
+  ...(opts.lib ? collectTests(LIB) : []),
+  ...(opts.wizard ? [...collectTests(path.join(WIZARD, "lib"), ".test.ts"), ...collectTests(path.join(WIZARD, "app"), ".test.ts")] : []),
+];
 if (opts.filter) {
   // Match against the repo-relative path: the absolute worktree path itself
   // may contain the substring (e.g. a `pixie-w-jev` checkout matches "jev").
