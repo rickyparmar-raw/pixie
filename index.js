@@ -51,7 +51,12 @@ async function startBot() {
 
   try {
     const channelPolicy = require("./lib/channelPolicy");
+    // Rows with no channel at all date from before multi-tenancy, when this
+    // bot served Pixl alone (see scripts/hardwire-isolate-legacy-facts.mjs),
+    // so they belong to Pixl when Pixl is configured, and to nobody otherwise.
+    const legacyOwner = require("./lib/programs").get("pixl") ? "pixl" : null;
     const facts = db.assignUnownedLearnedFacts((channel) => {
+      if (!channel) return legacyOwner;
       const r = channelPolicy.resolve(channel);
       return r.role === "none" ? null : r.program?.id || null;
     });
