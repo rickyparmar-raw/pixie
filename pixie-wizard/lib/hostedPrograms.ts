@@ -140,11 +140,13 @@ const UPDATABLE_PROGRAM_COLUMNS = new Set([
   "milestones",
   "settings",
   "status",
+  "behavior",
+  "runtime_status",
   "core_sync_state",
   "core_sync_error",
   "core_synced_at",
 ]);
-const JSONB_PROGRAM_COLUMNS = new Set(["sensitive_categories", "sources", "guides", "milestones", "settings"]);
+const JSONB_PROGRAM_COLUMNS = new Set(["sensitive_categories", "sources", "guides", "milestones", "settings", "behavior"]);
 
 export async function updateHostedProgram(id: string, patch: Partial<HostedProgramRow>): Promise<HostedProgramRow> {
   const entries = Object.entries(patch).filter(([col]) => UPDATABLE_PROGRAM_COLUMNS.has(col));
@@ -234,16 +236,32 @@ export async function addHostedHelper(input: {
   slackUserId: string;
   role?: "helper" | "organizer" | "owner";
   helperSource?: "creator" | "organizer_channel" | "usergroup" | "manual";
+  eligibleForPings?: boolean;
 }): Promise<HostedProgramHelper> {
   const role = input.role ?? "helper";
   const helperSource = input.helperSource ?? "manual";
+  // The eligible_for_pings column arrives via migration 004. Callers that do
+  // not pass a preference keep the exact pre-migration statement, so old
+  // flows stay green on databases the migration has not reached yet.
+  if (input.eligibleForPings === undefined) {
+    const { rows } = await query<HostedProgramHelper>(
+      `insert into hosted_program_helpers (program_id, slack_user_id, role, helper_source, active)
+       values ($1, $2, $3, $4, true)
+       on conflict (program_id, slack_user_id)
+       do update set role = excluded.role, helper_source = excluded.helper_source, active = true, removed_at = null
+       returning *`,
+      [input.programId, input.slackUserId, role, helperSource],
+    );
+    return rows[0];
+  }
   const { rows } = await query<HostedProgramHelper>(
-    `insert into hosted_program_helpers (program_id, slack_user_id, role, helper_source, active)
-     values ($1, $2, $3, $4, true)
+    `insert into hosted_program_helpers (program_id, slack_user_id, role, helper_source, active, eligible_for_pings)
+     values ($1, $2, $3, $4, true, $5)
      on conflict (program_id, slack_user_id)
-     do update set role = excluded.role, helper_source = excluded.helper_source, active = true, removed_at = null
+     do update set role = excluded.role, helper_source = excluded.helper_source, active = true, removed_at = null,
+       eligible_for_pings = excluded.eligible_for_pings
      returning *`,
-    [input.programId, input.slackUserId, role, helperSource],
+    [input.programId, input.slackUserId, role, helperSource, input.eligibleForPings],
   );
   return rows[0];
 }

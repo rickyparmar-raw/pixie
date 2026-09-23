@@ -1,8 +1,17 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { saveHostedSettings, saveHostedSources } from "@/app/wizard/hostedActions";
 import type { ActionState } from "@/lib/types";
+import {
+  BEHAVIOR_FIELDS,
+  behaviorFlag,
+  effectiveBehavior,
+  type BehaviorSection,
+  type HelpBehavior,
+  type MainBehavior,
+  type ProgramBehavior,
+} from "@/lib/types";
 import { SubmitButton } from "@/app/wizard/_components/SubmitButton";
 import { inputClass, labelClass } from "@/app/wizard/_components/formStyles";
 import { Select } from "@/app/_components/Select";
@@ -13,6 +22,71 @@ const initialState: ActionState = { error: null };
 function FormError({ state }: { state: ActionState }) {
   if (!state.error) return null;
   return <p className="border-l-2 border-brand/60 pl-3 text-sm text-brand">{state.error}</p>;
+}
+
+export interface BehaviorValue {
+  main: MainBehavior;
+  help: HelpBehavior;
+}
+
+// Shared Main/Help toggle groups — the settings page and the onboarding
+// wizard's behavior step render this same component, so the two can never
+// drift on labels, help text, or defaults. Controlled: the parent owns the
+// value (settings serializes it into hidden inputs on submit; the wizard
+// passes it straight into the sandbox-creation call).
+export function BehaviorToggles({ value, onChange }: { value: BehaviorValue; onChange: (section: BehaviorSection, key: string, on: boolean) => void }) {
+  return (
+    <div className="space-y-6">
+      {(["main", "help"] as const).map((section) => (
+        <fieldset key={section}>
+          <legend className="text-sm font-medium text-text">{section === "main" ? "Main channel" : "Help channel"}</legend>
+          <div className="mt-2.5 space-y-2.5">
+            {BEHAVIOR_FIELDS.filter((f) => f.section === section).map((f) => {
+              const on = behaviorFlag(value[section], f.key);
+              return (
+                <label key={f.key} className="flex gap-3 rounded-md border border-line px-3 py-3">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 accent-brand"
+                    checked={on}
+                    onChange={(e) => onChange(section, f.key, e.target.checked)}
+                  />
+                  <span>
+                    <span className="block text-sm text-text">{f.label}</span>
+                    <span className="mt-1 block text-xs leading-relaxed text-text-muted">{f.help}</span>
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      ))}
+    </div>
+  );
+}
+
+// Hidden inputs serializing a BehaviorValue into the `behavior.<section>.<key>`
+// = on|off shape saveHostedSettings parses. One input per toggle (no
+// hidden-off duality) because the value is fully controlled above.
+export function BehaviorHiddenInputs({ value }: { value: BehaviorValue }) {
+  return (
+    <>
+      {(["main", "help"] as const).flatMap((section) =>
+        BEHAVIOR_FIELDS.filter((f) => f.section === section).map((f) => (
+          <input
+            key={`${section}.${f.key}`}
+            type="hidden"
+            name={`behavior.${section}.${f.key}`}
+            value={behaviorFlag(value[section], f.key) ? "on" : "off"}
+          />
+        )),
+      )}
+    </>
+  );
+}
+
+export function behaviorFromState(value: BehaviorValue): ProgramBehavior {
+  return { main: { ...value.main }, help: { ...value.help } };
 }
 
 function Toggle({ name, label, defaultChecked }: { name: string; label: string; defaultChecked?: boolean }) {
@@ -30,12 +104,16 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
   // Routing flags live in the settings JSON blob, not in their own columns.
   const programSettings = (program.settings ?? {}) as Record<string, unknown>;
   const [sourcesState, sourcesAction] = useActionState(saveHostedSources, initialState);
+  const [behavior, setBehavior] = useState<BehaviorValue>(() => effectiveBehavior(program.behavior));
+  const setToggle = (section: BehaviorSection, key: string, on: boolean) =>
+    setBehavior((prev) => ({ ...prev, [section]: { ...prev[section], [key]: on } }));
 
   return (
     <div className="max-w-2xl space-y-12">
       <form action={settingsAction} className="space-y-5">
         <h2 className="text-sm font-medium text-text">Behavior</h2>
         <input type="hidden" name="programId" value={program.id} />
+        <BehaviorHiddenInputs value={behavior} />
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -59,7 +137,9 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
           <textarea id="programDescription" name="programDescription" defaultValue={program.program_description ?? ""} rows={2} className={inputClass} />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <BehaviorToggles value={behavior} onChange={setToggle} />
+
+        <div className="grid gap-4 sm:grid-cols-2 border-t border-line pt-4">
           <div>
             <label htmlFor="posture" className={labelClass}>Posture</label>
             <Select
@@ -88,9 +168,6 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
         </div>
 
         <div className="space-y-2.5 border-t border-line pt-4">
-          <Toggle name="aiAnswers" label="AI answers on" defaultChecked={program.ai_answers} />
-          <Toggle name="ticketsEnabled" label="Human tickets on" defaultChecked={program.tickets_enabled} />
-          <Toggle name="autoEscalate" label="Auto-escalate when unsure" defaultChecked={program.auto_escalate} />
           <Toggle name="autoAssign" label="Auto-assign to the recommended helper" defaultChecked={programSettings.autoAssign === true} />
           <Toggle
             name="helperPing"
