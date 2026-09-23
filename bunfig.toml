@@ -2,3 +2,7 @@
 # See lib/test-setup.js — pins the test database before anything can open the
 # real one.
 preload = ["./lib/test-setup.js"]
+# Keep a bare `bun test` at the repo root on the bot suite: the Next/TS wizard
+# has its own runner (`bun run test:wizard`) and node_modules must never be
+# scanned. Supported by bun >= 1.2 via --path-ignore-patterns.
+pathIgnorePatterns = ["pixie-wizard/**", "node_modules/**"]

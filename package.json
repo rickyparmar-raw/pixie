@@ -12,7 +12,9 @@
     "migrate:dump": "bun scripts/migrate-railway.mjs --dump-expected",
     "smoke": "node scripts/smoke-test.js",
     "test:diff": "node scripts/test-diff.mjs",
-    "test": "bun test"
+    "test": "bun scripts/run-tests.mjs",
+    "test:file": "bun test",
+    "test:wizard": "bun --cwd pixie-wizard test",
   },
   "keywords": [],
   "author": "",
