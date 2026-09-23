@@ -55,6 +55,39 @@ export function summarizeAnalytics(rows: readonly AnalyticsSnapshot[]): Dashboar
   }, { questions: 0, aiAnswered: 0, escalated: 0, openTickets: 0, resolved: 0, stale: 0, faqGaps: 0, activeIncidents: 0 });
 }
 
+// Statuses with a ticket still in someone's queue — the "Open" filter group
+// in the tickets list and the openTickets count share this set with Core's
+// OPEN_GROUP (lib/web/dashboardApi.js); keep them byte-identical.
+export const OPEN_STATUSES_DASHBOARD: readonly string[] = OPEN_STATUSES;
+
+export function isOpenTicketStatus(status: string | null | undefined): boolean {
+  return typeof status === "string" && OPEN_STATUSES_DASHBOARD.includes(status);
+}
+
+// Waiting time for display/sort: resolved tickets waited until resolution,
+// open ones are still waiting. Never negative (clock skew), null when the
+// row carries no usable timestamps.
+export function waitingMs(
+  ticket: { created_at?: unknown; resolved_at?: unknown; updated_at?: unknown },
+  now = Date.now(),
+): number | null {
+  const created = typeof ticket.created_at === "number" ? ticket.created_at : null;
+  if (created === null || !Number.isFinite(created)) return null;
+  const end = typeof ticket.resolved_at === "number" ? ticket.resolved_at : now;
+  if (!Number.isFinite(end)) return null;
+  return Math.max(0, end - created);
+}
+
+// Deep link into the Slack thread a ticket came from. slack.com/archives
+// resolves the workspace itself, so Core never has to expose which
+// workspace a channel lives in for the dashboard to link it.
+export function slackThreadUrl(channel: string | null | undefined, threadTs: string | null | undefined): string | null {
+  if (!channel || !threadTs || !/^[A-Za-z0-9_-]+$/.test(channel)) return null;
+  const compact = String(threadTs).replace(".", "");
+  if (!/^\d+$/.test(compact)) return null;
+  return `https://slack.com/archives/${channel}/p${compact}`;
+}
+
 // Merge by date, not by index.
 export function mergeDailySeries(rows: readonly AnalyticsSnapshot[]): VolumeDay[] {
   const byDate = new Map<string, VolumeDay>();
