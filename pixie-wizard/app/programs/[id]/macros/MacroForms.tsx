@@ -50,7 +50,7 @@ export function MacroCreateForm({ programId }: { programId: string }) {
           <div className="grid gap-4 sm:grid-cols-[10rem_1fr]">
             <label className="block">
               <span className={labelClass}>Trigger</span>
-              <input name="trigger" placeholder="?shipping" aria-label="Trigger" className={`${inputClass} font-mono`} />
+              <input name="trigger" placeholder="!shipping" aria-label="Trigger" className={`${inputClass} font-mono`} />
             </label>
             <label className="block">
               <span className={labelClass}>Name</span>
