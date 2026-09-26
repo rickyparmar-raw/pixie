@@ -1,0 +1,368 @@
+/* "Create your program" — step 1 of the hosted setup.
+
+   The heading block, the inputs, the field surface and the preview panel all
+   ride on the shared onboarding.css classes, so this screen inherits the Docs
+   step's column grid, type scale, surfaces and button language. What lives
+   here is only what this step adds: the field rhythm, the slug hint, the
+   inline icon problem, the not-live-yet module, the Slack-style message card,
+   the "where it shows" card and the "in your dashboard" card.
+
+   The reference never wraps a step's fields in one heavy container — each
+   control is its own box on the page background — so `.ob-program-fields` is a
+   bare grid, no border, no fill.
+
+   Every rule is scoped to an `ob-program-*` class (or pairs one with a shared
+   class to win a specificity tie) so a restyle of the shared shell can never
+   be undone by a stray cascade order here. */
+
+.onboarding-step-copy .ob-program-step {
+  margin: 0;
+  color: #b5b8b3;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+/* Two lines that break on the sentence, not mid-clause, the way the Docs step's
+   lede does — 49 characters of measure at 20px. */
+.onboarding-docs-grid .onboarding-step-copy .ob-program-lede {
+  max-width: 492px;
+}
+
+/* ---- left column: the identity fields ---- */
+
+/* On the two-column layout the grid stretches both columns to one band, so the
+   closing module is pinned to the foot of this one and the column ends level
+   with the panel's last card. Stacked layouts have no band to align to, so the
+   column stays a plain block there and the module keeps its own top margin. */
+@media (min-width: 1051px) {
+  .onboarding-docs-grid > .ob-program-column {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .onboarding-docs-grid .ob-program-post {
+    margin-top: auto;
+  }
+}
+
+.ob-program-fields {
+  display: grid;
+  gap: 24px;
+  margin-top: 32px;
+}
+
+.ob-program-field {
+  display: grid;
+  min-width: 0;
+  align-content: start;
+  gap: 7px;
+}
+
+/* Slug and icon sit side by side under the two full-width fields. */
+.ob-program-row {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
+}
+
+.ob-program-fields .ob-program-label {
+  display: block;
+  margin: 0;
+  color: #ecebe4;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* The controls sit *on* the page rather than in it: same raised fill as the
+   reference's inner cards, so a field reads as a surface with a hairline rather
+   than a hole cut in the background. Focus moves the border only — the fill
+   stays put so the well never changes depth under the caret. */
+.ob-program-fields .ob-program-input,
+.ob-program-fields .ob-program-area {
+  width: 100%;
+  min-height: 44px;
+  padding: 11px 13px;
+  border: 1px solid #373c39;
+  border-radius: 3px;
+  background: #121614;
+  color: #ecebe4;
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.4;
+  outline: none;
+  transition: border-color 80ms steps(2, end);
+}
+
+/* Four rows of 21px, so the optional description is a field the eye can judge
+   the length of instead of a scrolled sliver. */
+.ob-program-fields .ob-program-area {
+  min-height: 105px;
+  padding: 10px 13px;
+  resize: vertical;
+}
+
+.ob-program-fields .ob-program-input::placeholder,
+.ob-program-fields .ob-program-area::placeholder {
+  color: #6c716b;
+}
+
+.ob-program-fields .ob-program-input:focus,
+.ob-program-fields .ob-program-area:focus {
+  border-color: #9fe35a;
+  background: #121614;
+}
+
+/* No route renders the slug, so the hint never spells one out: it says what
+   the slug is for and shows the value, carried over from the name while the
+   field is still empty. The same line type hangs under the icon field so the
+   pair of controls in the row stay the same height. */
+.ob-program-hint {
+  min-width: 0;
+  margin: 0;
+  color: #7d827c;
+  font-size: 12.5px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.ob-program-hint-value {
+  color: #a9ada8;
+}
+
+.ob-program-hint[data-hint="true"] .ob-program-hint-value {
+  color: #6c716b;
+  font-style: italic;
+}
+
+.ob-program-problem {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #ffb899;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+
+/* "Nothing is posted yet" is a module, not a caption: it answers the question
+   the whole step invites ("what have I actually changed so far?"), so it wears
+   the Docs step's knowledge-quality surface — a quiet bordered box, a mark and
+   two lines — and carries the launch mark, the one icon that says when the name
+   does go live. */
+.ob-program-post {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  margin-top: 24px;
+  padding: 15px 20px;
+  border: 1px solid #262a27;
+  border-radius: 4px;
+  background: #121614;
+  gap: 16px;
+}
+
+.ob-program-post-mark {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  color: var(--onb-lime-fill);
+}
+
+.ob-program-post-mark svg {
+  display: block;
+}
+
+.ob-program-post-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.ob-program-post-title {
+  margin: 0;
+  color: var(--onb-cream);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.ob-program-post-note {
+  margin: 5px 0 0;
+  color: var(--onb-muted);
+  font-size: 12.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* ---- right column: how the program looks in Slack ---- */
+
+.ob-program-preview .ob-program-spark {
+  display: block;
+  flex: 0 0 auto;
+  color: #a6ee5a;
+}
+
+/* The panel stretches to the height of the left column, so the list is the flex
+   child that has to be allowed to shrink instead of pushing the panel taller. */
+.ob-program-list {
+  min-height: 0;
+}
+
+.onboarding-preview-card.ob-program-card,
+.onboarding-preview-card.ob-program-where {
+  min-width: 0;
+  min-height: 0;
+}
+
+/* A monogram is a placeholder for a picture the user has not supplied yet, so it
+   takes the hairline the reference uses for a framed mark — not a lime outline,
+   which would claim an accent this step reserves for real state. */
+.ob-program-avatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #3a3e3b;
+  border-radius: 4px;
+  background: #0b0e0d;
+  color: #ecebe4;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.ob-program-avatar[data-empty="true"] {
+  color: #a9ada8;
+}
+
+.ob-program-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ob-program-card .ob-program-msg {
+  display: block;
+  min-width: 0;
+  flex: 1;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.ob-program-msg-name {
+  display: block;
+  overflow: hidden;
+  color: #ecebe4;
+  font-size: 15px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-program-card .onboarding-preview-type {
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+/* Slack draws the message body under the avatar, full card width. The fill is
+   a shade off the card rather than a hard edge, so the card still reads as one
+   surface instead of a box inside a box inside a box. */
+.ob-program-msg-body {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  border: 0;
+  border-radius: 3px;
+  background: #161b18;
+  color: #cfd1cc;
+  font-size: 13.5px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+/* "Where it shows" reuses the Docs bullets verbatim, so the panel reads as one
+   system; the layers mark is the same lime stack the Docs step uses for
+   knowledge quality. */
+.onboarding-preview-mark.ob-program-where-mark {
+  color: #a6ee5a;
+}
+
+.ob-program-where .onboarding-preview-card-head {
+  gap: 24px;
+}
+
+.ob-program-where-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.onboarding-preview-bullets.ob-program-where-list {
+  margin: 5px 0 0 60px;
+  overflow-wrap: anywhere;
+}
+
+/* ---- third card: the values themselves ----
+
+   The first two cards say where the program shows up; this one shows what the
+   dashboard will actually list, in the Docs step's card anatomy so all three
+   read as one system. Its three rows are single-line on purpose: the panel is a
+   fixed-height band, so a long name or description has to clip rather than push
+   the footer off the baseline. */
+
+.onboarding-preview-card.ob-program-home {
+  min-height: 130px;
+}
+
+.onboarding-preview-mark.ob-program-home-mark {
+  border: 1px solid #3a3e3b;
+  border-radius: 4px;
+  background: #0b0e0d;
+  color: var(--onb-cream);
+}
+
+.ob-program-home .onboarding-preview-card-head {
+  gap: 24px;
+}
+
+.onboarding-preview-bullets.ob-program-home-list li {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .ob-program-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 780px) {
+  .ob-program-fields {
+    margin-top: 24px;
+  }
+}
+
+@media (max-width: 520px) {
+  .ob-program-fields {
+    gap: 18px;
+  }
+
+  .ob-program-msg-body {
+    font-size: 12.5px;
+  }
+
+  .onboarding-preview-bullets.ob-program-where-list,
+  .onboarding-preview-bullets.ob-program-home-list {
+    margin-left: 0;
+  }
+}

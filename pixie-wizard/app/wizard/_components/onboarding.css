@@ -1,0 +1,798 @@
+@font-face {
+  font-family: "Pixie Pixel";
+  src: url("/pixelify.woff2") format("woff2");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Shell for the hosted setup wizard. Geometry is tuned against the 1448x1086
+   reference: 1245px content column, 715px left column, 487px preview panel,
+   44px gutter. Everything floats directly on the night art — no page scrim and
+   no rule above the footer. The step-content primitives (copy block, form
+   controls, right-hand preview) live in onboarding-shared.css. */
+.onboarding-page {
+  /* The asset's own sky colour: the art image only starts at ~35% of the page
+     height, so anything else leaves a lighter band above it. */
+  --onb-page: #08110d;
+  --onb-surface: #121715;
+  --onb-surface-raised: #141816;
+  --onb-line: #2a2f2c;
+  --onb-line-step: #383c39;
+  --onb-line-panel: #2e3230;
+  --onb-cream: #ecebe4;
+  --onb-muted: #a9ada8;
+  --onb-dim: #b5b8b3;
+  --onb-lime: #9fe35a;
+  --onb-lime-fill: #a1f75e;
+  --onb-lime-deep: #6da644;
+  --onb-lime-ink: #0d1a07;
+  position: relative;
+  min-height: 100dvh;
+  overflow-x: clip;
+  background: var(--onb-page);
+  color: var(--onb-cream);
+  font-family: var(--font-sans), "Inter", system-ui, sans-serif;
+  font-size: 16px;
+  isolation: isolate;
+}
+
+.onboarding-page *,
+.onboarding-page *::before,
+.onboarding-page *::after {
+  box-sizing: border-box;
+}
+
+.onboarding-page ::selection {
+  background: var(--onb-lime);
+  color: #07100d;
+}
+
+.onboarding-page :focus-visible {
+  outline: 2px solid var(--onb-lime);
+  outline-offset: 3px;
+}
+
+.onboarding-shell {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  width: min(1245px, calc(100% - 48px));
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 28px 0 24px;
+  flex-direction: column;
+}
+
+/* ---------------------------------------------------------------- header -- */
+
+.onboarding-header {
+  display: flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.onboarding-logo {
+  position: relative;
+  top: 0;
+  left: -5px;
+  color: var(--onb-cream);
+  font-family: "Pixie Pixel", "Courier New", monospace;
+  font-size: 29px;
+  font-weight: 400;
+  line-height: 1;
+  text-decoration: none;
+}
+
+.onboarding-logo span {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-top: 7px;
+  margin-left: 7px;
+  vertical-align: top;
+  border-radius: 0;
+  background: var(--onb-lime-fill);
+  font-size: 0;
+}
+
+/* Three quiet controls, vertically centred on the logo and right-aligned to the
+   shell edge: a section label, a Core-reachability note, and a real exit link. */
+.onboarding-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  line-height: 1;
+}
+
+.onboarding-setup-label {
+  color: #a9ada8;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.onboarding-sync-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  color: #a9ada8;
+  font-size: 12px;
+  cursor: help;
+}
+
+.onboarding-sync-dot {
+  display: block;
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: #8a7a4e;
+}
+
+.onboarding-exit {
+  padding: 6px 10px;
+  border: 1px solid #373c39;
+  border-radius: 3px;
+  color: var(--onb-cream);
+  font-size: 12px;
+  line-height: 1.1;
+  text-decoration: none;
+  transition: border-color 90ms steps(2, end), color 90ms steps(2, end);
+}
+
+.onboarding-exit:hover {
+  border-color: var(--onb-lime);
+  color: var(--onb-lime);
+}
+
+/* --------------------------------------------------------------- stepper -- */
+
+.onboarding-stepper {
+  display: flex;
+  width: 1039px;
+  max-width: 100%;
+  margin: 35px auto 0;
+  padding-top: 26px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.onboarding-step-item {
+  position: relative;
+  flex: 0 0 155px;
+  min-width: 0;
+}
+
+.onboarding-step-button {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 110px;
+  align-items: center;
+  padding: 28px 6px 0;
+  border: 1.5px solid var(--onb-line-step);
+  border-radius: 4px;
+  background: transparent;
+  color: #d8d8d2;
+  cursor: pointer;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 90ms steps(2, end), background-color 90ms steps(2, end), color 90ms steps(2, end);
+}
+
+.onboarding-step-button:hover {
+  border-color: #5d635e;
+  color: var(--onb-cream);
+}
+
+.onboarding-step-button[data-state="active"] {
+  padding: 27px 5px 0;
+  border: 2.5px solid var(--onb-lime-fill);
+  background: #081107;
+  color: var(--onb-lime);
+}
+
+.onboarding-step-number {
+  position: absolute;
+  top: -14px;
+  left: 50%;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  transform: translateX(-50%);
+  place-items: center;
+  border-radius: 50%;
+  background: #3f403f;
+  color: #e0e0d9;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.onboarding-step-button[data-state="active"] .onboarding-step-number {
+  background: var(--onb-lime-fill);
+  color: var(--onb-lime-ink);
+}
+
+.onboarding-step-icon {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: currentColor;
+}
+
+.onboarding-stepper .onboarding-step-label {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  margin: 0;
+  color: currentColor;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.onboarding-step-connector {
+  position: absolute;
+  top: 50px;
+  right: calc(100% + 8px);
+  left: auto;
+  width: 50px;
+  border-top: 1px dashed #4e5350;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------ step shell -- */
+
+.onboarding-form {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.onboarding-main-grid {
+  display: grid;
+  min-height: 0;
+  margin-top: 40px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.onboarding-step-section {
+  min-width: 0;
+}
+
+/* --------------------------------------------------------------- footer -- */
+
+.onboarding-footer {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 35px;
+}
+
+.onboarding-footer-progress {
+  display: none;
+  align-items: center;
+  gap: 12px;
+  color: var(--onb-muted);
+  font-size: 11px;
+}
+
+.onboarding-footer-progress-bar {
+  display: flex;
+  gap: 4px;
+}
+
+.onboarding-footer-progress-bar span {
+  display: block;
+  width: 22px;
+  height: 6px;
+  background: #383c39;
+}
+
+.onboarding-footer-progress-bar span[data-filled="true"] {
+  background: var(--onb-lime-fill);
+}
+
+/* -------------------------------------------------------------- buttons -- */
+
+.onboarding-button {
+  position: relative;
+  display: inline-flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0 24px;
+  border: 0;
+  background: #0e110f;
+  color: var(--onb-cream);
+  cursor: pointer;
+  clip-path: polygon(5px 0, calc(100% - 5px) 0, 100% 5px, 100% calc(100% - 5px), calc(100% - 5px) 100%, 5px 100%, 0 calc(100% - 5px), 0 5px);
+  font-family: var(--font-sans), "Inter", system-ui, sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  transition: background-color 90ms steps(2, end), color 90ms steps(2, end), transform 90ms steps(2, end);
+}
+
+.onboarding-button:hover {
+  background: #171d19;
+}
+
+.onboarding-button:active {
+  transform: translateY(2px);
+}
+
+.onboarding-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.onboarding-button:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--onb-lime);
+}
+
+.onboarding-button-quiet {
+  background: #0e110f;
+  box-shadow: inset 0 0 0 1.5px #7c7e7e;
+  color: var(--onb-cream);
+}
+
+.onboarding-button-quiet:hover {
+  background: #171d19;
+  box-shadow: inset 0 0 0 1.5px #9a9d9c;
+}
+
+.onboarding-button-quiet:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--onb-lime);
+}
+
+.onboarding-button-primary {
+  background: var(--onb-lime-fill);
+  box-shadow: inset 0 -3px 0 var(--onb-lime-deep);
+  color: var(--onb-lime-ink);
+}
+
+.onboarding-button-primary:hover {
+  background: #b0f970;
+  box-shadow: inset 0 -3px 0 var(--onb-lime-deep);
+}
+
+.onboarding-button-primary:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 -1px 0 var(--onb-lime-deep);
+}
+
+.onboarding-button-primary:focus-visible {
+  box-shadow: inset 0 -3px 0 var(--onb-lime-deep), inset 0 0 0 2px #14240b;
+}
+
+.onboarding-button-arrow {
+  display: grid;
+  place-items: center;
+}
+
+.onboarding-button-arrow svg {
+  display: block;
+}
+
+.onboarding-footer .onboarding-button {
+  min-width: 169px;
+}
+
+.onboarding-footer .onboarding-button-primary {
+  min-width: 190px;
+}
+
+/* ------------------------------------------- shared bits used by 2nd..5th -- */
+
+.onboarding-helper-add,
+.onboarding-testbox-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.onboarding-helper-list {
+  display: grid;
+  gap: 10px;
+  margin: 18px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-helper-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--onb-line);
+  border-radius: 3px;
+  flex-wrap: wrap;
+}
+
+.onboarding-helper-avatar {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  border: 1px solid var(--onb-line);
+  background: #0b100e;
+  color: var(--onb-cream);
+  font-size: 14px;
+  font-weight: 700;
+  overflow: hidden;
+}
+
+.onboarding-helper-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.onboarding-helper-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.onboarding-helper-name {
+  display: block;
+  color: var(--onb-cream);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.onboarding-helper-role {
+  display: block;
+  margin-top: 3px;
+  color: var(--onb-muted);
+  font-size: 11px;
+}
+
+.onboarding-helper-remove {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--onb-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.onboarding-helper-remove:hover {
+  color: var(--onb-lime);
+}
+
+.onboarding-helper-tags {
+  display: flex;
+  width: 100%;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.onboarding-tag {
+  padding: 4px 9px;
+  border: 1px solid var(--onb-line);
+  border-radius: 2px;
+  background: #0b100e;
+  color: var(--onb-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.onboarding-tag[data-on="true"] {
+  border-color: var(--onb-lime);
+  background: rgba(24, 46, 14, 0.6);
+  color: var(--onb-lime);
+}
+
+.onboarding-checklist {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-check-row {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid var(--onb-line);
+}
+
+.onboarding-check-row:first-child {
+  border-top: 1px solid var(--onb-line);
+}
+
+.onboarding-check {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--onb-lime-fill);
+  color: var(--onb-lime-ink);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.onboarding-check-row[data-state="todo"] .onboarding-check {
+  border: 1px solid #7a4436;
+  background: transparent;
+  color: #ffb899;
+}
+
+.onboarding-check-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.onboarding-check-label {
+  display: block;
+  color: var(--onb-cream);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.onboarding-check-problem {
+  display: block;
+  margin-top: 4px;
+  color: var(--onb-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.onboarding-link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--onb-lime);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.onboarding-testbox {
+  margin-top: 20px;
+}
+
+.onboarding-test-answer {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--onb-line);
+  border-radius: 3px;
+  color: var(--onb-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.onboarding-test-answer strong {
+  display: block;
+  color: var(--onb-cream);
+  font-weight: 600;
+}
+
+.onboarding-test-answer p {
+  margin: 6px 0 0;
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------ responsive -- */
+
+@media (max-width: 1290px) {
+  .onboarding-shell {
+    width: calc(100% - 48px);
+  }
+
+  .onboarding-stepper {
+    width: 100%;
+  }
+
+  .onboarding-step-item {
+    flex: 1 1 0;
+  }
+}
+
+@media (max-width: 780px) {
+  .onboarding-shell {
+    width: calc(100% - 28px);
+    padding-top: 18px;
+  }
+
+  .onboarding-logo {
+    top: 4px;
+    font-size: 22px;
+  }
+
+  .onboarding-header-actions {
+    gap: 10px;
+  }
+
+  .onboarding-setup-label {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+  }
+
+  .onboarding-sync-note,
+  .onboarding-exit {
+    font-size: 11px;
+  }
+
+  .onboarding-exit {
+    padding: 5px 8px;
+  }
+
+  .onboarding-stepper {
+    margin-top: 26px;
+    padding-top: 18px;
+  }
+
+  .onboarding-step-button,
+  .onboarding-step-button[data-state="active"] {
+    height: 92px;
+    padding: 26px 4px 0;
+  }
+
+  .onboarding-stepper .onboarding-step-label {
+    font-size: 12px;
+  }
+
+  .onboarding-step-icon {
+    width: 26px;
+    height: 26px;
+  }
+
+  .onboarding-step-icon svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .onboarding-step-number {
+    top: -10px;
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
+  }
+
+  .onboarding-step-connector {
+    top: 44px;
+    right: 4px;
+    left: auto;
+    width: 8px;
+    border-top: 0;
+    border-left: 1px dashed #4e5350;
+  }
+
+  .onboarding-main-grid {
+    margin-top: 26px;
+  }
+
+  .onboarding-footer {
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 520px) {
+  .onboarding-footer {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .onboarding-footer .onboarding-button,
+  .onboarding-footer .onboarding-button-primary {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+/* Below 600px the five tiles shrink to 74px boxes with 9px labels, so the nav
+   hands over to one row: "Step N of 5" and the step name on the left, five
+   tappable segments on the right. The geometry is unconditional; the media
+   query at the end of the file only picks which indicator is live. */
+.onboarding-stepper-compact {
+  display: none;
+  margin-top: 20px;
+  align-items: center;
+  gap: 4px;
+}
+
+.onboarding-compact-meta {
+  display: grid;
+  margin-right: auto;
+  gap: 3px;
+}
+
+.onboarding-compact-eyebrow {
+  color: var(--onb-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+
+.onboarding-compact-name {
+  color: var(--onb-cream);
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* The bar is 22x6 like the footer's progress bar, drawn by ::before so the
+   button can stay a 32px tap target. The current step is the taller bar. */
+.onboarding-compact-segment {
+  display: grid;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  place-items: center;
+  cursor: pointer;
+}
+
+.onboarding-compact-segment::before {
+  width: 22px;
+  height: 6px;
+  background: #3a3d3b;
+  content: "";
+}
+
+.onboarding-compact-segment[data-state="done"]::before,
+.onboarding-compact-segment[data-state="active"]::before {
+  background: var(--onb-lime-fill, #a2f660);
+}
+
+.onboarding-compact-segment[data-state="active"]::before {
+  height: 9px;
+}
+
+.onboarding-compact-segment[data-state="todo"]:hover::before { background: #4d524f; }
+
+.onboarding-compact-segment:focus-visible {
+  outline-offset: 0;
+}
+
+/* At 600px the tiles give way to the compact row above, which carries the same
+   "Step N of 5" text as the copy block's own eyebrow. */
+@media (max-width: 600px) {
+  .onboarding-stepper { display: none; }
+  .onboarding-stepper-compact { display: flex; }
+  .onboarding-page .onboarding-step-eyebrow { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding-page *,
+  .onboarding-page *::before,
+  .onboarding-page *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+  }
+}

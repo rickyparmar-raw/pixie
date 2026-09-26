@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/session";
+import { getSession, isLocalDemoEnabled } from "@/lib/session";
 import { creatorEligible } from "@/lib/programClaim";
 import { coreSlackChannels, coreConfigured } from "@/lib/pixieCore";
 import { HostedSetupView } from "./_components/HostedSetupView";
@@ -45,5 +45,14 @@ export default async function WizardPage() {
     }
   }
 
-  return <HostedSetupView channels={channels} coreLive={coreLive} />;
+  const demoMode = session.hcaId === "dev-local" && isLocalDemoEnabled();
+  return (
+    <HostedSetupView
+      channels={channels}
+      coreLive={coreLive}
+      demoMode={demoMode}
+      userKey={session.hcaId}
+      creatorSlackId={session.slackId ?? null}
+    />
+  );
 }

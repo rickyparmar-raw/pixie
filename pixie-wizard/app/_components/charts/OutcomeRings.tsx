@@ -23,17 +23,27 @@ export function OutcomeRings({ rates }: { rates: readonly OutcomeRate[] }) {
 
   return (
     <div className="flex flex-wrap items-center gap-x-10 gap-y-6">
-      <RingChart data={data} size={188} strokeWidth={11} ringGap={7}>
+      {/* The arcs draw fast and almost together: Pixie's motion language is a
+          90ms step, and a ring that takes a second to appear reads as an empty
+          chart. Square caps and no hover glow — drawn, not lit. */}
+      <RingChart
+        data={data}
+        size={176}
+        strokeWidth={8}
+        ringGap={5}
+        enterTransition={{ duration: 0.3, ease: "easeOut" }}
+        enterStaggerScale={0.2}
+      >
         {data.map((ring, index) => (
-          <Ring index={index} key={ring.label} />
+          <Ring index={index} key={ring.label} lineCap="butt" showGlow={false} />
         ))}
         <RingCenter>
           {({ value, label, isHovered }) => (
             <div className="text-center">
-              <p className="font-heading text-2xl font-semibold tabular-nums text-text">
+              <p className="font-mono text-[26px] leading-none tabular-nums text-text">
                 {isHovered ? Math.round(value) : lead.pct}%
               </p>
-              <p className="mt-0.5 text-[11px] text-text-muted">{isHovered ? label : lead.label}</p>
+              <p className="mt-1.5 text-[11px] text-text-muted">{isHovered ? label : lead.label}</p>
             </div>
           )}
         </RingCenter>
@@ -43,7 +53,7 @@ export function OutcomeRings({ rates }: { rates: readonly OutcomeRate[] }) {
         {rates.map((rate) => (
           <div key={rate.label} className="flex items-baseline justify-between gap-4 border-b border-line pb-2.5 last:border-0">
             <dt className="inline-flex items-center gap-2 text-xs text-text-muted">
-              <span aria-hidden className="size-2 rounded-full" style={{ background: rate.color }} />
+              <span aria-hidden className="size-1.5 shrink-0 rounded-[1px]" style={{ background: rate.color }} />
               {rate.label}
             </dt>
             <dd className="text-right">

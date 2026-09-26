@@ -1,5 +1,6 @@
 import { test, expect, afterEach } from "bun:test";
 import { programSlugFor, creatorEligible } from "./programClaim";
+import { isLocalDemoEnabled, isLoopbackHost } from "./session";
 
 const savedCreatorAllowlist = process.env.PIXIE_WIZARD_CREATOR_ALLOWLIST;
 afterEach(() => {
@@ -12,6 +13,22 @@ test("programSlugFor derives a safe slug or rejects", () => {
   expect(programSlugFor("Solvable!")).toBe("solvable");
   expect(() => programSlugFor("x")).toThrow();
   expect(() => programSlugFor("has space and $ymbols ok")).not.toThrow();
+});
+
+test("demo login is limited to loopback development URLs", () => {
+  expect(isLocalDemoEnabled("development", "http://localhost:4901", "1")).toBe(true);
+  expect(isLocalDemoEnabled("development", "http://127.0.0.1:4901", "1")).toBe(true);
+  expect(isLocalDemoEnabled("development", "http://[::1]:4901", "1")).toBe(true);
+  expect(isLocalDemoEnabled("development", "https://pixie.example.com")).toBe(false);
+  expect(isLocalDemoEnabled("development", "http://localhost:4901", "0")).toBe(false);
+  expect(isLocalDemoEnabled("development", "http://localhost:4901")).toBe(false);
+  expect(isLocalDemoEnabled("production", "http://localhost:4901", "1")).toBe(false);
+  expect(isLocalDemoEnabled("production", "http://localhost:4901", "0")).toBe(false);
+  expect(isLocalDemoEnabled("production", "https://pixie.example.com", "1")).toBe(false);
+  expect(isLoopbackHost("localhost:4901")).toBe(true);
+  expect(isLoopbackHost("127.0.0.1:4901")).toBe(true);
+  expect(isLoopbackHost("attacker.example:443")).toBe(false);
+  expect(isLocalDemoEnabled("development", "not-a-url")).toBe(false);
 });
 
 test("program creation is invite-only: unset creator allowlist denies everyone", () => {

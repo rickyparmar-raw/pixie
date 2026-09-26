@@ -2,7 +2,8 @@ import Link from "next/link";
 import { requireProgramMembership } from "@/lib/programAccess";
 import { coreTicketSearch } from "@/lib/pixieCore";
 import { resolveIdentities, labelFor } from "@/lib/identity";
-import { PageHeader, CoreError, StatusDot, EmptyState } from "@/app/_components/DashboardShell";
+import { PageHeader, CoreError, StatusBadge, Chip, EmptyState, Mono } from "@/app/_components/DashboardShell";
+import { IconSearch, IconChevronRight } from "@/app/_components/icons";
 import { timeAgo } from "@/app/_components/format";
 import { TicketResolveButton } from "./TicketResolveButton";
 
@@ -32,6 +33,15 @@ const VIEWS: Array<[value: string, label: string]> = [
 ];
 
 const LIMIT = 25;
+
+// A status is operational text, so it reads in mono with a square marker in its
+// tone: mint resolved, tang waiting, danger failed. `urgent` is the one
+// priority that is a problem rather than a hint.
+function priorityTone(priority: string): string {
+  if (priority === "urgent") return "text-danger";
+  if (priority === "high") return "text-tang";
+  return "";
+}
 
 function withParams(base: Record<string, string | undefined>, patch: Record<string, string | undefined>): string {
   const p = new URLSearchParams();
@@ -73,44 +83,65 @@ export default async function TicketsPage({
   const base = { status: query.status, q: query.q, assignee: query.assignee };
   const identities = await resolveIdentities(rows.flatMap((t) => [t.requester_id, t.assignee_id]));
 
+  const firstShown = rows.length === 0 ? 0 : (page - 1) * LIMIT + 1;
+  const lastShown = (page - 1) * LIMIT + rows.length;
+
   return (
     <>
       <PageHeader title="Tickets" description="Every support request Pixie has opened for this program." />
 
-      {/* filters — a text row, a search box, an optional assignee narrow */}
-      <div className="mb-6 space-y-4">
-        <nav className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          {VIEWS.map(([value, label]) => {
-            const active = (query.status ?? "") === value;
-            return (
-              <Link
-                key={label}
-                href={withParams(base, { status: value || undefined, page: undefined })}
-                aria-current={active ? "page" : undefined}
-                className={`border-b-2 pb-1 transition-colors ${
-                  active ? "border-brand text-text" : "border-transparent text-text-muted hover:text-text"
-                }`}
-              >
-                {label}
-                {active && total > 0 && <span className="ml-1.5 font-mono text-xs text-text-muted">{total}</span>}
-              </Link>
-            );
-          })}
-        </nav>
-        <form method="get" className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+      {/* views — the statuses a helper actually filters by, then a search row */}
+      <div className="mb-5 space-y-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <nav aria-label="Ticket views" className="flex flex-wrap items-center gap-1.5">
+            {VIEWS.map(([value, label]) => {
+              const active = (query.status ?? "") === value;
+              return (
+                <Link
+                  key={label}
+                  href={withParams(base, { status: value || undefined, page: undefined })}
+                  aria-current={active ? "page" : undefined}
+                  className={`pixie-button pixie-button-sm ${
+                    active
+                      ? "bg-brand/15 text-text"
+                      : "pixie-button-ghost text-text-muted hover:text-text"
+                  }`}
+                >
+                  {label}
+                  {active && total > 0 && <span className="font-mono text-[12px] text-brand">{total}</span>}
+                </Link>
+              );
+            })}
+          </nav>
+          {!searchError && rows.length > 0 && (
+            <p className="ml-auto font-mono text-[12px] text-text-muted">
+              {firstShown}–{lastShown} of {total}
+            </p>
+          )}
+        </div>
+
+        <form method="get" className="flex flex-col gap-2 sm:flex-row sm:items-center">
           {query.status && <input type="hidden" name="status" value={query.status} />}
-          <input
-            name="q"
-            defaultValue={query.q ?? ""}
-            placeholder="Search questions and summaries"
-            className="w-full min-w-0 rounded-[var(--radius)] border border-line bg-panel-2 px-3 py-1.5 text-sm text-text placeholder:text-text-muted focus:border-brand focus:outline-none sm:flex-1"
-          />
-          <div className="flex gap-2">
+          <div className="relative min-w-0 flex-1">
+            <IconSearch
+              size={16}
+              className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted"
+            />
+            <input
+              name="q"
+              defaultValue={query.q ?? ""}
+              placeholder="Search questions and summaries"
+              aria-label="Search questions and summaries"
+              className="pixie-input pl-9"
+            />
+          </div>
+          <div className="flex items-center gap-2">
             <input
               name="assignee"
               defaultValue={query.assignee ?? ""}
               placeholder="Assignee ID"
-              className="min-w-0 flex-1 rounded-[var(--radius)] border border-line bg-panel-2 px-2.5 py-1.5 font-mono text-xs text-text placeholder:text-text-muted focus:border-brand focus:outline-none sm:w-36 sm:flex-none"
+              aria-label="Filter by assignee Slack user ID"
+              className="pixie-input min-w-0 flex-1 font-mono text-xs sm:w-40 sm:flex-none"
             />
             <button type="submit" className="pixie-button pixie-button-quiet">Search</button>
           </div>
@@ -126,49 +157,60 @@ export default async function TicketsPage({
         />
       ) : (
         <ul className="divide-y divide-line border-y border-line">
-          {rows.map((t) => (
-            <li key={t.id} className="grid gap-x-4 gap-y-1 py-3 sm:grid-cols-[1fr_auto]">
-              <Link href={`/programs/${id}/tickets/${t.id}`} className="group min-w-0">
-                <p className="truncate text-sm text-text group-hover:text-brand">
-                  <span className="font-mono text-xs text-text-muted">#{t.id}</span> {t.summary || t.question}
-                </p>
-                <p className="mt-0.5 truncate text-xs text-text-muted">
-                  {labelFor(identities, t.requester_id)}
-                  {t.category ? ` · ${t.category}` : ""}
-                  {t.priority && t.priority !== "normal" ? ` · ${t.priority}` : ""}
-                </p>
-              </Link>
-              <div className="flex items-center gap-4 sm:flex-col sm:items-end sm:gap-1">
-                <StatusDot status={t.status}>{t.status.replace(/_/g, " ")}</StatusDot>
-                <span className="text-xs text-text-muted">
-                  {t.assignee_id ? `${labelFor(identities, t.assignee_id)} · ` : ""}
-                  {timeAgo(t.created_at)}
-                </span>
-                {RESOLVABLE_STATUSES.has(t.status) && (
-                  <TicketResolveButton programId={id} ticketId={t.id} />
-                )}
-              </div>
-            </li>
-          ))}
+          {rows.map((t) => {
+            const priority = t.priority && t.priority !== "normal" ? t.priority : null;
+            return (
+              <li key={t.id} className="group">
+                <div className="-mx-2.5 flex flex-col gap-2.5 rounded-[3px] px-2.5 py-2.5 transition-colors group-hover:bg-panel-2 sm:flex-row sm:items-center sm:gap-6">
+                  <Link href={`/programs/${id}/tickets/${t.id}`} className="min-w-0 flex-1">
+                    <span className="flex items-baseline gap-2.5">
+                      <span className="shrink-0 font-mono text-[12px] text-text-muted">#{t.id}</span>
+                      <span className="min-w-0 truncate text-sm text-text transition-colors group-hover:text-brand">
+                        {t.summary || t.question}
+                      </span>
+                    </span>
+                    <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px] text-text-muted">
+                      <span>{labelFor(identities, t.requester_id)}</span>
+                      {t.category ? <Chip>{t.category}</Chip> : null}
+                      {priority ? <span className={`pixie-chip ${priorityTone(priority)}`}>{priority}</span> : null}
+                    </span>
+                  </Link>
+                  <div className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 sm:min-w-[17rem] sm:flex-nowrap sm:justify-end">
+                    <StatusBadge status={t.status.replace(/_/g, " ")} />
+                    <span className="text-[12px] text-text-muted">
+                      {t.assignee_id ? `${labelFor(identities, t.assignee_id)} · ` : ""}
+                      <Mono>{timeAgo(t.created_at)}</Mono>
+                    </span>
+                    {RESOLVABLE_STATUSES.has(t.status) && (
+                      <TicketResolveButton programId={id} ticketId={t.id} />
+                    )}
+                  </div>
+                </div>
+              </li>
+            );
+          })}
         </ul>
       )}
 
       {pages > 1 && (
-        <div className="mt-6 flex items-center gap-5 text-sm text-text-muted">
-          <span className="font-mono text-xs">
-            {page} / {pages}
+        <nav aria-label="Ticket pages" className="mt-5 flex items-center gap-2">
+          <span className="mr-auto font-mono text-[12px] text-text-muted">
+            page {page} / {pages}
           </span>
           {page > 1 && (
-            <Link href={withParams(base, { page: String(page - 1) })} className="hover:text-text">
-              ← Newer
+            <Link
+              href={withParams(base, { page: String(page - 1) })}
+              className="pixie-button pixie-button-quiet pixie-button-sm"
+            >
+              <IconChevronRight size={16} className="rotate-180" /> Newer
             </Link>
           )}
           {page < pages && (
-            <Link href={withParams(base, { page: String(page + 1) })} className="hover:text-text">
-              Older →
+            <Link href={withParams(base, { page: String(page + 1) })} className="pixie-button pixie-button-quiet pixie-button-sm">
+              Older <IconChevronRight size={16} />
             </Link>
           )}
-        </div>
+        </nav>
       )}
     </>
   );

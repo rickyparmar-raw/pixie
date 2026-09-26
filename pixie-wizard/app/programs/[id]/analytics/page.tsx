@@ -76,24 +76,25 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
         description="Last 30 days. Every figure is counted from stored tickets, never estimated."
       />
 
-      <div className="space-y-12">
+      <div className="space-y-8">
         <Section title="Volume" description="Every question that arrived, and the share a person had to pick up.">
           <VolumeChart data={a.daily ?? []} aspectRatio="3 / 1" />
-          <div className="mt-8 border-t border-line pt-7">
+        </Section>
+
+        <Section title="Signal" description="Each stage between a question arriving and a ticket closing.">
           <SignalRail
             stages={[
               { label: "Questions", value: a.created },
-              { label: `${persona} answered`, value: a.aiAnswered },
+              { label: `${persona} answered`, value: a.aiAnswered, tone: "text-brand" },
               { label: "Needed a person", value: a.humanHandled, tone: "text-tang" },
-              { label: "Escalated", value: escalated, tone: "text-brand" },
+              { label: "Escalated", value: escalated, tone: "text-tang" },
               { label: "Resolved", value: resolved, tone: "text-mint" },
             ]}
           />
-          <p className="mt-5 text-xs text-text-muted">
+          <p className="mt-6 border-t border-line pt-4 text-[13px] text-text-muted">
             {Math.round(a.deflectionRate * 100)}% of resolved tickets never needed a person.{" "}
             {a.stale48h > 0 && `${a.stale48h} open past 48h.`}
           </p>
-          </div>
         </Section>
 
         <Section title="Response time" description="Median, per stage of the handoff.">
@@ -112,14 +113,14 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
               { label: "Duplicates", pct: pct(a.duplicateRate), color: "var(--chart-3)", detail: "already asked" },
             ]}
           />
-          <p className="mt-7 border-t border-line pt-5 text-xs text-text-muted">
-            <span className="font-mono text-sm text-text">{a.humanHandled}</span> of {a.created} handled by a person.
+          <p className="mt-7 border-t border-line pt-5 text-[13px] text-text-muted">
+            <span className="font-mono text-sm text-text tabular-nums">{a.humanHandled}</span> of {a.created} handled by a person.
           </p>
         </Section>
 
         <Section title="What they asked about" description="Share of questions by category.">
           {a.byCategory.length === 0 ? (
-            <EmptyState title="No categorised tickets yet." />
+            <EmptyState title="No categorised tickets yet." hint="Share appears once a question carries a category." />
           ) : (
             <SharePie
               shares={a.byCategory.map((c) => ({ label: c.category, value: c.n }))}
@@ -131,17 +132,20 @@ export default async function AnalyticsPage({ params }: { params: Promise<{ id: 
 
         <Section title="Helper workload" description="Open assigned, and resolved in the last 30 days.">
           {helpers.length === 0 ? (
-            <EmptyState title="No helper activity yet." />
+            <EmptyState title="No helper activity yet." hint="Bars appear once a helper is assigned or resolves a ticket." />
           ) : (
-            <ul className="space-y-3">
+            <ul className="divide-y divide-line">
               {helpers.map((h) => (
-                <li key={h.userId} className="grid grid-cols-[9rem_1fr_auto] items-center gap-3 text-sm">
-                  <span className="truncate text-xs text-text-muted">{labelFor(identities, h.userId)}</span>
-                  <span className="flex h-1.5 overflow-hidden rounded-full bg-line/50">
-                    <span className="bg-tang" style={{ width: `${(h.open / helperMax) * 100}%` }} />
-                    <span className="bg-mint" style={{ width: `${(h.resolved / helperMax) * 100}%` }} />
+                <li
+                  key={h.userId}
+                  className="grid grid-cols-1 gap-x-4 gap-y-1.5 py-3 first:pt-0 last:pb-0 sm:grid-cols-[10rem_1fr_auto] sm:items-center"
+                >
+                  <span className="truncate text-[13px] text-text-muted">{labelFor(identities, h.userId)}</span>
+                  <span className="flex h-1.5 overflow-hidden rounded-[1px] bg-line/60">
+                    <span className="h-full bg-tang" style={{ width: `${(h.open / helperMax) * 100}%` }} />
+                    <span className="h-full bg-mint" style={{ width: `${(h.resolved / helperMax) * 100}%` }} />
                   </span>
-                  <span className="font-mono text-xs tabular-nums text-text-muted">
+                  <span className="whitespace-nowrap text-right font-mono text-xs tabular-nums text-text-muted">
                     <span className="text-tang">{h.open}</span> open · <span className="text-mint">{h.resolved}</span> resolved
                   </span>
                 </li>

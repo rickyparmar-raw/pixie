@@ -11,7 +11,15 @@ describe("summarizeAnalytics", () => {
       programId: "b", created: 4, aiAnswered: 4, humanHandled: 0, stale48h: 0,
       byStatus: { resolved: 1, claimed: 1 }, gapCounts: {}, incidents: {},
       medianFirstResponseMs: null, medianResolveMs: null,
-    }])).toEqual({ questions: 12, aiAnswered: 9, escalated: 1, openTickets: 4, resolved: 4, stale: 1, faqGaps: 2, activeIncidents: 1 });
+    }])).toEqual({ questions: 12, aiAnswered: 9, escalated: 1, openTickets: 4, resolved: 4, stale: 1, faqGaps: 2, activeIncidents: 1, waitingTickets: 0, resolvedToday: null });
+  });
+
+  test("prefers Core openCount over counting terminal statuses as open", () => {
+    expect(summarizeAnalytics([{
+      programId: "core", created: 8, aiAnswered: 0, humanHandled: 0, stale48h: 0,
+      byStatus: { open: 2, closed: 3, duplicate: 2, spam: 1 }, gapCounts: {}, incidents: {},
+      openCount: 2, medianFirstResponseMs: null, medianResolveMs: null,
+    }])).toMatchObject({ openTickets: 2 });
   });
 });
 

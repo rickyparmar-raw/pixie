@@ -1,0 +1,412 @@
+/* Step-content primitives shared by all five setup steps: the copy block that
+   opens the left column, the form controls, and the right-hand "what Pixie will
+   know" panel. Shell geometry (page, header, stepper, footer, buttons) lives in
+   onboarding.css. This file is imported after it and the two share no selectors,
+   so the split does not change the cascade. */
+
+/* Pixelify ships a single static weight, so the reference's heavier page-title
+   lettering is reproduced by smearing each glyph one pixel in eight directions
+   in its own colour. */
+.onboarding-title {
+  text-shadow: 1px 0 0 currentColor, -1px 0 0 currentColor, 0 1px 0 currentColor, 0 -1px 0 currentColor,
+    1px 1px 0 currentColor, -1px 1px 0 currentColor, 1px -1px 0 currentColor, -1px -1px 0 currentColor;
+}
+
+/* ------------------------------------------------------------ step shell -- */
+
+.onboarding-docs-grid {
+  /* the reference column sits 1px right of true centre at 1448 */
+  position: relative;
+  left: 1px;
+  display: grid;
+  grid-template-columns: minmax(0, 715px) minmax(0, 487px);
+  gap: 43px;
+  /* stretch, not start: on the steps with a short left column the panel would
+     otherwise stop a few hundred px short of it and read as a stub. On Docs
+     the left column is the taller item, so its 2px top margin absorbs the row
+     and the panel lands on exactly the same box. */
+  align-items: stretch;
+}
+
+/* Every step's content band is at least as tall as the Docs one, so Back /
+   Continue sit at the same height on all five steps instead of jumping with
+   each form's length. Desktop only; stacked layouts flow naturally. */
+@media (min-width: 1051px) {
+  .onboarding-docs-grid {
+    min-height: 620px;
+  }
+}
+
+.onboarding-step-copy {
+  min-width: 0;
+}
+
+.onboarding-step-eyebrow,
+.onboarding-step-label {
+  margin: 0;
+  color: #b5b8b3;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+.onboarding-title {
+  margin: 10px 0 0;
+  color: var(--onb-cream);
+  font-family: "Pixie Pixel", "Courier New", monospace;
+  font-size: 58px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1;
+}
+
+.onboarding-lede {
+  max-width: 530px;
+  margin: 14px 0 0;
+  color: #dcdcd6;
+  font-size: 20px;
+  font-weight: 400;
+  line-height: 27px;
+}
+
+/* ------------------------------------------------------------- form bits -- */
+
+.onboarding-field {
+  display: block;
+  min-width: 0;
+  flex: 1;
+}
+
+.onboarding-field-label {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--onb-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.onboarding-fields-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.onboarding-field-full {
+  grid-column: 1 / -1;
+}
+
+.onboarding-input,
+.onboarding-select,
+.onboarding-textarea {
+  width: 100%;
+  border: 1px solid var(--onb-line);
+  border-radius: 3px;
+  background: #0b100e;
+  color: var(--onb-cream);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 90ms steps(2, end), background-color 90ms steps(2, end);
+}
+
+.onboarding-input,
+.onboarding-select {
+  min-height: 42px;
+  padding: 9px 12px;
+}
+
+.onboarding-textarea {
+  min-height: 100px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
+.onboarding-input::placeholder,
+.onboarding-textarea::placeholder {
+  color: #6a726c;
+}
+
+.onboarding-input:focus,
+.onboarding-select:focus,
+.onboarding-textarea:focus {
+  border-color: var(--onb-lime);
+  background: #101614;
+}
+
+.onboarding-hidden-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.onboarding-error {
+  margin: 10px 0 0;
+  padding: 9px 12px;
+  border: 1px solid #7a4436;
+  border-radius: 3px;
+  background: #2a1710;
+  color: #ffcbb0;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.onboarding-note {
+  margin: 16px 0 0;
+  color: var(--onb-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* -------------------------------------------------------- right preview -- */
+
+.onboarding-preview {
+  display: flex;
+  min-width: 0;
+  margin-top: 2px;
+  padding: 34px 24px 46px 25px;
+  border: 1px solid #262a28;
+  border-radius: 5px;
+  background: #0e110f;
+  flex-direction: column;
+}
+
+.onboarding-preview-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+}
+
+.onboarding-preview-spark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  margin-top: -4px;
+  place-items: center;
+  color: var(--onb-lime-fill);
+}
+
+.onboarding-preview-title {
+  margin: 0;
+  flex: 0 0 auto;
+  color: var(--onb-cream);
+  font-family: "Pixie Pixel", "Courier New", monospace;
+  font-size: 28px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+.onboarding-preview-copy {
+  max-width: 345px;
+  margin: 10px 0 0;
+  color: var(--onb-dim);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 21px;
+}
+
+.onboarding-preview-list {
+  display: grid;
+  gap: 12px;
+  margin-top: 27px;
+}
+
+.onboarding-preview-card {
+  position: relative;
+  display: flex;
+  min-height: 135px;
+  padding: 16px 18px 9px 23px;
+  border: 1px solid #232824;
+  border-radius: 4px;
+  background: #141816;
+  flex-direction: column;
+}
+
+.onboarding-preview-card-head {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.onboarding-preview-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  color: var(--onb-cream);
+}
+
+.onboarding-preview-mark svg {
+  display: block;
+}
+
+
+.onboarding-preview-name {
+  min-width: 0;
+  flex: 1;
+  color: var(--onb-cream);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.onboarding-preview-type {
+  display: block;
+  margin-top: 5px;
+  color: var(--onb-muted);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.28;
+}
+
+.onboarding-preview-check {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  margin-top: 1px;
+  place-items: center;
+  color: var(--onb-lime-fill);
+}
+
+.onboarding-preview-status {
+  align-self: flex-start;
+  margin-left: auto;
+  color: var(--onb-muted);
+  font-size: 12px;
+  line-height: 1.3;
+  text-align: right;
+}
+
+.onboarding-preview-bullets {
+  margin: 5px 0 0 60px;
+  padding: 0;
+  color: #cfd1cc;
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 21px;
+  list-style: none;
+}
+
+.onboarding-preview-bullets li {
+  position: relative;
+  padding-left: 16px;
+}
+
+.onboarding-preview-bullets li::before {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #83887f;
+  content: "";
+}
+
+.onboarding-preview-problem {
+  margin: 5px 0 0 60px;
+  color: #ffb899;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.onboarding-preview-remove {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--onb-dim);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0;
+  transition: opacity 90ms steps(2, end), color 90ms steps(2, end);
+}
+
+.onboarding-preview-card:hover .onboarding-preview-remove,
+.onboarding-preview-card:focus-within .onboarding-preview-remove {
+  opacity: 1;
+}
+
+.onboarding-preview-remove:hover {
+  color: var(--onb-lime);
+}
+
+.onboarding-preview-empty {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed var(--onb-line);
+  border-radius: 3px;
+  color: var(--onb-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.onboarding-preview-card:hover .onboarding-preview-check {
+  opacity: 0;
+}
+
+/* ------------------------------------------------------------ responsive -- */
+
+@media (max-width: 1050px) {
+  .onboarding-docs-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+
+  .onboarding-preview {
+    margin-top: 0;
+  }
+
+  .onboarding-title {
+    font-size: 44px;
+  }
+
+  .onboarding-lede {
+    font-size: 17px;
+    line-height: 24px;
+  }
+}
+
+@media (max-width: 780px) {
+  .onboarding-preview-copy {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 520px) {
+  .onboarding-title {
+    margin-top: 12px;
+    font-size: 34px;
+  }
+
+  .onboarding-lede {
+    margin-top: 12px;
+    font-size: 15px;
+    line-height: 22px;
+  }
+
+  .onboarding-preview {
+    padding: 20px 16px;
+  }
+
+  .onboarding-preview-title {
+    font-size: 22px;
+  }
+}

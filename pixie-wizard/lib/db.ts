@@ -6,6 +6,10 @@
 // them (see lib/hostedPrograms.ts, lib/programClaim.ts, and the ownership
 // checks in app/wizard/hostedActions.ts), never in database-side policies.
 import { Pool, type QueryResultRow } from "pg";
+import { newDb, DataType } from "pg-mem";
+import { randomUUID } from "crypto";
+import { readFileSync } from "fs";
+import { join } from "path";
 
 function required(name: string): string {
   const v = process.env[name];
@@ -16,8 +20,29 @@ function required(name: string): string {
 // Created on first use, not at import time — Next evaluates this module
 // while prerendering static pages where env vars may be absent.
 let _pool: Pool | null = null;
+let _localPool: ReturnType<ReturnType<typeof newDb>["adapters"]["createPg"]>["Pool"] | null = null;
+
+function localPool() {
+  if (!_localPool) {
+    const memory = newDb({ autoCreateForeignKeyIndices: true });
+    memory.registerExtension("pgcrypto", (schema) => {
+      schema.registerFunction({ name: "gen_random_uuid", returns: DataType.uuid, implementation: randomUUID, impure: true });
+    });
+    memory.public.none(readFileSync(join(process.cwd(), "db", "schema.sql"), "utf8"));
+    const { Pool: MemoryPool } = memory.adapters.createPg();
+    _localPool = new MemoryPool();
+    void _localPool.query(
+      `insert into hosted_programs (id, workspace_id, program_name, owner_hca_id)
+       values ('pixl', 'local', 'Pixl', 'dev-local')
+       on conflict (id) do nothing`,
+    );
+  }
+  return _localPool;
+}
+
 function pool(): Pool {
   if (!_pool) {
+    if (!process.env.DATABASE_URL && process.env.NODE_ENV !== "production") return localPool() as unknown as Pool;
     _pool = new Pool({
       connectionString: required("DATABASE_URL"),
       // Railway's private-network Postgres doesn't need or support TLS; a

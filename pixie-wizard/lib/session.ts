@@ -13,6 +13,25 @@ export interface WizardSession {
   exp: number;
 }
 
+export function isLoopbackHost(value: string): boolean {
+  try {
+    const url = new URL(value.includes("://") ? value : `http://${value}`);
+    const hostname = url.hostname.toLowerCase();
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]" || hostname === "::1";
+  } catch {
+    return false;
+  }
+}
+
+export function isLocalDemoEnabled(
+  nodeEnv = process.env.NODE_ENV,
+  baseUrl = process.env.BASE_URL,
+  demoFlag = process.env.PIXIE_DEMO_LOGIN,
+): boolean {
+  if (nodeEnv !== "development" || demoFlag !== "1") return false;
+  return isLoopbackHost(baseUrl ?? "");
+}
+
 function secret(): string {
   const s = process.env.SESSION_SECRET;
   if (!s) throw new Error("SESSION_SECRET is not set");

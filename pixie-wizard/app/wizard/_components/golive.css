@@ -1,0 +1,414 @@
+/* Go Live — "You're ready." step.
+   Same shell, same two-column grid, same surfaces as the Docs step: the
+   heading block and the preview panel come from onboarding.css, and every box
+   below the heading is the `ob-golive-` family. Colours and radii are lifted
+   from the variables and box styles Docs uses, so this step reads as the same
+   product; only the sizes are literal, to hold the type scale. */
+
+/* ---- Left column ------------------------------------------------------ */
+
+.ob-golive-main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+/* This column is budgeted, not free: the band is 623px tall so that Back /
+   Launch land at the same height as on every other step, and this column is the
+   one that fills it. Everything below is a trade — the checklist's 10px row gaps
+   are paid for out of the row padding, and the demo footer row is paid for out
+   of both — so no box may grow without something else giving the pixels back. */
+
+/* ---- Launch checklist -------------------------------------------------- */
+
+/* The surface wraps the list, not the other way round: the demo line is a
+   footer row of the same box, and a caption floating between two bordered
+   surfaces reads as belonging to neither. */
+.ob-golive-board {
+  margin: 28px 0 0;
+  padding: 3px 0 0;
+  border: 1px solid #262b29;
+  border-radius: 4px;
+  background: rgba(22, 27, 24, 0.97);
+}
+
+/* 10px of row spacing instead of a rule between rows. The reference's only
+   comparable surface — Docs' Knowledge quality — carries no internal rules,
+   and a full-bleed 1px separator across a 715px box reads as a table. */
+.ob-golive-checks {
+  display: flex;
+  margin: 0;
+  padding: 0;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+}
+
+/* 7px of padding, not 10: the three rows that carry only a label sit on 32.75px
+   of content, and every pixel of row height here comes straight out of the demo
+   footer row below. */
+.ob-golive-check {
+  display: flex;
+  min-width: 0;
+  min-height: 34px;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 7px 22px;
+}
+
+/* 18px, the same mark the Docs preview cards use. Three states: lime check
+   (done), muted clock (Core is unreachable — nothing to fix), and an empty ring
+   for a row that really is still to-do. */
+.ob-golive-check-mark {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  flex: 0 0 18px;
+  place-items: center;
+  color: var(--onb-lime-fill, #a2f660);
+}
+
+.ob-golive-check-mark svg {
+  display: block;
+}
+
+.ob-golive-check-mark[data-state="pending"] {
+  color: var(--onb-muted, #a9ada8);
+}
+
+.ob-golive-check-mark[data-state="todo"] {
+  border: 1.5px solid #4a504c;
+  border-radius: 50%;
+}
+
+.ob-golive-check-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.ob-golive-check-label {
+  display: block;
+  color: var(--onb-cream, #ecebe4);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.ob-golive-check-problem {
+  display: block;
+  margin-top: 4px;
+  color: var(--onb-muted, #a9ada8);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ob-golive-fix {
+  margin-top: 3px;
+  padding: 0;
+  flex: 0 0 auto;
+  border: 0;
+  background: none;
+  color: var(--onb-lime, #9fe35a);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ob-golive-fix:hover {
+  color: var(--onb-lime-fill, #a2f660);
+}
+
+/* ---- Demo note --------------------------------------------------------- */
+
+/* The checklist surface's footer row, not a caption between two boxes: the
+   reference keeps every supporting line inside a surface, and this one explains
+   the Launch button the shell owns, so it has to live where the user is already
+   reading the reasons Launch is or isn't ready. */
+.ob-golive-demo {
+  display: flex;
+  margin: 4px 0 0;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 6px 22px;
+  color: var(--onb-muted, #a9ada8);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.ob-golive-demo-mark {
+  margin-top: 1px;
+  flex: 0 0 auto;
+  color: var(--onb-muted, #a9ada8);
+}
+
+.ob-golive-demo-mark svg {
+  display: block;
+}
+
+/* ---- Test question ---------------------------------------------------- */
+
+.ob-golive-test {
+  margin-top: 12px;
+  padding: 18px 22px 14px;
+  border: 1px solid #252a28;
+  border-radius: 4px;
+  background: rgba(20, 24, 22, 0.97);
+}
+
+.ob-golive-test-label {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--onb-muted, #a9ada8);
+  font-size: 13px;
+}
+
+.ob-golive-test-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+/* 44px to match the input it sits beside — the reference's buttons are ~48px
+   with ~15px labels, and a 32px stub reads as a chip, not a control. Secondary
+   styling of the header's Exit link: dark fill, cream label, hairline border
+   that lights lime on hover. */
+.onboarding-input.ob-golive-input {
+  min-width: 0;
+  min-height: 44px;
+}
+
+.onboarding-button.ob-golive-ask {
+  min-height: 44px;
+  padding: 0 18px;
+  border: 1px solid #373c39;
+  border-radius: 3px;
+  background: #0e110f;
+  clip-path: none;
+  color: var(--onb-cream, #ecebe4);
+  font-size: 14px;
+  font-weight: 600;
+  transition: background-color 90ms steps(2, end), border-color 90ms steps(2, end);
+}
+
+.onboarding-button.ob-golive-ask:hover {
+  border-color: var(--onb-lime, #9fe35a);
+  background: #171d19;
+}
+
+.ob-golive-caption {
+  margin: 8px 0 0;
+  color: var(--onb-muted, #a9ada8);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Fixed height, filled by either the answer or its empty state, so asking a
+   question never shifts the boxes below it. */
+.ob-golive-result {
+  height: 82px;
+  margin-top: 8px;
+}
+
+.ob-golive-result-card,
+.ob-golive-result-empty {
+  height: 100%;
+}
+
+.ob-golive-result-card {
+  display: flex;
+  height: 100%;
+  justify-content: center;
+  padding: 10px 16px;
+  border: 1px solid #2a2f2d;
+  border-radius: 4px;
+  background: rgba(26, 31, 28, 0.97);
+  flex-direction: column;
+}
+
+.ob-golive-result-head {
+  display: flex;
+  margin: 0;
+  align-items: center;
+  gap: 8px;
+  color: var(--onb-cream, #ecebe4);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.ob-golive-arrow {
+  color: var(--onb-lime, #9fe35a);
+  font-weight: 400;
+}
+
+.ob-golive-tag,
+.ob-golive-who {
+  overflow-wrap: anywhere;
+}
+
+.ob-golive-tag {
+  color: var(--onb-lime, #9fe35a);
+}
+
+.ob-golive-result-body {
+  display: -webkit-box;
+  margin: 5px 0 0;
+  overflow: hidden;
+  color: var(--onb-muted, #a9ada8);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Plain text, no box: the surface already has a border and the input has one, so
+   a third dashed rectangle inside the same card is a border nobody can explain.
+   It still occupies the reserved 82px, so an answer never shifts what is below. */
+.ob-golive-result-empty {
+  display: flex;
+  margin: 0;
+  align-items: flex-start;
+  padding: 8px 0 0;
+  color: var(--onb-muted, #a9ada8);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* ---- Launch notes: pinned to the bottom of the column ----------------- */
+
+.ob-golive-notes {
+  margin-top: auto;
+  padding-top: 8px;
+}
+
+.ob-golive-note {
+  display: flex;
+  margin: 0;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--onb-muted, #a9ada8);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.onboarding-error.ob-golive-alert {
+  display: flex;
+  margin: 10px 0 0;
+  align-items: flex-start;
+  gap: 9px;
+}
+
+.ob-golive-alert-icon {
+  margin-top: 1px;
+  flex: 0 0 auto;
+  color: #ffb899;
+}
+
+/* ---- Right panel: what happens at launch ------------------------------ */
+
+/* The list takes whatever height the stretched panel has left over and splits
+   it three ways, so the cards stay equal and the panel never ends in a stub. */
+.ob-golive-plan {
+  display: grid;
+  min-height: 0;
+  margin: 28px 0 0;
+  flex: 1;
+  grid-template-rows: repeat(3, minmax(135px, 1fr));
+  gap: 13px;
+  padding: 0;
+  list-style: none;
+}
+
+.ob-golive-plan-card {
+  display: flex;
+  min-height: 0;
+  align-items: center;
+  padding: 14px 18px;
+  border: 1px solid #232824;
+  border-radius: 4px;
+  background: #141816;
+}
+
+/* Stepper badge, not a lime chip: same 22px circle, dark fill, light digit. */
+.ob-golive-plan-num {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  margin-right: 13px;
+  flex: 0 0 22px;
+  place-items: center;
+  border-radius: 50%;
+  background: #3b3e3c;
+  color: var(--onb-cream, #ecebe4);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.ob-golive-plan-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.ob-golive-plan-title {
+  display: flex;
+  align-items: center;
+  color: var(--onb-cream, #ecebe4);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.ob-golive-plan-note {
+  display: block;
+  margin-top: 6px;
+  color: var(--onb-muted, #a9ada8);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* ---- Small screens ---------------------------------------------------- */
+
+@media (max-width: 1050px) {
+  .ob-golive-board {
+    margin-top: 24px;
+  }
+
+  .ob-golive-plan {
+    margin-top: 24px;
+    flex: 0 0 auto;
+    grid-template-rows: none;
+  }
+}
+
+@media (max-width: 780px) {
+  .ob-golive-plan-card {
+    min-height: 116px;
+  }
+}
+
+@media (max-width: 520px) {
+  .ob-golive-check,
+  .ob-golive-demo {
+    padding: 12px 16px;
+  }
+
+  .ob-golive-check {
+    flex-wrap: wrap;
+  }
+
+  .ob-golive-test {
+    padding: 16px;
+  }
+
+  .ob-golive-test-row {
+    flex-direction: column;
+  }
+
+  .ob-golive-plan-card {
+    padding: 14px 16px;
+  }
+}

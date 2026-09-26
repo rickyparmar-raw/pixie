@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSession, ownsIdentifier } from "@/lib/session";
+import { getSession, isLocalDemoEnabled, ownsIdentifier } from "@/lib/session";
 import { creatorEligible, insertHostedProgram, claimHostedChannels } from "@/lib/programClaim";
 import { sourceUrlProblem } from "@/lib/sourceUrls";
 import { getHostedProgram, listHostedChannels, updateHostedProgram, markSyncState, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow, upsertWizardPerson, setWizardSuperadmin, setHostedHelperRole, revokeHostedHelper, isWizardSuperadmin, revokeWizardSuperadmin } from "@/lib/hostedPrograms";
@@ -12,9 +12,10 @@ import {
   syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot,
   coreChannelMembership, coreConfigured, coreHelpersSync, coreHelpers, coreRoutingExpertise,
   coreKnowledgePropose, coreKnowledgeReview, coreFaqPropose, coreMacroSave, coreMacroDelete,
-  coreMacroSend, coreIncidentDetect, coreIncidentAction, coreIncidentNotify,
-  coreRadarEvaluate, coreRadarAction, coreRetentionPolicy, coreRetentionSweep,
+  coreMacroSend, coreMacroBulk, coreIncidentDetect, coreIncidentManual, coreIncidentAction, coreIncidentNotify,
+  coreRadarEvaluate, coreRadarAction, coreRetentionPolicy, coreRetentionSweep, coreUserInfoBatch,
 } from "@/lib/pixieCore";
+import { HELPER_TAGS } from "@/lib/onboardingDraft";
 import { validateActivationGuards } from "@/lib/activationGuards";
 import type { ActionState } from "@/lib/types";
 import type { DocSource } from "@/lib/types";
@@ -63,24 +64,56 @@ function parseSources(formData: FormData): { sources: DocSource[]; error: string
   const types = formData.getAll("sourceType").map(String);
   const urls = formData.getAll("sourceUrl").map(String);
   const labels = formData.getAll("sourceLabel").map(String);
+  const contents = formData.getAll("sourceContent").map(String);
+  const jsonContents = formData.getAll("sourceContentJson").map(String);
+  const publicValues = formData.getAll("sourcePublic").map(String);
+  const siteUrls = formData.getAll("sourceSiteUrl").map(String);
+  const rowCount = Math.max(urls.length, types.length, contents.length, jsonContents.length);
+  if (rowCount > 20) return { sources: [], error: "Add no more than 20 sources at a time." };
   const sources: DocSource[] = [];
-  for (let i = 0; i < Math.max(urls.length, types.length); i++) {
+  let totalContentLength = 0;
+  for (let i = 0; i < rowCount; i++) {
     const url = (urls[i] || "").trim();
+    const rawContent = (contents[i] || "").trim();
+    const jsonContent = (jsonContents[i] || "").trim();
     const type = (types[i] || "").trim() as DocSource["type"];
-    // An empty optional row still submits a non-empty type — <select> always
-    // has some value selected, even one nobody touched — so "no URL" is what
-    // actually means "this row was left blank", not "type and URL both
-    // blank". Skip it regardless of what the leftover type value is.
-    if (!url) continue;
+    if (!url && !rawContent && !jsonContent) continue;
     if (!["url", "json-faq", "gdoc", "github-dir", "text"].includes(type)) {
       return { sources: [], error: `Source row ${i + 1} has an unknown type.` };
     }
-    if (!url) {
+    let content: unknown = rawContent || undefined;
+    if (jsonContent) {
+      try {
+        content = JSON.parse(jsonContent) as unknown;
+      } catch {
+        return { sources: [], error: `Source row ${i + 1} has invalid structured content.` };
+      }
+    }
+    const hasContent = content !== undefined && content !== "";
+    if (type === "text" && !hasContent) {
+      return { sources: [], error: `Source row ${i + 1} is missing its text content.` };
+    }
+    if (type !== "text" && type !== "json-faq" && !url) {
       return { sources: [], error: `Source row ${i + 1} is missing its URL.` };
     }
-    const problem = sourceUrlProblem(url);
-    if (problem) return { sources: [], error: `Row ${i + 1}: ${problem}` };
-    sources.push({ type, url, label: (labels[i] || "").trim() || undefined });
+    const sourceUrl = type === "text" ? undefined : url || undefined;
+    const sourceContent = type === "text" || (type === "json-faq" && !sourceUrl) ? content : undefined;
+    if (sourceUrl) {
+      const problem = sourceUrlProblem(sourceUrl);
+      if (problem) return { sources: [], error: `Row ${i + 1}: ${problem}` };
+    }
+    totalContentLength += rawContent.length + jsonContent.length;
+    if (totalContentLength > 300_000) return { sources: [], error: "Combined source content is too large." };
+    const label = (labels[i] || "").trim() || `Source ${i + 1}`;
+    sources.push({
+      type,
+      url: sourceUrl,
+      content: sourceContent,
+      name: label,
+      label,
+      public: publicValues[i] === "true" || undefined,
+      siteUrl: (siteUrls[i] || "").trim() || undefined,
+    });
   }
   return { sources, error: null };
 }
@@ -97,7 +130,18 @@ function flagOn(formData: FormData, name: string, fallback: boolean): boolean {
 // No Slack app, no tokens, no Railway, no AI keys. Double-submit collapses
 // onto the existing row via the live-slug unique index.
 export async function activateHostedProgram(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await requireHostedSession();
+  let session: Awaited<ReturnType<typeof requireHostedSession>>;
+  try {
+    session = await requireHostedSession();
+  } catch (err) {
+    if (err instanceof Error && err.message === "Unauthorized") {
+      return { error: "Your session expired. Sign in again — your setup is saved on this device." };
+    }
+    throw err;
+  }
+  if (session.hcaId === "dev-local" && isLocalDemoEnabled()) {
+    return { error: "Demo mode is preview-only. Start a real setup to activate a program." };
+  }
 
   const programName = String(formData.get("programName") ?? "").trim();
   const programSlug = String(formData.get("programSlug") ?? "").trim();
@@ -230,6 +274,15 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
     }).catch(() => null);
   }
 
+  // Expertise picked during onboarding ("U123:Hardware,Grants"). Best-effort
+  // like the helper sync above; it can be edited from the Helpers page later.
+  for (const row of formData.getAll("helperTags").map(String)) {
+    const [userId, rawTags = ""] = row.split(":");
+    const tags = rawTags.split(",").filter((tag) => (HELPER_TAGS as readonly string[]).includes(tag));
+    if (!allHelperMembers.includes(userId) || tags.length === 0) continue;
+    await coreRoutingExpertise(slug, { actorId: session.slackId || userId, userId, tags }).catch(() => null);
+  }
+
   await logHostedAudit({
     programId: slug,
     actorHcaId: session.hcaId,
@@ -269,6 +322,29 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
 
   redirect(`/programs/${slug}`);
   return { error: null };
+}
+
+// Onboarding's Helpers step: resolve Slack IDs to display names/avatars via
+// Core's cached identity lookup. Display identity only, never email.
+export async function lookupSlackPeople(ids: string[]): Promise<{
+  ok: boolean;
+  reason?: "offline" | "failed";
+  people: Record<string, { name: string; handle: string | null; avatarUrl: string | null } | null>;
+}> {
+  await requireHostedSession();
+  const wanted = [...new Set((Array.isArray(ids) ? ids : []).map(String).filter((id) => /^[UW][A-Z0-9]{8,14}$/.test(id)))].slice(0, 20);
+  if (wanted.length === 0) return { ok: true, people: {} };
+  if (!coreConfigured()) return { ok: false, reason: "offline", people: {} };
+  try {
+    const profiles = await coreUserInfoBatch(wanted);
+    const people = Object.fromEntries(wanted.map((id) => {
+      const p = profiles[id];
+      return [id, p ? { name: p.displayName || p.realName || p.username || id, handle: p.username, avatarUrl: p.avatarUrl } : null];
+    }));
+    return { ok: true, people };
+  } catch {
+    return { ok: false, reason: "failed", people: {} };
+  }
 }
 
 export async function saveHostedSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -590,6 +666,23 @@ export async function hostedMacroSend(_prev: ActionState, formData: FormData): P
   return { error: null };
 }
 
+export async function hostedMacroBulkSend(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const macroId = Number(formData.get("macroId") ?? "");
+  const selector = String(formData.get("selector") ?? "waiting_for_helper");
+  const category = String(formData.get("category") ?? "").trim() || undefined;
+  if (!programId || !macroId) return { error: "Pick a macro first." };
+  try {
+    const data = await coreMacroBulk(macroId, { actorId: session.slackId, selector, ...(category ? { category } : {}) });
+    revalidatePath(`/programs/${programId}/tickets`);
+    return { error: null, ok: true, data };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Bulk macro send failed." };
+  }
+}
+
 // Helpers: manual membership, expertise tags, reconciliation.
 export async function hostedHelperSave(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const programId = String(formData.get("programId") ?? "");
@@ -729,6 +822,23 @@ export async function hostedIncidentAction(input: {
     return { ok: true, data };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Incident action failed." };
+  }
+}
+
+export async function hostedManualIncident(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const publicMessage = String(formData.get("publicMessage") ?? "").trim();
+  if (!programId || !title || !publicMessage) return { error: "Title and the member message are required." };
+  try {
+    await coreIncidentManual(programId, { actorId: session.slackId, title, description: description || undefined, publicMessage });
+    revalidatePath(`/programs/${programId}/incidents`);
+    return { error: null, ok: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Incident creation failed." };
   }
 }
 

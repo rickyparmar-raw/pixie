@@ -5,6 +5,7 @@ import { RadarAxis } from "@/components/charts/radar-axis";
 import { RadarChart } from "@/components/charts/radar-chart";
 import { RadarGrid } from "@/components/charts/radar-grid";
 import { RadarLabels } from "@/components/charts/radar-labels";
+import { BarList, MiniBar } from "@/app/_components/DashboardShell";
 
 export type Strength = { tag: string; resolved: number; replies: number };
 
@@ -33,38 +34,46 @@ export function StrengthRadar({ strengths }: { strengths: readonly Strength[] })
   const [lead, ...rest] = scored;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-12 gap-y-8">
-      {/* Chrome recedes; default margin is too large. */}
+    <div className="grid items-center gap-x-10 gap-y-8 sm:grid-cols-2">
+      {/* Measured by its container, not a fixed 300px box: a fixed box paints
+          its axis labels outside itself and overflows a phone. */}
       <RadarChart
         data={[{ label: "Strengths", color: "var(--chart-1)", values }]}
         metrics={metrics}
-        size={300}
-        margin={44}
+        className="mx-auto w-full max-w-[340px]"
+        margin={64}
         levels={3}
       >
-        <RadarGrid showLabels={false} strokeOpacity={0.3} />
-        <RadarAxis strokeOpacity={0.25} />
-        <RadarLabels fontSize={11} offset={14} />
+        <RadarGrid showLabels={false} stroke="var(--color-line)" strokeOpacity={0.55} />
+        <RadarAxis stroke="var(--color-line)" strokeOpacity={0.4} />
+        <RadarLabels fontSize={11} offset={18} />
         <RadarArea index={0} showPoints={false} showGlow={false} />
       </RadarChart>
 
-      <div className="min-w-[12rem] flex-1">
-        <p className="text-xs text-text-muted">Strongest in</p>
-        <p className="font-heading mt-1 text-2xl font-semibold leading-none text-text">{lead.tag}</p>
-        <p className="mt-2 font-mono text-xs tabular-nums text-text-muted">
+      <div className="min-w-0">
+        <p className="pixie-eyebrow flex items-center gap-2 text-text-muted">
+          <span className="pixie-mark" aria-hidden="true" />
+          Strongest in
+        </p>
+        <p className="mt-2.5 truncate text-[15px] font-semibold leading-tight text-text">{lead.tag}</p>
+        <p className="mt-1.5 font-mono text-xs tabular-nums text-text-muted">
           {lead.resolved} resolved · {lead.replies} replied
         </p>
 
-        <dl className="mt-6 space-y-2 border-t border-line pt-4">
-          {rest.map((s) => (
-            <div key={s.tag} className="flex items-baseline justify-between gap-4">
-              <dt className="truncate text-xs text-text-muted">{s.tag}</dt>
-              <dd className="shrink-0 font-mono text-xs tabular-nums text-text-muted">
-                {s.resolved} · {s.replies}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <div className="mt-4 border-t border-line pt-4">
+          <BarList>
+            {rest.map((s) => (
+              <MiniBar
+                key={s.tag}
+                label={s.tag}
+                value={s.weight}
+                max={peak}
+                tone="bg-brand"
+                display={`${s.resolved} · ${s.replies}`}
+              />
+            ))}
+          </BarList>
+        </div>
       </div>
     </div>
   );

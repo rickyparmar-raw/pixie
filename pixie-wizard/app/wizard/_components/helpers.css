@@ -1,0 +1,465 @@
+/* Step 4 — Add your helpers.
+   Owns ob-helpers-*, plus two documented one-notch tightenings of the shared
+   preview card rhythm (the list gap and the card's bottom padding, both scoped
+   under .onboarding-preview) — this panel is the only one that carries two
+   cards *and* a rules list, and at the shared rhythm it alone overflowed the
+   620px band the other steps reserve for their footer. The two-column grid, the
+   heading block, the preview shell and the shared type scale all come from
+   onboarding.css, so this step inherits the Docs screen's geometry and tokens
+   instead of re-measuring them. The left column is one stack of equal-weight
+   bordered modules — the add field, then a row per person — using a single
+   shared outline and fill, and the chips borrow the wizard's one accent rather
+   than a second green of their own. */
+
+/* One outline and one fill, shared by the add module and every helper row. The
+   left column then reads as a stack of equal-weight bordered modules — the
+   grammar the reference sets with its drop zone, source cards and quality bar —
+   instead of a bare input row followed by cards of a different weight. */
+.ob-helpers-add,
+.ob-helpers-row {
+  border: 1px solid #262b29;
+  border-radius: 4px;
+  background: rgba(22, 27, 24, 0.97);
+}
+
+/* The column's vertical rhythm, in one place: 22px between the copy block and
+   the first module, 22px again before the caption that introduces the rows,
+   then 8 / 9 / 16px through the list and its footnote. The two rows and the
+   add module are the only tall items, so the total has to land inside the
+   620px band every step reserves for its footer — a few px here is the
+   difference between Back and Continue on the shared y and 10px below it. */
+.ob-helpers-add {
+  margin-top: 22px;
+  padding: 14px 16px;
+}
+
+.ob-helpers-add-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.ob-helpers-add-field {
+  display: block;
+  min-width: 0;
+  flex: 1;
+}
+
+/* 40px, the height the Docs step's own field row uses, so the two steps' form
+   controls are the same size on the same page. */
+.ob-helpers-input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 13px;
+  border: 1px solid var(--onb-line);
+  border-radius: 3px;
+  background: #0b100e;
+  color: var(--onb-cream);
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 80ms steps(2, end), background-color 80ms steps(2, end);
+}
+
+.ob-helpers-input::placeholder {
+  color: #6a726c;
+}
+
+.ob-helpers-input:focus {
+  border-color: var(--onb-lime);
+  background: #101614;
+}
+
+.ob-helpers-input[data-invalid="true"] {
+  border-color: #7a4436;
+}
+
+.ob-helpers-add-btn {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 26px;
+  border: 1px solid #565b57;
+  border-radius: 4px;
+  background: #0e1210;
+  color: var(--onb-cream);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  transition: border-color 80ms steps(2, end), background-color 80ms steps(2, end);
+}
+
+.ob-helpers-add-btn:hover {
+  border-color: #7c827b;
+  background: #151a18;
+}
+
+/* One small-caps label, used by the add field and by the routing walkthrough.
+   Sized and tracked off the STEP 4 OF 5 eyebrow so the two read as one
+   typographic tier instead of a caption buried under the form. */
+.ob-helpers-label {
+  display: block;
+  margin: 0 0 6px;
+  color: var(--onb-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  line-height: 1.45;
+  text-transform: uppercase;
+}
+
+.ob-helpers-hint,
+.ob-helpers-issue,
+.ob-helpers-expired,
+.ob-helpers-lookup {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ob-helpers-hint {
+  color: var(--onb-muted);
+}
+
+.ob-helpers-issue,
+.ob-helpers-expired {
+  color: #ffcbb0;
+}
+
+.ob-helpers-expired a {
+  color: var(--onb-lime);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.ob-helpers-lookup {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  color: var(--onb-muted);
+}
+
+.ob-helpers-lookup::before {
+  width: 5px;
+  height: 5px;
+  margin-top: 7px;
+  flex: 0 0 5px;
+  background: #4a4f4c;
+  content: "";
+}
+
+/* Caption for the whole row block, hung off the left text edge at the same tier
+   as every other hint in the column, and set at the module gap above it. */
+.ob-helpers-tags-hint {
+  margin: 22px 0 0;
+  color: var(--onb-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.ob-helpers-list {
+  display: grid;
+  gap: 9px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The row is a flex line so the remove button centres on the whole card —
+   avatar, name and chips together — rather than floating beside the name. */
+.ob-helpers-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+}
+
+.ob-helpers-row-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.ob-helpers-row-top {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Icon-tile treatment, the same one the source and quality marks on the Docs
+   screen sit in: a 1px outlined dark rounded square. An initial and a real
+   avatar share the frame, so a person who has an avatar image doesn't lose the
+   tile the letter was holding. */
+.ob-helpers-avatar {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid #3a3e3b;
+  border-radius: 4px;
+  background: #0e1210;
+  color: var(--onb-cream);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.ob-helpers-avatar img {
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  object-fit: cover;
+}
+
+.ob-helpers-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.ob-helpers-name {
+  display: block;
+  color: var(--onb-cream);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ob-helpers-sub {
+  display: block;
+  margin-top: 3px;
+  color: var(--onb-muted);
+  font-size: 12.5px;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Sits inside the row next to the chips, so it takes the chip outline rather
+   than the fainter one a lone element could get away with. */
+.ob-helpers-owner {
+  flex: none;
+  padding: 3px 9px;
+  border: 1px solid var(--onb-line-panel);
+  border-radius: 3px;
+  color: var(--onb-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ob-helpers-remove {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  place-items: center;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  background: none;
+  color: var(--onb-dim);
+  cursor: pointer;
+  transition: border-color 80ms steps(2, end), color 80ms steps(2, end);
+}
+
+.ob-helpers-remove:hover {
+  border-color: var(--onb-line);
+  color: var(--onb-cream);
+}
+
+/* Indented to the name's left edge so the chips read as belonging to the person
+   above them, not to the card. */
+.ob-helpers-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 11px 0 0 44px;
+}
+
+/* One accent for the whole wizard, so a chip borrows the same lime the active
+   step, the checks and Continue use. The selected state is that lime on the
+   text and a 1px lime border over a barely-there green wash — never a second,
+   duller green, which would read as a second accent rather than as the one. */
+.ob-helpers-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px;
+  border: 1px solid var(--onb-line-panel);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--onb-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+  transition: border-color 80ms steps(2, end), background-color 80ms steps(2, end), color 80ms steps(2, end);
+}
+
+.ob-helpers-tag:hover {
+  border-color: #4a4f4c;
+  color: var(--onb-cream);
+}
+
+.ob-helpers-tag[data-on="true"] {
+  border-color: var(--onb-lime);
+  background: rgba(159, 227, 90, 0.08);
+  color: var(--onb-lime);
+}
+
+.ob-helpers-empty {
+  margin: 20px 0 0;
+  padding: 24px 18px;
+  border: 1px dashed #4a4f4c;
+  border-radius: 4px;
+  background: rgba(24, 28, 26, 0.97);
+  color: var(--onb-muted);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.ob-helpers-foot {
+  max-width: 620px;
+  margin: 16px 0 0;
+  color: var(--onb-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+/* ---- Right panel: the routing walkthrough ---- */
+
+.ob-helpers-spark {
+  display: flex;
+  color: var(--onb-lime);
+}
+
+/* Same inter-card rhythm as the source cards on step 3, so the two preview
+   panels read as one system. One notch tighter, and the card's bottom padding
+   drops 9px -> 8px: this panel carries two routing cards *and* two rules, and
+   at the shared step-3 rhythm it alone pushed the band past the 620px every
+   step reserves for its footer, landing Back/Continue 30px lower than the
+   other four steps. */
+.onboarding-preview .onboarding-preview-list {
+  gap: 11px;
+}
+
+.onboarding-preview .onboarding-preview-card {
+  padding-bottom: 8px;
+}
+
+.ob-helpers-label-flow {
+  margin-bottom: 6px;
+}
+
+.ob-helpers-question {
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--onb-line);
+  border-radius: 4px;
+  background: rgba(26, 31, 28, 0.97);
+  color: var(--onb-cream);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.ob-helpers-link {
+  display: flex;
+  height: 16px;
+  align-items: center;
+  margin-left: 4px;
+  color: #7c827b;
+}
+
+.ob-helpers-link svg {
+  transform: rotate(90deg);
+}
+
+.ob-helpers-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 9px;
+  margin: 0;
+}
+
+.ob-helpers-chain .ob-helpers-link {
+  margin-left: 0;
+}
+
+.ob-helpers-target {
+  color: var(--onb-cream);
+  font-size: 15px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.ob-helpers-target[data-empty="true"] {
+  color: var(--onb-muted);
+}
+
+.ob-helpers-verdict {
+  margin: 8px 0 0;
+  color: var(--onb-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+/* Indented to the card text edge and using the same round-dot bullets as the
+   step 3 preview list, so the footnotes belong to the cards above them. They
+   sit outside the card list, so they take a section-sized gap rather than the
+   11px inter-card rhythm — and that gap stays inside the 620px reserve: the
+   panel's content lands 4px under the band, which is the slack that keeps this
+   step's footer on the shared y instead of 30px below it. */
+.ob-helpers-rules {
+  display: grid;
+  gap: 6px;
+  margin: 15px 0 0 24px;
+  padding: 0;
+  list-style: none;
+}
+
+.ob-helpers-rules li {
+  position: relative;
+  padding-left: 16px;
+  color: var(--onb-muted);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.ob-helpers-rules li::before {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #83887f;
+  content: "";
+}
+
+/* Once the grid stacks, the row body and the chip strip are the only things
+   that need to give way: the add module is already a full-width card. */
+@media (max-width: 720px) {
+  .ob-helpers-add-row {
+    flex-wrap: wrap;
+  }
+
+  .ob-helpers-add-field {
+    flex: 1 1 190px;
+  }
+
+  .ob-helpers-row-top {
+    flex-wrap: wrap;
+  }
+
+  .ob-helpers-tags {
+    margin-left: 0;
+  }
+}

@@ -2,7 +2,16 @@ import Link from "next/link";
 import { WorkspaceNav, ProgramNav, MobileProgramNav } from "./SidebarNav";
 import { ThemeToggle } from "./ThemeToggle";
 import { Figure } from "./Figure";
-import { IconSearch, IconBell, IconChevronRight, IconDoc } from "./icons";
+import {
+  IconSearch,
+  IconBell,
+  IconPlus,
+  IconDoc,
+  IconExit,
+  IconInfo,
+  IconAlert,
+  IconCheck,
+} from "./icons";
 
 export function DashboardShell({
   children,
@@ -33,17 +42,20 @@ export function DashboardShell({
 }) {
   const homeHref = programId ? `/programs/${programId}` : "/overview";
   return (
-    <div className="min-h-screen bg-ink text-text">
-      <aside className="fixed inset-y-0 left-0 z-10 hidden w-[240px] flex-col border-r border-line bg-ink px-3 py-5 lg:flex">
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          <Link href={homeHref} className="flex items-center gap-1.5 pl-1 font-heading text-lg font-extrabold tracking-tight text-text">
+    <div className="pixie-night min-h-screen bg-ink text-text">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-[240px] flex-col border-r border-line bg-ink px-3 py-5 lg:flex">
+        <div className="pixie-nav-scroll min-h-0 flex-1 overflow-y-auto">
+          <Link
+            href={homeHref}
+            className="flex items-start gap-2 font-display text-[24px] leading-none text-text"
+          >
             pixie
-            <span className="mb-2.5 size-[7px] rounded-full bg-gradient-to-br from-brand to-mint" aria-hidden="true" />
+            <span className="pixie-mark-bg mt-[5px] size-[7px] shrink-0" aria-hidden="true" />
           </Link>
 
           {showWorkspaceNav && (
             <>
-              <p className="mt-8 pl-1 text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted/70">Workspace</p>
+              <Eyebrow className="mt-8">Workspace</Eyebrow>
               <WorkspaceNav />
             </>
           )}
@@ -51,13 +63,13 @@ export function DashboardShell({
           {programId && (
             <>
               <div className="my-5 border-t border-line" />
-              <div className="flex items-center gap-2 pl-1 text-xs">
-                <span className="grid size-5 shrink-0 place-items-center rounded-[6px] bg-gradient-to-br from-brand/25 to-mint/25 text-[9px] font-semibold text-text">
+              <div className="flex items-center gap-2 pl-1 text-[13px]">
+                <span className="grid size-5 shrink-0 place-items-center rounded-[2px] bg-lime/15 font-display text-[10px] leading-none text-lime">
                   {programName?.slice(0, 2).toUpperCase()}
                 </span>
                 <span className="truncate text-text">{programName}</span>
               </div>
-              <p className="mt-5 pl-1 text-[11px] font-medium uppercase tracking-[0.08em] text-text-muted/70">Program</p>
+              <Eyebrow className="mt-5">Program</Eyebrow>
               <ProgramNav programId={programId} />
             </>
           )}
@@ -65,82 +77,132 @@ export function DashboardShell({
 
         <Link
           href={programId ? `/programs/${programId}/knowledge` : "/programs"}
-          className="pixie-button pixie-button-quiet mt-6 shrink-0 justify-start gap-2 text-xs"
+          className="pixie-button pixie-button-quiet pixie-button-sm mt-6 w-full shrink-0 justify-start"
         >
-          <IconDoc size={14} /> View docs
+          <IconDoc size={16} /> View docs
         </Link>
 
         {userName && (
           <form action="/api/auth/logout" method="post" className="mt-4 shrink-0 border-t border-line pt-4">
-            <button type="submit" className="flex w-full items-center gap-2.5 text-left text-xs">
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-brand text-[11px] font-semibold text-on-brand">
+            <button
+              type="submit"
+              className="group flex w-full items-center gap-2.5 rounded-[2px] px-1.5 py-1.5 text-left"
+            >
+              {/* The initial is Inter at 600, not the pixel face: at 12px in a
+                  28px tile a 1px-stroke pixel "L" reads as a speck rather than a
+                  letter, and the tile is the one place the user's own name is
+                  the whole content. */}
+              <span className="grid size-7 shrink-0 place-items-center rounded-[2px] bg-lime text-[13px] leading-none font-semibold text-lime-ink">
                 {userName.slice(0, 1).toUpperCase()}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-text">{userName}</span>
-                {userEmail && <span className="block truncate text-text-muted">{userEmail}</span>}
+                <span className="block truncate text-[13px] text-text">{userName}</span>
+                {userEmail && <span className="block truncate text-[12px] text-text-muted">{userEmail}</span>}
               </span>
-              <IconChevronRight size={14} className="shrink-0 text-text-muted" />
+              <IconExit
+                size={16}
+                className="shrink-0 text-text-muted transition-colors group-hover:text-text"
+              />
             </button>
           </form>
         )}
       </aside>
 
-      <div className="lg:pl-[240px]">
-        <header className="flex min-h-[64px] flex-wrap items-center gap-x-4 gap-y-3 border-b border-line px-6 py-3.5 lg:px-8">
-          <div className="text-xs text-text-muted">
-            <Link href={homeHref} className="text-text hover:text-brand">pixie</Link>
-            <span className="px-2 text-text-muted/50">/</span>
-            {programName ?? crumb}
+      {/* `min-h-[100dvh]` so a short page still ends at the viewport floor, and
+          the bottom reserve -- the same `--pixie-art-band` the art box is cut
+          to, so the two cannot disagree -- keeps the last panel clear of the
+          horizon. Both collapse to nothing in day theme and below 1024px, where
+          globals.css hides the art. */}
+      <div className="relative z-10 min-h-[100dvh] pb-[var(--pixie-art-band)] lg:pl-[240px]">
+        {/* Pixie's night world: the unedited skyline/water art, anchored to the
+            bottom of this column in its own reserved band, so she reads under
+            the last panel the way the onboarding places her under the preview
+            panel — never through the gap between two of them. */}
+        <div className="pixie-night-art" aria-hidden="true">
+          <img src="/pixie-night-background.png" alt="" width={1672} height={940} />
+        </div>
+
+        <header className="flex min-h-[60px] flex-wrap items-center gap-x-4 gap-y-3 border-b border-line bg-ink/80 px-6 py-3 lg:px-10">
+          <div className="flex items-center gap-2 text-[12px]">
+            <Link href={homeHref} className="text-text transition-colors hover:text-brand">pixie</Link>
+            <span className="text-line-strong" aria-hidden="true">/</span>
+            <span className="truncate text-text-muted">{programName ?? crumb}</span>
           </div>
 
           {programId && (
             <form action={`/programs/${programId}/tickets`} className="order-3 w-full lg:order-none lg:ml-2 lg:max-w-xs lg:flex-1">
               <label className="relative block">
-                <IconSearch size={13} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-muted" />
-                <input name="q" type="search" placeholder="Search tickets…" className="pixie-input pl-8 text-xs" />
+                <IconSearch size={16} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted" />
+                {/* 30px, the height of the two square buttons beside it: the
+                    field is a header control, not a form, and a 38px input
+                    next to a 30px bell leaves the row reading as two sizes. */}
+                <input name="q" type="search" placeholder="Search tickets…" className="pixie-input h-[30px] py-0 pl-9" />
               </label>
             </form>
           )}
 
-          <div className="ml-auto flex items-center gap-3">
-            <Link href="/wizard?mode=hosted" className="text-xs text-text-muted hover:text-text">
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <Link href="/wizard?mode=hosted" className="pixie-button pixie-button-quiet pixie-button-sm">
+              <IconPlus size={16} />
               New program
             </Link>
             <ThemeToggle />
             {programId && (
-              <Link href={`/programs/${programId}/incidents`} aria-label="Incidents" className="grid size-7 place-items-center rounded-[5px] text-text-muted transition-colors hover:text-text">
-                <IconBell size={15} />
+              <Link
+                href={`/programs/${programId}/incidents`}
+                aria-label="Incidents"
+                className="pixie-icon-button"
+              >
+                <IconBell size={16} />
               </Link>
             )}
           </div>
           {programId && <MobileProgramNav programId={programId} />}
         </header>
-        <main className="mx-auto max-w-[1440px] px-6 py-10 lg:px-10">{children}</main>
+        <main className="relative mx-auto max-w-[1440px] px-6 py-9 lg:px-10">{children}</main>
       </div>
     </div>
   );
 }
 
+// Eyebrow / section label: 11px uppercase, wide tracking, muted, always led by
+// the 6px square lime marker. The one label style in the product — the sidebar
+// section names, page eyebrows and section titles all use this.
+function Eyebrow({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <p className={`pixie-eyebrow flex items-center gap-2 text-text-muted ${className}`}>
+      <span className="pixie-mark" aria-hidden="true" />
+      {children}
+    </p>
+  );
+}
+
 // Compact page header: title, one optional line of context, optional action.
-// No eyebrow, no badges row, no decorative icons — the breadcrumb in the
-// shell header already says which program you're in.
+// The breadcrumb in the shell header already says which program you're in, so
+// the eyebrow is reserved for pages that need a second word of orientation.
+//
+// On a phone the action drops to its own line under the description rather than
+// being squeezed into a column beside it: a 34px pixel title and a button have
+// no shared width there, and the button is what loses.
 export function PageHeader({
+  eyebrow,
   title,
   description,
   actions,
 }: {
+  eyebrow?: string;
   title: string;
   description?: string;
   actions?: React.ReactNode;
 }) {
   return (
-    <div className="mb-10 flex items-start justify-between gap-6 border-b border-line pb-6">
-      <div>
-        <h1 className="font-heading text-[26px] font-semibold leading-[1.15] tracking-tight text-text sm:text-[30px]">
+    <div className="mb-8 flex flex-col items-start gap-4 border-b border-line pb-6 sm:flex-row sm:justify-between sm:gap-6">
+      <div className="min-w-0">
+        {eyebrow && <Eyebrow className="mb-3">{eyebrow}</Eyebrow>}
+        <h1 className="font-display text-[26px] leading-[1.05] text-text sm:text-[34px]">
           {title}
         </h1>
-        {description && <p className="mt-2.5 max-w-prose text-sm leading-relaxed text-text-muted">{description}</p>}
+        {description && <p className="mt-3 max-w-[60ch] text-sm text-text-muted">{description}</p>}
       </div>
       {actions && <div className="shrink-0">{actions}</div>}
     </div>
@@ -167,23 +229,23 @@ export function Section({
   return (
     <section className={bordered ? "pixie-panel p-5" : undefined}>
       {(title || actions) && (
-        <div className="flex items-baseline justify-between gap-4">
+        <div className="flex items-center justify-between gap-4">
           {title && (
-            <h2 className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.13em] text-text-muted">
-              <span className="size-1.5 shrink-0 rounded-full bg-brand" aria-hidden />
+            <h2 className="pixie-eyebrow flex items-center gap-2 text-text-muted">
+              <span className="pixie-mark" aria-hidden="true" />
               {title}
             </h2>
           )}
           {actions}
         </div>
       )}
-      {description && <p className="mt-2 max-w-prose text-[13px] leading-relaxed text-text-muted">{description}</p>}
-      <div className={title || description ? "mt-5" : undefined}>{children}</div>
+      {description && <p className="mt-2 max-w-prose text-[13px] text-text-muted">{description}</p>}
+      <div className={title || description ? "mt-4" : undefined}>{children}</div>
     </section>
   );
 }
 
-// One metric: label above, value below. No border, no icon. Drop these into
+// One metric: value above, label below. No border, no icon. Drop these into
 // a grid and they read as an aligned group.
 export function MetricCard({
   label,
@@ -216,7 +278,6 @@ export function StatCard({
   icon,
   tone = "text-text",
   iconTone = "bg-panel-2",
-  barTone = "bg-line",
 }: {
   label: string;
   value: string | number;
@@ -224,20 +285,20 @@ export function StatCard({
   icon: React.ReactNode;
   tone?: string;
   iconTone?: string;
-  // The thin top accent's color — pass the solid form of `tone` (e.g.
-  // "bg-tang" alongside "text-tang") so the card reads as one color story
-  // at a glance, not just from its icon chip.
+  // Kept for call-site compatibility: the old card painted a 3px accent bar
+  // across the top in this colour. The night card has no coloured bar — tone
+  // lives in the icon tile and the figure — so the prop is accepted and
+  // ignored rather than resurrected as a stripe.
   barTone?: string;
 }) {
   return (
-    <div className="pixie-panel group relative overflow-hidden p-4 transition-shadow hover:shadow-[0_6px_20px_-8px_rgba(20,30,15,0.18)]">
-      <span className={`absolute inset-x-0 top-0 h-[3px] ${barTone}`} aria-hidden />
+    <div className="pixie-panel p-4">
       <div className="flex items-center gap-2.5">
-        <span className={`grid size-7 shrink-0 place-items-center rounded-full ${iconTone} ${tone}`}>{icon}</span>
-        <p className="text-[13px] text-text-muted">{label}</p>
+        <span className={`grid size-7 shrink-0 place-items-center rounded-[2px] ${iconTone} ${tone}`}>{icon}</span>
+        <p className="text-[12px] text-text-muted">{label}</p>
       </div>
-      <p className={`mt-3 font-heading text-[28px] font-semibold leading-none tabular-nums ${tone}`}><Figure value={value} /></p>
-      {detail && <p className="mt-2 text-xs text-text-muted">{detail}</p>}
+      <p className={`mt-3 font-mono text-[28px] leading-none tabular-nums ${tone}`}><Figure value={value} /></p>
+      {detail && <p className="mt-2 text-[11px] text-text-muted">{detail}</p>}
     </div>
   );
 }
@@ -247,33 +308,63 @@ export function StatCard({
 export function MetricRow({ label, value, tone = "text-text" }: { label: string; value: string | number; tone?: string }) {
   return (
     <div className="flex items-baseline justify-between gap-4 py-1.5">
-      <span className="text-sm text-text-muted">{label}</span>
-      <span className={`font-mono text-sm tabular-nums ${tone}`}>{value}</span>
+      <span className="text-[13px] text-text-muted">{label}</span>
+      <span className={`font-mono text-[13px] tabular-nums ${tone}`}>{value}</span>
     </div>
   );
 }
 
+// One semantic colour for a status string, used by both StatusBadge and
+// StatusDot. Mint = resolved/healthy, tang = waiting on a person, danger =
+// failed/stale/critical. Lime is never a failure — an escalated or reopened
+// request is still live work, so it reads tang like every other wait.
+//
+// The order of the tests is the whole rule: a word that is both healthy and
+// failing wins as healthy, and failing beats waiting. `confirmed` is a
+// deliberate word boundary so a hypothetical `unconfirmed` (a burst Pixie saw
+// but nobody has agreed to) stays tang, like every other un-reviewed candidate.
+function toneForStatus(s: string): string {
+  if (/resolved|healthy|active|synced|answered|ok\b/i.test(s)) return "mint";
+  if (/fail|stale|critical|error|\bconfirmed\b/i.test(s)) return "danger";
+  if (/wait|pending|assigned|claim|review|candidate|escalat|reopen|attention|paused|invited/i.test(s)) return "tang";
+  // Everything else is history, not news: `dismissed` and `suppressed` land
+  // here, grey on purpose — a call that was talked over and a rule that was
+  // switched off are not states waiting on anybody.
+  return "muted";
+}
+
+const TONE_TEXT: Record<string, string> = {
+  mint: "text-mint",
+  tang: "text-tang",
+  danger: "text-danger",
+  muted: "text-text-muted",
+};
+
+const TONE_MARK: Record<string, string> = {
+  mint: "bg-mint",
+  tang: "bg-tang",
+  danger: "bg-danger",
+  muted: "bg-text-muted",
+};
+
 export function StatusBadge({ status }: { status: string }) {
-  const tone = /resolved|healthy|active/i.test(status)
-    ? "text-mint"
-    : /failed|stale|attention|critical/i.test(status)
-      ? "text-brand"
-      : "text-tang";
   return (
-    <span className={`inline-flex items-center gap-1.5 text-xs ${tone}`}>
-      <span className="size-1.5 rounded-full bg-current" aria-hidden />
+    <span className={`inline-flex items-center gap-1.5 font-mono text-[12px] ${TONE_TEXT[toneForStatus(status)]}`}>
+      <span className="size-1.5 shrink-0 rounded-[1px] bg-current" aria-hidden />
       {status}
     </span>
   );
 }
 
-// The one shape for "a Core read failed on this page". Calm: a left rule and
-// a plain sentence, no box, no "is Core running?" rhetorical question.
+// The one shape for "a Core read failed on this page". Still the same honest
+// sentence — a warning, restyled, never softened or hidden.
 export function CoreError({ message }: { message: string }) {
   return (
-    <p className="my-6 border-l-2 border-brand/60 pl-3 text-sm text-text-muted">
-      {message} Pixie Core may be restarting; this page will recover on its own.
-    </p>
+    <div className="my-6">
+      <Notice tone="warn">
+        {message} Pixie Core may be restarting; this page will recover on its own.
+      </Notice>
+    </div>
   );
 }
 
@@ -289,20 +380,13 @@ export function Mono({ children, className = "" }: { children: React.ReactNode; 
   return <span className={`font-mono ${className}`}>{children}</span>;
 }
 
-function toneForStatus(s: string): string {
-  if (/resolved|healthy|active|synced|answered|ok\b/i.test(s)) return "bg-mint";
-  if (/fail|stale|critical|escalat|attention|reopen|error/i.test(s)) return "bg-brand";
-  if (/wait|pending|assigned|claim|review|candidate/i.test(s)) return "bg-tang";
-  return "bg-text-muted";
-}
-
 // Bare semantic dot + optional label. StatusBadge (above) is the same idea
-// with brand/mint/tang text colour; this one keeps the label in muted text
-// and only the dot carries state — quieter, for dense rows.
+// with the same marker and the status in tone colour; this one keeps the label
+// in muted text and only the marker carries state — quieter, for dense rows.
 export function StatusDot({ status, children }: { status: string; children?: React.ReactNode }) {
   return (
     <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs text-text-muted">
-      <span className={`size-1.5 shrink-0 rounded-full ${toneForStatus(status)}`} aria-hidden />
+      <span className={`size-1.5 shrink-0 rounded-[1px] ${TONE_MARK[toneForStatus(status)]}`} aria-hidden />
       {children ?? status}
     </span>
   );
@@ -311,21 +395,30 @@ export function StatusDot({ status, children }: { status: string; children?: Rea
 export type Stage = { label: string; value: string | number; sub?: string; tone?: string };
 
 // The support-signal rail: a horizontal run of stages joined by a thin
-// connector with a node. `142 ──•── 98 ──•── 31 ──•── 120`, labels beneath.
+// connector with a node. `142 ──■── 98 ──■── 31 ──■── 120`, labels beneath.
+//
+// Two layouts, one markup. From `sm` up there is room for the rail and the
+// connectors are what carry the order. Below it — a phone — the rail was an
+// overflow-x strip that cut a label in half mid-word with no scroll affordance
+// and put the rest of the stages off-screen; there the stages are a two-column
+// grid with the connectors dropped, because an arrow between two numbers has
+// nothing to say once the two numbers sit side by side.
 export function SignalRail({ stages, className = "" }: { stages: Stage[]; className?: string }) {
   return (
-    <ol className={`flex items-start overflow-x-auto pb-1 ${className}`}>
+    <ol
+      className={`grid grid-cols-2 gap-x-4 gap-y-4 pb-1 sm:flex sm:items-start sm:gap-y-0 sm:overflow-x-auto ${className}`}
+    >
       {stages.map((s, i) => (
-        <li key={s.label} className="flex shrink-0 items-start">
-          <div className="min-w-[6.5rem] pr-1">
-            <div className={`font-mono text-2xl leading-none tabular-nums ${s.tone ?? "text-text"}`}>{s.value}</div>
-            <div className="mt-1.5 text-xs text-text-muted">{s.label}</div>
-            {s.sub ? <div className="mt-0.5 font-mono text-[11px] text-text-muted/70">{s.sub}</div> : null}
+        <li key={s.label} className="flex min-w-0 items-start sm:shrink-0">
+          <div className="min-w-0 sm:min-w-[6.5rem] sm:pr-1">
+            <div className={`font-mono text-[24px] leading-none tabular-nums ${s.tone ?? "text-text"}`}>{s.value}</div>
+            <div className="mt-1.5 text-[13px] text-text-muted">{s.label}</div>
+            {s.sub ? <div className="mt-0.5 font-mono text-[11px] text-text-muted/80">{s.sub}</div> : null}
           </div>
           {i < stages.length - 1 && (
-            <div aria-hidden className="mx-1 flex items-center gap-1 pt-2.5 text-line sm:mx-2">
+            <div aria-hidden className="mx-1 hidden items-center gap-1 pt-2.5 text-line-strong sm:mx-2 sm:flex">
               <span className="h-px w-5 bg-current sm:w-9" />
-              <span className="size-1 rounded-full bg-current" />
+              <span className="size-[3px] rounded-[1px] bg-current" />
               <span className="h-px w-5 bg-current sm:w-9" />
             </div>
           )}
@@ -357,10 +450,10 @@ export function MiniBar({
   const pct = max > 0 ? (value / max) * 100 : 0;
   const width = value > 0 ? Math.max(pct, 2) : 0;
   return (
-    <div className="grid grid-cols-[8.5rem_1fr_3rem] items-center gap-3 text-sm">
+    <div className="grid grid-cols-[8.5rem_1fr_3rem] items-center gap-3 text-[13px]">
       <span className="truncate text-text-muted">{label}</span>
-      <span className="h-1.5 overflow-hidden rounded-full bg-line/50">
-        <span className={`block h-full rounded-full ${tone}`} style={{ width: `${width}%` }} />
+      <span className="block h-1.5 bg-line/60">
+        <span className={`block h-full rounded-[1px] ${tone}`} style={{ width: `${width}%` }} />
       </span>
       <span className="text-right font-mono tabular-nums text-text">{display ?? value}</span>
     </div>
@@ -374,6 +467,14 @@ export function BarList({ children }: { children: React.ReactNode }) {
 // A dense list row: optional mono lead (an id), primary text that can link,
 // a trailing meta cluster. Used by tickets, audit, knowledge, incidents,
 // helpers — anywhere the page is really a ledger.
+//
+// `min-w-0` on both the row and the element around it, and `overflow-hidden` on
+// the row, are what make this safe to drop into any grid. Without them the
+// wrapper's automatic minimum size is its min-content width — nowrap ids,
+// timestamps and status words — and a `1fr` track grows to that instead of
+// shrinking, pushing the neighbouring column off the page. With them the title
+// column truncates and the row is bounded by its track, so the ledger can never
+// be what makes a page scroll sideways.
 export function DataRow({
   href,
   lead,
@@ -388,34 +489,76 @@ export function DataRow({
   sub?: React.ReactNode;
 }) {
   const body = (
-    <div className="-mx-2.5 flex items-baseline gap-3 rounded-md px-2.5 py-2 transition-colors group-hover:bg-panel-2/70">
+    <div className="-mx-2.5 flex min-w-0 items-baseline gap-3 overflow-hidden rounded-[3px] px-2.5 py-2 transition-colors group-hover:bg-panel-2">
       {lead != null && <span className="shrink-0 font-mono text-xs text-text-muted">{lead}</span>}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate text-sm text-text group-hover:text-brand">{title}</span>
+        <span className="truncate text-sm text-text transition-colors group-hover:text-brand">{title}</span>
         {sub != null && <span className="mt-0.5 truncate text-xs text-text-muted">{sub}</span>}
       </span>
       {meta != null && <span className="shrink-0 text-xs text-text-muted">{meta}</span>}
     </div>
   );
   return href ? (
-    <Link href={href} prefetch={false} className="group block">
+    <Link href={href} prefetch={false} className="group block min-w-0">
       {body}
     </Link>
   ) : (
-    <div className="group">{body}</div>
+    <div className="group min-w-0">{body}</div>
   );
 }
 
-// Empty state: one plain line of what would be here, one line of why it
-// isn't. No illustration, no confetti.
+// Empty state: the mascot, one plain line of what would be here, one line of
+// why it isn't. Dashed border, no illustration, no confetti.
 export function EmptyState({ title, hint }: { title: string; hint?: string }) {
   return (
-    <div className="flex items-start gap-3 py-2 text-sm">
-      <img src="/pixie-hero.png" alt="" width={28} height={28} className="pixel-art mt-0.5 size-7 shrink-0 opacity-80" />
-      <div>
-        <p className="text-text">{title}</p>
-        {hint ? <p className="mt-1 text-text-muted">{hint}</p> : null}
+    <div className="pixie-empty">
+      <img src="/pixie-hero.png" alt="" width={28} height={28} className="pixel-art pixie-empty-art" />
+      <div className="min-w-0">
+        <p className="pixie-empty-title">{title}</p>
+        {hint ? <p className="pixie-empty-hint">{hint}</p> : null}
       </div>
     </div>
   );
+}
+
+/* ------------------------------------------------------------------ notices -- */
+
+type Tone = "info" | "warn" | "error" | "success";
+
+const NOTICE_ICON: Record<Tone, typeof IconInfo> = {
+  info: IconInfo,
+  warn: IconAlert,
+  error: IconAlert,
+  success: IconCheck,
+};
+
+// A banner for the things a page must not swallow: Core down, sync pending,
+// metrics unavailable. The tone's border and icon colour are drawn by
+// `.pixie-notice-*`; this adds the sprite, an optional bold lead line and the
+// body copy.
+export function Notice({
+  tone = "info",
+  title,
+  children,
+}: {
+  tone?: Tone;
+  title?: string;
+  children?: React.ReactNode;
+}) {
+  const Icon = NOTICE_ICON[tone];
+  return (
+    <div className={`pixie-notice pixie-notice-${tone}`}>
+      <Icon size={16} className="pixie-notice-icon" />
+      <div className="pixie-notice-body">
+        {title && <p className="pixie-notice-title">{title}</p>}
+        {children}
+      </div>
+    </div>
+  );
+}
+
+// A tag or pill — sync state, plan, category. `tone="lime"` is the one
+// highlighted variant, for a state that's the product's headline.
+export function Chip({ tone, children }: { tone?: "lime"; children: React.ReactNode }) {
+  return <span className={`pixie-chip ${tone === "lime" ? "pixie-chip-lime" : ""}`}>{children}</span>;
 }

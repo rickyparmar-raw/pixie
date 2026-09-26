@@ -2,10 +2,20 @@
 
 import { motion, useSpring } from "motion/react";
 import { memo, useMemo, useRef } from "react";
+import { cn } from "@/lib/utils";
 
 const TICKER_ITEM_HEIGHT = 24;
 /** Full scroll stacks are skipped above this count — single label + instant updates. */
 const COMPACT_TICKER_THRESHOLD = 60;
+
+/* The date chip matches the floating tooltip box exactly: inverted cream, a
+   hard 3px corner, a 1px hairline in the chip's own ink tone, and no shadow or
+   blur. The label is a timestamp, so it is mono and 12px — the one face the
+   design system reserves for operational text. */
+const CHIP =
+  "overflow-hidden rounded-md border border-chart-tooltip-foreground/20 text-xs [background:var(--chart-tooltip-background)] [color:var(--chart-tooltip-foreground)]";
+
+const CHIP_LABEL = "whitespace-nowrap font-mono font-medium";
 
 export interface DateTickerProps {
   currentIndex: number;
@@ -20,9 +30,9 @@ const DateTickerCompact = memo(function DateTickerCompact({
   const label = labels[currentIndex] ?? labels[0] ?? "";
 
   return (
-    <div className="overflow-hidden rounded-full px-4 py-1 shadow-lg [background:var(--chart-tooltip-background)] [color:var(--chart-tooltip-foreground)]">
+    <div className={cn(CHIP, "px-3 py-1")}>
       <div className="flex h-6 items-center justify-center">
-        <span className="whitespace-nowrap font-medium text-sm">{label}</span>
+        <span className={CHIP_LABEL}>{label}</span>
       </div>
     </div>
   );
@@ -93,7 +103,7 @@ const DateTickerInner = memo(function DateTickerInner({
   }
 
   return (
-    <div className="overflow-hidden rounded-full px-4 py-1 shadow-lg [background:var(--chart-tooltip-background)] [color:var(--chart-tooltip-foreground)]">
+    <div className={cn(CHIP, "px-3 py-1")}>
       <div className="relative h-6 overflow-hidden">
         <div className="flex items-center justify-center gap-1">
           {/* Month stack */}
@@ -104,9 +114,7 @@ const DateTickerInner = memo(function DateTickerInner({
                   className="flex h-6 shrink-0 items-center justify-center"
                   key={segment.key}
                 >
-                  <span className="whitespace-nowrap font-medium text-sm">
-                    {segment.month}
-                  </span>
+                  <span className={CHIP_LABEL}>{segment.month}</span>
                 </div>
               ))}
             </motion.div>
@@ -120,9 +128,7 @@ const DateTickerInner = memo(function DateTickerInner({
                   className="flex h-6 shrink-0 items-center justify-center"
                   key={label.key}
                 >
-                  <span className="whitespace-nowrap font-medium text-sm">
-                    {label.day}
-                  </span>
+                  <span className={CHIP_LABEL}>{label.day}</span>
                 </div>
               ))}
             </motion.div>

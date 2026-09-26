@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { hostedTicketAction } from "@/app/wizard/hostedActions";
+import { IconCheck, IconAlert } from "@/app/_components/icons";
 import type { ActionState } from "@/lib/types";
 
 const initial: ActionState = { error: null };
@@ -15,7 +16,7 @@ export function TicketResolveButton({ programId, ticketId }: { programId: string
   const done = state.ok === true;
 
   return (
-    <form action={formAction} className="flex flex-col items-end gap-0.5">
+    <form action={formAction} className="flex flex-col items-end gap-1">
       <input type="hidden" name="programId" value={programId} />
       <input type="hidden" name="ticketId" value={ticketId} />
       <button
@@ -23,11 +24,17 @@ export function TicketResolveButton({ programId, ticketId }: { programId: string
         name="ticketAction"
         value="resolve"
         disabled={pending || done}
-        className="rounded-[var(--radius)] border border-line px-2 py-0.5 text-xs text-text-muted transition-colors hover:border-brand hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+        className="pixie-button pixie-button-quiet pixie-button-sm min-w-[5.75rem]"
       >
+        <IconCheck size={16} />
         {pending ? "Resolving…" : done ? "Resolved" : "Resolve"}
       </button>
-      {state.error && <span className="max-w-[14rem] text-right text-xs text-brand">{state.error}</span>}
+      {state.error && (
+        <span className="flex max-w-[15rem] items-start gap-1.5 text-right text-[11px] text-danger">
+          <IconAlert size={16} className="mt-px shrink-0" />
+          {state.error}
+        </span>
+      )}
     </form>
   );
 }
