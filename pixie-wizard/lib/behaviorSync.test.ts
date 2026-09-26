@@ -89,11 +89,12 @@ test("behavior toggle catalog matches the Core defaults: main mostly on with tic
     escalateUnknown: true,
     helperPings: true,
     expertiseRouting: true,
+    autoResolve: true,
   });
   const main = BEHAVIOR_FIELDS.filter((f) => f.section === "main");
   const help = BEHAVIOR_FIELDS.filter((f) => f.section === "help");
   expect(main).toHaveLength(7);
-  expect(help).toHaveLength(7);
+  expect(help).toHaveLength(8);
   for (const f of [...main, ...help]) {
     // Plain-English labels, never env var names.
     expect(f.label).not.toMatch(/^[A-Z_]{4,}$/);

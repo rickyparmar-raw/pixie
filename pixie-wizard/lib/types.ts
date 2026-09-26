@@ -72,6 +72,7 @@ export interface HelpBehavior {
   escalateUnknown: boolean;
   helperPings: boolean;
   expertiseRouting: boolean;
+  autoResolve: boolean;
 }
 
 export interface ProgramBehavior {
@@ -97,6 +98,7 @@ export const HELP_BEHAVIOR_DEFAULTS: HelpBehavior = {
   escalateUnknown: true,
   helperPings: true,
   expertiseRouting: true,
+  autoResolve: true,
 };
 
 export type BehaviorSection = "main" | "help";
@@ -127,6 +129,7 @@ export const BEHAVIOR_FIELDS: BehaviorField[] = [
   { section: "help", key: "escalateUnknown", label: "Escalate when unsure", help: "Questions Pixie cannot answer go to helpers instead of getting a guess.", defaultOn: true },
   { section: "help", key: "helperPings", label: "Ping helpers on hard questions", help: "Mention a helper by name when a ticket needs a human.", defaultOn: true },
   { section: "help", key: "expertiseRouting", label: "Route to helpers by expertise", help: "Pick the pinged helper from their listed topics.", defaultOn: true },
+  { section: "help", key: "autoResolve", label: "Auto-resolve finished tickets", help: "Pixie watches ticket threads and marks them resolved when the conversation shows it's solved.", defaultOn: true },
 ];
 
 // Untyped read of one toggle — catalog keys are plain strings at runtime,

@@ -136,6 +136,11 @@ async function startBot() {
   } catch (e) {
     log.debug("bot", `auto-join error: ${e.message}`);
   }
+  try {
+    require("./lib/resolutionWatcher").start(app.client);
+  } catch (e) {
+    log.error("resolution", "watcher failed to start:", e.message);
+  }
 }
 
 // Offline test mode: `bun index.js --ask "how do i join pixl?"` builds the
