@@ -14,9 +14,18 @@ import {
   DataRow,
   EmptyState,
   StatCard,
+  Notice,
 } from "@/app/_components/DashboardShell";
 import { personaName, timeAgo } from "@/app/_components/format";
-import { IconChat, IconHand, IconCheck, IconClock, IconDoc, IconUsers } from "@/app/_components/icons";
+import {
+  IconChat,
+  IconHand,
+  IconCheck,
+  IconClock,
+  IconDoc,
+  IconUsers,
+  IconArrowRight,
+} from "@/app/_components/icons";
 import type { PublicHelperIdentity } from "@/lib/types";
 import type { VolumeDay } from "@/lib/dashboardMetrics";
 import { VolumeChart } from "@/app/_components/charts/VolumeChart";
@@ -58,8 +67,8 @@ const STATE_ORDER: Array<[key: string, label: string, tone: string]> = [
   ["waiting_for_helper", "Waiting for a helper", "bg-tang"],
   ["assigned", "Assigned", "bg-text-muted"],
   ["claimed", "Claimed", "bg-text-muted"],
-  ["escalated", "Escalated", "bg-brand"],
-  ["reopened", "Reopened", "bg-brand"],
+  ["escalated", "Escalated", "bg-tang"],
+  ["reopened", "Reopened", "bg-tang"],
   ["open", "Unanswered", "bg-text-muted"],
   ["resolved", "Resolved", "bg-mint"],
 ];
@@ -155,69 +164,57 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
 
   return (
     <>
-      <div className="relative -mx-6 mb-10 overflow-hidden px-6 pb-8 lg:-mx-10 lg:px-10">
-        <svg
-          aria-hidden
-          viewBox="0 0 320 240"
-          className="pointer-events-none absolute -right-16 -top-16 hidden h-[240px] w-[320px] opacity-90 sm:block dark:opacity-70"
-        >
-          <path
-            d="M303,86 C312,116 296,152 266,172 C236,192 190,196 154,186 C118,176 84,150 74,118 C64,86 78,48 108,28 C138,8 184,4 222,14 C260,24 294,56 303,86 Z"
-            fill="var(--color-mint)"
-          />
-          <path
-            d="M120,150 C138,142 160,146 168,164 C176,182 166,204 146,210 C126,216 102,208 94,190 C86,172 102,158 120,150 Z"
-            fill="var(--color-brand)"
-            opacity="0.9"
-          />
-        </svg>
-        <div className="relative flex flex-wrap items-start justify-between gap-6 border-b border-line pb-8">
-          <div>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium uppercase tracking-[0.16em] text-text-muted">
-              <span>{greetingWord(new Date().getHours())}, {firstName}</span>
-              <StatusBadge status={healthLabel(program.status, program.core_sync_state)} />
-            </div>
-            <h1 className="font-heading mt-2 max-w-lg text-[28px] font-semibold leading-[1.15] tracking-tight text-text sm:text-[34px]">
-              Here&apos;s what&apos;s happening with {program.program_name}&apos;s support today.
-            </h1>
-            <p className="mt-2.5 max-w-md text-sm text-text-muted">
-              {persona} keeps {program.program_name} moving with real answers, not more noise.
-            </p>
-          </div>
-          {mascotLine && (
-            <div className="flex items-start gap-3">
-              <img src="/pixie-hero.png" alt="" width={48} height={48} className="pixel-art size-12 shrink-0" />
-              <div className="relative max-w-[220px] rounded-xl border border-line bg-panel px-3.5 py-2.5 text-[13px] leading-snug text-text shadow-[0_8px_20px_-10px_rgba(20,30,15,0.25)]">
-                <span
-                  aria-hidden
-                  className="absolute -left-1.5 top-4 size-3 rotate-45 border-b border-l border-line bg-panel"
-                />
-                {mascotLine}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
+      <ProgramHero
+        greeting={`${greetingWord(new Date().getHours())}, ${firstName}`}
+        health={healthLabel(program.status, program.core_sync_state)}
+        title={`Here's what's happening with ${program.program_name}'s support today.`}
+        lede={`${persona} keeps ${program.program_name} moving with real answers, not more noise.`}
+        mascotLine={mascotLine}
+      />
 
+      {/* Sync state is an honest warning, never a silent gap: pending is
+          information, failed is a failure. */}
       {program.core_sync_state === "pending" && (
-        <p className="mb-8 border-l-2 border-line pl-3 text-sm text-text-muted">
-          Activation saved. Pixie picks up this configuration within a few minutes.
-        </p>
+        <div className="mb-8">
+          <Notice tone="info">Activation saved. Pixie picks up this configuration within a few minutes.</Notice>
+        </div>
       )}
       {program.core_sync_state === "failed" && program.core_sync_error && (
-        <p className="mb-8 border-l-2 border-brand/60 pl-3 text-sm text-text-muted">
-          {program.core_sync_error}. Settings are saved and retry automatically.
-        </p>
+        <div className="mb-8">
+          <Notice tone="error">
+            {program.core_sync_error}. Settings are saved and retry automatically.
+          </Notice>
+        </div>
       )}
 
-      <div className="space-y-11">
+      <div className="space-y-8">
         {coreDown && <CoreError message="Some support metrics are unavailable right now." />}
         {(!coreDown || ticketsR.status === "fulfilled") && (
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-            <StatCard label="Open tickets" value={analytics ? openCount : "—"} icon={<IconChat size={14} />} barTone="bg-text-muted/30" />
-            <StatCard label="Waiting for a helper" value={analytics ? waitingCount : "—"} icon={<IconHand size={14} />} tone="text-tang" iconTone="bg-tang/15" barTone="bg-tang" />
-            <StatCard label="Resolved today" value={resolvedToday ?? "—"} icon={<IconCheck size={14} />} tone="text-mint" iconTone="bg-mint/15" barTone="bg-mint" />
-            <StatCard label="Stayed quiet" value={analytics ? Number(analytics.stale48h ?? 0) : "—"} detail="open 48h+" icon={<IconClock size={14} />} tone="text-brand" iconTone="bg-brand/15" barTone="bg-brand" />
+            <StatCard label="Open tickets" value={analytics ? openCount : "—"} icon={<IconChat size={16} />} />
+            <StatCard
+              label="Waiting for a helper"
+              value={analytics ? waitingCount : "—"}
+              icon={<IconHand size={16} />}
+              tone="text-tang"
+              iconTone="bg-tang/15"
+            />
+            <StatCard
+              label="Resolved today"
+              value={resolvedToday ?? "—"}
+              icon={<IconCheck size={16} />}
+              tone="text-mint"
+              iconTone="bg-mint/15"
+            />
+            {/* Stale is a failure state, so it wears danger — never lime. */}
+            <StatCard
+              label="Stayed quiet"
+              value={analytics ? Number(analytics.stale48h ?? 0) : "—"}
+              detail="open 48h+"
+              icon={<IconClock size={16} />}
+              tone="text-danger"
+              iconTone="bg-danger/15"
+            />
           </div>
         )}
 
@@ -229,37 +226,53 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
           </Section>
         )}
 
-        <div className="grid items-start gap-6 lg:grid-cols-[1.55fr_1fr]">
+        {/* minmax(0,…) on both tracks: the ticket lists inside carry
+            nowrap text, whose min-content would otherwise size the track and
+            push the row past the viewport on a phone. */}
+        <div className="grid items-start gap-6 grid-cols-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)]">
           <Section
             bordered
             title="Support activity"
             description="Ticket states across the last 30 days."
-            actions={<Link href={`/programs/${id}/analytics`} className="text-xs text-text-muted hover:text-text">Analytics →</Link>}
+            actions={<PanelLink href={`/programs/${id}/analytics`}>Analytics</PanelLink>}
           >
-            {analyticsR.status === "rejected" ? <p className="text-sm text-text-muted">Support activity is unavailable right now.</p> : <>
-              <div className="mb-6 flex flex-wrap gap-x-8 gap-y-2 text-xs text-text-muted">
-                <span><span className="font-mono text-text">{questions}</span> questions</span>
-                <span><span className="font-mono text-brand">{answered}</span> answered by {persona}</span>
-                <span><span className="font-mono text-mint">{resolved}</span> resolved</span>
-              </div>
-              <BarList>
-                 {STATE_ORDER.filter(([k]) => (byStatus[k] ?? 0) > 0).map(([k, label, tone]) => (
-                  <MiniBar key={k} label={label} value={byStatus[k] ?? 0} max={stateMax} tone={tone} />
-                ))}
-                {STATE_ORDER.every(([k]) => (byStatus[k] ?? 0) === 0) && (
-                  <EmptyState title="No tickets in the last 30 days." />
-                )}
-              </BarList>
-            </>}
+            {analyticsR.status === "rejected" ? (
+              <Notice tone="warn">Support activity is unavailable right now.</Notice>
+            ) : (
+              <>
+                <div className="mb-5 flex flex-wrap gap-x-8 gap-y-2 text-[12px] text-text-muted">
+                  <span>
+                    <span className="font-mono tabular-nums text-text">{questions}</span> questions
+                  </span>
+                  <span>
+                    <span className="font-mono tabular-nums text-brand">{answered}</span> answered by {persona}
+                  </span>
+                  <span>
+                    <span className="font-mono tabular-nums text-mint">{resolved}</span> resolved
+                  </span>
+                </div>
+                <BarList>
+                  {STATE_ORDER.filter(([k]) => (byStatus[k] ?? 0) > 0).map(([k, label, tone]) => (
+                    <MiniBar key={k} label={label} value={byStatus[k] ?? 0} max={stateMax} tone={tone} />
+                  ))}
+                  {STATE_ORDER.every(([k]) => (byStatus[k] ?? 0) === 0) && (
+                    <EmptyState
+                      title="No tickets in the last 30 days."
+                      hint="Ticket states appear here once questions start arriving."
+                    />
+                  )}
+                </BarList>
+              </>
+            )}
           </Section>
 
           <Section
             bordered
             title="Needs attention"
-            actions={<Link href={`/programs/${id}/tickets`} className="text-xs text-text-muted hover:text-text">Tickets →</Link>}
+            actions={<PanelLink href={`/programs/${id}/tickets`}>Tickets</PanelLink>}
           >
             {ticketsR.status === "rejected" ? (
-              <p className="text-sm text-text-muted">Ticket queue is unavailable right now.</p>
+              <Notice tone="warn">Ticket queue is unavailable right now.</Notice>
             ) : attention.length === 0 ? (
               <EmptyState title="Nothing needs a person right now." hint="Waiting, escalated and reopened tickets show up here." />
             ) : (
@@ -286,12 +299,12 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         <Section
           bordered
           title="Recent activity"
-          actions={<Link href={`/programs/${id}/tickets`} className="text-xs text-text-muted hover:text-text">All tickets →</Link>}
+          actions={<PanelLink href={`/programs/${id}/tickets`}>All tickets</PanelLink>}
         >
           {ticketsR.status === "rejected" ? (
-            <p className="text-sm text-text-muted">Recent tickets are unavailable right now.</p>
+            <Notice tone="warn">Recent tickets are unavailable right now.</Notice>
           ) : tickets.length === 0 ? (
-            <EmptyState title="No tickets yet." />
+            <EmptyState title="No tickets yet." hint="Every question your community asks shows up here." />
           ) : (
             <ul className="divide-y divide-line">
               {tickets.slice(0, 8).map((t) => {
@@ -302,8 +315,12 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
                     <DataRow
                       href={`/programs/${id}/tickets/${t.id}`}
                       lead={
-                        <span className={`grid size-5 place-items-center rounded-full ${isResolved ? "bg-mint/15 text-mint" : needsPerson ? "bg-tang/15 text-tang" : "bg-panel-2 text-text-muted"}`}>
-                          {isResolved ? <IconCheck size={11} /> : needsPerson ? <IconHand size={11} /> : <IconChat size={11} />}
+                        <span
+                          className={`grid size-6 place-items-center rounded-[2px] ${
+                            isResolved ? "bg-mint/15 text-mint" : needsPerson ? "bg-tang/15 text-tang" : "bg-panel-2 text-text-muted"
+                          }`}
+                        >
+                          {isResolved ? <IconCheck size={16} /> : needsPerson ? <IconHand size={16} /> : <IconChat size={16} />}
                         </span>
                       }
                       title={t.summary || t.question || "Ticket"}
@@ -318,39 +335,141 @@ export default async function ProgramPage({ params }: { params: Promise<{ id: st
         </Section>
 
         <div className="grid gap-6 sm:grid-cols-2">
-          <Section bordered title="Knowledge" actions={<Link href={`/programs/${id}/knowledge`} className="text-xs text-text-muted hover:text-text">Knowledge →</Link>}>
-            <div className="flex items-center gap-3">
-              <span className="grid size-9 shrink-0 place-items-center rounded-full bg-panel-2 text-text-muted"><IconDoc size={16} /></span>
-              <div className="grid flex-1 grid-cols-3 gap-2 text-center">
-                <div><p className="font-heading text-lg font-semibold text-text tabular-nums">{sourceCount}</p><p className="text-[11px] text-text-muted">Sources</p></div>
-                <div><p className={`font-heading text-lg font-semibold tabular-nums ${gapCount ? "text-tang" : "text-text"}`}>{gapCount}</p><p className="text-[11px] text-text-muted">Open gaps</p></div>
-                <div><p className={`font-heading text-lg font-semibold tabular-nums ${reviewCount ? "text-tang" : "text-text"}`}>{reviewCount ?? "—"}</p><p className="text-[11px] text-text-muted">In review</p></div>
-              </div>
+          <Section
+            bordered
+            title="Knowledge"
+            actions={<PanelLink href={`/programs/${id}/knowledge`}>Knowledge</PanelLink>}
+          >
+            <div className="flex items-center gap-4">
+              <span className="grid size-8 shrink-0 place-items-center rounded-[2px] bg-panel-2 text-text-muted">
+                <IconDoc size={16} />
+              </span>
+              <SummaryNumbers
+                items={[
+                  { value: sourceCount, label: "Sources" },
+                  { value: gapCount, label: "Open gaps", tone: gapCount ? "text-tang" : undefined },
+                  { value: reviewCount ?? "—", label: "In review", tone: reviewCount ? "text-tang" : undefined },
+                ]}
+              />
             </div>
           </Section>
 
-          <Section bordered title="Helpers" actions={<Link href={`/programs/${id}/helpers`} className="text-xs text-text-muted hover:text-text">Helpers →</Link>}>
+          <Section bordered title="Helpers" actions={<PanelLink href={`/programs/${id}/helpers`}>Helpers</PanelLink>}>
             {helperStatsR.status === "rejected" ? (
-              <p className="text-sm text-text-muted">Helper stats are unavailable right now.</p>
+              <Notice tone="warn">Helper stats are unavailable right now.</Notice>
             ) : (
-              <div className="flex items-center gap-3">
-                <span className="grid size-9 shrink-0 place-items-center rounded-full bg-panel-2 text-text-muted"><IconUsers size={16} /></span>
-                <div className="grid flex-1 grid-cols-3 gap-2 text-center">
-                  <div><p className="font-heading text-lg font-semibold text-text tabular-nums">{activeHelperCount ?? "—"}</p><p className="text-[11px] text-text-muted">Active</p></div>
-                  <div><p className="font-heading text-lg font-semibold text-mint tabular-nums">{helperResolvedCount ?? "—"}</p><p className="text-[11px] text-text-muted">Resolved</p></div>
-                  <div><p className="font-heading text-lg font-semibold text-text tabular-nums">{acceptRatePct != null ? `${acceptRatePct}%` : "—"}</p><p className="text-[11px] text-text-muted">Accept rate</p></div>
-                </div>
+              <div className="flex items-center gap-4">
+                <span className="grid size-8 shrink-0 place-items-center rounded-[2px] bg-panel-2 text-text-muted">
+                  <IconUsers size={16} />
+                </span>
+                <SummaryNumbers
+                  items={[
+                    { value: activeHelperCount ?? "—", label: "Active" },
+                    { value: helperResolvedCount ?? "—", label: "Resolved", tone: "text-mint" },
+                    { value: acceptRatePct != null ? `${acceptRatePct}%` : "—", label: "Accept rate" },
+                  ]}
+                />
               </div>
             )}
           </Section>
         </div>
 
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t border-line pt-5 text-xs text-text-muted">
-          <span>Source health</span><span>{sourceCount} sources configured</span><span>{gapCount} open knowledge gaps</span>
-          <Link href={`/programs/${id}/settings`} className="ml-auto text-text hover:text-brand">Settings →</Link>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-line pt-5 text-[12px] text-text-muted">
+          <p className="pixie-eyebrow flex items-center gap-2">
+            <span className="pixie-mark" aria-hidden="true" />
+            Source health
+          </p>
+          <p>
+            <span className="font-mono tabular-nums text-text">{sourceCount}</span> sources configured
+          </p>
+          <p>
+            <span className="font-mono tabular-nums text-text">{gapCount}</span> open knowledge gaps
+          </p>
+          <Link
+            href={`/programs/${id}/settings`}
+            className="pixie-button pixie-button-ghost pixie-button-sm ml-auto"
+          >
+            Settings
+            <IconArrowRight size={16} />
+          </Link>
         </div>
       </div>
     </>
+  );
+}
+
+// The overview hero. Same recipe as PageHeader — eyebrow, pixel H1, muted
+// lede, hairline under — but hand-rolled because this one row has to carry
+// three things PageHeader's string eyebrow can't: the greeting, the program
+// health badge beside it, and Pixie's status note on the right.
+function ProgramHero({
+  greeting,
+  health,
+  title,
+  lede,
+  mascotLine,
+}: {
+  greeting: string;
+  health: string;
+  title: string;
+  lede: string;
+  mascotLine: string | null;
+}) {
+  return (
+    <div className="mb-8 flex flex-wrap items-start justify-between gap-x-8 gap-y-5 border-b border-line pb-6">
+      <div className="min-w-[16rem] flex-1">
+        <p className="pixie-eyebrow flex flex-wrap items-center gap-x-3 gap-y-1.5 text-text-muted">
+          <span className="flex items-center gap-2">
+            <span className="pixie-mark" aria-hidden="true" />
+            {greeting}
+          </span>
+          <StatusBadge status={health} />
+        </p>
+        <h1 className="mt-3 max-w-[34rem] font-display text-[26px] leading-[1.05] text-text sm:text-[34px]">{title}</h1>
+        <p className="mt-3 max-w-[60ch] text-sm text-text-muted">{lede}</p>
+      </div>
+      {/* Pixie's own line, as a note in her voice — a bordered panel, square
+          corners, no bubble tail. Absent when Core is down and she has
+          nothing to report. */}
+      {mascotLine && (
+        <div className="flex w-full max-w-[21rem] items-start gap-2.5 rounded-[3px] border border-line bg-panel px-3 py-2.5 sm:w-auto">
+          <img src="/pixie-hero.png" alt="" width={32} height={32} className="pixel-art size-8 shrink-0" />
+          <p className="min-w-0 text-[13px] leading-snug text-text">{mascotLine}</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// The one way a panel header points somewhere else: a ghost button with the
+// pixel arrow, so every header row on this page reads the same.
+function PanelLink({ href, children }: { href: string; children: React.ReactNode }) {
+  return (
+    <Link href={href} className="pixie-button pixie-button-ghost pixie-button-sm">
+      {children}
+      <IconArrowRight size={16} />
+    </Link>
+  );
+}
+
+// A three-figure summary for a panel: figures are operational, so mono, and
+// only a figure that is asking for attention takes a tone.
+function SummaryNumbers({
+  items,
+}: {
+  items: { value: string | number; label: string; tone?: string }[];
+}) {
+  return (
+    <div className="grid flex-1 grid-cols-3 gap-2 text-center">
+      {items.map((item) => (
+        <div key={item.label} className="min-w-0">
+          <p className={`font-mono text-[19px] leading-none tabular-nums ${item.tone ?? "text-text"}`}>
+            {item.value}
+          </p>
+          <p className="mt-1.5 truncate text-[11px] text-text-muted">{item.label}</p>
+        </div>
+      ))}
+    </div>
   );
 }
 

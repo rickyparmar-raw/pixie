@@ -1,69 +1,42 @@
-"use client";
-
-import React, { useRef } from "react";
-import gsap from "gsap";
-import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { useGSAP } from "@gsap/react";
-import { LandingHero } from "./LandingHero";
-import { LandingWhy } from "./LandingWhy";
-import { LandingKinetic } from "./LandingKinetic";
-import { LandingTools } from "./LandingTools";
-import { LandingCommunities } from "./LandingCommunities";
-import { LandingShowcase } from "./LandingShowcase";
-import { LandingFooter } from "./LandingFooter";
+import { getSession, isLocalDemoEnabled } from "@/lib/session";
+import { PixieNav } from "./PixieNav";
 import "./landing.css";
 
-gsap.registerPlugin(ScrollTrigger, useGSAP);
-
-export function LandingExperience() {
-  const rootRef = useRef<HTMLDivElement>(null);
-
-  useGSAP(
-    () => {
-      const media = gsap.matchMedia();
-
-      media.add("(prefers-reduced-motion: no-preference)", () => {
-        // Refresh ScrollTrigger after elements mount
-        ScrollTrigger.refresh();
-      });
-
-      return () => media.revert();
-    },
-    { scope: rootRef }
-  );
-
-  const handleExplore = () => {
-    const whyEl = document.getElementById("why");
-    if (whyEl) {
-      whyEl.scrollIntoView({ behavior: "smooth" });
-    }
-  };
+export async function LandingExperience() {
+  const session = await getSession();
+  const setupHref = session ? "/wizard" : "/api/auth/login";
+  const demoHref = !session && isLocalDemoEnabled() ? "/api/auth/dev-login" : null;
 
   return (
-    <div
-      ref={rootRef}
-      className="landing-root bg-[#0e100f] text-[#fffce1] selection:bg-[#0ae448] selection:text-[#0e100f] min-h-screen overflow-x-hidden font-sans"
-    >
-      {/* 1. Hero Section with Top Announcement & Floating Navbar */}
-      <LandingHero onExploreClick={handleExplore} />
-
-      {/* 2. { Why Pixie® } Section with Scrub Highlighting */}
-      <LandingWhy />
-
-      {/* 3. Kinetic Typography Horizontal Scroll & Bezier Graph */}
-      <LandingKinetic />
-
-      {/* 4. { Pixie® Tools } Section (Slack Ingestion, Evidence Engine, Smart Handoff, Knowledge Matrix) */}
-      <LandingTools />
-
-      {/* 5. { Communities using Pixie® } Logos & Metrics */}
-      <LandingCommunities />
-
-      {/* 6. Showcase 3D Card Carousel with Live Interactive Sandbox */}
-      <LandingShowcase />
-
-      {/* 7. Footer: 6-Column Directory & Warm Cream Newsletter */}
-      <LandingFooter />
+    <div className="pixie-landing">
+      <a className="px-skip" href="#main">
+        Skip to content
+      </a>
+      <img
+        className="px-art"
+        src="/pixie-night-background.png"
+        alt=""
+        aria-hidden="true"
+      />
+      <PixieNav setupHref={setupHref} demoHref={demoHref} />
+      <main id="main" className="px-main">
+        <section className="px-hero" aria-labelledby="landing-title">
+          <div className="px-hero-copy">
+            <h1 id="landing-title">
+              <span>stop answering</span>{" "}
+              <span>the same question</span>{" "}
+              <span className="px-accent">40 times.</span>
+            </h1>
+            <p className="px-subcopy">Pixie helps run support for your Slack community.</p>
+            <a className="px-primary-cta" href={setupHref}>
+              <span className="px-cta-face">
+                <span>Set up Pixie</span>
+                <span className="px-cta-arrow" aria-hidden="true" />
+              </span>
+            </a>
+          </div>
+        </section>
+      </main>
     </div>
   );
 }

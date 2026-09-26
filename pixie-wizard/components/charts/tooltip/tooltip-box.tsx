@@ -175,12 +175,17 @@ function TooltipBoxInner({
   const isFlipped = flippedOverride ?? shouldFlipX;
   const transformOrigin = isFlipped ? "right top" : "left top";
 
+  // The chip is Pixie's inverted card: a hard 3px corner, a 1px hairline in
+  // the chip's own ink tone, no drop shadow and no backdrop blur — the night
+  // UI has neither. Because there is no blur class, `panelStyle` no longer
+  // needs the `backdropFilter` escape hatch it used to gate on. Base size is
+  // 12px and figures are tabular; a caller's own `text-*` on the content still
+  // wins, as before.
   const panelClassName = cn(
-    "min-w-[140px] overflow-hidden rounded-lg text-chart-tooltip-foreground shadow-lg",
+    "min-w-[140px] overflow-hidden rounded-md border border-chart-tooltip-foreground/20 text-xs text-chart-tooltip-foreground tabular-nums",
     panelStyle?.backgroundColor === undefined &&
       backgroundColor === chartCssVars.tooltipBackground &&
-      "bg-chart-tooltip-background",
-    panelStyle?.backdropFilter === undefined && "backdrop-blur-md"
+      "bg-chart-tooltip-background"
   );
   const panelStyleResolved = {
     transformOrigin,

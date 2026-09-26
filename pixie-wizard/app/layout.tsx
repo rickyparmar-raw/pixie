@@ -1,12 +1,20 @@
 import type { Metadata } from "next";
-import { JetBrains_Mono, Inter, Poppins } from "next/font/google";
+import { JetBrains_Mono, Inter } from "next/font/google";
 import "./globals.css";
 
-// Three voices: Poppins for headings (matches the marketing site's display
-// type), Inter for body/UI copy, JetBrains Mono for operational text.
+// Two voices: Inter for body/UI copy, JetBrains Mono for operational text.
+// The third — the pixel display face — is `public/pixelify.woff2`, declared as
+// "Pixie Pixel" in globals.css and shared with the landing page and the setup
+// wizard, so there is no third font file to load here.
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono-heading" });
 const sans = Inter({ subsets: ["latin"], variable: "--font-sans" });
-const heading = Poppins({ subsets: ["latin"], weight: ["500", "600", "700", "800"], variable: "--font-heading" });
+
+// Night is the default palette (see globals.css), so a returning day-mode user
+// would otherwise get a flash of the night ground before React hydrates. Stamp
+// the stored choice onto <html> before the first paint instead. Static string,
+// wrapped in try/catch because localStorage throws outright in some privacy
+// modes — and a blocked read just means "no preference", which is night.
+const themeStamp = `try{var t=localStorage.getItem("pixie-theme");if(t==="light"||t==="dark"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}`;
 
 export const metadata: Metadata = {
   title: "Pixie — grounded support for programs",
@@ -20,7 +28,10 @@ export const viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${mono.variable} ${sans.variable} ${heading.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${mono.variable} ${sans.variable}`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: themeStamp }} />
+      </head>
       <body className="min-h-screen antialiased">{children}</body>
     </html>
   );

@@ -1,0 +1,141 @@
+/* Onboarding art layer: the night scene sits behind the whole wizard page.
+   The page background is the asset's own sky colour (#08110d) so the top of
+   the image joins seamlessly with the empty sky above it.
+
+   Art geometry (measured off the 1672x940 asset, 1:1, no filters/crop):
+      horizon line .................. y 773.5  (0.82287 of height)
+      skyline mass top (left) ....... y 600
+      character hair top ........... y 624    (0.66383 of height)
+      character hair bottom ........ y 787    (incl. the 12px dark outline)
+      character hair x ............. 1312..1535 (0.78469..0.91806 of width)
+      crescent moon (body + dithered glow) x 172..239, y 188..271
+
+   Tailwind preflight sets `img { max-width: 100% }`, which pinned the art to
+   exactly the page width at every breakpoint. That made the `width: 125%` /
+   `170%` rules dead, so the image stayed left-anchored and the moon always
+   landed behind the left column - over the form labels on the Program and
+   Helpers steps. `max-width: none` below is what makes the framing real.
+
+   Placement model. `width: X%` and `margin-bottom` are both percentages of the
+   page width, so the framing is width-driven. Y below is the DOWNWARD push in
+   % of the page width, written `margin-bottom: -Y%` (a positive margin-bottom
+   would lift the box instead). Right-anchored:
+      k        = X/100 * pageWidth / 1672          image scale
+      Lx       = pageWidth - 1672k                 image left edge
+      pageX(i) = Lx + i*k = pageWidth - (1672 - i)*k
+   The moon's right edge (i 239) clears the left of the page exactly when
+   k >= pageWidth / 1433, i.e. X >= 116.7%. Everything above that is picked
+   so the character lands in the clear band under the preview panel, whose
+   floor is the panel's bottom edge - 889px at 1448x1086 and at every wider
+   desktop width, 113..177px under a full-width stacked panel.
+
+   >=1100px placement, solved for a 1448x1086 page (X 121%, Y 10.5%):
+      image width .................. 121% of the page (1752.1 x 985.0)
+      image bottom ................. page bottom + Y (10.5% = 152.0px)
+      -> image top y 253.0, bottom y 1238.0 (152px below the fold)
+      -> moon right edge lands at page x -53.6: body and glow fully off-screen
+      -> character hair x 1070.8..1304.4, hair top y 906.9, hair bottom y 1077.7
+      -> the panel ends at y 889, so the head clears it by 18px and the whole
+         head sits inside the 1086px page, with the rock and grass still on
+         screen to its right
+   The head is 170.8px tall there, so it only clears the panel outright while
+   the page has the room for it (viewport ~1086px tall or more). The
+   0.189*X - Y = 12.37% of the page width that separates hair top from panel
+   bottom is the same at every width, so on a shorter page the hair crown
+   tucks behind the panel's opaque bottom edge and the face still comes out
+   below it (+3..59px of clearance) - the only trade the fixed 1433px
+   moon-to-character gap allows.
+
+   700-1099px (X 125%, Y 13.02%) stacks the panel full width, so the band is
+   113px: the head clears the panel by 4..39px there, and 5..16px of it runs
+   past the page bottom.
+   <700px (X 170%, Y 17%) has the same 113..177px band under a full-width
+   panel, and the stacked footer buttons then cover all but the face on the
+   long scroll. What that buys is the moon sitting 105..274px off-screen at
+   every phone width, which is the half of this that actually costs
+   readability.
+
+   The page needs `isolation: isolate` (it has it) for z-index: -1 to land
+   above the page background instead of behind it. */
+.ob-art {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.ob-art-img {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: auto;
+  /* Beats the Tailwind preflight `img { max-width: 100% }`, which would
+     otherwise pin the art to the page width and cancel every breakpoint. */
+  max-width: none;
+  image-rendering: pixelated;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* 14 pixel "+" sparkles in a 1448x1086 grid, stretched to the page width so
+   they keep the reference's positions at any desktop size. None sits in the
+   header band or on top of any copy. The one at 1388,72 used to land inside
+   the "Exit setup" button below ~1290px, so it moved to 1424,104: right of
+   the header's right edge at every width, and above the stepper's top. */
+.ob-art-stars {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  background-size: 100% 100%;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1448' height='1086' viewBox='0 0 1448 1086' shape-rendering='crispEdges'%3E%3Cpath fill='%23a6ee5a' fill-opacity='.66' d='M64 109h3v9h-3zM61 112h9v3h-9zM325 71h3v9h-3zM322 74h9v3h-9zM1186 84h3v9h-3zM1183 87h9v3h-9zM1352 152h3v9h-3zM1349 155h9v3h-9zM1294 207h3v9h-3zM1291 210h9v3h-9zM1357 636h3v9h-3zM1354 639h9v3h-9zM44 466h3v9h-3zM41 469h9v3h-9z'/%3E%3Cpath fill='%237fb34a' fill-opacity='.5' d='M151 154h3v9h-3zM148 157h9v3h-9zM119 182h3v9h-3zM116 185h9v3h-9zM1427 104h3v9h-3zM1424 107h9v3h-9zM1236 246h3v9h-3zM1233 249h9v3h-9zM1404 297h3v9h-3zM1401 300h9v3h-9zM808 403h3v9h-3zM805 406h9v3h-9zM77 258h3v9h-3zM74 261h9v3h-9z'/%3E%3C/svg%3E");
+}
+
+/* Stacked layout. Right-anchored and wider than the page, so the rock and the
+   character keep the bottom-right corner to themselves instead of drifting
+   under the stacked panel. 125% puts the moon 50..73px off the left edge. */
+@media (max-width: 1099px) {
+  .ob-art-img {
+    left: auto;
+    right: 0;
+    width: 125%;
+    margin-bottom: -13.02%;
+  }
+}
+
+@media (max-width: 699px) {
+  .ob-art-img {
+    /* 170% keeps the character ~0.29x the page width tall and pushes the moon
+       105..178px clear of the left edge at phone widths. */
+    width: 170%;
+    margin-bottom: -17%;
+  }
+
+  /* Keep only three, all hard against the 14px left margin the stacked shell
+     leaves free. Anything further in lands on the header, the stepper or the
+     title at phone widths. */
+  .ob-art-stars {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1448' height='1086' viewBox='0 0 1448 1086' shape-rendering='crispEdges'%3E%3Cpath fill='%23a6ee5a' fill-opacity='.66' d='M2 466h3v9h-3zM-1 469h9v3h-9zM2 700h3v9h-3zM-1 703h9v3h-9zM2 980h3v9h-3zM-1 983h9v3h-9z'/%3E%3C/svg%3E");
+  }
+}
+
+/* >=1100px. Wider than the page and anchored right and bottom, which is what
+   throws the asset's top-left crescent moon - body and dithered glow - clean
+   off the left edge while the character still rises into the band under the
+   preview panel. 10.5% of the page width is the recomputed overlap: at 1448
+   that is 152px of scene below the fold, putting the hair top at y 906.9,
+   clear of the panel's y 889, and the hair bottom at y 1077.7, inside the
+   1086px page. */
+@media (min-width: 1100px) {
+  .ob-art-img {
+    left: auto;
+    right: 0;
+    width: 121%;
+    margin-bottom: -10.5%;
+  }
+}

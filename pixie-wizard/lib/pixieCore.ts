@@ -279,6 +279,30 @@ export async function coreMacroSend(macroId: number, payload: Record<string, unk
   return request(`/internal/v1/macros/${macroId}`, "macro send failed", send("POST", payload));
 }
 
+export async function coreMacroBulk(macroId: number, payload: Record<string, unknown>): Promise<{
+  sent: number[];
+  skipped: Array<{ ticketId: number; reason: string }>;
+}> {
+  return request(`/internal/v1/macros/${macroId}/bulk`, "bulk macro send failed", send("POST", payload));
+}
+
+// Both reads are actor-gated in Core: pass the server-verified linked Slack ID.
+export async function coreMacrosWaiting(programId: string, actorId: string, category?: string): Promise<{ count: number; ticketIds: number[] }> {
+  const params = new URLSearchParams({ actorId });
+  if (category) params.set("category", category);
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/macros/waiting?${params}`,
+    "waiting ticket count failed",
+  );
+}
+
+export async function coreMacroTemplates(programId: string, actorId: string): Promise<{ templates: unknown[]; placeholders?: unknown[] }> {
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/macros/templates?actorId=${encodeURIComponent(actorId)}`,
+    "macro templates lookup failed",
+  );
+}
+
 export async function coreAnalytics(programId: string, days = 30): Promise<Record<string, unknown>> {
   return request(`/internal/v1/programs/${encodeURIComponent(programId)}/analytics?days=${days}`, "analytics failed");
 }
@@ -360,6 +384,14 @@ export async function coreIncidentDetail(incidentId: number): Promise<unknown> {
 
 export async function coreIncidentDetect(programId: string, payload: Record<string, unknown>): Promise<unknown> {
   return request(`/internal/v1/programs/${encodeURIComponent(programId)}/incidents`, "incident detection failed", send("POST", payload));
+}
+
+export async function coreIncidentManual(programId: string, payload: Record<string, unknown>): Promise<unknown> {
+  return request(
+    `/internal/v1/programs/${encodeURIComponent(programId)}/incidents/manual`,
+    "manual incident creation failed",
+    send("POST", payload),
+  );
 }
 
 export async function coreIncidentAction(incidentId: number, payload: Record<string, unknown>): Promise<unknown> {

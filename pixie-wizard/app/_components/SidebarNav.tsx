@@ -6,39 +6,49 @@ import type { ComponentType } from "react";
 import {
   IconHome,
   IconGrid,
-  IconUsers,
+  IconKey,
   IconChat,
   IconDoc,
-  IconRadar,
-  IconAlert,
+  IconGaps,
+  IconUsers,
+  IconPeople,
+  IconMacro,
   IconBars,
+  IconGauge,
+  IconRadar,
+  IconSiren,
   IconLog,
-  IconClock,
+  IconHourglass,
   IconGear,
 } from "./icons";
 
 // Small client island so the sidebar can show which route is active without
 // making the whole shell a client component. Just links + usePathname — no
 // state, no effects.
+//
+// Every item gets its own sprite, all from the onboarding's 1-bit pixel pack:
+// the nav is the one place a product shows all of them at once, so repeated
+// icons read as a bug rather than as restraint.
 
-type Item = [slug: string, label: string, Icon: ComponentType<{ size?: number; className?: string }>];
+type IconComponent = ComponentType<{ size?: number; className?: string }>;
+type Item = [slug: string, label: string, Icon: IconComponent];
 
 const MAIN: Item[] = [
   ["tickets", "Tickets", IconChat],
   ["knowledge", "Knowledge", IconDoc],
-  ["gaps", "FAQ gaps", IconAlert],
+  ["gaps", "FAQ gaps", IconGaps],
   ["helpers", "Helpers", IconUsers],
-  ["people", "People", IconUsers],
-  ["macros", "Macros", IconLog],
+  ["people", "People", IconPeople],
+  ["macros", "Macros", IconMacro],
   ["analytics", "Analytics", IconBars],
-  ["usage", "Quota & usage", IconBars],
+  ["usage", "Quota & usage", IconGauge],
   ["radar", "Support radar", IconRadar],
-  ["incidents", "Incidents", IconAlert],
+  ["incidents", "Incidents", IconSiren],
 ];
 
 const SECONDARY: Item[] = [
   ["audit", "Audit", IconLog],
-  ["retention", "Retention", IconClock],
+  ["retention", "Retention", IconHourglass],
   ["settings", "Settings", IconGear],
 ];
 
@@ -58,7 +68,7 @@ function NavLink({
   label: string;
   exact: boolean;
   muted?: boolean;
-  Icon: ComponentType<{ size?: number; className?: string }>;
+  Icon: IconComponent;
 }) {
   const pathname = usePathname();
   const active = isActive(pathname ?? "", href, exact);
@@ -67,13 +77,17 @@ function NavLink({
       href={href}
       prefetch={false}
       aria-current={active ? "page" : undefined}
-      className={`flex items-center gap-2.5 rounded-md py-1.5 pl-2.5 pr-2 text-[13px] transition-colors ${
+      className={`relative flex items-center gap-2.5 rounded-[3px] py-[7px] pl-3 pr-2 text-[13px] transition-colors ${
         active
-          ? "bg-brand/12 font-medium text-text"
-          : `hover:bg-panel-2/70 hover:text-text ${muted ? "text-text-muted/70" : "text-text-muted"}`
+          ? "bg-brand/10 text-text"
+          : `${muted ? "text-text-dim" : "text-text-muted"} hover:bg-panel-2 hover:text-text`
       }`}
     >
-      <Icon size={14} className={`shrink-0 ${active ? "text-brand" : ""}`} />
+      {/* The active step's lime outline, in miniature: a 2px lime bar down the
+          left edge, with the icon carrying the same lime. `pixie-mark-bg` so
+          the bar is the day theme's mark colour rather than lime on cream. */}
+      {active && <span className="pixie-mark-bg absolute inset-y-[3px] left-0 w-[2px]" aria-hidden="true" />}
+      <Icon size={16} className={`shrink-0 ${active ? "text-lime" : ""}`} />
       {label}
     </Link>
   );
@@ -81,10 +95,10 @@ function NavLink({
 
 export function WorkspaceNav() {
   return (
-    <nav className="mt-3 space-y-0.5">
+    <nav className="mt-2.5 space-y-px">
       <NavLink href="/overview" label="Overview" exact Icon={IconHome} />
       <NavLink href="/programs" label="Programs" exact Icon={IconGrid} />
-      <NavLink href="/people" label="People & access" exact Icon={IconUsers} />
+      <NavLink href="/people" label="People & access" exact Icon={IconKey} />
     </nav>
   );
 }
@@ -97,7 +111,7 @@ function MobileNavLink({ href, label, exact }: { href: string; label: string; ex
       href={href}
       prefetch={false}
       aria-current={active ? "page" : undefined}
-      className={`whitespace-nowrap border-b-2 pb-1.5 text-xs transition-colors ${
+      className={`whitespace-nowrap border-b-2 pb-1.5 text-[13px] transition-colors ${
         active ? "border-brand text-text" : "border-transparent text-text-muted"
       }`}
     >
@@ -110,7 +124,7 @@ function MobileNavLink({ href, label, exact }: { href: string; label: string; ex
 export function MobileProgramNav({ programId }: { programId: string }) {
   const base = `/programs/${programId}`;
   return (
-    <nav className="flex w-full gap-4 overflow-x-auto lg:hidden">
+    <nav className="pixie-mobile-nav flex w-full gap-4 overflow-x-auto pr-3 pb-px lg:hidden">
       <MobileNavLink href={base} label="Overview" exact />
       {[...MAIN, ...SECONDARY].map(([slug, label]) => (
         <MobileNavLink key={slug} href={`${base}/${slug}`} label={label} exact={false} />
@@ -123,13 +137,13 @@ export function ProgramNav({ programId }: { programId: string }) {
   const base = `/programs/${programId}`;
   return (
     <>
-      <nav className="mt-2 space-y-0.5">
+      <nav className="mt-2.5 space-y-px">
         <NavLink href={base} label="Overview" exact Icon={IconHome} />
         {MAIN.map(([slug, label, Icon]) => (
           <NavLink key={slug} href={`${base}/${slug}`} label={label} exact={false} Icon={Icon} />
         ))}
       </nav>
-      <nav className="mt-4 space-y-0.5">
+      <nav className="mt-3 space-y-px">
         {SECONDARY.map(([slug, label, Icon]) => (
           <NavLink key={slug} href={`${base}/${slug}`} label={label} exact={false} Icon={Icon} muted />
         ))}

@@ -3,6 +3,7 @@
 import { PieCenter } from "@/components/charts/pie-center";
 import { PieChart } from "@/components/charts/pie-chart";
 import { PieSlice } from "@/components/charts/pie-slice";
+import { EmptyState } from "@/app/_components/DashboardShell";
 
 export type Share = { label: string; value: number; color?: string };
 
@@ -40,22 +41,24 @@ export function SharePie({
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);
 
   if (total === 0) {
-    return <p className="py-10 text-center text-sm text-text-muted">Nothing to split up yet.</p>;
+    return <EmptyState title="Nothing to split up yet." hint="Share appears once questions carry a category." />;
   }
 
   const data = slices.map((slice, index) => ({ ...slice, color: slice.color ?? RAMP[index] }));
 
   return (
     <div className="flex flex-wrap items-center gap-x-9 gap-y-6">
-      <PieChart data={data} size={size} innerRadius={size * 0.31} padAngle={0.02} cornerRadius={3}>
+      {/* 1px corners and a hairline pad: the slices are wedges of flat colour,
+          with no rounding and no hover glow. */}
+      <PieChart data={data} size={size} innerRadius={size * 0.31} padAngle={0.02} cornerRadius={1} hoverOffset={6}>
         {data.map((slice, index) => (
-          <PieSlice index={index} key={slice.label} />
+          <PieSlice index={index} key={slice.label} showGlow={false} />
         ))}
         <PieCenter>
           {({ value, label, isHovered }) => (
             <div className="text-center">
-              <p className="font-heading text-xl font-semibold tabular-nums text-text">{value}</p>
-              <p className="mt-0.5 line-clamp-2 text-[11px] leading-tight text-text-muted">
+              <p className="font-mono text-xl leading-none tabular-nums text-text">{value}</p>
+              <p className="mt-1.5 line-clamp-2 text-[11px] leading-tight text-text-muted">
                 {isHovered ? label : centerLabel}
               </p>
             </div>
@@ -67,7 +70,7 @@ export function SharePie({
         {data.map((slice) => (
           <div key={slice.label} className="flex items-baseline justify-between gap-4">
             <dt className="inline-flex min-w-0 items-center gap-2 text-xs text-text-muted">
-              <span aria-hidden className="size-2 shrink-0 rounded-full" style={{ background: slice.color }} />
+              <span aria-hidden className="size-1.5 shrink-0 rounded-[1px]" style={{ background: slice.color }} />
               <span className="truncate">{slice.label}</span>
             </dt>
             <dd className="shrink-0 text-right">

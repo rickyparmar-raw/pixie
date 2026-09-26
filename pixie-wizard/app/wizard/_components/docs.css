@@ -1,0 +1,323 @@
+/* Docs step only: drop zone, source-kind row, knowledge-quality meter. The shell
+   (page, stepper, preview panel, footer) lives in onboarding-shared.css. */
+
+/* The Docs screen is the reference layout, so its preview cards are pinned to the
+   reference's 13px pitch (tops at 413 / 561 / 709). That lines every lime check
+   mark up with its card title at y 441 / 589 / 737. Scoped to this step so the
+   shared preview panel keeps its own tuning for the other four steps. */
+[data-step-panel="2"] .onboarding-preview .onboarding-preview-list {
+  gap: 13px;
+}
+
+/* ------------------------------------------------------------ drop zone -- */
+
+/* Chrome derives a dashed border's dash length from the border width, so the
+   1px edge collapsed into what reads as a solid line, and CSS cannot ask for a
+   dash length at all. The edge is therefore painted as four repeating gradients
+   over the fill, with the real border dropped rather than left underneath as a
+   second line. The reference measures ~6.5px on / 2.5px off across a soft
+   ~1.7px edge; the dash is half-transparent because that edge is resampled and
+   so reads lighter than a hard one. Dashes begin 4px in, level with where the
+   4px corner arc ends, and stop 4px short of the far corners. Gradients cannot
+   be interpolated, so only the fill transitions on hover. */
+.onboarding-dropzone {
+  --onb-dz-dash: rgb(91 96 92 / 50%);
+  --onb-dz-on: 6.5px;
+  --onb-dz-off: 2.5px;
+  --onb-dz-thick: 1.7px;
+  --onb-dz-inset: 4px;
+  --onb-dz-edge-x: repeating-linear-gradient(90deg, var(--onb-dz-dash) 0 var(--onb-dz-on), #0000 var(--onb-dz-on) calc(var(--onb-dz-on) + var(--onb-dz-off)));
+  --onb-dz-edge-y: repeating-linear-gradient(180deg, var(--onb-dz-dash) 0 var(--onb-dz-on), #0000 var(--onb-dz-on) calc(var(--onb-dz-on) + var(--onb-dz-off)));
+  display: flex;
+  min-height: 208px;
+  align-items: center;
+  justify-content: flex-start;
+  margin-top: 34px;
+  /* 48px plus the 1px the removed border used to add, so the icon keeps its row. */
+  padding: 49px 20px 0;
+  border: 0;
+  border-radius: 4px;
+  background:
+    var(--onb-dz-edge-x) var(--onb-dz-inset) top / calc(100% - 2 * var(--onb-dz-inset)) var(--onb-dz-thick) no-repeat,
+    var(--onb-dz-edge-x) var(--onb-dz-inset) bottom / calc(100% - 2 * var(--onb-dz-inset)) var(--onb-dz-thick) no-repeat,
+    var(--onb-dz-edge-y) left var(--onb-dz-inset) / var(--onb-dz-thick) calc(100% - 2 * var(--onb-dz-inset)) no-repeat,
+    var(--onb-dz-edge-y) right var(--onb-dz-inset) / var(--onb-dz-thick) calc(100% - 2 * var(--onb-dz-inset)) no-repeat,
+    #131615;
+  color: var(--onb-cream);
+  cursor: pointer;
+  flex-direction: column;
+  text-align: center;
+  transition: background-color 90ms steps(2, end);
+}
+
+.onboarding-dropzone:hover {
+  --onb-dz-dash: var(--onb-lime);
+  background-color: #18201a;
+}
+
+.onboarding-drop-icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  color: var(--onb-cream);
+}
+
+.onboarding-drop-icon svg {
+  display: block;
+}
+
+.onboarding-drop-title {
+  margin-top: 15px;
+  color: var(--onb-cream);
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.onboarding-drop-copy {
+  margin-top: 5px;
+  color: var(--onb-dim);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.onboarding-drop-copy span {
+  color: var(--onb-lime);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ---------------------------------------------------------- source kinds -- */
+
+.onboarding-source-grid {
+  display: grid;
+  margin-top: 17px;
+  grid-template-columns: 183fr 161fr 173fr 167fr;
+  gap: 10px;
+}
+
+.onboarding-source-card {
+  display: flex;
+  min-height: 91px;
+  align-items: flex-start;
+  padding: 24px 6px 0 16px;
+  border: 1px solid #292c2a;
+  border-radius: 4px;
+  background: #121714;
+  color: var(--onb-cream);
+  cursor: pointer;
+  gap: 15px;
+  text-align: left;
+  transition: border-color 90ms steps(2, end), background-color 90ms steps(2, end);
+}
+
+.onboarding-source-card:hover {
+  border-color: #454b47;
+  background: #18201a;
+}
+
+.onboarding-source-card[data-selected="true"] {
+  border-color: var(--onb-lime);
+  background: #16240f;
+}
+
+.onboarding-source-mark {
+  position: relative;
+  top: -1px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  color: var(--onb-cream);
+}
+
+.onboarding-source-mark svg {
+  display: block;
+}
+
+/* The mark and the two-line label block are centred against each other, so the
+   icon reads level with the name line instead of riding the card's top edge. */
+.onboarding-source-card > span:last-child {
+  min-width: 0;
+  margin-top: 4px;
+}
+
+.onboarding-source-name {
+  display: block;
+  color: var(--onb-cream);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.onboarding-source-type {
+  display: block;
+  margin-top: 6px;
+  color: var(--onb-muted);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.onboarding-source-link {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.onboarding-source-link .onboarding-field-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.onboarding-source-link .onboarding-input {
+  min-height: 40px;
+  padding: 7px 10px;
+}
+
+.onboarding-source-link .onboarding-button {
+  min-height: 40px;
+  font-size: 14px;
+}
+
+/* ------------------------------------------------------ knowledge meter -- */
+
+.onboarding-quality {
+  display: flex;
+  min-height: 97px;
+  align-items: center;
+  margin-top: 23px;
+  padding: 0 24px 0 26px;
+  border: 1px solid #262a27;
+  border-radius: 4px;
+  background: #121614;
+  gap: 24px;
+}
+
+.onboarding-quality-mark {
+  position: relative;
+  top: -2px;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  place-items: center;
+  color: var(--onb-lime-fill);
+}
+
+.onboarding-quality-mark svg {
+  display: block;
+  transform: scale(1.19);
+}
+
+.onboarding-quality-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.onboarding-quality-title {
+  color: var(--onb-cream);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.onboarding-quality-note {
+  margin-top: 5px;
+  color: var(--onb-muted);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.23;
+}
+
+.onboarding-quality-meter {
+  display: flex;
+  align-items: center;
+  gap: 19.5px;
+  flex: 0 0 auto;
+}
+
+/* Five 37.6px segments on a 4px gap fill a fixed 204px track, so the row keeps
+   its width whatever the score is. */
+.onboarding-quality-bars {
+  position: relative;
+  top: 1px;
+  display: flex;
+  width: 204px;
+  gap: 4px;
+}
+
+.onboarding-quality-bar {
+  display: block;
+  width: 37.6px;
+  height: 12px;
+  border-radius: 3px;
+  background: #363838;
+  flex: 1 1 auto;
+}
+
+.onboarding-quality-bar[data-filled="true"] {
+  background: var(--onb-lime-fill);
+}
+
+.onboarding-quality-count {
+  color: var(--onb-dim);
+  font-size: 15.5px;
+  font-weight: 400;
+  line-height: 1;
+}
+
+@media (max-width: 1050px) {
+  .onboarding-source-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .onboarding-quality {
+    padding: 0 18px;
+    gap: 16px;
+  }
+}
+
+@media (max-width: 520px) {
+  .onboarding-dropzone {
+    min-height: 168px;
+    padding: 17px 16px 16px;
+  }
+
+  .onboarding-source-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .onboarding-source-link {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .onboarding-quality {
+    align-items: flex-start;
+    padding: 16px;
+    flex-wrap: wrap;
+  }
+
+  .onboarding-quality-meter {
+    width: 100%;
+    margin-left: 58px;
+  }
+
+  .onboarding-quality-bars {
+    width: auto;
+  }
+
+  .onboarding-quality-bar {
+    width: 28px;
+  }
+}

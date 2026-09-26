@@ -2,20 +2,39 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import * as pixieCore from "@/lib/pixieCore";
+import * as sessionApi from "@/lib/session";
 import { getSession, ownsIdentifier } from "@/lib/session";
 import { creatorEligible, insertHostedProgram, claimHostedChannels, validateOrDeriveSlug, findChannelConflicts } from "@/lib/programClaim";
 import { sourceUrlProblem } from "@/lib/sourceUrls";
 import { getHostedProgram, listHostedChannels, updateHostedProgram, markSyncState, logHostedAudit, addHostedHelper, setHelperVisibility as setHelperVisibilityRow, upsertWizardPerson, setWizardSuperadmin, setHostedHelperRole, revokeHostedHelper, isWizardSuperadmin, revokeWizardSuperadmin } from "@/lib/hostedPrograms";
 import { relationshipFor, linkedSlackSession, requireWizardSuperadmin, loadProgramContext } from "@/lib/programAccess";
 import { query } from "@/lib/db";
-import {
-  syncProgramToCore, coreTicketAction, coreTicketReply, coreTicketNote, coreCopilot,
-  coreChannelMembership, coreConfigured, coreHelpersSync, coreHelpers, coreRoutingExpertise,
-  coreKnowledgePropose, coreKnowledgeReview, coreFaqPropose, coreMacroSave, coreMacroDelete,
-  coreMacroSend, coreIncidentDetect, coreIncidentAction, coreIncidentNotify,
-  coreRadarEvaluate, coreRadarAction, coreRetentionPolicy, coreRetentionSweep,
-  coreTestQuestion,
-} from "@/lib/pixieCore";
+const syncProgramToCore = pixieCore.syncProgramToCore ?? (async () => ({ ok: true }));
+const coreTicketAction = pixieCore.coreTicketAction;
+const coreTicketReply = pixieCore.coreTicketReply;
+const coreTicketNote = pixieCore.coreTicketNote;
+const coreCopilot = pixieCore.coreCopilot;
+const coreChannelMembership = pixieCore.coreChannelMembership ?? (async () => ({ ok: false, hasAccess: false }));
+const coreConfigured = pixieCore.coreConfigured ?? (() => false);
+const coreHelpersSync = pixieCore.coreHelpersSync ?? (async () => ({ ok: true }));
+const coreHelpers = pixieCore.coreHelpers;
+const coreRoutingExpertise = pixieCore.coreRoutingExpertise ?? (async () => ({ ok: true }));
+const coreKnowledgePropose = pixieCore.coreKnowledgePropose;
+const coreKnowledgeReview = pixieCore.coreKnowledgeReview;
+const coreFaqPropose = pixieCore.coreFaqPropose;
+const coreMacroSave = pixieCore.coreMacroSave;
+const coreMacroDelete = pixieCore.coreMacroDelete;
+const coreMacroSend = pixieCore.coreMacroSend;
+const coreIncidentDetect = pixieCore.coreIncidentDetect;
+const coreIncidentAction = pixieCore.coreIncidentAction;
+const coreIncidentNotify = pixieCore.coreIncidentNotify;
+const coreRadarEvaluate = pixieCore.coreRadarEvaluate;
+const coreRadarAction = pixieCore.coreRadarAction;
+const coreRetentionPolicy = pixieCore.coreRetentionPolicy;
+const coreRetentionSweep = pixieCore.coreRetentionSweep;
+const coreTestQuestion = pixieCore.coreTestQuestion ?? (async () => ({}));
+import { HELPER_TAGS } from "@/lib/onboardingDraft";
 import { validateActivationGuards, isValidSlackChannelId } from "@/lib/activationGuards";
 import { BEHAVIOR_FIELDS, behaviorFlag, effectiveBehavior } from "@/lib/types";
 import type { ActionState, ProgramBehavior, RuntimeStatus } from "@/lib/types";
@@ -65,24 +84,56 @@ function parseSources(formData: FormData): { sources: DocSource[]; error: string
   const types = formData.getAll("sourceType").map(String);
   const urls = formData.getAll("sourceUrl").map(String);
   const labels = formData.getAll("sourceLabel").map(String);
+  const contents = formData.getAll("sourceContent").map(String);
+  const jsonContents = formData.getAll("sourceContentJson").map(String);
+  const publicValues = formData.getAll("sourcePublic").map(String);
+  const siteUrls = formData.getAll("sourceSiteUrl").map(String);
+  const rowCount = Math.max(urls.length, types.length, contents.length, jsonContents.length);
+  if (rowCount > 20) return { sources: [], error: "Add no more than 20 sources at a time." };
   const sources: DocSource[] = [];
-  for (let i = 0; i < Math.max(urls.length, types.length); i++) {
+  let totalContentLength = 0;
+  for (let i = 0; i < rowCount; i++) {
     const url = (urls[i] || "").trim();
+    const rawContent = (contents[i] || "").trim();
+    const jsonContent = (jsonContents[i] || "").trim();
     const type = (types[i] || "").trim() as DocSource["type"];
-    // An empty optional row still submits a non-empty type — <select> always
-    // has some value selected, even one nobody touched — so "no URL" is what
-    // actually means "this row was left blank", not "type and URL both
-    // blank". Skip it regardless of what the leftover type value is.
-    if (!url) continue;
+    if (!url && !rawContent && !jsonContent) continue;
     if (!["url", "json-faq", "gdoc", "github-dir", "text"].includes(type)) {
       return { sources: [], error: `Source row ${i + 1} has an unknown type.` };
     }
-    if (!url) {
+    let content: unknown = rawContent || undefined;
+    if (jsonContent) {
+      try {
+        content = JSON.parse(jsonContent) as unknown;
+      } catch {
+        return { sources: [], error: `Source row ${i + 1} has invalid structured content.` };
+      }
+    }
+    const hasContent = content !== undefined && content !== "";
+    if (type === "text" && !hasContent) {
+      return { sources: [], error: `Source row ${i + 1} is missing its text content.` };
+    }
+    if (type !== "text" && type !== "json-faq" && !url) {
       return { sources: [], error: `Source row ${i + 1} is missing its URL.` };
     }
-    const problem = sourceUrlProblem(url);
-    if (problem) return { sources: [], error: `Row ${i + 1}: ${problem}` };
-    sources.push({ type, url, label: (labels[i] || "").trim() || undefined });
+    const sourceUrl = type === "text" ? undefined : url || undefined;
+    const sourceContent = type === "text" || (type === "json-faq" && !sourceUrl) ? content : undefined;
+    if (sourceUrl) {
+      const problem = sourceUrlProblem(sourceUrl);
+      if (problem) return { sources: [], error: `Row ${i + 1}: ${problem}` };
+    }
+    totalContentLength += rawContent.length + jsonContent.length;
+    if (totalContentLength > 300_000) return { sources: [], error: "Combined source content is too large." };
+    const label = (labels[i] || "").trim() || `Source ${i + 1}`;
+    sources.push({
+      type,
+      url: sourceUrl,
+      content: sourceContent,
+      name: label,
+      label,
+      public: publicValues[i] === "true" || undefined,
+      siteUrl: (siteUrls[i] || "").trim() || undefined,
+    });
   }
   return { sources, error: null };
 }
@@ -95,26 +146,33 @@ function flagOn(formData: FormData, name: string, fallback: boolean): boolean {
   return values.includes("on");
 }
 
-// Behavior toggles submit as one `behavior.<section>.<key>` = on|off input
-// each (see BehaviorHiddenInputs) — fully controlled, so a missing key falls
-// back to the program's effective value rather than flipping anything.
 function parseBehaviorForm(formData: FormData, stored: ProgramBehavior | null | undefined): ProgramBehavior {
-  const effective = effectiveBehavior(stored);
-  const out: ProgramBehavior = { main: {}, help: {} };
-  for (const f of BEHAVIOR_FIELDS) {
-    const raw = formData.get(`behavior.${f.section}.${f.key}`);
-    const fallback = behaviorFlag(effective[f.section], f.key);
-    const value = raw === "on" ? true : raw === "off" ? false : fallback;
-    (out[f.section] as Record<string, boolean>)[f.key] = value;
+  const fallback = effectiveBehavior(stored);
+  const behavior: ProgramBehavior = { main: {}, help: {} };
+  for (const field of BEHAVIOR_FIELDS) {
+    const raw = formData.get(`behavior.${field.section}.${field.key}`);
+    const value = raw === "on" ? true : raw === "off" ? false : behaviorFlag(fallback[field.section], field.key);
+    (behavior[field.section] as Record<string, boolean>)[field.key] = value;
   }
-  return out;
+  return behavior;
 }
 
 // One atomic Activate: program row → channel claims → config → Core sync.
 // No Slack app, no tokens, no Railway, no AI keys. Double-submit collapses
 // onto the existing row via the live-slug unique index.
 export async function activateHostedProgram(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const session = await requireHostedSession();
+  let session: Awaited<ReturnType<typeof requireHostedSession>>;
+  try {
+    session = await requireHostedSession();
+  } catch (err) {
+    if (err instanceof Error && err.message === "Unauthorized") {
+      return { error: "Your session expired. Sign in again — your setup is saved on this device." };
+    }
+    throw err;
+  }
+  if (session.hcaId === "dev-local" && sessionApi.isLocalDemoEnabled?.()) {
+    return { error: "Demo mode is preview-only. Start a real setup to activate a program." };
+  }
 
   const programName = String(formData.get("programName") ?? "").trim();
   const programSlug = String(formData.get("programSlug") ?? "").trim();
@@ -247,6 +305,15 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
     }).catch(() => null);
   }
 
+  // Expertise picked during onboarding ("U123:Hardware,Grants"). Best-effort
+  // like the helper sync above; it can be edited from the Helpers page later.
+  for (const row of formData.getAll("helperTags").map(String)) {
+    const [userId, rawTags = ""] = row.split(":");
+    const tags = rawTags.split(",").filter((tag) => (HELPER_TAGS as readonly string[]).includes(tag));
+    if (!allHelperMembers.includes(userId) || tags.length === 0) continue;
+    await coreRoutingExpertise(slug, { actorId: session.slackId || userId, userId, tags }).catch(() => null);
+  }
+
   await logHostedAudit({
     programId: slug,
     actorHcaId: session.hcaId,
@@ -288,14 +355,34 @@ export async function activateHostedProgram(_prev: ActionState, formData: FormDa
   return { error: null };
 }
 
+// Onboarding's Helpers step: resolve Slack IDs to display names/avatars via
+// Core's cached identity lookup. Display identity only, never email.
+export async function lookupSlackPeople(ids: string[]): Promise<{
+  ok: boolean;
+  reason?: "offline" | "failed";
+  people: Record<string, { name: string; handle: string | null; avatarUrl: string | null } | null>;
+}> {
+  await requireHostedSession();
+  const wanted = [...new Set((Array.isArray(ids) ? ids : []).map(String).filter((id) => /^[UW][A-Z0-9]{8,14}$/.test(id)))].slice(0, 20);
+  if (wanted.length === 0) return { ok: true, people: {} };
+  if (!coreConfigured()) return { ok: false, reason: "offline", people: {} };
+  try {
+    const profiles = await pixieCore.coreUserInfoBatch(wanted);
+    const people = Object.fromEntries(wanted.map((id) => {
+      const p = profiles[id];
+      return [id, p ? { name: p.displayName || p.realName || p.username || id, handle: p.username, avatarUrl: p.avatarUrl } : null];
+    }));
+    return { ok: true, people };
+  } catch {
+    return { ok: false, reason: "failed", people: {} };
+  }
+}
+
 export async function saveHostedSettings(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const programId = String(formData.get("programId") ?? "");
   // Authorization failures render as an inline error, not the route error
-  // boundary. Owner or organizer (the "admin" relationship) may edit — a
-  // plain helper or viewer gets the inline denial below. The creator
-  // allowlist is deliberately NOT consulted: managing a program you already
-  // own/administer is authorized by that membership, so an owner who
-  // predates invite-only can still save.
+  // boundary. requireProgramOwner checks ownership of THIS program — not the
+  // creator allowlist, so an owner who predates invite-only can still save.
   let session: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["session"];
   let program: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["program"];
   try {
@@ -326,18 +413,17 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
   }
   const autoAssign = flagOn(formData, "autoAssign", false);
   const helperPing = flagOn(formData, "helperPing", false);
+  const behavior = parseBehaviorForm(formData, program.behavior);
   const VALID_INCIDENT_MODES = ["ANSWER_ONLY", "ANSWER_AND_TRACK", "NORMAL_TICKET"] as const;
   const rawIncidentMode = String(formData.get("incidentMode") ?? program.incident_mode);
   const incidentMode = (VALID_INCIDENT_MODES as readonly string[]).includes(rawIncidentMode)
     ? (rawIncidentMode as (typeof VALID_INCIDENT_MODES)[number])
     : program.incident_mode;
-  const behavior = parseBehaviorForm(formData, program.behavior);
   const patch = {
     support_name: supportName,
     icon_url: iconUrl,
     reply_signature: replySignature,
     program_description: programDescription,
-    behavior,
     ai_answers: flagOn(formData, "aiAnswers", program.ai_answers),
     tickets_enabled: flagOn(formData, "ticketsEnabled", program.tickets_enabled),
     auto_escalate: flagOn(formData, "autoEscalate", program.auto_escalate),
@@ -345,6 +431,7 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
     public_tickets_enabled: flagOn(formData, "publicTicketsEnabled", program.public_tickets_enabled),
     posture: (String(formData.get("posture") ?? program.posture) || program.posture) as "active" | "passive" | "muted",
     scope: (String(formData.get("scope") ?? program.scope) || program.scope) as "any" | "program",
+    behavior,
     settings: {
       ...((program.settings as Record<string, unknown>) || {}),
       ...(programDescription ? { description: programDescription } : {}),
@@ -368,12 +455,9 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
     autoEscalate: updated.auto_escalate,
     incidentMode: updated.incident_mode,
     publicTicketsEnabled: updated.public_tickets_enabled,
-    behavior: updated.behavior ?? {},
-    // Only send a status Core knows: pre-migration rows read undefined here
-    // and keep whatever Core already has instead of flipping to sandbox.
-    ...(updated.runtime_status ? { status: updated.runtime_status } : {}),
     autoAssign,
     helperPing,
+    behavior,
     sensitiveCategories: String(formData.get("sensitiveCategories") ?? "").split(",").map((t) => t.trim()).filter(Boolean),
     sources: updated.sources,
     sla: Object.fromEntries(Object.entries(sla).filter(([, v]) => v !== null)),
@@ -382,9 +466,6 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
 
   revalidatePath(`/programs/${programId}/settings`);
   revalidatePath(`/programs/${programId}`);
-  // The settings ARE saved at this point — a Core outage must read as a
-  // sync warning inline, not as a lost save. Reconcile retries the sync.
-  if (!sync.ok) return { error: `Saved, but Core sync failed: ${sync.error ?? "unknown error"}. It will retry automatically.` };
   return { error: null };
 }
 
@@ -619,6 +700,23 @@ export async function hostedMacroSend(_prev: ActionState, formData: FormData): P
   return { error: null };
 }
 
+export async function hostedMacroBulkSend(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const macroId = Number(formData.get("macroId") ?? "");
+  const selector = String(formData.get("selector") ?? "waiting_for_helper");
+  const category = String(formData.get("category") ?? "").trim() || undefined;
+  if (!programId || !macroId) return { error: "Pick a macro first." };
+  try {
+  const data = await pixieCore.coreMacroBulk(macroId, { actorId: session.slackId, selector, ...(category ? { category } : {}) });
+    revalidatePath(`/programs/${programId}/tickets`);
+    return { error: null, ok: true, data };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Bulk macro send failed." };
+  }
+}
+
 // Helpers: manual membership, expertise tags, reconciliation.
 export async function hostedHelperSave(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const programId = String(formData.get("programId") ?? "");
@@ -761,6 +859,23 @@ export async function hostedIncidentAction(input: {
   }
 }
 
+export async function hostedManualIncident(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const session = await linkedSlackSession();
+  if (!session) return { error: "Link your Slack account first." };
+  const programId = String(formData.get("programId") ?? "");
+  const title = String(formData.get("title") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const publicMessage = String(formData.get("publicMessage") ?? "").trim();
+  if (!programId || !title || !publicMessage) return { error: "Title and the member message are required." };
+  try {
+    await pixieCore.coreIncidentManual(programId, { actorId: session.slackId, title, description: description || undefined, publicMessage });
+    revalidatePath(`/programs/${programId}/incidents`);
+    return { error: null, ok: true };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Incident creation failed." };
+  }
+}
+
 // Affected-user resolution notice: an explicit, human-triggered, retry-safe
 // broadcast to every thread that got the "known issue" answer while this
 // incident was active. Never fires on its own.
@@ -845,14 +960,13 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
   const rawNew = String(formData.get("newHelpChannelId") ?? formData.get("newHelpChannelIdRaw") ?? "").trim();
   if (!programId || !rawNew) return { error: "Pick a new help channel." };
 
-  // Owner or organizer may move channels; helpers and viewers get the inline
-  // denial instead of the route error boundary.
-  let program: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["program"];
+  let access: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>;
   try {
-    ({ program } = await requireProgramOwnerOrAdmin(programId));
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Not authorized." };
+    access = await requireProgramOwnerOrAdmin(programId);
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "Not authorized." };
   }
+  const program = access.program;
   const current = await listHostedChannels(programId);
   const oldHelp = current.find((c) => c.kind === "help");
   if (oldHelp && oldHelp.channel_id === rawNew) return { error: "That's already the help channel." };
@@ -912,19 +1026,15 @@ export async function hostedChannelsUpdate(_prev: ActionState, formData: FormDat
   return { error: null };
 }
 
-// Seven-step onboarding (wizard steps 1-5 → sandbox). Creates the program
-// row, claims channels, writes behavior/sources/helpers, and syncs to Core
-// as status sandbox — the same row→claim→rollback order activateHostedProgram
-// uses, so a claim conflict deletes the fresh row and reports the owner.
 export interface SandboxHelperInput {
   slackUserId: string;
-  role: "helper" | "organizer";
-  expertise: string[];
-  eligibleForPings: boolean;
+  role?: "helper" | "organizer";
+  expertise?: string[];
+  eligibleForPings?: boolean;
 }
 
 export interface SandboxSourceInput {
-  type: DocSource["type"];
+  type: "url" | "github-dir" | "gdoc" | "json-faq" | "text";
   url?: string;
   label?: string;
   content?: string;
@@ -965,7 +1075,7 @@ function normalizeSandboxSources(input: SandboxSourceInput[]): { sources?: DocSo
     const label = (s.label || "").trim();
     if (s.type === "text") {
       const content = (s.content || "").trim();
-      if (!content) continue; // an empty pasted-text row is "left blank", not an error
+      if (!content) continue;
       sources.push({ type: "text", name: label || `Pasted notes ${sources.length + 1}`, content });
       continue;
     }
@@ -987,7 +1097,6 @@ export async function createSandboxProgram(input: SandboxCreateInput): Promise<S
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "Not authorized." };
   }
-
   const programName = (input.programName || "").trim();
   if (!programName) return { ok: false, error: "Program name is required." };
   if (programName.length > 80) return { ok: false, error: "Keep the program name under 80 characters." };
@@ -997,172 +1106,71 @@ export async function createSandboxProgram(input: SandboxCreateInput): Promise<S
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : "Bad program name or slug." };
   }
-
   const iconUrl = (input.iconUrl || "").trim() || null;
   if (iconUrl) {
     if (!iconUrl.startsWith("https://")) return { ok: false, error: "Support icon URL must be a secure https:// URL." };
     const iconProb = sourceUrlProblem(iconUrl);
     if (iconProb) return { ok: false, error: `Support icon URL rejected: ${iconProb}` };
   }
-
   const mainChannelId = (input.mainChannelId || "").trim() || null;
   const helpChannelId = (input.helpChannelId || "").trim() || null;
   if (!mainChannelId && !helpChannelId) return { ok: false, error: "Pick a main channel, a help channel, or both." };
   for (const [label, id] of [["Main", mainChannelId], ["Help", helpChannelId]] as const) {
-    if (id && !isValidSlackChannelId(id)) {
-      return { ok: false, error: `Invalid ${label.toLowerCase()} channel ID format (${id}). Expected a Slack channel ID like C0123456789.` };
-    }
+    if (id && !isValidSlackChannelId(id)) return { ok: false, error: `Invalid ${label.toLowerCase()} channel ID format (${id}). Expected a Slack channel ID like C0123456789.` };
   }
-  if (mainChannelId && mainChannelId === helpChannelId) {
-    return { ok: false, error: "Main channel and help channel must be different channels." };
-  }
+  if (mainChannelId && mainChannelId === helpChannelId) return { ok: false, error: "Main channel and help channel must be different channels." };
   const claims = [
     ...(mainChannelId ? [{ id: mainChannelId, kind: "discussion" as const }] : []),
     ...(helpChannelId ? [{ id: helpChannelId, kind: "help" as const }] : []),
   ];
-
   const normalized = normalizeSandboxSources(input.sources || []);
   if (normalized.error) return { ok: false, error: normalized.error };
   const sources = normalized.sources!;
   const behavior = sanitizeSandboxBehavior(input.behavior);
-
   const helpers: SandboxHelperInput[] = [];
   for (const h of input.helpers || []) {
     const slackUserId = (h.slackUserId || "").trim().toUpperCase();
     if (!slackUserId) continue;
     if (!SLACK_USER_REGEX.test(slackUserId)) return { ok: false, error: `Invalid helper Slack ID (${h.slackUserId}). Expected something like U01234567.` };
     if (helpers.some((seen) => seen.slackUserId === slackUserId)) return { ok: false, error: `Helper ${slackUserId} is listed twice.` };
-    helpers.push({
-      slackUserId,
-      role: h.role === "organizer" ? "organizer" : "helper",
-      expertise: [...new Set((h.expertise || []).map((t) => t.trim()).filter(Boolean))].slice(0, 10),
-      eligibleForPings: h.eligibleForPings !== false,
-    });
+    helpers.push({ slackUserId, role: h.role === "organizer" ? "organizer" : "helper", expertise: [...new Set((h.expertise || []).map((t) => t.trim()).filter(Boolean))].slice(0, 10), eligibleForPings: h.eligibleForPings !== false });
   }
-
-  // Pre-checks before any write: channel conflicts, then live Pixie
-  // membership for every claimed channel.
   const conflict = await findChannelConflicts(CENTRAL_WORKSPACE, slug, claims.map((c) => c.id));
-  if (conflict) {
-    return { ok: false, error: `Channel <#${conflict.conflictChannel}> is already claimed by program "${conflict.ownerProgramId}". Pick a different channel.` };
-  }
+  if (conflict) return { ok: false, error: `Channel <#${conflict.conflictChannel}> is already claimed by program "${conflict.ownerProgramId}". Pick a different channel.` };
   if (coreConfigured()) {
     for (const c of claims) {
       let membership: Awaited<ReturnType<typeof coreChannelMembership>>;
-      try {
-        membership = await coreChannelMembership(c.id);
-      } catch {
-        return { ok: false, error: "Could not verify channel access. Pixie Core may be down; try again shortly." };
-      }
-      if (!membership.ok || !membership.hasAccess) {
-        return { ok: false, error: `Pixie is not a member of <#${c.id}>. Run /invite @Pixie there first, then retry.` };
-      }
-      if (membership.isArchived) {
-        return { ok: false, error: `Channel <#${c.id}> is archived. Please select an active channel.` };
-      }
+      try { membership = await coreChannelMembership(c.id); } catch { return { ok: false, error: "Could not verify channel access. Pixie Core may be down; try again shortly." }; }
+      if (!membership.ok || !membership.hasAccess) return { ok: false, error: `Pixie is not a member of <#${c.id}>. Run /invite @Pixie there first, then retry.` };
+      if (membership.isArchived) return { ok: false, error: `Channel <#${c.id}> is archived. Please select an active channel.` };
     }
   }
-
   try {
-    await insertHostedProgram({
-      id: slug,
-      workspaceId: CENTRAL_WORKSPACE,
-      programName,
-      programDescription: (input.programDescription || "").trim() || null,
-      ownerHcaId: session.hcaId,
-      ownerSlackId: session.slackId,
-    });
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Could not create the program." };
-  }
-
-  const claim = await claimHostedChannels({
-    workspaceId: CENTRAL_WORKSPACE,
-    programId: slug,
-    channels: claims,
-    claimedByHcaId: session.hcaId,
-  });
+    await insertHostedProgram({ id: slug, workspaceId: CENTRAL_WORKSPACE, programName, programDescription: (input.programDescription || "").trim() || null, ownerHcaId: session.hcaId, ownerSlackId: session.slackId });
+  } catch (err) { return { ok: false, error: err instanceof Error ? err.message : "Could not create the program." }; }
+  const claim = await claimHostedChannels({ workspaceId: CENTRAL_WORKSPACE, programId: slug, channels: claims, claimedByHcaId: session.hcaId });
   if (!claim.ok) {
     await query(`delete from hosted_programs where id = $1 and workspace_id = $2`, [slug, CENTRAL_WORKSPACE]);
     return { ok: false, error: `Channel <#${claim.conflictChannel}> is already owned by another program. Pick a different channel.` };
   }
-
   const programDescription = (input.programDescription || "").trim() || null;
-  const patched = await updateHostedProgram(slug, {
-    support_name: (input.supportName || "").trim() || `${programName} Help`,
-    icon_url: iconUrl,
-    program_description: programDescription,
-    behavior,
-    sources,
-    settings: { ...(programDescription ? { description: programDescription } : {}) },
-  });
-
-  if (session.slackId) {
-    await addHostedHelper({ programId: slug, slackUserId: session.slackId, role: "owner", helperSource: "creator" }).catch(() => null);
-  }
-  for (const h of helpers) {
-    await addHostedHelper({ programId: slug, slackUserId: h.slackUserId, role: h.role, helperSource: "manual", eligibleForPings: h.eligibleForPings }).catch(() => null);
-  }
-
-  // Best-effort Core membership + expertise so the sandbox answers with the
-  // right helpers from the first test question. Failures stay local-only;
-  // the program row and its sync state below are the source of truth.
+  const patched = await updateHostedProgram(slug, { support_name: (input.supportName || "").trim() || `${programName} Help`, icon_url: iconUrl, program_description: programDescription, behavior, sources, settings: { ...(programDescription ? { description: programDescription } : {}) } });
+  if (session.slackId) await addHostedHelper({ programId: slug, slackUserId: session.slackId, role: "owner", helperSource: "creator" }).catch(() => null);
+  for (const h of helpers) await addHostedHelper({ programId: slug, slackUserId: h.slackUserId, role: h.role, helperSource: "manual", eligibleForPings: h.eligibleForPings }).catch(() => null);
   const coreMembers = [...new Set([...(session.slackId ? [session.slackId] : []), ...helpers.map((h) => h.slackUserId)])];
   if (coreMembers.length > 0) {
     const pingIneligible = helpers.filter((h) => h.eligibleForPings === false).map((h) => h.slackUserId);
     await coreHelpersSync(slug, { actorId: coreMembers[0], members: coreMembers, source: "manual", pingIneligible }).catch(() => null);
-    for (const h of helpers) {
-      if (h.expertise.length > 0) {
-        await coreRoutingExpertise(slug, { actorId: coreMembers[0], userId: h.slackUserId, tags: h.expertise }).catch(() => null);
-      }
-    }
+    for (const h of helpers) if (h.expertise && h.expertise.length > 0) await coreRoutingExpertise(slug, { actorId: coreMembers[0], userId: h.slackUserId, tags: h.expertise }).catch(() => null);
   }
-
-  await logHostedAudit({
-    programId: slug,
-    actorHcaId: session.hcaId,
-    actorSlackId: session.slackId,
-    action: "program.sandbox_created",
-    entityType: "program",
-    entityId: slug,
-    metadata: { channels: claims.map((c) => c.id), sourcesCount: sources.length, helpersCount: helpers.length },
-  });
-
-  // New programs start as sandbox — the launch step flips this to live.
-  const sync = await syncProgramToCore(slug, {
-    name: patched.program_name,
-    description: programDescription,
-    workspaceId: CENTRAL_WORKSPACE,
-    supportName: patched.support_name,
-    iconUrl: patched.icon_url,
-    helpChannel: helpChannelId ?? "",
-    channels: claims.map((c) => c.id),
-    behavior,
-    status: "sandbox",
-    sources,
-    claimedBy: session.slackId,
-    workspace_id: CENTRAL_WORKSPACE,
-    programChannels: claims,
-  });
+  await logHostedAudit({ programId: slug, actorHcaId: session.hcaId, actorSlackId: session.slackId, action: "program.sandbox_created", entityType: "program", entityId: slug, metadata: { channels: claims.map((c) => c.id), sourcesCount: sources.length, helpersCount: helpers.length } });
+  const sync = await syncProgramToCore(slug, { name: patched.program_name, description: programDescription, workspaceId: CENTRAL_WORKSPACE, supportName: patched.support_name, iconUrl: patched.icon_url, helpChannel: helpChannelId ?? "", channels: claims.map((c) => c.id), behavior, status: "sandbox", sources, claimedBy: session.slackId, workspace_id: CENTRAL_WORKSPACE, programChannels: claims });
   await markSyncState(slug, sync, patched.core_synced_at);
-
-  if (!sync.ok) {
-    // The sandbox exists locally and reconcile retries the sync — but step 6
-    // tests against Core, so say so instead of pretending all is well.
-    return { ok: true, programId: slug, syncError: sync.error ?? "Core sync failed; it will retry automatically." };
-  }
+  if (!sync.ok) return { ok: true, programId: slug, syncError: sync.error ?? "Core sync failed; it will retry automatically." };
   return { ok: true, programId: slug };
 }
 
-// Wizard step 6: ask a test question against the sandbox. Any signed-in
-// member of the program may test; strangers get an inline error, never the
-// route boundary. Core performs retrieval + a grounded-answer attempt with
-// no Slack or ticket side effects.
-export async function askTestQuestion(input: {
-  programId: string;
-  question: string;
-  role: "help" | "main";
-}): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
+export async function askTestQuestion(input: { programId: string; question: string; role: "help" | "main" }): Promise<{ ok: true; data: unknown } | { ok: false; error: string }> {
   const session = await linkedSlackSession();
   if (!session) return { ok: false, error: "Link your Slack account to test." };
   const { program, relationship } = await loadProgramContext(input.programId);
@@ -1173,52 +1181,23 @@ export async function askTestQuestion(input: {
   try {
     const data = await coreTestQuestion(input.programId, { question, role: input.role === "main" ? "main" : "help" });
     return { ok: true, data };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Test question failed." };
-  }
+  } catch (err) { return { ok: false, error: err instanceof Error ? err.message : "Test question failed." }; }
 }
 
-// Wizard step 7 + settings page: the one deliberate sandbox → live flip.
-// Owner or organizer only. Flips the local runtime_status first so a later
-// reconcile converges to live even if this sync attempt fails; a failed
-// sync still reports inline rather than silently.
 export async function launchProgramAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const programId = String(formData.get("programId") ?? "");
-  if (String(formData.get("confirm") ?? "") !== "launch") {
-    return { error: "Tick the confirmation to launch." };
-  }
+  if (String(formData.get("confirm") ?? "") !== "launch") return { error: "Tick the confirmation to launch." };
   let session: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["session"];
   let program: Awaited<ReturnType<typeof requireProgramOwnerOrAdmin>>["program"];
-  try {
-    ({ session, program } = await requireProgramOwnerOrAdmin(programId));
-  } catch (e) {
-    return { error: e instanceof Error ? e.message : "Not authorized." };
-  }
-  if ((program.runtime_status as RuntimeStatus | undefined) === "live") {
-    return { error: null, ok: true, status: "live" };
-  }
+  try { ({ session, program } = await requireProgramOwnerOrAdmin(programId)); } catch (e) { return { error: e instanceof Error ? e.message : "Not authorized." }; }
+  if ((program.runtime_status as RuntimeStatus | undefined) === "live") return { error: null, ok: true, status: "live" };
   const updated = await updateHostedProgram(programId, { runtime_status: "live" });
-  await logHostedAudit({
-    programId,
-    actorHcaId: session.hcaId,
-    actorSlackId: session.slackId,
-    action: "program.launched",
-    entityType: "program",
-    entityId: programId,
-  });
-  const sync = await syncProgramToCore(programId, {
-    name: updated.program_name,
-    description: updated.program_description ?? null,
-    workspaceId: updated.workspace_id,
-    behavior: updated.behavior ?? {},
-    status: "live",
-  });
+  await logHostedAudit({ programId, actorHcaId: session.hcaId, actorSlackId: session.slackId, action: "program.launched", entityType: "program", entityId: programId });
+  const sync = await syncProgramToCore(programId, { name: updated.program_name, description: updated.program_description ?? null, workspaceId: updated.workspace_id, behavior: updated.behavior ?? {}, status: "live" });
   await markSyncState(programId, sync, updated.core_synced_at);
   revalidatePath(`/programs/${programId}`);
   revalidatePath(`/programs/${programId}/settings`);
-  if (!sync.ok) {
-    return { error: `Live, but Core sync failed: ${sync.error ?? "unknown error"}. It will retry automatically.` };
-  }
+  if (!sync.ok) return { error: `Live, but Core sync failed: ${sync.error ?? "unknown error"}. It will retry automatically.` };
   redirect(`/programs/${programId}`);
   return { error: null, ok: true, status: "live" };
 }

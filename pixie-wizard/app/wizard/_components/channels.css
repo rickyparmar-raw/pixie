@@ -1,0 +1,436 @@
+/* Channels step. Colours come from the shared tokens so it can never drift from
+   the approved Docs screen; only the step's own geometry lives here. Sizes
+   follow the reference: 13px uppercase block labels, 14px muted explanation,
+   40px controls, 1px #373c39 surfaces, 3-4px radii, no glow, no clip-path cuts.
+   Selection is the reference's own idiom: the row keeps its dark card fill and
+   only the 1px border and the lime check appear, so nothing green-filled is
+   added to this step except the shared Continue button. */
+
+.ob-channels {
+  --ob-ch-card-line: #373c39;
+  --ob-ch-card: rgba(22, 27, 24, 0.97);
+  --ob-ch-card-pick: #121614;
+  --ob-ch-post-line: #3a3e3b;
+  --ob-ch-post: #121614;
+  --ob-ch-faint: #6a726c;
+  --ob-ch-warn: #ffcbb0;
+}
+
+/* Safety net for the step label: the shared eyebrow rule already matches the
+   reference, and this keeps it there if that rule is ever retuned. */
+.ob-channels .onboarding-step-copy .ob-channels-eyebrow {
+  margin: 0;
+  color: #b5b8b3;
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: 0.22em;
+  line-height: 1.3;
+  text-transform: uppercase;
+}
+
+/* A shade wider than the shared 530px measure so the lede sets two long lines
+   like the reference instead of orphaning a short tail. */
+.ob-channels .onboarding-lede {
+  max-width: 580px;
+}
+
+.ob-channels-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  /* Wide enough to set in two lines: a third line here would orphan the last
+     word, and the step's column already ends on the reference's baseline. */
+  max-width: 660px;
+  margin: 22px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--ob-ch-card-line);
+  border-radius: 3px;
+  background: #0e1210;
+  color: #a9ada8;
+  font-size: 13px;
+  line-height: 19px;
+}
+
+.ob-channels-notice-icon {
+  margin-top: 2px;
+  flex: 0 0 14px;
+  color: var(--onb-muted);
+}
+
+/* The stack rhythm is the reference's own card gap, so the two blocks land on
+   the same baseline as the reference's last card. */
+.ob-channels-stack {
+  display: grid;
+  gap: 12px;
+  margin-top: 22px;
+}
+
+.ob-channels-block {
+  display: flex;
+  min-height: 176px;
+  flex-direction: column;
+  padding: 16px 18px 16px;
+  border: 1px solid var(--ob-ch-card-line);
+  border-radius: 4px;
+  background: var(--ob-ch-card);
+}
+
+.ob-channels-block-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* The pack has no "#" sprite, so the channel mark is the pixel font's own "#". */
+.ob-channels-mark {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  place-items: center;
+  color: var(--onb-lime);
+  font-family: "Pixie Pixel", "Courier New", monospace;
+  font-size: 17px;
+  line-height: 1;
+}
+
+.ob-channels-label {
+  margin: 0;
+  color: var(--onb-cream);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.ob-channels-label-flag {
+  color: var(--ob-ch-faint);
+  font-weight: 400;
+}
+
+.ob-channels-hint {
+  margin: 7px 0 0;
+  color: var(--onb-muted);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+/* The picker sits on the card's floor: with no channel list the field simply
+   rests lower, so one card shape holds in every state. */
+.ob-channels-search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 12px;
+}
+
+.ob-channels-count {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  color: var(--ob-ch-faint);
+  font-size: 12px;
+  pointer-events: none;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.ob-channels-search[data-count="true"] .ob-channels-input {
+  padding-right: 100px;
+}
+
+.ob-channels-input {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--onb-line);
+  border-radius: 3px;
+  background: #0b100e;
+  color: var(--onb-cream);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: border-color 90ms steps(2, end), background-color 90ms steps(2, end);
+}
+
+.ob-channels-input::placeholder {
+  color: var(--ob-ch-faint);
+}
+
+.ob-channels-input:focus {
+  border-color: var(--onb-lime);
+  background: #101614;
+}
+
+.ob-channels-use {
+  min-height: 40px;
+  padding: 0 14px;
+  flex: 0 0 auto;
+  border: 1px solid #565b57;
+  border-radius: 4px;
+  background: #0e1210;
+  color: var(--onb-cream);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: border-color 90ms steps(2, end), background-color 90ms steps(2, end);
+}
+
+.ob-channels-use:hover {
+  border-color: #7c827b;
+  background: #151a18;
+}
+
+/* Two columns so the picker stays inside the Docs screen's grid: six entries
+   read as three short rows and the step never grows a scrollbar. */
+.ob-channels-list {
+  display: grid;
+  margin: 10px 0 0;
+  padding: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px 6px;
+  list-style: none;
+}
+
+.ob-channels-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 36px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 9px;
+  border: 1px solid var(--onb-line);
+  border-radius: 3px;
+  background: var(--ob-ch-card-pick);
+  color: var(--onb-dim);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 14px;
+  text-align: left;
+  transition: border-color 90ms steps(2, end), background-color 90ms steps(2, end),
+    color 90ms steps(2, end);
+}
+
+.ob-channels-row:hover {
+  border-color: #4a504c;
+  color: var(--onb-cream);
+}
+
+/* Selected reads exactly like the reference's chosen cards: same dark fill,
+   one lime border, one lime check. No green surface, no restyled type. */
+.ob-channels-row[data-selected="true"] {
+  border-color: var(--onb-lime);
+  color: var(--onb-cream);
+}
+
+.ob-channels-row-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A missing invite is a quiet inline note, not a badge: the reference has no
+   pills anywhere, so the flag rides the same type as the row it sits in. */
+.ob-channels-note {
+  margin-left: auto;
+  flex: 0 0 auto;
+  color: var(--onb-faint);
+  font-size: 12px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.ob-channels-row-check {
+  flex: 0 0 17px;
+  color: var(--onb-lime-fill);
+}
+
+.ob-channels-miss {
+  margin: 10px 0 0;
+  color: var(--ob-ch-faint);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.ob-channels-issue {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 10px 0 0;
+  color: var(--ob-ch-warn);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.ob-channels-issue-icon {
+  margin-top: 2px;
+  flex: 0 0 13px;
+}
+
+.ob-channels-hint-issue {
+  color: var(--onb-muted);
+}
+
+.ob-channels-hint-issue .ob-channels-issue-icon {
+  color: var(--ob-ch-faint);
+}
+
+/* ---- Right panel: two small posts, not a fake Slack window ---- */
+
+.ob-channels-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The feed follows the Docs panel's own rhythm: the same 27px drop to the first
+   card and the same 13px pitch, so both panels' first cards land on the
+   reference's 413 line. Content stacks from the top — the panel is stretched to
+   the left column, and spreading it down that height left a hole between the two
+   posts. The footnote is the one thing that stays pinned to the floor. */
+.ob-channels-feed {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 13px;
+  margin-top: 27px;
+}
+
+/* The Docs preview cards are 135px, so the posts borrow that box instead of the
+   150px this step used: same height, same border, same fill, so the two panels
+   read as one set of cards. Three lines spread across it the way a chat post
+   does — channel at the top, the question under it, the outcome on the floor. */
+.ob-channels-post {
+  display: flex;
+  min-height: 135px;
+  padding: 16px 18px 14px;
+  border: 1px solid var(--ob-ch-post-line);
+  border-radius: 4px;
+  background: var(--ob-ch-post);
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.ob-channels-post-head {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.ob-channels-post-name {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  color: var(--onb-cream);
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+}
+
+.ob-channels-lock {
+  display: grid;
+  flex: 0 0 16px;
+  margin-left: auto;
+  place-items: center;
+  color: var(--onb-dim);
+}
+
+.ob-channels-lock-lead {
+  margin-left: 0;
+}
+
+/* The third card answers the question the two posts raise: the helpers channel is
+   private, so name what never leaves it. Same box and same dot bullets as the
+   Docs preview cards, trimmed tighter because it carries no post. */
+.ob-channels-private {
+  display: flex;
+  padding: 11px 18px 6px;
+  border: 1px solid var(--ob-ch-post-line);
+  border-radius: 4px;
+  background: var(--ob-ch-post);
+  flex-direction: column;
+}
+
+.ob-channels-private-list {
+  margin: 5px 0 0;
+  padding: 0;
+  color: #cfd1cc;
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 21px;
+  list-style: none;
+}
+
+.ob-channels-private-list li {
+  position: relative;
+  padding-left: 16px;
+}
+
+.ob-channels-private-list li::before {
+  position: absolute;
+  top: 8px;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #83887f;
+  content: "";
+}
+
+.ob-channels-post-line {
+  margin: 9px 0 0;
+  color: #cfd1cc;
+  font-size: 13.5px;
+  line-height: 19px;
+}
+
+.ob-channels-post-out {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 8px 0 0;
+  color: var(--onb-muted);
+  font-size: 12.5px;
+  line-height: 17px;
+}
+
+/* The one arrow in the step: it points at the thread Pixie answered in. */
+.ob-channels-post-arrow {
+  flex: 0 0 13px;
+  color: var(--onb-lime);
+}
+
+/* Pinned to the panel floor: the cards stack from the top, this is the last line. */
+.ob-channels-post-foot {
+  margin: auto 0 0;
+  color: var(--ob-ch-faint);
+  font-size: 12.5px;
+  line-height: 17px;
+}
+
+@media (max-width: 780px) {
+  .ob-channels .onboarding-lede,
+  .ob-channels-notice {
+    max-width: none;
+  }
+
+  .ob-channels-block {
+    min-height: 0;
+    padding: 14px;
+  }
+
+  .ob-channels-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -11,15 +11,12 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
 
   return (
     <>
-      <PageHeader title="Settings" description="Behavior, knowledge sources and channels for this program." />
-      <div className="space-y-12">
-        <Suspense
-          fallback={
-            <Section title="Channels" description="Claimed help and organizer channels.">
-              <p className="text-sm text-text-muted">Loading channels…</p>
-            </Section>
-          }
-        >
+      <PageHeader
+        title="Settings"
+        description="How Pixie behaves here, what she reads, and where she answers."
+      />
+      <div className="max-w-4xl space-y-8">
+        <Suspense fallback={<ChannelsPlaceholder />}>
           <ChannelsSection programId={id} workspaceId={program.workspace_id} />
         </Suspense>
         {relationship === "owner" || relationship === "admin" ? (
@@ -34,5 +31,20 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
         )}
       </div>
     </>
+  );
+}
+
+// The streamed boundary keeps the section's own title and description so the
+// page doesn't jump when the channel list lands — only the body is a skeleton.
+function ChannelsPlaceholder() {
+  return (
+    <Section bordered title="Channels" description="Where Pixie answers, and where work lands for your helpers.">
+      <div className="space-y-2.5" aria-busy="true" aria-label="Loading channels">
+        <div className="pixie-skeleton h-4 w-56 max-w-full" />
+        <div className="pixie-skeleton h-9 w-full max-w-md" />
+        <div className="pixie-skeleton h-9 w-full max-w-md" />
+        <span className="sr-only">Loading channels.</span>
+      </div>
+    </Section>
   );
 }

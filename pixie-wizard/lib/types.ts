@@ -7,6 +7,7 @@ export interface ActionState {
   error: string | null;
   ok?: boolean;
   status?: string;
+  data?: unknown;
 }
 
 // A knowledge source for the bot's corpus.

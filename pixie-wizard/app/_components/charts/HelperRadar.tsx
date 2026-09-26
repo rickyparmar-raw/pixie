@@ -20,30 +20,39 @@ export function HelperRadar({ dimensions }: { dimensions: readonly Dimension[] }
   for (const d of dimensions) values[d.key] = d.score ?? 0;
 
   return (
-    <div className="flex flex-wrap items-center gap-x-12 gap-y-8">
+    <div className="grid items-center gap-x-10 gap-y-8 sm:grid-cols-2">
+      {/* Measured by its container, not a fixed 300px box: a fixed box paints
+          its axis labels outside itself and overflows a phone. */}
       <RadarChart
         data={[{ label: "Helper", color: "var(--chart-1)", values }]}
         metrics={metrics}
-        size={300}
-        margin={52}
+        className="mx-auto w-full max-w-[340px]"
+        margin={64}
         levels={4}
       >
-        <RadarGrid showLabels={false} strokeOpacity={0.3} />
-        <RadarAxis strokeOpacity={0.25} />
-        <RadarLabels fontSize={11} offset={14} />
+        <RadarGrid showLabels={false} stroke="var(--color-line)" strokeOpacity={0.55} />
+        <RadarAxis stroke="var(--color-line)" strokeOpacity={0.4} />
+        <RadarLabels fontSize={11} offset={18} />
         <RadarArea index={0} showPoints={false} showGlow={false} />
       </RadarChart>
 
-      <dl className="min-w-[13rem] flex-1 space-y-2.5">
+      <dl className="min-w-0 space-y-2.5">
         {dimensions.map((d) => (
-          <div key={d.key} className="flex items-baseline justify-between gap-4 border-b border-line pb-2 last:border-0">
-            <dt className="text-xs text-text-muted">{d.label}</dt>
-            <dd className="shrink-0 text-right">
-              <span className="font-mono text-sm tabular-nums text-text">
-                {d.score === null ? "—" : d.score}
-              </span>
-              <span className="ml-2 text-[11px] text-text-muted">{d.detail}</span>
-            </dd>
+          <div key={d.key} className="border-b border-line pb-2 last:border-0 last:pb-0">
+            <div className="flex items-baseline justify-between gap-4">
+              <dt className="text-xs text-text-muted">{d.label}</dt>
+              <dd className="shrink-0 text-right">
+                <span className="font-mono text-sm tabular-nums text-text">
+                  {d.score === null ? "—" : d.score}
+                </span>
+                <span className="ml-2 text-[11px] text-text-muted">{d.detail}</span>
+              </dd>
+            </div>
+            {/* An unmeasurable dimension keeps an empty track: the em dash in
+                the score says why, the bar never invents a value. */}
+            <div className="mt-1.5 h-1.5 bg-line/60">
+              <div className="h-full rounded-[1px] bg-brand" style={{ width: `${d.score ? Math.max(d.score, 2) : 0}%` }} />
+            </div>
           </div>
         ))}
       </dl>

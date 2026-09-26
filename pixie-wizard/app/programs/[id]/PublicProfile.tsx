@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { PublicProgramProfile, PublicHelperIdentity } from "@/lib/types";
-import { StatusBadge } from "@/app/_components/DashboardShell";
+import { PageHeader, Section, Chip, EmptyState, Notice, StatusBadge } from "@/app/_components/DashboardShell";
+import { IconArrowRight } from "@/app/_components/icons";
 
 const ROLE_LABEL: Record<"owner" | "organizer" | "helper", string> = {
   owner: "Owner",
@@ -12,7 +13,9 @@ const ROLE_LABEL: Record<"owner" | "organizer" | "helper", string> = {
 // comes from getPublicProgramProfile()'s column-allowlisted SELECT — there is
 // no admin object in scope. Deliberately shell-less: a non-member must never
 // see a nav bar offering Tickets/Audit/Settings links that would just
-// redirect them right back here.
+// redirect them right back here. It still sits on Pixie's night ground, with
+// the same masked horizon art behind it, so a public profile looks like the
+// same product as the pages behind the sign-in.
 export function PublicProfile({
   profile,
   helpChannelDisplay,
@@ -23,62 +26,92 @@ export function PublicProfile({
   roster: PublicHelperIdentity[];
 }) {
   return (
-    <main className="mx-auto min-h-screen max-w-xl px-6 py-16">
-      <Link href="/programs" className="text-xs text-text-muted hover:text-text">← All programs</Link>
-
-      <div className="mt-8 flex items-start gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-md bg-panel-2 text-xs text-text-muted">
-          {profile.programName.slice(0, 2).toUpperCase()}
-        </span>
-        <div>
-          <h1 className="font-heading text-xl text-text">{profile.programName}</h1>
-          {profile.supportName && <p className="mt-0.5 text-sm text-text-muted">Answers as {profile.supportName}</p>}
-        </div>
-        <div className="ml-auto">
-          <StatusBadge status={profile.status === "active" ? "Active" : profile.status} />
-        </div>
+    <div className="pixie-night min-h-screen bg-ink text-text">
+      <div className="pixie-night-art" aria-hidden="true">
+        <img src="/pixie-night-background.png" alt="" width={1672} height={940} />
       </div>
 
-      {profile.description && <p className="mt-6 text-sm leading-relaxed text-text-muted">{profile.description}</p>}
+      <main className="relative z-10 mx-auto min-h-screen w-full max-w-2xl px-6 py-12 lg:px-10">
+        <Link
+          href="/programs"
+          className="pixie-button pixie-button-quiet pixie-button-sm"
+        >
+          <IconArrowRight size={16} className="rotate-180" />
+          All programs
+        </Link>
 
-      <dl className="mt-10 space-y-3 text-sm">
-        <div className="flex justify-between gap-4">
-          <dt className="text-text-muted">Help channel</dt>
-          <dd className="text-text">{helpChannelDisplay ?? "Not public"}</dd>
+        <PageHeader
+          eyebrow="Public profile"
+          title={profile.programName}
+          description={profile.supportName ? `Answers as ${profile.supportName}` : undefined}
+          actions={
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 place-items-center rounded-[2px] bg-lime/15 font-display text-[16px] leading-none text-lime">
+                {profile.programName.slice(0, 2).toUpperCase()}
+              </span>
+              <StatusBadge status={profile.status === "active" ? "Active" : profile.status} />
+            </div>
+          }
+        />
+
+        <div className="space-y-8">
+          {profile.description ? (
+            <p className="text-sm leading-relaxed text-text-muted">{profile.description}</p>
+          ) : (
+            <EmptyState
+              title="No description for this program yet."
+              hint="The owner hasn't published one."
+            />
+          )}
+
+          <Section bordered title="At a glance">
+            <dl className="divide-y divide-line">
+              <div className="flex items-baseline justify-between gap-4 py-2.5">
+                <dt className="text-[13px] text-text-muted">Help channel</dt>
+                <dd className="min-w-0 truncate text-right font-mono text-[13px] text-text">
+                  {helpChannelDisplay ?? <span className="text-text-muted">Not public</span>}
+                </dd>
+              </div>
+              <div className="flex items-baseline justify-between gap-4 py-2.5">
+                <dt className="text-[13px] text-text-muted">Public knowledge sources</dt>
+                <dd className="font-mono text-[13px] tabular-nums text-text">{profile.publicSourceCount}</dd>
+              </div>
+            </dl>
+          </Section>
+
+          <Section title="Support roster">
+            {roster.length === 0 ? (
+              <EmptyState
+                title="No public roster for this program."
+                hint="Support names are only shown when the owner publishes them."
+              />
+            ) : (
+              <ul className="divide-y divide-line">
+                {roster.map((entry, i) => (
+                  <li key={i} className="flex items-center gap-2.5 py-2.5">
+                    {entry.avatarUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- external Slack CDN avatar, not a local asset
+                      <img src={entry.avatarUrl} alt="" className="size-6 shrink-0 rounded-[2px] object-cover" />
+                    ) : (
+                      <span className="grid size-6 shrink-0 place-items-center rounded-[2px] bg-panel-2 font-mono text-[10px] leading-none text-text-muted">
+                        {ROLE_LABEL[entry.role].slice(0, 1)}
+                      </span>
+                    )}
+                    <span className="min-w-0 truncate text-[13px] text-text">
+                      {entry.displayName ?? ROLE_LABEL[entry.role]}
+                    </span>
+                    {entry.displayName && <Chip>{ROLE_LABEL[entry.role]}</Chip>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
+          <Notice tone="info">
+            You&apos;re viewing the public profile. Only members can manage this program.
+          </Notice>
         </div>
-        <div className="flex justify-between gap-4">
-          <dt className="text-text-muted">Public knowledge sources</dt>
-          <dd className="tabular-nums text-text">{profile.publicSourceCount}</dd>
-        </div>
-      </dl>
-
-      <div className="mt-10">
-        <h2 className="text-sm font-medium text-text">Support roster</h2>
-        {roster.length === 0 ? (
-          <p className="mt-2 text-xs text-text-muted">No public roster for this program.</p>
-        ) : (
-          <ul className="mt-3 space-y-2 text-sm">
-            {roster.map((entry, i) => (
-              <li key={i} className="flex items-center gap-2">
-                {entry.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- external Slack CDN avatar, not a local asset
-                  <img src={entry.avatarUrl} alt="" className="size-6 rounded-full" />
-                ) : (
-                  <span className="grid size-6 place-items-center rounded-full bg-panel-2 text-[10px] text-text-muted">
-                    {ROLE_LABEL[entry.role].slice(0, 1)}
-                  </span>
-                )}
-                <span className="text-text">{entry.displayName ?? ROLE_LABEL[entry.role]}</span>
-                {entry.displayName && <span className="text-text-muted">· {ROLE_LABEL[entry.role]}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      <p className="mt-12 border-t border-line pt-6 text-xs text-text-muted">
-        You&apos;re viewing the public profile. Only members can manage this program.
-      </p>
-    </main>
+      </main>
+    </div>
   );
 }

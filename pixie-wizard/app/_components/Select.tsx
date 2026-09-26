@@ -1,12 +1,20 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
+import { IconCheck, IconChevronRight } from "./icons";
 
 export type SelectOption = { value: string; label: string };
 
 // A real listbox, not a native select — the OS draws that popup and no amount
 // of CSS reaches it. A hidden input carries the value so this still works in a
 // plain server-action form.
+//
+// Dressed entirely in the dashboard's own vocabulary: the trigger is a
+// `.pixie-input` (so it is the same rectangle as every field beside it), the
+// menu is a `.pixie-panel` with square corners and no drop shadow, hovering an
+// option raises it to `--color-panel-2`, and the chosen one is marked with the
+// lime pixel check. The chevron is the pack's right-arrow sprite rotated a
+// quarter turn rather than a hand-drawn SVG, so it stays on the pixel grid.
 export function Select({
   name,
   options,
@@ -94,23 +102,13 @@ export function Select({
           setActive(Math.max(0, options.findIndex((o) => o.value === value)));
         }}
         onKeyDown={onKeyDown}
-        className="flex w-full items-center justify-between gap-2 rounded-md border border-line bg-panel-2 px-3 py-2 text-left text-sm text-text transition-colors hover:border-text-muted/50 focus:border-brand focus:outline-none"
+        className="pixie-input flex items-center justify-between gap-2 text-left"
       >
         <span className="truncate">{selected?.label ?? ""}</span>
-        <svg
-          aria-hidden
-          width="13"
-          height="13"
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className={`shrink-0 text-text-muted transition-transform ${open ? "rotate-180" : ""}`}
-        >
-          <path d="M4 6.5 8 10.5 12 6.5" />
-        </svg>
+        <IconChevronRight
+          size={16}
+          className={`shrink-0 text-text-muted ${open ? "rotate-270" : "rotate-90"}`}
+        />
       </button>
 
       {open && (
@@ -119,7 +117,7 @@ export function Select({
           role="listbox"
           tabIndex={-1}
           aria-activedescendant={`${listId}-${active}`}
-          className="absolute z-20 mt-1.5 max-h-60 w-full overflow-auto rounded-md border border-line bg-panel py-1 shadow-[0_12px_28px_-12px_rgba(10,20,10,0.45)]"
+          className="pixie-panel absolute z-30 mt-1 max-h-60 w-full overflow-auto p-1"
         >
           {options.map((option, index) => {
             const isSelected = option.value === value;
@@ -134,16 +132,12 @@ export function Select({
                   e.preventDefault();
                   choose(index);
                 }}
-                className={`flex cursor-pointer items-center justify-between gap-2 px-3 py-1.5 text-sm ${
-                  index === active ? "bg-panel-2 text-text" : "text-text-muted"
+                className={`flex cursor-pointer items-center justify-between gap-2 rounded-[2px] px-2.5 py-1.5 text-[13px] ${
+                  index === active ? "bg-panel-2 text-text" : isSelected ? "text-text" : "text-text-muted"
                 }`}
               >
                 <span className="truncate">{option.label}</span>
-                {isSelected && (
-                  <svg aria-hidden width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-brand">
-                    <path d="M3 8.5 6.5 12 13 4.5" />
-                  </svg>
-                )}
+                {isSelected && <IconCheck size={16} className="shrink-0 text-brand" />}
               </li>
             );
           })}

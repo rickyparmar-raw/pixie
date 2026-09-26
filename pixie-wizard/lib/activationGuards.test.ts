@@ -247,6 +247,14 @@ test("guard: usable knowledge exists (at least one valid source required)", asyn
   expect(privateIpUrl.error).toMatch(/url rejected/i);
 });
 
+test("guard: text content is a usable knowledge source", async () => {
+  const result = await validateActivationGuards({
+    ...baseValidInput,
+    sources: [{ type: "text", content: "# Community handbook" }],
+  });
+  expect(result.ok).toBe(true);
+});
+
 test("guard: cross-program channel reuse rejection (help & organizer)", async () => {
   const existingProgId = "existing-prog";
   const takenHelp = "C0999888777";
