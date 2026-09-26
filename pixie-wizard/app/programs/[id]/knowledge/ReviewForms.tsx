@@ -65,6 +65,7 @@ export type Fact = {
   category: string | null;
   author_id: string | null;
   created_at: number;
+  auto_learned?: number;
 };
 
 // One card for every stage of a learned fact's life. Candidates and pending
@@ -85,6 +86,7 @@ export function CandidateCard({ programId, candidate, authorLabel, createdLabel 
       <p className="text-xs text-text-muted">
         #{candidate.id}
         {` · ${candidate.status}`}
+        {candidate.auto_learned ? " · auto-learned" : ""}
         {candidate.ticket_id ? ` · from ticket #${candidate.ticket_id}` : ""}
         {candidate.category ? ` · ${candidate.category}` : ""}
         {authorLabel ? ` · by ${authorLabel}` : ""}
