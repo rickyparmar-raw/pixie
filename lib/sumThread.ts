@@ -1,5 +1,3 @@
-// Summarizes a Slack thread for helpers, extracting the asker, core problem,
-// troubleshooting history, and current status.
 import configModule = require("./config");
 import llm = require("./llm");
 import log = require("./log");
@@ -18,9 +16,7 @@ interface ThreadClient {
   };
 }
 
-// One page covers a real debug arc; longer threads repeat the same attempts.
 const THREAD_FETCH_LIMIT = 50;
-// Caps the helper summary so it stays a glanceable handoff, not a transcript.
 const SUMMARY_MAX_TOKENS = 1000;
 
 const HELPER_SUMMARY_SYSTEM_PROMPT = [

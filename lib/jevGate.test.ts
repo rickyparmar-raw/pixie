@@ -5,10 +5,6 @@ const { test, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const jev = require("./jevDecision");
 
-// Decision-contract tests only. The orchestrator (lib/respond.js, owned by the
-// architect) maps this flat verdict onto escalate/silence per channel role —
-// nothing here imports respond.js, so this file stays green regardless of how
-// the gate wiring evolves.
 const CFG = { enabled: true, experientialApiKeyPresent: true, model: "jev-latest:free", baseUrl: "https://api.experientiallabs.ai/v1/systemone", timeoutMs: 8000, engageThreshold: 0.7 };
 const GATE_INPUT = { message: "what is restoration energy?", conversationContext: "", program: { id: "pixl", name: "Pixl" }, channelPosture: "main", addressed: false };
 const verdict = (intent, p) => ({ answers: { intent: { type: "choice", choice: intent, probabilities: { [intent]: p } }, shouldEngage: { type: "boolean", probability: p } } });

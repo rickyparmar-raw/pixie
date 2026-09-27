@@ -9,7 +9,6 @@ const jev = require("./jevDecision");
 const log = require("./log");
 const { readSource } = require("./test-source");
 
-// Experiential-only config shape: no Vercel fields, no gateway key.
 const CFG = { enabled: true, experientialApiKeyPresent: true, model: "jev-latest:free", baseUrl: "https://api.experientiallabs.ai/v1/systemone", timeoutMs: 8000, engageThreshold: 0.7 };
 const PROGRAM = { id: "pixl", name: "Pixl" };
 const input = (message, extra = {}) => ({ message, conversationContext: "", program: PROGRAM, channelPosture: "main", ...extra });
@@ -188,7 +187,7 @@ test("decideAction follows the intent; probability only settles follow-ups", () 
   const jev = require("./jevDecision");
   const d = (intent, p) => ({ intent, shouldEngage: p >= 0.5, probabilities: { shouldEngage: p }, source: "jev" });
   const act = (intent, p, state = {}) => jev.decideAction(d(intent, p), { engageThreshold: 0.7 }, state).action;
-  assert.equal(act("direct_program_question", 0.45), "engage"); // "what is restoration energy?" measured p=0.45
+  assert.equal(act("direct_program_question", 0.45), "engage");
   assert.equal(act("support_question", 0.2), "engage");
   assert.equal(act("unrelated_chatter", 0.9), "silence");
   assert.equal(act("human_conversation", 0.8), "silence");

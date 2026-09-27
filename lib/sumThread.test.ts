@@ -57,10 +57,6 @@ test("summarizeThreadForHelper returns null when thread has no messages", async 
   assert.equal(result, null);
 });
 
-/* ------------------------------------------------------------------ */
-/* STEP 1 characterization pins (SUPPORT sumThread): output shape +    */
-/* scope. Append-only.                                                 */
-/* ------------------------------------------------------------------ */
 
 test("char: sumThread output is a helper string or null — never a write", async () => {
   const fs = require("fs");
@@ -71,7 +67,6 @@ test("char: sumThread output is a helper string or null — never a write", asyn
   assert.equal(src.includes('require("./db")'), false);
   assert.equal(/INSERT\s+INTO/i.test(src), false);
   assert.equal(sumThread.THREAD_FETCH_LIMIT, 50);
-  // Prompt contract: asker + goal + tried + status, Slack mrkdwn, no fluff.
   assert.match(sumThread.HELPER_SUMMARY_SYSTEM_PROMPT, /Asker/);
   assert.match(sumThread.HELPER_SUMMARY_SYSTEM_PROMPT, /Goal \/ Problem/);
   assert.match(sumThread.HELPER_SUMMARY_SYSTEM_PROMPT, /What Was Tried/);
@@ -91,7 +86,6 @@ test("char: sumThread output is a helper string or null — never a write", asyn
   } finally {
     llm.complete = real;
   }
-  // Thinking-wrapped replies are stripped; empty model output is null.
   llm.complete = async () => ({ text: "<thinking>draft</thinking>\n• *Asker:* <@U1>" });
   try {
     const stripped = await sumThread.summarizeThreadForHelper({
@@ -120,7 +114,6 @@ test("registry: !sum writes nothing — no tickets, no helper pings, no learned 
   const fs = require("fs");
   const path = require("path");
   const src = readSource("sumThread.js");
-  // No ticket creation, no helper routing, no knowledge writes from this module.
   assert.equal(src.includes('require("./db")'), false);
   assert.equal(src.includes('require("./tickets")'), false);
   assert.equal(src.includes("escalateTicket"), false);
@@ -128,9 +121,6 @@ test("registry: !sum writes nothing — no tickets, no helper pings, no learned 
   assert.equal(src.includes("captureFromThread"), false);
   assert.equal(src.includes("postMessage"), false);
   assert.equal(src.includes("postEphemeral"), false);
-  // The handlers-side !sum flow (lib/handlers.js, not owned here) must keep
-  // that contract too: it posts the summary and returns, never touching the
-  // paths above. Pinned here so a future edit adding a write fails loudly.
   const handlerSrc = readSource("handlers.js");
   const sumBlock = handlerSrc.slice(handlerSrc.indexOf("async function handleSumRequest"));
   const sumEnd = sumBlock.indexOf("async function onMessage");
@@ -157,7 +147,6 @@ test("char: sumThread scope is one thread per call — no cross-thread bleed", a
   } finally {
     llm.complete = real;
   }
-  // buildTranscript stays pure: bot vs user tags, drops textless rows.
   assert.equal(sumThread.buildTranscript([]), "");
   assert.match(sumThread.buildTranscript([{ bot_id: "B1", text: "bot line" }]), /assistant \(bot\): bot line/);
 });

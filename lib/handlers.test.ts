@@ -48,8 +48,6 @@ test("mentionsPixieByName follows the configured bot identity", () => {
   }
 });
 
-// This used to build `<@undefined>` because the bot user ID was read off the
-// wrong object, so a real @-mention never matched.
 test("mentionsPixieDirectly matches the resolved bot user id", () => {
   assert.equal(handlers.mentionsPixieDirectly("<@U0PIXIE> whats up"), true);
   assert.equal(handlers.mentionsPixieDirectly("<@U0SOMEONE> whats up"), false);
@@ -69,8 +67,6 @@ test("stripBotMention removes every ping and trims", () => {
   assert.equal(handlers.stripBotMention("<@U0PIXIE> how do i join <@U0PIXIE>"), "how do i join");
 });
 
-// Another human being @-mentioned must not suppress the answer — the old
-// blanket `<@U` check dropped those messages entirely.
 test("stripBotMention leaves other people's mentions intact", () => {
   assert.equal(handlers.stripBotMention("<@U0PIXIE> ask <@U0ALEX> about it"), "ask <@U0ALEX> about it");
 });
@@ -80,8 +76,6 @@ test("shouldConsiderThreadReply allows all top-level messages", () => {
   assert.equal(handlers.shouldConsiderThreadReply({ ts: "1.1", thread_ts: "1.1", text: "hi" }), true);
 });
 
-// The expensive case: a thread pixie has nothing to do with should never cost
-// an intent call.
 test("shouldConsiderThreadReply skips threads pixie has not spoken in", () => {
   assert.equal(
     handlers.shouldConsiderThreadReply({ ts: "2.2", thread_ts: "1.1", text: "lol same" }),
@@ -144,12 +138,7 @@ test("findImage picks the first image with a private URL", () => {
   assert.equal(handlers.findImage({ files: [{ mimetype: "text/plain" }, image] }), image);
 });
 
-/* ----------------------------------------------------- mention with image -- */
 
-// Slack fires both `message` and `app_mention` for "@pixie <screenshot>" and
-// both claim the same ts, so whichever arrives first decides the reply. Only
-// onMessage looked for an image, so app_mention winning produced "I can't
-// actually see images" on a message that plainly had one.
 test("onAppMention analyses an attached image instead of replying blind", async () => {
   const savedRespond = respond.respond;
   const savedVision = vision.analyzeImage;
@@ -164,8 +153,6 @@ test("onAppMention analyses an attached image instead of replying blind", async 
     visionSawQuestion = question;
     return "that's a photo of a breadboard";
   };
-  // Scope gate: an @-mention only reaches any handling in a channel Pixie is
-  // actually configured for — C0MENTION stands in for that here.
   config.slack.helpChannel = "C0MENTION";
 
   try {
@@ -187,7 +174,6 @@ test("onAppMention analyses an attached image instead of replying blind", async 
 
   assert.equal(posted.length, 1);
   assert.match(posted[0].text, /breadboard/);
-  // The raw "<@U0PIXIE>" would otherwise read as part of the question.
   assert.equal(visionSawQuestion, "bruda cant u see the IMAGE");
 });
 
@@ -214,16 +200,9 @@ test("onAppMention still uses the text path when there is no image", async () =>
   assert.equal(calls[0].addressedHow, "mention");
 });
 
-/* -------------------------------------------- help channel thread replies -- */
 
-// Thread replies in the help channel were dropped before any gate ran, so a
-// correction to pixie's own answer never reached it — pixie kept the last word
-// while being wrong. These cover every way a help-channel message can land.
 const HELP_CHANNEL = "C0HELP";
 
-// onMessage reaches the network twice over — respond() answers and
-// learn.captureFromReply judges the reply. Both are stubbed so these tests
-// assert routing only.
 async function routeHelpMessage(event) {
   const savedHelp = config.slack.helpChannel;
   const savedAuto = config.slack.autoReplyChannel;
@@ -254,7 +233,6 @@ test("help channel still answers a top-level post", async () => {
   const calls = await routeHelpMessage({ ts: "100.1", text: "how do i submit my project" });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].mode, respond.HELP_ONLY);
-  // Nothing to seed from — the post is the whole thread.
   assert.ok(calls[0].seedClient);
 });
 
@@ -324,7 +302,7 @@ test("a casual help-channel root stays silent and does not open a ticket", async
   const event = { ts: "qg-1", channel: HELP_CHANNEL, user: "U0ASKER", team: "T-QG", text: "hi" };
   try {
     await handlers.onMessage({ event, client });
-    await handlers.onMessage({ event, client }); // Slack retry
+    await handlers.onMessage({ event, client });
   } finally {
     programs.forChannel = savedForChannel;
     programs.isHelpChannel = savedIsHelp;
@@ -412,12 +390,7 @@ test("help channel answers a thread reply that names pixie", async () => {
   assert.ok(calls[0].seedClient);
 });
 
-/* --------------------------------------------- thread transcript recall --- */
 
-// Pixie used to only remember messages it actually replied to — a thread
-// reply it stayed quiet on vanished from context.getThreadContext entirely,
-// so a real question later in the same thread had no idea the chatter ever
-// happened. These cover the two spots that were silently dropping messages.
 
 test("help channel hands an unnamed thread reply to the gate once pixie has spoken there", async () => {
   context.addToThread("700.1", "assistant", "try reinstalling the extension", null, HELP_CHANNEL);
@@ -433,9 +406,6 @@ test("help channel hands an unnamed thread reply to the gate once pixie has spok
   assert.equal(calls[0].addressed, false);
 });
 
-// The existing "never spoke in" case must stay a true no-op — two humans
-// working a problem out in a thread pixie was never part of is not her
-// context to keep.
 test("help channel: an untagged question in a thread pixie never spoke in is left to the humans", async () => {
   const calls = await routeHelpMessage({
     ts: "799.2",
@@ -451,11 +421,6 @@ test("help channel ignores non-question chatter in a thread pixie never spoke in
   assert.equal(context.getThreadContext("798.1"), null);
 });
 
-// The regex gate that used to sit here dropped this on the word "lol" and
-// never asked anyone. Deciding that from one message was the whole problem —
-// "lol thanks so much for that" and "lol so it still wont build" are the same
-// shape — so anything with words in it now goes to the classifier, which gets
-// to see what this person said just before.
 test("faqChannels hands a low-signal reply to the gate instead of dropping it", async () => {
   const FAQ_CHANNEL = "C0FAQTX";
   const savedFaq = config.slack.faqChannels;
@@ -492,9 +457,6 @@ test("faqChannels hands a low-signal reply to the gate instead of dropping it", 
   assert.equal(mode, respond.HELP_ONLY, "the gate decides, not a pattern over the message");
 });
 
-// The one thing still decided locally: a message with no words in it is not
-// worth a model call. It is recorded so the thread reads correctly, and that
-// is all.
 test("faqChannels still drops a bare reaction without calling the model", async () => {
   const FAQ_CHANNEL = "C0FAQTY";
   const savedFaq = config.slack.faqChannels;
@@ -529,8 +491,6 @@ test("faqChannels still drops a bare reaction without calling the model", async 
   assert.match(context.getThreadContext("faq-thread-2"), /lmaooo/);
 });
 
-// Every human message is recorded, replied to or not — the gate reads the
-// three before the one it is judging, and pixie is silent for most of them.
 test("onMessage records what people say even when it stays quiet", async () => {
   const FAQ_CHANNEL = "C0FAQTZ";
   const savedFaq = config.slack.faqChannels;
@@ -562,7 +522,6 @@ test("onMessage records what people say even when it stays quiet", async () => {
   );
 });
 
-/* ------------------------------------------------------- guide reactions -- */
 
 test("onReactionAdded advances a guide when :upvote: lands on its own tracked message", async () => {
   const guides = require("./guides");
@@ -582,7 +541,6 @@ test("onReactionAdded advances a guide when :upvote: lands on its own tracked me
 
   assert.equal(posted.length, 1, "the next step should have been posted");
   assert.equal(db.getGuide("thread-reaction-advance").current_step, 1);
-  // The new step's own message is now the one tracked, not the old one.
   assert.equal(db.getGuideByMessageTs("700.2").thread_ts, "thread-reaction-advance");
 });
 
@@ -628,12 +586,7 @@ test("onReactionAdded still records ordinary feedback when :upvote: lands on a n
   assert.deepEqual(calls, [["702.1", "U-fan", 1]]);
 });
 
-/* --------------------------------------------------------- delete reaction -- */
 
-// reaction_added carries the channel on event.item.channel; there is no
-// top-level event.channel. Reading the wrong one made every lookup below run
-// with channel: undefined, and the Slack error was swallowed at log.debug, so
-// :pixl-delete: did nothing and said nothing.
 test("onReactionAdded deletes pixie's own message on :pixl-delete:", async () => {
   const deleted = [];
   await handlers.onReactionAdded({
@@ -699,8 +652,6 @@ test("onReactionAdded does not delete a message pixie did not write", async () =
   assert.equal(deleted.length, 0, "only pixie's own messages may be deleted this way");
 });
 
-// Same root cause, second symptom: the next guide step was posted to
-// channel: undefined.
 test("onReactionAdded posts the next guide step to the item's channel", async () => {
   const guides = require("./guides");
   guides.startGuide("submit-ysws-guidelines", "thread-reaction-channel", "U-owner");
@@ -721,12 +672,6 @@ test("onReactionAdded posts the next guide step to the item's channel", async ()
   assert.equal(posted[0].channel, "C0GUIDE", "the step must go to the channel the reaction was in");
 });
 
-// conversations.history only returns top-level channel messages, never thread
-// replies — and pixie answers in threads. Looking the message up by ts found
-// nothing, so the ownership check failed and the delete silently did not
-// happen. It also needed channel membership pixie does not always have.
-// reaction_added already carries item_user, the message's author, so no
-// lookup is needed at all.
 test("onReactionAdded deletes a threaded reply using item_user, with no history call", async () => {
   const deleted = [];
   await handlers.onReactionAdded({
@@ -872,10 +817,6 @@ test("staging allowlist drops non-sandbox channels before any handling", async (
   const saved = config.slack.stagingOnlyChannels;
   const savedFaq = config.slack.faqChannels;
   config.slack.stagingOnlyChannels = ["C0C04LB6VA5"];
-  // Scope gate: the sandbox channel also has to be one Pixie is configured
-  // for, same as any real channel would need to be — using faqChannels
-  // rather than helpChannel here because routeHelpMessage's own save/restore
-  // of config.slack.helpChannel would otherwise clobber it mid-test.
   config.slack.faqChannels = ["C0C04LB6VA5"];
   try {
     const prod = await routeHelpMessage({ ts: "950.1", channel: "C0PIXEL", text: "pixie how do i submit my project" });
@@ -888,14 +829,7 @@ test("staging allowlist drops non-sandbox channels before any handling", async (
   }
 });
 
-/* ------------------------------------------- unclaimed-channel silence -- */
 
-// Being invited to a channel (any workspace admin can do that) must never
-// imply scope. Only an explicit claim (help channel, a program's own
-// channels, or faqChannels) does. Before this gate existed, naming or
-// @-mentioning Pixie in literally any channel it was a member of produced a
-// full answer — and could escalate a real ticket — regardless of whether
-// that channel had ever been configured for it.
 test("a plain message naming Pixie in an unclaimed channel gets total silence", async () => {
   const savedRespond = respond.respond;
   const posted = [];
@@ -1046,11 +980,7 @@ test("DMs without a user identity fail closed without calling respond", async ()
   assert.match(posted[0].text, /slow down/);
 });
 
-/* ------------------------------------------ !teach roster-helper gate -- */
 
-// !teach is a program-management command: a global admin can run it anywhere,
-// and a program's own roster helper can run it for that program. Everyone else
-// gets the helpers-only bounce.
 test("handleTeachRequest lets a program roster helper teach", async () => {
   const prog = { id: "teachgate", name: "TeachGate" };
   db.syncHelper({ programId: "teachgate", userId: "U0ROSTER", source: "manual" });
@@ -1089,7 +1019,6 @@ test("handleTeachRequest bounces a non-helper who is not a global admin", async 
   assert.match(posted[0].text, /helpers-only/);
 });
 
-/* ------------------------------ ANSWER PIPELINE characterization (audit) -- */
 
 test("CHAR: onAppMention routes to respond ALWAYS addressed (mention path parity)", async () => {
   const savedRespond = respond.respond;
@@ -1115,8 +1044,6 @@ test("CHAR: onAppMention routes to respond ALWAYS addressed (mention path parity
   assert.equal(calls[0].addressed, true);
 });
 
-// Regression: a helper answering in a thread marks it taken over, and !sum /
-// !teach are used exactly there. They used to die in the takeover check.
 test("!sum and !teach from a helper still run in a taken-over help thread", async () => {
   const savedTeach = learn.teach;
   const savedSum = sumThread.summarizeThreadForHelper;
@@ -1164,7 +1091,6 @@ test("untagged thread message: addressed while it is just Pixie and the asker; s
   try {
     await send("7200.2", "U0CROWDASK", "whats your favourite colour");
     thread = [...thread, { user: "U0CROWDASK", ts: "7200.2" }];
-    // A helper joins and talks to the asker: Pixie must not take it as meant for her.
     await send("7200.3", "U0CROWDHELPER", "did you check the docs page for this?");
     thread = [...thread, { user: "U0CROWDHELPER", ts: "7200.3" }];
     await send("7200.4", "U0CROWDASK", "yeah i did, what else can i try");
@@ -1221,8 +1147,6 @@ test("untagged chatter in a two-person Pixie thread produces no Slack post", asy
   assert.deepEqual(posted, []);
 });
 
-// Regression: a sensitive message addressed to Pixie in a channel that cannot
-// hold a ticket used to vanish: no ticket, no ping, no reply.
 test("a pinged sensitive message with no ticket possible still gets a reply", async () => {
   const FAQ_CHANNEL = "C0FAQSENS";
   const tickets = require("./tickets");
@@ -1377,18 +1301,15 @@ test("macros work in any program thread for helpers, like !sum", async () => {
   const savedRespond = respond.respond;
   respond.respond = async () => {};
   try {
-    // A non-helper typing a real trigger gets the same helpers-only note as !sum.
     await handlers.onMessage({ event: { ts: "handler-gate-nonhelper", team: "T-HANDLER-GATES", channel, thread_ts: "handler-gate-ticket", user: "U-STRANGER", text: "!gate" }, client });
     assert.equal(posts.length, 0);
     assert.equal(ephemerals.length, 1);
     assert.match(ephemerals[0].text, /helpers-only/);
 
-    // A non-helper's "!important ..." is not a macro and stays a normal message.
     await handlers.onMessage({ event: { ts: "handler-gate-chatter", team: "T-HANDLER-GATES", channel, thread_ts: "handler-gate-ticket", user: "U-STRANGER", text: "!important the site is down" }, client });
     assert.equal(ephemerals.length, 1);
     assert.equal(db.claimMessage("handler-gate-chatter", channel), true, "the chatter message was left for normal handling");
 
-    // A helper in a thread with no ticket: Pixie posts the macro into that thread.
     await handlers.onMessage({ event: { ts: "handler-gate-nonticket", team: "T-HANDLER-GATES", channel, thread_ts: "handler-no-ticket", user: helperId, text: "!gate" }, client });
     assert.equal(posts.length, 1);
     assert.equal(posts[0].thread_ts, "handler-no-ticket");

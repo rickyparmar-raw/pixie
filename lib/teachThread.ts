@@ -1,9 +1,3 @@
-// Turns a Slack thread into a teach entry, triggered by the "Teach Pixie from
-// thread" message shortcut (registered in lib/commands.js). Deliberately not a
-// slash command: Bolt's SlashCommand payload carries no thread_ts at all, so a
-// slash command has no way to know which thread it was typed in. A message
-// shortcut's payload does carry the thread, which is why this exists as its
-// own trigger instead of an extension of /pixie-teach.
 import configModule = require("./config");
 import llm = require("./llm");
 import learn = require("./learn");
@@ -27,10 +21,7 @@ interface TeachResult {
   answer: string;
 }
 
-// One page of thread history is enough to judge teachability — longer threads
-// repeat themselves, and the model call stays bounded.
 const THREAD_FETCH_LIMIT = 50;
-// The model's only way to say "nothing worth remembering" without parsing risk.
 const DECLINE_MARKER = "NONE";
 
 const SYSTEM_PROMPT = [
@@ -54,8 +45,6 @@ function isDeclineLine(line: string): boolean {
   return line.toUpperCase() === DECLINE_MARKER;
 }
 
-// Model thinking leaks back in as preamble — only a trailing parseable Q&A
-// line counts, and leaked prompt echoes never do.
 function parseModelReply(text: string): TeachResult | null {
   const reply = llm.stripThinking((text || "").trim());
   if (!reply || reply.toUpperCase() === DECLINE_MARKER) return null;
@@ -71,8 +60,6 @@ function parseModelReply(text: string): TeachResult | null {
   return null;
 }
 
-// Returns { question, answer } or null — either the thread had nothing worth
-// teaching, or the model declined, or its reply didn't parse.
 async function summarizeThread({ client, channel, threadTs }: { client: ThreadClient; channel: string; threadTs: string }): Promise<TeachResult | null> {
   const { messages } = await client.conversations.replies({ channel, ts: threadTs, limit: THREAD_FETCH_LIMIT });
   const transcript = buildTranscript(messages || []);

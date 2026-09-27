@@ -1,27 +1,3 @@
-// Experiential Labs native adapter: one POST to /v1/systemone per call.
-//
-// Wire shapes follow the public System One protocol (noul/choice/score):
-//   request  { model, state, questions }
-//   response { model, answers: { id: answer }, usage }
-//   noul   question {type,instructions,criteria?} → answer {type:'noul', noul: P(yes)}
-//   choice question {criteria:{name:desc}}       → answer {choice, probabilities, confidence}
-//   score  question {criteria:[levels]}          → answer {score (0-based), legend, probabilities, confidence}
-//
-// Free-lane-only billing rule, enforced by construction:
-// - exactly one HTTP attempt per evaluation (no retries that could burn quota
-//   or spill into metered lanes),
-// - never switches model, endpoint, or provider — there is no fallback path
-//   in this module or anywhere above it,
-// - every provider-side refusal (quota, rate limit, auth, overload, timeout,
-//   malformed) throws a classified error that the caller turns into the
-//   existing fail-closed fallback (abstain/escalate, never a paid retry).
-//
-// Score workaround: the Experiential host's native score path is unreliable
-// (intermittent Cloudflare 502s on any batch containing a score question,
-// while noul/choice batches serve 200). Score questions are therefore sent as
-// a 5-way choice with fixed risk_N categories and mapped back to the shared
-// 1-5 risk scale. Native score ANSWERS are still validated when received
-// (diagnostic path), but a score question is never emitted here.
 import axios = require("axios");
 
 type QuestionType = "boolean" | "choice" | "score";
@@ -75,10 +51,6 @@ function fail(kind: string, message: string, status: number | null = null): Clas
   return err;
 }
 
-// Free-lane-only billing rule, enforced at the transport edge too: the model
-// name must end in `:free` or `-free` (OpenCode Zen names its free
-// lane `jev-1.13-free`). The caller (lib/jevDecision.js) refuses earlier,
-// but a direct caller of this adapter must fail closed the same way.
 function isFreeModel(model: unknown): boolean {
   return typeof model === "string" && /[:-]free$/.test(model.trim());
 }
@@ -87,9 +59,6 @@ function finiteNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-// Our internal question vocabulary uses `boolean`; the wire uses `noul`.
-// Criteria ({true,false} descriptions, choice map, score levels) pass through
-// untouched — thresholds and exact-fact hardening live in lib/jevDecision.js.
 function toWireQuestions(questions: Questions = {}): Record<string, WireQuestion> {
   const wire: Record<string, WireQuestion> = {};
   for (const [id, q] of Object.entries(questions || {})) {
@@ -99,7 +68,6 @@ function toWireQuestions(questions: Questions = {}): Record<string, WireQuestion
     } else if (q.type === "choice") {
       wire[id] = { type: q.type, instructions: q.instructions, criteria: q.criteria };
     } else if (q.type === "score") {
-      // Never emit native score: send the fixed risk choice instead.
       wire[id] = { type: "choice", instructions: q.instructions, criteria: RISK_CHOICE_CRITERIA };
     } else {
       throw fail("bad_response", `question ${id} has unsupported type ${q.type}`);
@@ -117,9 +85,6 @@ function checkRiskChoice(id: string, answer: Answer): { type: "score"; score: nu
       if (finiteNumber(v) === null) throw fail("bad_response", `answer ${id} has invalid probabilities`);
     }
   }
-  // risk_N → shared 0-based score scale (risk N). Probabilities pass through
-  // untouched so confidence is always the model's own distribution, never
-  // invented; absent probabilities mean absent confidence downstream.
   return { type: "score", score: Number(m[1]) - 1, ...(answer.probabilities ? { probabilities: answer.probabilities } : {}) };
 }
 
@@ -156,8 +121,6 @@ function checkScore(id: string, question: Question, answer: Answer): { type: "sc
   return { type: "score", score: s, ...(answer.probabilities ? { probabilities: answer.probabilities } : {}) };
 }
 
-// Strict: one translated answer per asked question, types must match, numbers
-// must be finite and in range. Anything else throws bad_response → fail closed.
 function toInternalAnswers(questions: Questions = {}, answers: Record<string, Answer> | null | undefined): Record<string, unknown> {
   if (!answers || typeof answers !== "object" || Array.isArray(answers)) throw fail("bad_response", "response has no answers map");
   const out: Record<string, unknown> = {};
@@ -167,8 +130,6 @@ function toInternalAnswers(questions: Questions = {}, answers: Record<string, An
     if (q.type === "boolean" && answer.type === "noul") out[id] = checkNoul(id, answer);
     else if (q.type === "choice" && answer.type === "choice") out[id] = checkChoice(id, q, answer);
     else if (q.type === "score" && answer.type === "choice") out[id] = checkRiskChoice(id, answer);
-    // Diagnostic path only: native score answers validate but are never
-    // requested by production Experiential evaluations (see toWireQuestions).
     else if (q.type === "score" && answer.type === "score") out[id] = checkScore(id, q, answer);
     else throw fail("bad_response", `answer ${id} type mismatch`);
   }
@@ -186,10 +147,6 @@ function classifyHttpStatus(status: number, data: unknown): ClassifiedError {
 }
 
 async function defaultHttpPost(url: string, body: unknown, { headers, timeoutMs, apiKey }: { headers: Record<string, string>; timeoutMs: number; apiKey: string | null }): Promise<HttpResponse> {
-  // Key travels only in the Authorization header of this single request. It
-  // is never logged, metered, or stored — see lib/jevDecision.js logging.
-  // Required here (not in experientialEvaluate) so injected test transports
-  // never need real credentials.
   if (!apiKey) throw fail("auth", "experiential api key missing");
   const res = await axios.post(url, body, {
     headers: { ...headers, Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },

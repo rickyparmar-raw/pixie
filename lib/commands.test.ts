@@ -23,7 +23,6 @@ test("parseForgetInput parses single ids, ranges, pending, and all", () => {
   assert.deepEqual(parseForgetInput("PENDING"), { type: "pending" });
 
   assert.deepEqual(parseForgetInput("all"), { type: "all" });
-  // 'all' requires exact literal matching, not prefix
   assert.equal(parseForgetInput("allofit"), null);
   assert.equal(parseForgetInput("invalid"), null);
 });
@@ -38,16 +37,12 @@ test("parseId accepts a bare or hashed id and rejects anything else", () => {
   assert.equal(parseId(""), null);
 });
 
-/* -------------------------------------------- teach-thread shortcut -- */
 
 function stubEphemeralClient() {
   const posted = [];
   return { client: { chat: { postEphemeral: async (args) => void posted.push(args) } }, posted };
 }
 
-// Shortcut args are shaped differently from a slash command ({shortcut, ack,
-// client} vs {command, ack, respond}), so the admin gate needed its own wrapper
-// — this is the regression test for that wrapper actually gating correctly.
 test("adminOnlyShortcut blocks a non-admin and answers ephemerally", async () => {
   const { client, posted } = stubEphemeralClient();
   const inner = async () => {
@@ -154,16 +149,13 @@ test("programCommand tickets on|off is reachable by a program's own helper, not 
   db.syncHelper({ programId: "cmd-tix", userId: "U-HELPER-TIX", source: "manual" });
   programs.invalidate();
 
-  // A non-helper, non-admin is refused.
   await commands.programCommand({ command: { text: "tickets off", channel_id: "C-CMD-TIX", user_id: "U0RANDOM" }, ack: async () => {}, respond: sendEphemeral });
   assert.match(responses[0], /helpers-only/);
 
-  // The program's own helper can toggle it off, and it actually takes effect.
   await commands.programCommand({ command: { text: "tickets off", channel_id: "C-CMD-TIX", user_id: "U-HELPER-TIX" }, ack: async () => {}, respond: sendEphemeral });
   assert.match(responses[1], /ticket auto-creation from this channel is \*off\*/);
   assert.equal(programs.get("cmd-tix").publicTicketsEnabled, false);
 
-  // ...and back on.
   await commands.programCommand({ command: { text: "tickets on", channel_id: "C-CMD-TIX", user_id: "U-HELPER-TIX" }, ack: async () => {}, respond: sendEphemeral });
   assert.match(responses[2], /back \*on\*/);
   assert.equal(programs.get("cmd-tix").publicTicketsEnabled, true);
@@ -184,9 +176,6 @@ test("guideCommand returns interactive picker blocks when no text passed", async
   assert.ok(responses[0].blocks.length >= 2);
 });
 
-// Slash commands answer with their own ephemeral helper rather than going
-// through lib/reply.js, so without this wrapper `/pixie <question>` would be
-// the one place pixie still talks in dashes.
 test("every registered command has its ephemeral replies de-dashed", async () => {
   const registered = {};
   const app = {
@@ -222,11 +211,7 @@ test("/pixie help returns the actor's filtered runtime command list", async () =
   assert.doesNotMatch(responses[0].text, /\/pixie-teach/);
 });
 
-/* ------------------- registry consistency (command-registry workstream) -- */
 
-// The registry (lib/commandRegistry.js) is the inventory of record; the help
-// listing (lib/capabilities.js) and the Bolt bindings below must cover the
-// same slash surface. If any of the three drifts, this fails.
 test("REGISTRY: slash defs, CAPABILITIES, and Bolt bindings cover each other", () => {
   const brand = require("./brand");
   const capabilities = require("./capabilities");
@@ -258,7 +243,6 @@ test("REGISTRY: slash defs, CAPABILITIES, and Bolt bindings cover each other", (
   }
 });
 
-/* ------------------------------ ANSWER PIPELINE characterization (audit) -- */
 
 test("CHAR: /pixie ask parity — docs hit answers ephemerally, miss chats, error falls back", async () => {
   const respond = require("./respond");
@@ -269,7 +253,6 @@ test("CHAR: /pixie ask parity — docs hit answers ephemerally, miss chats, erro
   const origChat = chat.getChatReply;
   const { config } = require("./config");
   const savedFaq = config.slack.faqChannels;
-  // /pixie answers from the channel's own program, so the channel must be claimed.
   config.slack.faqChannels = [...(savedFaq || []), "C1"];
   try {
     let lookedUpFor = null;
@@ -278,7 +261,6 @@ test("CHAR: /pixie ask parity — docs hit answers ephemerally, miss chats, erro
     assert.match(sent[0].text, /docs answer here/);
     assert.ok(lookedUpFor, "the lookup is scoped to the channel's program");
 
-    // An unclaimed channel gets no program knowledge at all.
     sent.length = 0;
     let unscopedLookups = 0;
     respond.lookupAnswer = async () => { unscopedLookups += 1; return { source: "Docs", answer: "leak" }; };

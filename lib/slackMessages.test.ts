@@ -77,8 +77,6 @@ test("Pixl's branding can never appear on a message sent for a different program
   assert.equal(sandboxPayload.username, "Sandbox Help");
   assert.notEqual(pixlPayload.username, sandboxPayload.username);
   assert.notEqual(pixlPayload.icon_url, sandboxPayload.icon_url);
-  // The Pixl identity must not leak onto the sandbox program's message in
-  // any field, not just username.
   assert.equal(JSON.stringify(sandboxPayload).includes("Pixl"), false);
 });
 
@@ -104,7 +102,6 @@ test("429 with Retry-After is honored once, then the send succeeds", async () =>
   assert.equal(calls, 2);
 });
 
-// WHY: the cap must be proven without waiting 30s in the suite.
 async function withCapturedSleeps(fn) {
   const delays = [];
   const orig = global.setTimeout;
@@ -122,7 +119,6 @@ async function withCapturedSleeps(fn) {
 }
 
 test("characterization: shadow mode returns fixed shape and sends nothing", async () => {
-  // WHY: callers branch on the exact shape, so it is pinned not unified.
   let called = false;
   const client = { chat: { postMessage: async () => { called = true; return { ts: "x" }; } } };
   const res = await sendProgramMessage({ client, program: { id: "p1", shadowMode: true }, channel: "C1", text: "hi" });
@@ -131,7 +127,6 @@ test("characterization: shadow mode returns fixed shape and sends nothing", asyn
 });
 
 test("characterization: brandingFor trims supportName and drops empty", () => {
-  // WHY: pinned bug now fixed, so the pin asserts the fixed shape.
   const cases = [
     [{ supportName: "  Highway Help  " }, "Highway Help"],
     [{ supportName: "a".repeat(100) }, "a".repeat(80)],
@@ -141,7 +136,6 @@ test("characterization: brandingFor trims supportName and drops empty", () => {
 });
 
 test("characterization: brandingFor keeps only http(s) icons", () => {
-  // WHY: pinned bug now fixed, so the pin asserts the fixed shape.
   const cases = [
     [{ name: "H" }, undefined],
     [{ name: "H", iconUrl: "not-a-url" }, undefined],
@@ -180,7 +174,6 @@ test("characterization: Retry-After 31s is capped at 30s", async () => {
 });
 
 test("characterization: unknown transient backs off then gives up", async () => {
-  // WHY: a bad value must fall to backoff, not a Retry-After wait.
   let calls = 0;
   const broken = {
     chat: {
@@ -209,7 +202,6 @@ test("characterization: unknown transient backs off then gives up", async () => 
 });
 
 test("characterization: branded ratelimit retry preserves brand", async () => {
-  // WHY: pinned bug now fixed, so the pin asserts preservation.
   const sent = [];
   let calls = 0;
   const flaky = {
@@ -238,7 +230,6 @@ test("characterization: branded ratelimit retry preserves brand", async () => {
 });
 
 test("characterization: ticket action failures stay silent, only public_resolve explains", async () => {
-  // WHY: buttons must not chatter on failure; the one explain path is pinned here.
   const tickets = require("./tickets");
   const probe = { chat: { postMessage: async () => { throw new Error("must not send on auth failure"); } } };
   for (const fn of [tickets.claimTicket, tickets.resolveTicket, tickets.closeTicket]) {
@@ -248,9 +239,6 @@ test("characterization: ticket action failures stay silent, only public_resolve 
   const fs = require("fs");
   const src = readSource("tickets.js");
   const hits = (src.match(/postEphemeral/g) || []).length;
-  // The two public thread buttons explain a not-authorized click; Decline adds
-  // one clicker-only confirmation (never a channel post). Every other
-  // organizer-card action still stays silent on failure.
   assert.equal(hits, 3);
   assert.ok(src.includes("public_resolve_ticket"));
   assert.ok(src.includes("SUPPORT_REOPEN_ACTION"));
@@ -258,7 +246,6 @@ test("characterization: ticket action failures stay silent, only public_resolve 
 });
 
 test("regression: missing or empty Retry-After falls to transient backoff", async () => {
-  // WHY: missing must not become a 0ms storm.
   const makers = [
     () => {
       const e = new Error("t");
@@ -285,7 +272,6 @@ test("regression: missing or empty Retry-After falls to transient backoff", asyn
 });
 
 test("regression: Retry-After header lookup ignores case", async () => {
-  // WHY: Slack capitalizes the header, so any case must be honored.
   const keys = ["retry-after", "Retry-After", "RETRY-AFTER"];
   for (const key of keys) {
     let calls = 0;
@@ -309,7 +295,6 @@ test("regression: Retry-After header lookup ignores case", async () => {
 });
 
 test("regression: brand survives ratelimit and drops only on branding rejection", async () => {
-  // WHY: ratelimit must not strip identity; only a rejected brand may.
   const sent = [];
   let calls = 0;
   const prog = { name: "Highway", supportName: "Highway Help", iconUrl: "https://example.com/i.png" };
@@ -341,7 +326,6 @@ test("regression: brand survives ratelimit and drops only on branding rejection"
 });
 
 test("regression: retry path holds one permanent check with no dead throw", () => {
-  // WHY: a second check hides the real exit, so the shape is pinned.
   const fs = require("fs");
   const src = readSource("slackMessages.js");
   assert.equal(src.includes("lastError"), false);
@@ -349,7 +333,6 @@ test("regression: retry path holds one permanent check with no dead throw", () =
 });
 
 test("regression: brandingFor trims, drops empty, and gates iconUrl", () => {
-  // WHY: dirty program rows must not leak whitespace or bad icons to Slack.
   const names = [
     [{ supportName: "  A Help  " }, "A Help"],
     [{ supportName: "   ", name: "H" }, undefined],
@@ -366,7 +349,6 @@ test("regression: brandingFor trims, drops empty, and gates iconUrl", () => {
 });
 
 test("regression: duplicate card text carries no stray bracket", () => {
-  // WHY: the card line must match its siblings exactly.
   const fs = require("fs");
   const src = readSource("tickets.js");
   assert.ok(src.includes("Duplicate of #${canon}`"));

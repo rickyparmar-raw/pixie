@@ -1,8 +1,3 @@
-// The App Home tab: pixie's private homepage, one per viewer.
-//
-// Public information for anyone who opens it — what pixie knows, what it can
-// walk them through, how well the docs are holding up — plus, for helpers only,
-// the review queue as clickable buttons.
 import knowledge = require("./knowledge");
 import reply = require("./reply");
 import guides = require("./guides");
@@ -17,25 +12,18 @@ import stats = require("./stats");
 
 const { isAdmin } = configModule;
 const { relativeTime, coverageStats, statsText } = stats;
-type Legacy = Record<string, any>;
+interface Legacy {
+  [key: string]: any;
+}
 
-// How many candidates the home tab renders. Slack caps a view at 100 blocks and
-// each candidate costs two, so this stays well clear of the ceiling while still
-// showing enough to work through in one sitting.
 const HOME_REVIEW_LIMIT = 8;
 const HOME_LEARNED_LIMIT = 3;
 
 const APPROVE_ACTION = "learn_approve";
 const DROP_ACTION = "learn_drop";
 
-// Below this, the docs are failing more questions than they answer and the
-// message says so plainly. The number was 23% when this was written — visible
-// nowhere except one bullet in the middle of /pixie-stats, which is why nobody
-// knew the corpus needed work.
 const HEALTHY_COVERAGE = 50;
 
-// Small block builders so every section below reads as content, not Slack
-// shape boilerplate.
 function divider(): Legacy {
   return { type: "divider" };
 }
@@ -59,9 +47,6 @@ function coverageBlocks(): Legacy[] {
   ];
 }
 
-// What pixie has picked up by being used. Separate from docs coverage on
-// purpose: coverage is a question about the docs, this is a question about
-// pixie — every answer here is one it can now give without a model call.
 function learnedBlocks(): Legacy[] {
   const { known, cacheHits, instant } = coverageStats();
   if (known === 0) return [];
@@ -77,10 +62,6 @@ function learnedBlocks(): Legacy[] {
   return [divider(), section(lines.join("\n"))];
 }
 
-// The review queue, as buttons. `/pixie-pending` prints the same rows and
-// `/pixie-approve <n>` accepts them one id at a time, which is why 96 rows
-// accumulated without a single review: matching numbers by eye across a wall of
-// ephemeral text is work nobody was going to do. Approving here is one click.
 function reviewBlocks(userId: string): Legacy[] {
   if (!isAdmin(userId)) return [];
 
@@ -92,10 +73,6 @@ function reviewBlocks(userId: string): Legacy[] {
   const blocks: Legacy[] = [divider(), section(`*waiting for review* — ${rows.length} candidate answer(s)`)];
 
   for (const row of rows) {
-    // A row lib/report.js drafted from repeated help-channel questions has no
-    // author — `<@null>` would render as literal broken text instead of a
-    // mention, so it gets its own attribution rather than pretending a human
-    // wrote it.
     const attribution = row.author_id ? `from <@${row.author_id}>` : "drafted from repeated help-channel questions";
     blocks.push(
       {
@@ -130,9 +107,6 @@ function reviewBlocks(userId: string): Legacy[] {
   return blocks;
 }
 
-// The home tab isn't in any channel, so it can't name one program the way a
-// reply can. It names them all instead — which is the same fact from the other
-// side, and the only place someone can see the full list.
 function programSummary(): string {
   const named = allProgramNames().filter((n: string) => n);
   if (named.length === 0) return "Hack Club YSWS programs";
@@ -140,8 +114,6 @@ function programSummary(): string {
   return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
 }
 
-// Registry reads must never break the home tab: a bot with no database yet
-// still has to render something.
 function allProgramNames(): string[] {
   try {
     return programs
@@ -226,27 +198,14 @@ function homeBlocks(userId: string): Legacy[] {
 
   blocks.push(...reviewBlocks(userId));
 
-  // The Home tab is published straight to Slack rather than going through
-  // lib/reply.js, so it does its own de-dashing.
   return reply.plainDashesInBlocks(blocks);
 }
 
-// Both buttons do the same three things, so they share one handler: run the
-// action, then re-publish the home view so the row it acted on disappears and
-// the next candidate moves up.
-//
-// The Drop button is the one piece of human feedback the gaps system actually
-// has access to. Recording the rejected question text in gap_rejections makes
-// it disappear from the auto-ranked list (topGaps) for the same window the
-// rank itself covers — without this, a "drop" is a UI gesture that does
-// nothing to the data underneath, and the same troll beat keeps coming back.
 function reviewAction(apply: (id: number) => unknown, verb: string) {
   return async ({ ack, body, action, client }: Legacy): Promise<void> => {
     await ack();
 
     const userId = body?.user?.id;
-    // The buttons only render for admins, but a stale view in an old tab can
-    // still fire one, so re-check rather than trusting what was rendered.
     if (!isAdmin(userId)) return;
 
     const id = Number(action?.value);
@@ -254,8 +213,6 @@ function reviewAction(apply: (id: number) => unknown, verb: string) {
       log.info("learn", `${verb} #${id} from app home by ${userId}`);
       apply(id);
 
-      // Look up the question this draft was for. drop the one-off noise into
-      // gap_rejections so the question text is excluded from future ranking.
       if (verb === "dropped") {
         try {
           const row = db.getLearnedFactById(id);
@@ -292,10 +249,6 @@ async function onAppHomeOpened({ event, client }: Legacy): Promise<void> {
 function register(app: Legacy): void {
   app.event("app_home_opened", onAppHomeOpened);
 
-  // Matched by prefix because each row's action_id carries its own id, keeping
-  // every button in the view distinct. Requires Interactivity to be enabled on
-  // the Slack app — Socket Mode carries it with no Request URL, but the toggle
-  // still has to be on or the buttons silently do nothing.
   app.action(new RegExp(`^${APPROVE_ACTION}_`), reviewAction(learn.approve, "approved"));
   app.action(new RegExp(`^${DROP_ACTION}_`), reviewAction(learn.forget, "dropped"));
 }

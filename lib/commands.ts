@@ -1,6 +1,3 @@
-// Slash commands and the channel-join welcome. All answers here are ephemeral or
-// private by default — the point is getting help without adding noise to a
-// busy channel. The App Home tab lives in home.js.
 import knowledge = require("./knowledge");
 import answer = require("./answer");
 import respond = require("./respond");
@@ -19,14 +16,20 @@ import stats = require("./stats");
 
 const { config, isAdmin } = configModule;
 const { relativeTime, statsText } = stats;
-type Legacy = Record<string, any>;
+interface Legacy {
+  [key: string]: any;
+}
+
+function errorMessage(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("message" in error)) return undefined;
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" ? message : undefined;
+}
 
 const GAP_LIMIT = 15;
 const PENDING_LIMIT = 15;
 const NOT_ALLOWED = "that one's helpers-only :nono:";
 
-// Wraps a command so it only runs for PIXIE_ADMIN_USER_IDS. Used for anything
-// that changes what pixie knows or exposes the maintainer view.
 function adminOnly(handler: (args: Legacy) => Promise<unknown>) {
   return async (args: Legacy): Promise<void> => {
     if (!isAdmin(args.command?.user_id)) {
@@ -38,9 +41,6 @@ function adminOnly(handler: (args: Legacy) => Promise<unknown>) {
   };
 }
 
-// Slash commands reply through Bolt's own `respond` helper rather than through
-// lib/reply.js, so they miss the de-dashing every other reply gets. Wrapping
-// the helper once here covers all of them, including `/pixie <question>`.
 function plainSpoken(handler: (args: Legacy) => Promise<unknown>) {
   return async (args: Legacy): Promise<unknown> => {
     const original = args.respond;
@@ -60,9 +60,6 @@ function plainSpoken(handler: (args: Legacy) => Promise<unknown>) {
   };
 }
 
-// Same allowlist as adminOnly, but for shortcut args ({shortcut, ack, client}
-// rather than {command, ack, respond}) — a message shortcut has no `respond`
-// helper of its own the way a slash command does.
 function adminOnlyShortcut(handler: (args: Legacy) => Promise<unknown>) {
   return async (args: Legacy): Promise<unknown> => {
     if (!isAdmin(args.shortcut?.user?.id)) {
@@ -79,10 +76,7 @@ function adminOnlyShortcut(handler: (args: Legacy) => Promise<unknown>) {
 }
 
 
-/* ------------------------------------------------------ /pixie-report ---- */
 
-// The same builder the scheduled Monday post uses, so the two can never quote
-// different numbers. `last` gets the previous week instead of this one.
 async function reportCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
@@ -90,9 +84,7 @@ async function reportCommand({ command, ack, respond: sendEphemeral }: Legacy): 
   await sendEphemeral({ response_type: "ephemeral", text: report.reportText(weeksAgo) });
 }
 
-/* ------------------------------------------------------------- /pixie ---- */
 
-// Ephemeral answer: same pipeline, but only the asker sees it.
 async function askCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
@@ -110,8 +102,6 @@ async function askCommand({ command, ack, respond: sendEphemeral }: Legacy): Pro
     return;
   }
 
-  // Scoped to the program that owns this channel; an unclaimed channel gets
-  // no program knowledge at all (never the union of every program's facts).
   const askPolicy = require("./channelPolicy").resolve(command.channel_id, command.team_id || null);
   const askProgram = askPolicy.role === "none" ? null : askPolicy.program;
   try {
@@ -130,13 +120,12 @@ async function askCommand({ command, ack, respond: sendEphemeral }: Legacy): Pro
     const chatReply = await getChatReply(question, "", command.channel_id === config.slack.helpChannel);
     await sendEphemeral({ response_type: "ephemeral", text: chatReply || respond.MENTION_FALLBACK });
     db.recordMetric(chatReply ? "answer_chat" : "fallback");
-  } catch (e: any) {
-    log.error("commands", `${brand.cmd()} failed:`, e.message);
+  } catch (e: unknown) {
+    log.error("commands", `${brand.cmd()} failed:`, errorMessage(e));
     await sendEphemeral({ response_type: "ephemeral", text: respond.ERROR_FALLBACK });
   }
 }
 
-/* --------------------------------------------------------- /pixie-check ---- */
 
 const validator = require("./validator");
 
@@ -156,13 +145,12 @@ async function checkCommand({ command, ack, respond: sendEphemeral }: Legacy): P
     const replyText = validator.formatValidationReport(report);
     await sendEphemeral({ response_type: "ephemeral", text: replyText });
     db.recordMetric("command_check");
-  } catch (e: any) {
-    log.error("commands", `${brand.cmd("check")} failed:`, e.message);
-    await sendEphemeral({ response_type: "ephemeral", text: `Could not inspect repository: ${e.message}` });
+  } catch (e: unknown) {
+    log.error("commands", `${brand.cmd("check")} failed:`, errorMessage(e));
+    await sendEphemeral({ response_type: "ephemeral", text: `Could not inspect repository: ${errorMessage(e)}` });
   }
 }
 
-/* ---------------------------------------------------------- /pixie-calc ---- */
 
 async function calcCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
@@ -187,26 +175,23 @@ async function calcCommand({ command, ack, respond: sendEphemeral }: Legacy): Pr
       response_type: "ephemeral",
       text: `Couldn't calculate a program reward for "${input}". Try approved hours (e.g. \`15 hours\`) or a reward name.`,
     });
-  } catch (e: any) {
-    log.error("commands", `${brand.cmd("calc")} failed:`, e.message);
+  } catch (e: unknown) {
+    log.error("commands", `${brand.cmd("calc")} failed:`, errorMessage(e));
     await sendEphemeral({ response_type: "ephemeral", text: respond.ERROR_FALLBACK });
   }
 }
 
-/* ------------------------------------------------------- /pixie-sources -- */
 
 async function sourcesCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
   let sources = [];
   try {
-    // This channel's program only — other programs' source inventories are
-    // not every member's business.
     const srcPolicy = require("./channelPolicy").resolve(command?.channel_id, command?.team_id || null);
     const prog = srcPolicy.role === "none" ? null : srcPolicy.program;
     sources = prog ? [...(prog.sources || []), ...(prog.sharedSources ? require("./programs").shared().sources || [] : [])] : [];
-  } catch (e: any) {
-    await sendEphemeral({ response_type: "ephemeral", text: `couldn't read sources.json: ${e.message}` });
+  } catch (e: unknown) {
+    await sendEphemeral({ response_type: "ephemeral", text: `couldn't read sources.json: ${errorMessage(e)}` });
     return;
   }
 
@@ -223,34 +208,25 @@ async function sourcesCommand({ command, ack, respond: sendEphemeral }: Legacy):
   });
 }
 
-/* -------------------------------------------------------- /pixie-reload -- */
 
 async function reloadCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
   try {
-    // force=true — someone explicitly asked to reload the docs, so a cached
-    // Firecrawl copy from earlier today isn't good enough here.
     await knowledge.refreshCorpus(true);
   (db as Legacy).clearCache();
     await sendEphemeral({
       response_type: "ephemeral",
       text: "refreshed the docs and cleared the answer cache :yesyes:",
     });
-  } catch (e: any) {
-    await sendEphemeral({ response_type: "ephemeral", text: `refresh failed: ${e.message}` });
+  } catch (e: unknown) {
+    await sendEphemeral({ response_type: "ephemeral", text: `refresh failed: ${errorMessage(e)}` });
   }
 }
 
-/* ---------------------------------------------------------- /pixie-gaps -- */
 
-// The docs to-do list: what people asked that the docs couldn't answer.
 async function gapsCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
-  // Only questions judged to be real docs gaps. A miss is not the same claim as
-  // "the docs should cover this" — an outage, someone's broken laptop and a
-  // half-typed fragment all used to land here, which is why the list went
-  // unread. See lib/report.js.
   const gaps = db.topGaps(GAP_LIMIT, undefined, { kind: (report as Legacy).DOCS });
   if (gaps.length === 0) {
     await sendEphemeral({ response_type: "ephemeral", text: "no unanswered questions logged yet :yay:" });
@@ -264,22 +240,17 @@ async function gapsCommand({ ack, respond: sendEphemeral }: Legacy): Promise<voi
   });
 }
 
-/* --------------------------------------------------------- /pixie-stats -- */
 
 async function statsCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
   await sendEphemeral({ response_type: "ephemeral", text: statsText() });
 }
 
-/* ------------------------------------------------------- learning loop --- */
 
 async function teachCommand({ command, ack, respond: sendEphemeral, client }: Legacy): Promise<void> {
   await ack();
 
   const text = (command.text || "").trim();
-  // A taught fact belongs to the program whose channel it was taught in; a
-  // fact with no program would be served to nobody (or, historically, to
-  // everybody). Refuse outside a claimed channel instead of guessing.
   const teachPolicy = require("./channelPolicy").resolve(command.channel_id, command.team_id || null);
   if (teachPolicy.role !== "main" && teachPolicy.role !== "help") {
     await sendEphemeral({ response_type: "ephemeral", text: "run this in one of the program's channels so i know which program it's for :nono:" });
@@ -298,7 +269,6 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Le
     return;
   }
 
-  // If no "Q :: A" syntax was given, attempt to summarize the thread
   let threadTs = command.thread_ts;
   const channel = command.channel_id;
   const user = command.user_id;
@@ -310,8 +280,8 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Le
       if (recentWithThread) {
         threadTs = recentWithThread.thread_ts || recentWithThread.ts;
       }
-    } catch (e: any) {
-      log.debug("commands", `could not inspect channel history for thread: ${e.message}`);
+    } catch (e: unknown) {
+      log.debug("commands", `could not inspect channel history for thread: ${errorMessage(e)}`);
     }
   }
 
@@ -328,8 +298,8 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Le
         });
         return;
       }
-    } catch (e: any) {
-      log.error("commands", "teach thread failed:", e.message);
+    } catch (e: unknown) {
+      log.error("commands", "teach thread failed:", errorMessage(e));
     }
   }
 
@@ -339,7 +309,6 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Le
   });
 }
 
-// "Teach Pixie from thread" message shortcut — right-click a message → app actions.
 async function teachThreadShortcut({ shortcut, ack, client }: Legacy): Promise<void> {
   await ack();
 
@@ -368,13 +337,12 @@ async function teachThreadShortcut({ shortcut, ack, client }: Legacy): Promise<v
         ? `queued for review :thinking_face:\n>*Q:* ${parsed.question}\n>*A:* ${parsed.answer}\n\n_#${id} — approve with \`/pixie-approve ${id}\`, or \`/pixie-forget ${id}\` to drop it_`
         : `already queued this thread, or couldn't save it — check \`${brand.cmd("pending")}\``,
     });
-  } catch (e: any) {
-    log.error("commands", "teach-thread shortcut failed:", e.message);
+  } catch (e: unknown) {
+    log.error("commands", "teach-thread shortcut failed:", errorMessage(e));
     await client.chat.postEphemeral({ channel, user, text: respond.ERROR_FALLBACK });
   }
 }
 
-// Candidates captured from helpers answering in threads pixie missed.
 async function pendingCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
@@ -490,10 +458,7 @@ async function forgetCommand({ command, ack, respond: sendEphemeral }: Legacy): 
   }
 }
 
-/* ---------------------------------------------------------- onboarding --- */
 
-// Built per call rather than at require time: brand.cmd() reads the environment,
-// and a module-level constant would freeze whichever value was set first.
 function welcomeText() {
   const prog = programs.all()[0] || null;
   const links = prog?.links || {};
@@ -514,12 +479,9 @@ function welcomeText() {
   ].join("\n");
 }
 
-// Channel join welcome DMs are disabled per user request
 async function onMemberJoined(): Promise<void> {
-  // No-op: do not DM members joining channels
 }
 
-/* ------------------------------------------------------- /pixie-program -- */
 
 const programs = require("./programs");
 
@@ -529,9 +491,6 @@ async function programCommand({ command, ack, respond: sendEphemeral }: Legacy):
   const parts = raw.split(/\s+/);
   const sub = (parts[0] || "").toLowerCase();
 
-  // The one subcommand a program's own helpers can run themselves — everyone
-  // else below this point still needs isAdmin, checked explicitly now that
-  // the whole command is no longer wrapped in adminOnly() at registration.
   if (sub === "tickets") {
     const prog = programs.forChannel(command.channel_id, command.team_id);
     if (!prog || prog.id === "ysws-global") {
@@ -595,8 +554,8 @@ async function programCommand({ command, ack, respond: sendEphemeral }: Legacy):
       }
       programs.saveProgram(progObj);
       await sendEphemeral({ response_type: "ephemeral", text: `saved program \`${progObj.id}\` :yesyes:` });
-    } catch (e: any) {
-      await sendEphemeral({ response_type: "ephemeral", text: `could not add program: ${e.message}` });
+    } catch (e: unknown) {
+      await sendEphemeral({ response_type: "ephemeral", text: `could not add program: ${errorMessage(e)}` });
     }
     return;
   }
@@ -606,8 +565,6 @@ async function programCommand({ command, ack, respond: sendEphemeral }: Legacy):
     const field = parts[2]?.toLowerCase();
     const val = parts[3]?.toLowerCase();
     const allowed: Record<string, string[]> = { posture: ["active", "passive"], scope: ["any", "program"] };
-    // hasOwnProperty, not a bare lookup: `field` is whatever someone typed into
-    // Slack, and `allowed["constructor"]` is not an array.
     const choices = Object.prototype.hasOwnProperty.call(allowed, field) ? allowed[field] : null;
     if (!id || !choices || !choices.includes(val)) {
       await sendEphemeral({
@@ -647,15 +604,9 @@ async function programCommand({ command, ack, respond: sendEphemeral }: Legacy):
   await sendEphemeral({ response_type: "ephemeral", text: "unknown subcommand. use `list`, `add`, `set`, or `remove`" });
 }
 
-/* ----------------------------------------------------------------- /guide -- */
 
 const guides = require("./guides");
 
-// WHY: starting a guide renders and persists identically from every entry
-// point — the /guide slash command and the picker button action. One helper
-// so the reaction hint, dedashing and message-ts bookkeeping can't drift:
-// the button path used to post raw blocks while every other entry dedashed
-// them, so guide steps briefly talked in dashes from exactly one button.
 async function postGuideFirstStep({ client, channel, threadTs, guideId, userId }: Legacy): Promise<Legacy | null> {
   const result = guides.startGuide(guideId, threadTs, userId);
   if (!result) return null;
@@ -724,18 +675,10 @@ async function guideCommand({ command, ack, respond: sendEphemeral, client }: Le
   }
 }
 
-/* ----------------------------------------------------------- registration -- */
 
 const tickets = require("./tickets");
 
 function register(app: Legacy): void {
-  // Command names come from the bot's own slug (lib/brand.js), not from literals:
-  // one image serves the whole fleet, and a bot deployed as Sol must answer /sol.
-  // The Slack manifest is generated from the same slug, so what the app advertises
-  // and what this process listens for cannot drift apart.
-  //
-  // With no PIXIE_BOT_SLUG set these resolve to /pixie and /pixie-* exactly as
-  // before, so the live Pixl deployment is unaffected.
   const cmd = brand.cmd;
 
   app.command(cmd(), plainSpoken(askCommand));
@@ -745,7 +688,6 @@ function register(app: Legacy): void {
   app.command(cmd("check"), plainSpoken(checkCommand));
   app.command(cmd("calc"), plainSpoken(calcCommand));
 
-  // Maintainer surface: changes what pixie knows, or exposes the review queue.
   app.command(cmd("report"), plainSpoken(adminOnly(reportCommand)));
   app.command(cmd("reload"), plainSpoken(adminOnly(reloadCommand)));
   app.command(cmd("gaps"), plainSpoken(adminOnly(gapsCommand)));
@@ -753,15 +695,8 @@ function register(app: Legacy): void {
   app.command(cmd("pending"), plainSpoken(adminOnly(pendingCommand)));
   app.command(cmd("approve"), plainSpoken(adminOnly(approveCommand)));
   app.command(cmd("forget"), plainSpoken(adminOnly(forgetCommand)));
-  // Not adminOnly: `tickets on|off` is deliberately reachable by a program's
-  // own helpers (see the in-function gate). Every other subcommand
-  // (list/add/set/remove) still enforces isAdmin itself, inline.
   app.command(cmd("program"), plainSpoken(programCommand));
 
-  // Unprefixed alias, kept because people on Pixl already type it. Registered
-  // only for the default bot: /guide can belong to exactly one app per workspace,
-  // and every fleet bot shares the Hack Club workspace — a second bot claiming it
-  // would fail to install.
   if (brand.slug() === brand.DEFAULT_SLUG) {
     app.command("/guide", plainSpoken(guideCommand));
   }
@@ -782,7 +717,6 @@ function register(app: Legacy): void {
 
     const guideName = guides.GUIDES[guideId]?.name || guideId;
 
-    // Remove the button menu and replace with a clean confirmation
     if (rootTs && client && client.chat && client.chat.update) {
       await client.chat
         .update({
@@ -799,7 +733,7 @@ function register(app: Legacy): void {
             },
           ],
         })
-        .catch((e: any) => log.debug("commands", `could not update guide menu message: ${e.message}`));
+        .catch((e: unknown) => log.debug("commands", `could not update guide menu message: ${errorMessage(e)}`));
     }
 
     const result = await postGuideFirstStep({ client, channel: channelId, threadTs, guideId, userId });
@@ -816,8 +750,8 @@ function register(app: Legacy): void {
         thread_ts: data.threadTs,
         text: reply.plainDashes(`🧵 *Thread Summary* (shared by <@${body.user.id}>):\n\n${data.summary}`),
       });
-    } catch (e: any) {
-      log.debug("commands", `sum_post_to_thread error: ${e.message}`);
+    } catch (e: unknown) {
+      log.debug("commands", `sum_post_to_thread error: ${errorMessage(e)}`);
     }
   });
 
@@ -853,8 +787,6 @@ export = {
   parseForgetInput,
   onMemberJoined,
   welcomeText,
-  // Kept as a getter so `commands.WELCOME` still reads as a string for any
-  // existing caller, while the text itself is built fresh from the bot's brand.
   get WELCOME() {
     return welcomeText();
   },

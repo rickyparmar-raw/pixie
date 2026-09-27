@@ -1,13 +1,3 @@
-// Central program-branded Slack messaging for the shared hosted app.
-//
-// One @Pixie installation serves many programs, so every outbound support
-// message goes through here: it applies the program's support identity
-// (display name + icon) via chat:write.customize and falls back to the plain
-// Pixie identity when customization is unavailable. Program branding only —
-// helper human identity is never impersonated.
-//
-// Rate-limit behavior is bounded: 429s honor Retry-After up to a cap, then
-// give up with a typed error instead of retry-storming the workspace.
 import log = require("./log");
 import type { Program, SlackClient } from "./types";
 import type { ChatPostMessageArguments } from "@slack/web-api";
@@ -37,9 +27,6 @@ type MessageClient = Pick<SlackClient, "chat">;
 const MAX_ATTEMPTS = 3;
 const MAX_RETRY_AFTER_MS = 30 * 1000;
 
-// A program-branded Slack send that has exhausted its retries. Recorded so a
-// spike of dropped support replies is visible in metrics rather than only in
-// the callers that swallow the throw.
 function recordSendFailure(program: Program | null | undefined, err: SlackError): void {
   try {
     const code = (err && (err.code || (err.data && err.data.error))) || "unknown";
@@ -55,7 +42,6 @@ function brandingFor(program: Program | null | undefined): Record<string, string
     const name = String(raw).trim().slice(0, 80);
     if (name) out.username = name;
   }
-  // WHY: Slack rejects non-http icons, so only http(s) survives branding.
   if (typeof program.iconUrl === "string" && /^https?:\/\//.test(program.iconUrl)) out.icon_url = program.iconUrl;
   return out;
 }
@@ -76,7 +62,6 @@ function retryAfterMs(err: SlackError | null | undefined): number | null {
   else if (err.data && err.data.retryAfter !== undefined) header = err.data.retryAfter;
   else if (err.headers) header = headerCaseInsensitive(err.headers, "retry-after");
   else header = null;
-  // WHY: missing/empty must fall to backoff, not a 0ms retry storm.
   if (header === null || header === undefined || header === "") return null;
   const secs = Number(header);
   if (!Number.isFinite(secs) || secs < 0) return null;
@@ -100,8 +85,6 @@ async function sendProgramMessage({ client, program = null, channel, threadTs = 
   if (!channel) throw new Error("channel required");
   if (!text && !blocks) throw new Error("text or blocks required");
 
-  // Shadow mode (migration): evaluate everything, send nothing. The legacy
-  // bot still owns the channel, so any public write here would double-reply.
   if (program && program.shadowMode === true) {
     log.debug("slackMessages", `shadowed send suppressed for program ${program.id}`);
     return { ok: false, shadowed: true, ts: null };
@@ -117,8 +100,6 @@ async function sendProgramMessage({ client, program = null, channel, threadTs = 
       return await client.chat.postMessage(payload as ChatPostMessageArguments) as SendResult;
     } catch (err) {
       const error = (err && typeof err === "object" ? err : {}) as SlackError;
-      // Custom identity rejected (missing scope, bad icon): retry once as
-      // plain Pixie rather than failing the support reply.
       const code = error.code || (error.data && error.data.error);
       if (useBrand && (code === "invalid_arguments" || code === "not_allowed" || code === "missing_scope")) {
         if (attempt >= MAX_ATTEMPTS - 1) { recordSendFailure(program, error); throw err; }
@@ -132,7 +113,6 @@ async function sendProgramMessage({ client, program = null, channel, threadTs = 
         await sleep(wait);
         continue;
       }
-      // Unknown transient error: one short backoff, then stop.
       if (attempt < MAX_ATTEMPTS - 1) {
         await sleep(500 * (attempt + 1));
         continue;

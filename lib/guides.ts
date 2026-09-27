@@ -1,16 +1,5 @@
-// Interactive step-by-step guides for common workflows.
-//
-// The original version advanced on *any* reply and matched its alternate paths
-// with `response.includes("not enough RE")` — literal phrases nobody types, so
-// every alternate branch was unreachable and "wait, what?" marched the user to
-// the next step. Progression is now model-checked: the reply is classified as
-// advancing, stuck (with which alternate), off-topic, or done.
 import configModule = require("./config");
-// Module object rather than a destructured `complete`, so tests can stub it —
-// destructuring binds at load time. Same reason lib/learn.js holds it this way.
 import llm = require("./llm");
-// Module object rather than destructured — same stubbing reason as the note
-// on lib/respond.js's `answer` import.
 import answer = require("./answer");
 import intent = require("./intent");
 import db = require("./db");
@@ -22,22 +11,26 @@ const { looksLikeHelpRequest } = intent;
 const MAX_TOKENS = 20;
 const TIMEOUT_MS = 10000;
 
-// Real headroom for a real answer — an install command, a specific fix — not
-// the 20-token classifier budget above.
 const STUCK_ANSWER_MAX_TOKENS = 400;
 
 const ADVANCE = "ADVANCE";
 const STUCK = "STUCK";
 const OTHER = "OTHER";
 const DONE = "DONE";
-type Legacy = Record<string, any>;
+interface Legacy {
+  [key: string]: any;
+}
+
+function errorMessage(error: unknown): string | undefined {
+  if (typeof error !== "object" || error === null || !("message" in error)) return undefined;
+  const message = (error as { message?: unknown }).message;
+  return typeof message === "string" ? message : undefined;
+}
 interface GuideTrigger {
   subject: string[][];
   hints: string[];
 }
 
-// Typed anywhere in a guide thread, bails out immediately. Checked before the
-// model call so quitting is always free and always works.
 const EXIT_PATTERN = /^\s*(?:stop|quit|exit|cancel|nvm|nevermind|never mind|forget it|no thanks|nah im good|nah i'm good)\b/i;
 
 const GUIDES: Record<string, Legacy> = {
@@ -863,20 +856,6 @@ function isAvailable(program: Legacy | null, guideId: string): boolean {
   return availableFor(program).some(([id]) => id === guideId);
 }
 
-// Guide selection used to be `q.includes("hackatime")`, which meant one typo
-// killed it: the live gap log has "pixie help me setup hackatimm" recorded as a
-// docs miss, and `active_guides` had never held a row. Detection is now two
-// passes — a free fuzzy one that catches the typo, then the model for phrasings
-// no keyword list would predict.
-//
-// `subject` groups are synonyms and every group must match; `hints` say the
-// person wants to be walked through it rather than just mentioning the word.
-//
-// The subject list does double duty: mentionsGuideSubject uses it alone to
-// decide whether the model pass is worth a call at all, so a synonym missing
-// here means that guide is unreachable for anyone who doesn't name it. Hence
-// "hours" — "how do i make my coding hours count" is a hackatime question that
-// never says hackatime.
 const GUIDE_TRIGGERS: Array<[string, GuideTrigger]> = [
   [
     "start-live",
@@ -1034,24 +1013,12 @@ const GUIDE_TRIGGERS: Array<[string, GuideTrigger]> = [
   ],
 ];
 
-// Budget scales with length because a fixed one is wrong at both ends: 2 edits
-// on a three-letter word turns "get" into "git", while 1 edit isn't enough slack
-// for a word as long as "hackatime".
 function editBudget(word: string): number {
   if (word.length <= 4) return 0;
   if (word.length <= 7) return 1;
   return 2;
 }
 
-// Damerau-Levenshtein, not plain Levenshtein: a swapped pair of letters is the
-// most common typo there is, and plain edit distance scores it 2, which puts
-// "regoin" out of reach of a 1-edit budget for "region". Counting a transposition
-// as one edit is what makes the budgets below tight enough to be safe and loose
-// enough to be useful.
-//
-// Stops as soon as an entire row exceeds the budget — this runs per token per
-// guide on every message, so the early exit matters more than the exact distance
-// once we're past the threshold.
 function withinEdits(a: string, b: string, budget: number): boolean {
   if (Math.abs(a.length - b.length) > budget) return false;
 
@@ -1082,7 +1049,6 @@ function matchesToken(tokens: string[], word: string): boolean {
   return tokens.some((t) => (budget === 0 ? t === word : withinEdits(t, word, budget)));
 }
 
-// Splitting the question into words once, shared by every pass below.
 function tokensOf(question: string): string[] {
   return (question || "")
     .toLowerCase()
@@ -1091,7 +1057,6 @@ function tokensOf(question: string): string[] {
     .filter(Boolean);
 }
 
-// The free pass. Returns a guide id or null; never makes a network call.
 function detectGuideByKeyword(question: string): string | null {
   const tokens = tokensOf(question);
   if (tokens.length === 0) return null;
@@ -1124,9 +1089,6 @@ function guideChooserPrompt() {
   ].join("\n");
 }
 
-// WHY: the guide's classifier-shaped calls share everything but budget and
-// words. One builder so a tier move edits one place instead of three pasted
-// request objects (detectGuideByModel, classifyStepReply).
 function intentTierRequest({ maxTokens, temperature, messages }: Legacy): Legacy {
   return {
     baseUrl: config.intent.baseUrl,
@@ -1142,10 +1104,6 @@ function intentTierRequest({ maxTokens, temperature, messages }: Legacy): Legacy
   };
 }
 
-// WHY: the guide picker menu is posted from two places — the plain-text menu
-// in respond.handleGuideMenu and the slash-command picker in
-// commands.guideCommand. Same buttons, same 5-per-row chunking; one builder
-// so a new guide shows up in both or neither, never just one.
 function guideMenuBlocks({ heading, entries }: Legacy): Legacy[] {
   const blocks: Legacy[] = [{ type: "section", text: { type: "mrkdwn", text: heading } }];
   const buttons = entries.map(([id, g]: [string, Legacy]) => ({
@@ -1160,10 +1118,6 @@ function guideMenuBlocks({ heading, entries }: Legacy): Legacy[] {
   return blocks;
 }
 
-// Second pass. Only reached when the keyword pass missed AND the message is
-// already a help request, so ordinary chat never pays for it. Runs before the
-// answer path rather than alongside it — a guide match replaces the answer call
-// instead of adding to it.
 async function detectGuideByModel(question: string): Promise<string | null> {
   try {
     const { text } = await llm.complete(
@@ -1180,20 +1134,12 @@ async function detectGuideByModel(question: string): Promise<string | null> {
 
     const label = (text || "").trim().toLowerCase();
     return Object.keys(GUIDES).find((id) => label.startsWith(id)) || null;
-  } catch (e: any) {
-    log.debug("guides", `guide selection failed: ${e.message}`);
+  } catch (e: unknown) {
+    log.debug("guides", `guide selection failed: ${errorMessage(e)}`);
     return null;
   }
 }
 
-// Is there any guide this message could possibly be about? Same fuzzy match as
-// the keyword pass, but only on the SUBJECT groups — the hints are dropped, so
-// merely naming git or hackatime is enough to qualify.
-//
-// This exists because the model pass ran on every help-shaped message the
-// keyword pass missed, which is nearly all of them: ~1700ms of latency added in
-// front of the answer call, to return NONE. A question that never mentions a
-// region, git or hackatime — however badly typed — has no guide to choose.
 function mentionsGuideSubject(question: string): boolean {
   const tokens = tokensOf(question);
   if (tokens.length === 0) return false;
@@ -1202,20 +1148,6 @@ function mentionsGuideSubject(question: string): boolean {
   );
 }
 
-// A keyword match only proves the words *could* be about some guide — not
-// that the person actually wants to be walked through it, rather than just
-// asking a question that happens to share vocabulary with the trigger list.
-// ("how to get pixels" matching shop-purchase, "how does my character level
-// up" matching customize-character, and a whole thread's worth of similar
-// hijacks all shipped this way — see the individual trigger comments above.)
-// Trimming the trigger lists fixes each specific phrase as it's found, but
-// it's still a keyword guess; it can't tell "walk me through submitting a
-// project" apart from "why did my project's submission get rejected". Every
-// keyword hit — not just a keyword miss — now gets confirmed by the same
-// model check used below, which is built to draw exactly that distinction
-// (see guideChooserPrompt: "Pick a walkthrough only when they want to be
-// taken through the process"). Only a message that mentions no guide subject
-// at all skips the model call, since there's nothing for it to confirm.
 function isExplicitGuideRequest(question: string): boolean {
   const text = (question || "").toLowerCase();
   return /\b(guide|walkthrough|tutorial|step-by-step|step by step|walk me through|take me through)\b/i.test(text);
@@ -1260,12 +1192,6 @@ function startGuide(guideId: string, threadTs: string, userId: string): Legacy |
   const guide = GUIDES[guideId];
   if (!guide) return null;
 
-  // A thread only has one guide slot (active_guides is keyed on thread_ts
-  // alone). Without this check, a different person asking an unrelated
-  // guide-shaped question in the same thread would silently steal that slot
-  // mid-walkthrough — db.saveGuide's ON CONFLICT upsert would overwrite
-  // whoever was already partway through. Decline instead; they get a normal
-  // answer.
   const existing = db.getGuide(threadTs);
   if (existing && existing.user_id && userId && existing.user_id !== userId) return null;
 
@@ -1302,8 +1228,6 @@ function classifierPrompt(guide: Legacy, step: Legacy, alternateKeys: string[]):
     .join("\n");
 }
 
-// Classifies the user's reply against the current step. Falls back to ADVANCE
-// on failure so an API outage can't strand someone mid-guide.
 async function classifyStepReply(guide: Legacy, step: Legacy, alternateKeys: string[], userResponse: string): Promise<Legacy> {
   try {
     const { text } = await llm.complete(
@@ -1330,8 +1254,8 @@ async function classifyStepReply(guide: Legacy, step: Legacy, alternateKeys: str
       return { kind: STUCK, alternateKey: "question or troubleshooting for this step" };
     }
     return { kind: ADVANCE };
-  } catch (e: any) {
-    log.debug("guides", `step classification failed (${e.message}), advancing`);
+  } catch (e: unknown) {
+    log.debug("guides", `step classification failed (${errorMessage(e)}), advancing`);
     return { kind: ADVANCE };
   }
 }
@@ -1357,13 +1281,6 @@ function stuckAnswerPrompt(guide: Legacy, step: Legacy, alternateKey: string, ca
   ].join("\n");
 }
 
-// A STUCK match used to reply with the exact same canned string every time,
-// regardless of what was actually asked — "how do i get X" and "how do i get
-// X on Linux using commands" got back the identical generic pointer. This
-// gives the model the canned guidance as grounding and lets it actually
-// answer what was asked, the same way pixie already does for any other
-// general (non-Pixl-specific) question. Falls back to the canned text on any
-// failure — an API hiccup should never leave someone stuck with nothing.
 async function answerStuckQuestion(guide: Legacy, step: Legacy, alternateKey: string, userResponse: string, inHelpChannel = false): Promise<string> {
   const canned = guide.alternateSteps[alternateKey];
   try {
@@ -1388,14 +1305,12 @@ async function answerStuckQuestion(guide: Legacy, step: Legacy, alternateKey: st
 
     const reply = (text || "").trim();
     return reply ? answer.normalizeEmoji(reply) : canned;
-  } catch (e: any) {
-    log.debug("guides", `stuck-answer generation failed (${e.message}), using canned reply`);
+  } catch (e: unknown) {
+    log.debug("guides", `stuck-answer generation failed (${errorMessage(e)}), using canned reply`);
     return canned;
   }
 }
 
-// Shared by continueGuide's ADVANCE branch and advanceGuideByReaction — moves
-// to the next step, or finishes the guide when there isn't one.
 function advanceToNextStep(threadTs: string, state: Legacy, guide: Legacy): Legacy {
   const nextIndex = state.current_step + 1;
   if (nextIndex >= guide.steps.length) {
@@ -1407,13 +1322,6 @@ function advanceToNextStep(threadTs: string, state: Legacy, guide: Legacy): Lega
   return stepPayload(guide.steps[nextIndex]);
 }
 
-// A :upvote: reaction on a guide step's own message is an explicit,
-// unambiguous "I'm ready for the next step" — no classifier call needed, and
-// no yes/no question to answer. Scoped to the guide's owner the same way a
-// typed reply is (see the user_id check in continueGuide) so someone else
-// reacting on the thread can't advance a walkthrough that isn't theirs.
-// Returns the same shape as continueGuide, or null when there's nothing to
-// advance (guide already gone, or this isn't the person it was started for).
 function advanceGuideByReaction(messageTsOrThreadTs: string | Legacy, userId: string): Legacy | null {
   let messageTs = null;
   let uid = userId;
@@ -1440,13 +1348,6 @@ function advanceGuideByReaction(messageTsOrThreadTs: string | Legacy, userId: st
   return advanceToNextStep(state.thread_ts, state, guide);
 }
 
-// Returns a payload to post, or null when the caller should handle the message
-// normally instead (off-topic question, or no active guide).
-//
-//   { message, checkNext }            -> next step / alternate advice
-//   { message, completed: true }      -> guide finished
-//   { message, cancelled: true }      -> user bailed out
-//   null                              -> not a guide reply, answer it normally
 async function continueGuide(threadTs: string, userResponse: string, userId: string | null = null, inHelpChannel = false): Promise<Legacy | null> {
   const state = db.getGuide(threadTs);
   if (!state) return null;
@@ -1457,12 +1358,6 @@ async function continueGuide(threadTs: string, userResponse: string, userId: str
     return null;
   }
 
-  // Thread guide state has no idea who's talking — only the person it was
-  // started for can advance or exit it. Without this, a bare "yea" meant for
-  // someone else entirely in the same thread reads exactly like ADVANCE to
-  // the step classifier, and the guide marches on for a person who never
-  // replied to it at all. Anyone else's message just falls through to a
-  // normal answer instead.
   if (state.user_id && userId && state.user_id !== userId) return null;
 
   if (isExitRequest(userResponse)) {
@@ -1479,8 +1374,6 @@ return { message: "no worries, stopping there — ping me if you wanna pick it b
     return { message: "cool, stopping the walkthrough — lmk if you need anything else :hii:", cancelled: true };
   }
 
-  // Off-topic: leave the guide parked and let the normal answer path handle it,
-  // so a real question mid-guide still gets a real answer.
   if (verdict.kind === OTHER) return null;
 
   if (verdict.kind === STUCK) {
@@ -1491,20 +1384,8 @@ return { message: "no worries, stopping there — ping me if you wanna pick it b
   return advanceToNextStep(threadTs, state, guide);
 }
 
-// Shown once — see buildGuideBlocks below.
 const GUIDE_REACTION_HINT = "react :upvote: on this message when you're ready for the next step — or just tell me if you're stuck";
 
-// Builds Slack Block Kit blocks for a guide step. Always returns blocks, even
-// with no screenshot — a plain-text step used to be one long paragraph with
-// the question mashed onto the end of it, which read as a wall of text
-// instead of a guide. Splitting the message and the question into their own
-// section blocks (with the question bolded) gives Slack's renderer room to
-// actually space them out.
-//
-// showReactionHint is only true on a guide's very first step: repeating the
-// full "react :upvote:..." sentence at the end of EVERY step's text was the
-// literal complaint — teach the mechanic once, in its own small context
-// block, and never repeat it.
 function buildGuideBlocks(result: Legacy, baseUrl: string, { showReactionHint = false }: { showReactionHint?: boolean } = {}): Legacy[] {
   const blocks: Legacy[] = [];
 

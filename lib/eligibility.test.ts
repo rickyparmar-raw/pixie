@@ -1,8 +1,4 @@
 // @ts-nocheck
-// Behavioral regression suite: WHEN Pixie speaks. 150+ realistic fixtures
-// driving the pure shouldPixieRespond decision — no network, no model, no
-// database. Roles generalize by addressee shape (<@U…> mentions, deferral
-// verbs); no real usernames are special-cased anywhere in the implementation.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const elig = require("./eligibility");
@@ -28,9 +24,7 @@ function run(f) {
   });
 }
 
-// [name, fixture, expectedDecision, expectedReason]
 const FIXTURES = [
-  // ——— clear help questions (help channel, top level) ———
   ["help: deadline ask", { text: "when is the deadline?", help: true }, "reply", "help_channel_ask"],
   ["help: how do i submit", { text: "how do i submit my project", help: true }, "reply", "help_channel_ask"],
   ["help: build error", { text: "my build keeps failing with exit code 1, any ideas", help: true }, "reply", "help_channel_ask"],
@@ -41,11 +35,9 @@ const FIXTURES = [
   ["help: parents consent", { text: "do i need parent consent if im 15", help: true }, "reply", "help_channel_ask"],
   ["help: team size", { text: "can teams have 4 people or is it max 3", help: true }, "reply", "help_channel_ask"],
   ["help: prize shipping", { text: "do prizes ship internationally", help: true }, "reply", "help_channel_ask"],
-  // ——— ambiguous (still asks: downstream intent gate judges) ———
   ["help: vague broken", { text: "its broken again", help: true }, "reply", "help_channel_ask"],
   ["help: vague still nothing", { text: "still nothing", help: true }, "reply", "help_channel_ask"],
   ["help: fragment", { text: "the thing with the stuff", help: true }, "reply", "help_channel_ask"],
-  // ——— direct invocation ———
   ["mention: how does RE work", { text: `<@${BOT}> how does RE work?` }, "reply", "addressed"],
   ["mention: ping + please", { text: `please <@${BOT}> check my repo` }, "reply", "addressed"],
   ["name: pixie help with submit", { text: "pixie help with submit", help: true }, "reply", "help_channel_ask"],
@@ -53,7 +45,6 @@ const FIXTURES = [
   ["mention: can you", { text: `<@${BOT}> can you look at this error` }, "reply", "addressed"],
   ["dm: anything", { text: "yo what up", dm: true }, "reply", "dm"],
   ["dm: greeting", { text: "hi", dm: true }, "reply", "dm"],
-  // ——— referential mentions (must NOT activate) ———
   ["ref: ask pixie next time", { text: "ask @Pixie next time lol" }, "silent", "referential_mention"],
   ["ref: pixie already answered", { text: "pixie already answered this above" }, "silent", "referential_mention"],
   ["human: quoted by human lead", { text: `${U1} Pixie said to reinstall` }, "human_defer", "human_directed"],
@@ -62,7 +53,6 @@ const FIXTURES = [
   ["ref: pixie knows", { text: "pixie knows all the deadlines" }, "silent", "referential_mention"],
   ["ref: ignore pixie", { text: "just ignore pixie on this one" }, "silent", "referential_mention"],
   ["ref: ping pixie later", { text: `ping <@${BOT}> later if it breaks again` }, "silent", "referential_mention"],
-  // ——— human-directed override ———
   ["human: direct mention ask", { text: `${U1} can I use this grant?` }, "human_defer", "human_directed"],
   ["human: bare deferral", { text: "asking ricky specifically, what tier is this" }, "human_defer", "human_directed"],
   ["human: reviewers", { text: "can one of the reviewers check this?" }, "human_defer", "human_directed"],
@@ -71,9 +61,7 @@ const FIXTURES = [
   ["human: leave to human", { text: `leave this to ${U1}, they know shipping` }, "human_defer", "human_directed"],
   ["human: defer to", { text: "defer to gabin on eligibility calls" }, "human_defer", "human_directed"],
   ["human: will answer", { text: "gabin will answer when hes online" }, "human_defer", "human_directed"],
-  // pixie invoked too → still replies
   ["human+pixie: both mentioned, pixie asked", { text: `${U1} what do you think? <@${BOT}> what does the doc say` }, "reply", "addressed"],
-  // ——— human takeover ———
   ["takeover: ill handle", { text: "I'll handle this", thread: {} }, "human_defer", "human_takeover"],
   ["takeover: let me check", { text: "let me check the logs first", thread: {} }, "human_defer", "human_takeover"],
   ["takeover: leave to me", { text: "leave this one to me", thread: {} }, "human_defer", "human_takeover"],
@@ -83,14 +71,12 @@ const FIXTURES = [
   ["takeover: asking specifically", { text: "asking ricky specifically on this", thread: {} }, "human_defer", "human_takeover"],
   ["takeover: sticky silence", { text: "any update on this?", thread: { takeover: true } }, "silent", "takeover"],
   ["takeover: chatter stays quiet", { text: "following this thread", thread: { takeover: true } }, "silent", "takeover"],
-  // Humans' threads are theirs: an untagged question never pulls Pixie in.
   ["takeover: untagged program question stays quiet", { text: "how do i link hackatime to my project?", thread: { takeover: true } }, "silent", "takeover"],
   ["main thread not joined: untagged question stays quiet", { text: "how do i link hackatime to my project?", thread: {} }, "silent", "main_thread_not_joined"],
   ["takeover: reactivation", { text: `<@${BOT}> come back, need you`, thread: { takeover: true } }, "reply", "takeover_reactivated"],
   ["takeover: a bare greeting to Pixie is answered", { text: `<@${BOT}> hiiiiiii`, thread: { takeover: true } }, "reply", "takeover_direct_address"],
   ["takeover: named greeting is answered", { text: "yo pixie wsg", thread: { takeover: true } }, "reply", "takeover_direct_address"],
   ["takeover: direct question still answered once", { text: `<@${BOT}> what is the deadline?`, thread: { takeover: true } }, "reply", "takeover_direct_address"],
-  // ——— mute ———
   ["mute: stfu pixie", { text: "stfu pixie", help: true }, "reply", "help_channel_ask"],
   ["muted: chatter", { text: "still broken", thread: { muted: true } }, "silent", "muted"],
   ["muted: question without invite", { text: "what about the pcb though", thread: { muted: true } }, "silent", "muted"],
@@ -98,7 +84,6 @@ const FIXTURES = [
   ["muted: reactivation clears", { text: `<@${BOT}> come back`, thread: { muted: true } }, "reply", "reactivated"],
   ["muted: pixie help reactivates", { text: "pixie help", thread: { muted: true } }, "reply", "reactivated"],
   ["muted: repeat shush stays quiet", { text: "shut up pixie", thread: { muted: true } }, "silent", "muted"],
-  // ——— greetings / noise (no ticket) ———
   ["noise: hi", { text: "hi", help: true }, "silent", "greeting"],
   ["noise: hello", { text: "hello everyone", help: true }, "silent", "greeting"],
   ["noise: test", { text: "test", help: true }, "silent", "greeting"],
@@ -110,16 +95,12 @@ const FIXTURES = [
   ["noise: empty", { text: "   ", help: true }, "silent", "greeting"],
   ["noise: thanks alone", { text: "thanks!", help: true }, "silent", "greeting"],
   ["greeting+question still flows", { text: "hi, how do i submit my project", help: true }, "reply", "help_channel_ask"],
-  // ——— general channel ———
-  // Top-level main-channel messages past the noise filters go to the
-  // engagement classifier (spec §19); chatter is silenced there, not here.
   ["general: chatter reaches the classifier", { text: "just shipped my project!!" }, "reply", "ambient_candidate"],
   ["general: love this", { text: "yo i love this program" }, "silent", "greeting"],
   ["general: addressed answers", { text: "pixie where are the docs", }, "reply", "addressed"],
   ["general: mention answers", { text: `<@${BOT}> deadline?` }, "reply", "addressed"],
   ["general: social reaches the classifier", { text: "who is going to the meetup", }, "reply", "ambient_candidate"],
   ["general: human ask stays quiet", { text: `${U1} are you coming` }, "human_defer", "human_directed"],
-  // ——— threads ———
   ["thread: followup answered before", { text: "tried that, got a new error", thread: { pixieSpoke: true } }, "reply", "thread_followup"],
   ["thread: thanks after answer", { text: "thanks!", thread: { pixieSpoke: true } }, "silent", "acknowledged"],
   ["thread: got it", { text: "got it", thread: { pixieSpoke: true } }, "silent", "acknowledged"],
@@ -127,11 +108,9 @@ const FIXTURES = [
   ["thread: new question continues", { text: "ok now how do i test it?", thread: { pixieSpoke: true } }, "reply", "thread_followup"],
   ["thread: cold thread no pixie", { text: "same issue here", thread: {} }, "silent", "main_thread_not_joined"],
   ["thread: help followup", { text: "still failing, logs attached", thread: { pixieSpoke: true }, help: true }, "reply", "help_thread_followup"],
-  // ——— already escalated ———
   ["escalated: chatter quiet", { text: "anyone looking?", thread: { ticketOpen: true } }, "silent", "already_escalated"],
   ["escalated: direct ask speaks", { text: `<@${BOT}> any update?`, thread: { ticketOpen: true } }, "reply", "addressed"],
   ["escalated: new question flows", { text: "also, does this affect shipping?", thread: { ticketOpen: true }, help: true }, "reply", "help_thread_followup"],
-  // ——— sensitive (exact grounding or humans) ———
   ["sensitive: refund", { text: "can I get a refund on my grant", help: true, program: { sensitiveCategories: ["refund", "money"] } }, "escalate", "sensitive_escalation"],
   ["sensitive: dm still escalates", { text: "help me commit fraud quietly", dm: true, program: { sensitiveCategories: ["fraud"] } }, "escalate", "sensitive_escalation"],
   ["sensitive: identity access", { text: "i lost my account access, verify me", help: true, program: { sensitiveCategories: ["identity", "account access"] } }, "escalate", "sensitive_escalation"],
@@ -140,26 +119,19 @@ const FIXTURES = [
   ["sensitive: disciplinary", { text: "was my ban a disciplinary action", help: true, program: { sensitiveCategories: ["disciplinary"] } }, "escalate", "sensitive_escalation"],
   ["sensitive: nonmatch answers normally", { text: "when is the deadline", help: true, program: { sensitiveCategories: ["refund"] } }, "reply", "help_channel_ask"],
   ["sensitive: substring not matched", { text: "i found money on the street", help: true, program: { sensitiveCategories: ["money"] } }, "reply", "help_channel_ask"],
-  // ——— bot-to-bot / self (caller filters, documented here as silent) ———
   ["social: project discussion reaches the classifier", { text: "working on my game tonight, sprites are hard" }, "reply", "ambient_candidate"],
   ["social: announcement", { text: "reminder: submissions close friday!", help: true }, "reply", "help_channel_ask"],
-  // ——— commands bypass ———
   ["cmd: teach", { text: "!teach deadline :: october", help: true }, "reply", "command_bypass"],
   ["cmd: sum", { text: "!sum", thread: {} }, "reply", "command_bypass"],
-  // ——— posture ———
   ["posture muted silent", { text: "when is the deadline", help: true, posture: "muted" }, "silent", "posture_muted"],
-  // ——— bug reports / followups ———
   ["bug: report with details", { text: "app crashes on upload, iphone 12, ios 17", help: true }, "reply", "help_channel_ask"],
   ["bug: followup clarification", { text: "it happens right after i press submit", thread: { pixieSpoke: true } }, "reply", "thread_followup"],
   ["bug: addressed to human", { text: `${U1} can you repro this crash?` }, "human_defer", "human_directed"],
-  // ——— referential edge cases ———
   ["ref: pixie said no", { text: "pixie said no exceptions though", help: true }, "silent", "referential_mention"],
   ["ref: ask pixie", { text: "you should ask pixie about that", help: true }, "silent", "referential_mention"],
   ["invoke: pixie what", { text: "pixie what is RE?", help: true }, "reply", "help_channel_ask"],
   ["invoke: mention please help", { text: `hey <@${BOT}>, please help with verification`, help: true }, "reply", "help_channel_ask"],
-  // ——— duplicate concurrent delivery shape ———
   ["dup: same question twice is still an ask", { text: "when is the deadline?", help: true }, "reply", "help_channel_ask"],
-  // ——— mixed tricky ———
   ["tricky: human first then pixie question", { text: `${U1} nvm — <@${BOT}> how do i submit`, help: true }, "reply", "help_channel_ask"],
   ["tricky: pixie mentioned mid-sentence as subject", { text: "i think pixie is down right now", help: true }, "reply", "help_channel_ask"],
   ["tricky: thanks pixie + new question", { text: "thanks pixie! where do i upload?", thread: { pixieSpoke: true } }, "reply", "thread_followup"],
@@ -189,9 +161,6 @@ const FIXTURES = [
   ["tricky: what", { text: "what", thread: { pixieSpoke: true } }, "reply", "thread_followup"],
   ["tricky: escalated + ack", { text: "ok thanks", thread: { pixieSpoke: true, ticketOpen: true } }, "silent", "acknowledged"],
   ["tricky: escalated + mention", { text: `<@${BOT}> still stuck`, thread: { ticketOpen: true } }, "reply", "addressed"],
-  // Helpers run !teach/!sum in threads they answered — which is what marks a
-  // takeover — so commands reach their (permission-checked) handlers first.
-  // Asking what a rule is is a docs question; asking to bend it is a human's call.
   ["policy: what is the ai policy", { text: "what is the ai policy?", help: true }, "reply", "help_channel_ask"],
   ["policy: age limit question", { text: "is there an age limit?", help: true }, "reply", "help_channel_ask"],
   ["policy: pinged opinion on the ai policy", { text: `<@${BOT}> what do you think about the AI policy?` }, "reply", "addressed"],
@@ -262,13 +231,7 @@ test("release gates: zero misfires on protected classes", () => {
   }
 });
 
-/* ------------------------------------------- STEP 1 characterization pins --
-   WHY: release-gate pins for the INTENT/ELIGIBILITY rewrite. Each asserts
-   CURRENT behavior so a later minimal fix cannot silently change it. If a
-   fix breaks one, the fixture wins: revert the fix, pin instead, report. */
 
-// WHY: bare name reference in a general channel still invokes today (B1
-// proximity preserved — fixtures rely on named-mention invocation).
 test("char: general-channel bare reference is currently addressed", () => {
   const got = run({ text: "i think pixie is down right now" });
   assert.equal(got.decision, "reply");
@@ -278,8 +241,6 @@ test("char: general-channel bare reference is currently addressed", () => {
   assert.equal(inv.invocation, true);
 });
 
-// WHY: single-word help-thread follow-ups split on ackOnly — "how"/"what"
-// flow, "ok" is done.
 test("char: short HELP_ONLY inputs pin current verdict", () => {
   assert.deepEqual(
     ((r) => [r.decision, r.reason])(run({ text: "how", thread: { pixieSpoke: true }, help: true })),
@@ -295,8 +256,6 @@ test("char: short HELP_ONLY inputs pin current verdict", () => {
   );
 });
 
-// WHY: muted threads need a direct address to reactivate — bare
-// "continue"/"resume" stays quiet, pinged reactivates once.
 test("char: continue/resume in muted thread pin current reactivation", () => {
   assert.equal(elig.reactivationPhrase("continue"), true);
   assert.equal(elig.reactivationPhrase("resume"), true);
@@ -317,7 +276,6 @@ test("char: continue/resume in muted thread pin current reactivation", () => {
   assert.equal(resumed.reason, "reactivated");
 });
 
-// WHY: "let me see" claims handling via the TAKEOVER table, not chatter.
 test("char: let-me-see takeover claim pins current", () => {
   assert.equal(elig.takeoverCue("let me see…", NAMES), true);
   assert.equal(elig.takeoverCue("let me see the logs", NAMES), true);
@@ -327,14 +285,11 @@ test("char: let-me-see takeover claim pins current", () => {
   );
 });
 
-// WHY: a ping in an already-escalated thread still speaks (B5 prescribed —
-// ticketOpen:false on the mention path, invocation pierces the gate).
 test("char: mention in already-escalated thread pins ALWAYS-reply", () => {
   assert.deepEqual(
     ((r) => [r.decision, r.reason])(run({ text: `<@${BOT}> still stuck`, thread: { ticketOpen: true } })),
     ["reply", "addressed"],
   );
-  // Mention path consults with ticketOpen:false — still a reply.
   const mentionPath = elig.shouldPixieRespond({
     text: `<@${BOT}> still stuck`,
     userId: "U-asker",
@@ -349,13 +304,10 @@ test("char: mention in already-escalated thread pins ALWAYS-reply", () => {
   assert.equal(mentionPath.decision, "reply");
 });
 
-// WHY: >6 words is substantive even with no question in it — the word-count
-// tail, not a request signal.
 test("char: long social counts as substantiveQuestion", () => {
   const social = "just wanted to say this community is amazing and i love being here every day";
   assert.equal(elig.substantiveQuestion(social), true);
   assert.equal(elig.greetingOrNoise(social), false);
-  // Help top-level flows; general top-level is left to the classifier.
   assert.deepEqual(
     ((r) => [r.decision, r.reason])(run({ text: social, help: true })),
     ["reply", "help_channel_ask"],
@@ -366,7 +318,6 @@ test("char: long social counts as substantiveQuestion", () => {
   );
 });
 
-// WHY: compliment silences at <=6 words, flows above or with a question.
 test("char: complimentOnly boundary pins current", () => {
   assert.deepEqual(
     ((r) => [r.decision, r.reason])(run({ text: "pixie is goated", help: true })),
@@ -382,16 +333,12 @@ test("char: complimentOnly boundary pins current", () => {
   );
 });
 
-// WHY: B1 proximity — sentence-initial address always invokes; referential
-// verbs silence even at the start.
 test("char: B1 invocation proximity preserved", () => {
   assert.equal(elig.invocationAnalysis("pixie where are the docs", { botUserId: BOT, botNames: NAMES }).invocation, true);
   assert.equal(elig.invocationAnalysis("pixiebot what is this", { botUserId: BOT, botNames: NAMES }).invocation, true);
   assert.equal(elig.invocationAnalysis("pixie already answered this above", { botUserId: BOT, botNames: NAMES }).invocation, false);
 });
 
-// WHY: bare deferral verbs fire with no mention syntax (B3 duplicate lines
-// ~96/~106 pin the same shape).
 test("char: bare deferral pins current human_directed", () => {
   assert.equal(elig.humanDirected("asking ricky specifically, what tier is this", { botUserId: BOT }), true);
   assert.equal(elig.humanDirected(`${U1} can I use this grant?`, { botUserId: BOT }), true);
@@ -399,9 +346,6 @@ test("char: bare deferral pins current human_directed", () => {
   assert.equal(elig.humanDirected("just shipped my project!!", { botUserId: BOT }), false);
 });
 
-// WHY: B4 single handoff — a ping runs eligibility once. Normal ping is
-// single (onMessage quiet, mention answers); silent pings are single silent
-// (claim-once blocks the mention pass; muted skips via wasAnswered).
 test("char: ping handoff pins current double-processing counts", async () => {
   process.env.PIXIE_DB_PATH = ":memory:";
   const db = require("./db");
@@ -423,7 +367,6 @@ test("char: ping handoff pins current double-processing counts", async () => {
   db.claimMessage = (...a) => { claims.push(a); return origClaim(...a); };
   respond.respond = async (a) => { responds.push(a); return true; };
   try {
-    // Normal ping: single handoff — onMessage silent, mention claims+answers.
     metrics = []; gaps = []; claims = []; responds = [];
     const ts1 = `char-ping-${Date.now()}-1`;
     await handlers.onMessage({ event: { ts: ts1, channel: "C0HELP", user: "U0ASKER", text: `<@${BOT}> how do i submit` }, client: {} });
@@ -431,12 +374,9 @@ test("char: ping handoff pins current double-processing counts", async () => {
     assert.equal(responds.length, 0, "normal ping onMessage never answers directly");
     metrics = []; gaps = []; claims = []; responds = [];
     await handlers.onAppMention({ event: { ts: ts1, channel: "C0HELP", user: "U0ASKER", text: `<@${BOT}> how do i submit` }, client: {} });
-    // Claim already consumed? No — onMessage never claimed, so mention claims once.
-    // Second delivery of the same ts must not answer (claim-once dedup).
     assert.equal(claims.length, 1);
     assert.equal(responds.length, 1);
 
-    // Praise ping: B4 single silent — claim-once blocks the mention answer.
     metrics = []; gaps = []; claims = []; responds = [];
     const ts2 = `char-ping-${Date.now()}-2`;
     await handlers.onMessage({ event: { ts: ts2, channel: "C0HELP", user: "U0ASKER", text: `<@${BOT}> is goated` }, client: {} });
@@ -448,7 +388,6 @@ test("char: ping handoff pins current double-processing counts", async () => {
     assert.equal(responds.length, 0, "B4: silent ping never answers via mention");
     assert.equal(metrics.length, 0, "B4: silent ping metrics exactly once");
 
-    // Muted silent ping: B4 single silent metric, no answer.
     db.muteThread("char-mute-1", "C0HELP");
     try {
       metrics = []; gaps = []; claims = []; responds = [];
@@ -472,7 +411,6 @@ test("char: ping handoff pins current double-processing counts", async () => {
   }
 });
 
-// WHY: mention path in an escalated thread answers ALWAYS (B5 prescribed).
 test("char: onAppMention in escalated thread answers ALWAYS", async () => {
   process.env.PIXIE_DB_PATH = ":memory:";
   const db = require("./db");
@@ -509,12 +447,7 @@ test("char: onAppMention in escalated thread answers ALWAYS", async () => {
   }
 });
 
-/* -------------------------------------------------- STEP 2 minimal fixes --
-   WHY: each fix pins its own regression so fixtures stay green. B3/B2 are
-   zero-change cleanups; B4 makes silent pings single. */
 
-// WHY: B3 dead duplicate removed — bare deferral still fires via the first
-// check alone.
 test("B3: bare deferral needs no duplicate", () => {
   assert.equal(elig.humanDirected("asking ricky specifically, what tier is this", { botUserId: BOT }), true);
   assert.equal(elig.humanDirected("waiting for ricky to review my submission", { botUserId: BOT }), true);
@@ -522,8 +455,6 @@ test("B3: bare deferral needs no duplicate", () => {
   assert.equal(elig.humanDirected("just shipped my project!!", { botUserId: BOT }), false);
 });
 
-// WHY: B2 window honored — body already missed above, so the slice alone
-// decides; leading mention and body-wide deferral still fire.
 test("B2: humanDirected window honors the slice", () => {
   assert.equal(elig.humanDirected(`${U1} can I use this grant?`, { botUserId: BOT }), true);
   assert.equal(elig.humanDirected("gabin will answer when hes online", { botUserId: BOT }), true);
@@ -531,7 +462,6 @@ test("B2: humanDirected window honors the slice", () => {
   assert.equal(elig.humanDirected("just shipped my project!!", { botUserId: BOT }), false);
 });
 
-// WHY: canonical strip helper matches the old per-call rebuild exactly.
 test("canonical: stripBotMention matches handlers behavior", () => {
   assert.equal(elig.stripBotMention(`<@${BOT}> how do i join <@${BOT}>`, BOT), "how do i join");
   assert.equal(elig.stripBotMention(`<@${BOT}> ask <@U0ALEX> about it`, BOT), "ask <@U0ALEX> about it");
@@ -542,8 +472,6 @@ test("canonical: stripBotMention matches handlers behavior", () => {
   assert.equal(elig.botNamePattern([]), "pixie");
 });
 
-// WHY: B4 single handoff — sensitive ping gaps/escalates once; the mention
-// pass claims-fails and does no second work.
 test("B4: ping escalate runs gap/escalate exactly once", async () => {
   process.env.PIXIE_DB_PATH = ":memory:";
   const db = require("./db");

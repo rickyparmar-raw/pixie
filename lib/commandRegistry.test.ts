@@ -11,7 +11,6 @@ const ADMIN = "U0ADMIN";
 const HELPER = "U0HELPER";
 const NORMAL = "U0NORMAL";
 
-/* ------------------------------------------------------------------ shape -- */
 
 test("every definition carries the full contract shape with valid enums", () => {
   assert.ok(COMMANDS.length >= 10, "registry must cover the whole inventory");
@@ -35,7 +34,6 @@ test("teach is split by surface because text and slash have different gates", ()
     teachDefs.map((c) => [c.surface, c.permission]).sort(),
     [["slash", "organizer"], ["text", "helper"]],
   );
-  // Same handler — the split is permission only, not behavior.
   assert.ok(teachDefs.every((c) => c.handlerKey === "teach"));
 });
 
@@ -47,10 +45,7 @@ test("organizer commands are never executable by normal users", () => {
   }
 });
 
-/* ------------------------------------------------------- match: teach ------ */
 
-// Today's channel-text triggers, pinned against the patterns handlers.js
-// actually builds — if either side drifts, this fails.
 test("match: text-form teach parity with handlers.teachPattern(false)", () => {
   const handlers = require("./handlers");
   const cases = [
@@ -62,7 +57,6 @@ test("match: text-form teach parity with handlers.teachPattern(false)", () => {
     "teach this thread",
     "teach thread",
     "teach this",
-    // Must NOT fire on the message path:
     "teach me something",
     "teach",
     "learn this",
@@ -98,11 +92,9 @@ test("match: mention-form teach fires only after an explicit mention", () => {
     const got = match(text, { botUserId: BOT, botNames: ["pixie"] });
     assert.ok(got && got.command.handlerKey === "teach", `match: ${text}`);
   }
-  // No mention, no mention-shape match — even for the bare verbs.
   for (const text of ["teach x", "learn this", "remember that", "memorize it", "please sum this"]) {
     assert.equal(match(text, { botUserId: BOT }), null, JSON.stringify(text));
   }
-  // Another user's mention is not an invocation of this bot.
   assert.equal(match("<@UOTHER> teach x", { botUserId: BOT }), null);
 });
 
@@ -115,7 +107,6 @@ test("match: teach args preserve the text after the trigger", () => {
   assert.equal(mentioned.args, "this thread");
 });
 
-/* --------------------------------------------------------- match: sum ------- */
 
 test("match: text-form sum parity with handlers.sumPattern(false)", () => {
   const handlers = require("./handlers");
@@ -131,7 +122,6 @@ test("match: text-form sum parity with handlers.sumPattern(false)", () => {
     "sum thread",
     "summarize thread",
     "summarise thread",
-    // Must NOT fire:
     "summary of the rules",
     "what is the summary",
     "consume this",
@@ -164,14 +154,11 @@ test("match: mention-form sum parity with handlers.sumPattern(true)", () => {
   }
 });
 
-/* -------------------------------------------------------- match: mute ------ */
 
 test("match: only the explicit !mute/!stfu command spellings route to mute", () => {
   assert.equal(match("!mute", { botUserId: BOT }).command.handlerKey, "mute");
   assert.equal(match("!stfu", { botUserId: BOT }).command.handlerKey, "mute");
   assert.equal(match(`<@${BOT}> !mute`, { botUserId: BOT }).command.handlerKey, "mute");
-  // Natural-language shush stays conversational (respond.isMuteRequest owns
-  // it) — the registry must not claim it.
   const respond = require("./respond");
   assert.equal(respond.isMuteRequest("stfu pixie"), true, "setup: conversational shush exists");
   assert.equal(match("stfu pixie", { botUserId: BOT }), null);
@@ -179,7 +166,6 @@ test("match: only the explicit !mute/!stfu command spellings route to mute", () 
   assert.equal(match("please be quiet pixie", { botUserId: BOT }), null);
 });
 
-/* ------------------------------------------------------- match: guide ------ */
 
 test("match: guide text triggers mirror respond.isGuideMenuRequest", () => {
   const respond = require("./respond");
@@ -190,28 +176,22 @@ test("match: guide text triggers mirror respond.isGuideMenuRequest", () => {
     assert.ok(got && got.command.handlerKey === "guide", `match: ${text}`);
     assert.equal(got.args, "");
   }
-  // Topic form takes everything after the prefix as args.
   const topic = match("pixie guide submitting my project", { botUserId: BOT });
   assert.ok(topic && topic.command.handlerKey === "guide");
   assert.equal(topic.args, "submitting my project");
   assert.equal(match(`<@${BOT}> !guide`, { botUserId: BOT }).command.handlerKey, "guide");
-  // Bare or off-shape phrases stay conversational.
   assert.equal(match("guide", { botUserId: BOT }), null);
   assert.equal(match("nonsense", { botUserId: BOT }), null);
   assert.equal(match(`<@${BOT}> guide`, { botUserId: BOT }), null);
 });
 
-/* --------------------------------- match: eligibility bypass consistency ---- */
 
 test("match: every own-slug command_bypass form reaches a registry command", () => {
-  // eligibility's bypass is deliberately broader (any slug); the registry only
-  // promises the bot's own slug — the same scope handlers.js enforces.
   for (const text of ["!teach x :: y", "!sum", "!mute", "!stfu", "/pixie-teach x", "/pixie-sum"]) {
     assert.ok(match(text, { botUserId: BOT }), `bypass form with no registry match: ${text}`);
   }
 });
 
-/* ------------------------------------------------------------- authorize --- */
 
 test("authorize: helper text commands need helper or organizer", () => {
   const teachText = byName("teach", "text");
@@ -245,22 +225,18 @@ test("authorize: commandsEnabled=false blocks non-admin commands in main only", 
       reason: "commands_disabled",
     });
   }
-  // Helper commands are non-admin commands too, so they are blocked as well.
   assert.deepEqual(authorize(teachText, { userId: HELPER, isHelper: true, role: "main", commandsEnabled: false }), {
     ok: false,
     reason: "commands_disabled",
   });
-  // Identity is judged before channel state: a stranger fails as a stranger.
   assert.deepEqual(authorize(teachText, { userId: NORMAL, role: "main", commandsEnabled: false }), {
     ok: false,
     reason: "not_helper",
   });
-  // Organizers stay reachable so a silenced room can always be managed.
   assert.deepEqual(authorize(teachSlash, { userId: ADMIN, isOrganizer: true, role: "main", commandsEnabled: false }), {
     ok: true,
     reason: "allowed",
   });
-  // Same commands pass in help channels and DMs regardless of the setting.
   assert.equal(authorize(ask, { userId: NORMAL, role: "help", commandsEnabled: false }).ok, true);
   assert.equal(authorize(ask, { userId: NORMAL, role: "dm", commandsEnabled: false }).ok, true);
   assert.equal(authorize(ask, { userId: NORMAL, role: "main" }).ok, true);
@@ -276,7 +252,6 @@ test("authorize: channel roles gate text commands, slash skips without a role", 
     ok: false,
     reason: "wrong_channel",
   });
-  // Slash context carries no channel scope — no role, no channel check.
   assert.equal(authorize(byName("ask"), { userId: NORMAL }).ok, true);
   assert.deepEqual(authorize("no-such-command", { userId: ADMIN, isOrganizer: true }), {
     ok: false,
@@ -292,7 +267,6 @@ test("byHandlerKey resolves the architect's dispatch map", () => {
   assert.equal(byHandlerKey("guide").length, 1);
 });
 
-/* ------------------------------------------------------------------ list --- */
 
 test("list() renders a usage listing with the bot's own slash names", () => {
   const text = list();

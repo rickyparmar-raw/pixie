@@ -1,5 +1,4 @@
 // @ts-nocheck
-// Commands are recognized and authorized before any conversational handling.
 process.env.PIXIE_DB_PATH = ":memory:";
 const { test, expect, beforeAll, afterAll, beforeEach } = require("bun:test");
 

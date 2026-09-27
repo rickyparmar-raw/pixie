@@ -7,14 +7,7 @@ const llm = require("./llm");
 const teachThread = require("./teachThread");
 const { readSource } = require("./test-source");
 
-// Stubbed as a namespace call (llm.complete), not destructured, so these tests
-// never touch the network — same convention as lib/learn.test.js.
 let completeReply = "how do i join :: post in #pixl-help and a helper will add you";
-// llm is a shared, cached module — every test file `require("./llm")`s the
-// same exports object. Stubbing at require time (module top level) poisons it
-// during Bun's collection phase, before any file's tests have run at all, so
-// before()/after() bracket the stub around this file's own execution window
-// instead — anything outside that window sees the real llm.complete.
 let realComplete;
 before(() => {
   realComplete = llm.complete;
@@ -77,7 +70,6 @@ test("summarizeThread declines when the model's reply doesn't parse", async () =
   assert.equal(parsed, null);
 });
 
-// An empty or text-free thread must not spend a model call at all.
 test("summarizeThread skips the model call on a thread with no text", async () => {
   const calls = [];
   const stub = llm.complete;
@@ -140,10 +132,6 @@ What is show and tell? :: Participants showcase their projects in a huddle, and 
   });
 });
 
-/* ------------------------------------------------------------------ */
-/* STEP 1 characterization pins (SUPPORT teachThread): capture/        */
-/* approval + program scoping. Append-only.                            */
-/* ------------------------------------------------------------------ */
 
 test("char: teachThread is read-only — fetch-only client, no db writes", async () => {
   const fs = require("fs");
@@ -155,7 +143,6 @@ test("char: teachThread is read-only — fetch-only client, no db writes", async
   assert.equal(/INSERT\s+INTO/i.test(src), false);
   assert.equal(/DELETE\s+FROM/i.test(src), false);
   assert.equal(teachThread.THREAD_FETCH_LIMIT, 50);
-  // summarizeThread only ever calls conversations.replies (read) + llm.
   const seen = [];
   const client = { conversations: { replies: async (args) => { seen.push(args); return { messages: [{ text: "how do i join pixl", user: "U1" }] }; } } };
   const parsed = await teachThread.summarizeThread({ client, channel: "C1", threadTs: "char-tt-1" });
@@ -183,7 +170,6 @@ test("char: teachThread output feeds program-scoped capture without cross-writin
   assert.equal(rowA.program_id, "char-tt-prog-a");
   assert.equal(rowB.program_id, "char-tt-prog-b");
   assert.equal(rowA.status, "pending");
-  // Approval is explicit — capture never lands straight in the corpus.
   assert.doesNotMatch(learn.corpusSection("char-tt-prog-a"), new RegExp(parsed.question.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   assert.equal(learn.approve(idA), true);
   assert.equal(db.getLearnedFactById(idA).status, "approved");
@@ -195,10 +181,6 @@ test("char: buildTranscript is pure and labels senders deterministically", () =>
   assert.equal(teachThread.buildTranscript([{ text: "q", user: "U9" }]), "user: q");
 });
 
-/* ------------------------------------------------------------------ */
-/* Command-registry workstream: !teach stores a program-scoped,         */
-/* auditable learned fact. Append-only.                                 */
-/* ------------------------------------------------------------------ */
 
 test("registry: teach output lands as a program-scoped auditable fact", async () => {
   const learn = require("./learn");
@@ -209,8 +191,6 @@ test("registry: teach output lands as a program-scoped auditable fact", async ()
     threadTs: "reg-teach-1",
   });
   assert.ok(parsed && parsed.question && parsed.answer);
-  // The handler attaches program/author/source around the pure Q&A — the same
-  // shape handlers.handleTeachRequest builds before calling learn.teach.
   const id = learn.teach({
     ...parsed,
     authorId: "U-HELPER-REG",
