@@ -59,7 +59,6 @@ async function escalate(program, threadTs, requesterId, client, question = "help
   });
 }
 
-/* ------------------------------------------ requester never selected -- */
 
 test("safety: the requester is never selected as helper, even as the top expert", async () => {
   const program = prog("safe-req", ["U-REQ", "U-OTHER"]);
@@ -75,7 +74,6 @@ test("safety: the requester is never selected as helper, even as the top expert"
   assert.equal(who, "U-OTHER");
   assert.ok(!pings(client.posts).some((p) => p.text.includes("U-REQ")));
 
-  // And when the requester is the ONLY roster helper, nobody is paged.
   const solo = prog("safe-req-solo", ["U-SOLO"]);
   const soloId = db.createTicket({
     programId: "safe-req-solo", channel: "C-safe-req-solo", threadTs: "t-safe-req-solo",
@@ -86,7 +84,6 @@ test("safety: the requester is never selected as helper, even as the top expert"
   assert.equal(pings(c2.posts).length, 0);
 });
 
-/* ----------------------------------------- bot user never selected -- */
 
 test("safety: Pixie's own bot user is never selected, even on the roster", async () => {
   const saved = config.slack.botUserId;
@@ -110,7 +107,6 @@ test("safety: Pixie's own bot user is never selected, even on the roster", async
   }
 });
 
-/* --------------------------------------- duplicate Slack event -- */
 
 test("safety: duplicate Slack event (same ts) creates one ticket and one ping", async () => {
   const program = prog("safe-dupe", ["U-HELPER"]);
@@ -124,7 +120,6 @@ test("safety: duplicate Slack event (same ts) creates one ticket and one ping", 
   assert.equal(pings(client.posts).length, 1);
 });
 
-/* ------------------------------------------ one-open-offer dedupe -- */
 
 test("safety: existing open assignment offer is not duplicated (one ping per epoch)", async () => {
   const program = prog("safe-epoch", ["U-HELPER"]);
@@ -139,7 +134,6 @@ test("safety: existing open assignment offer is not duplicated (one ping per epo
   assert.ok(lifecycle.openOfferFor("safe-epoch", ticket.id), "the epoch's offer stays open");
 });
 
-/* ------------------------------ resolved -> reopen starts a new epoch -- */
 
 test("safety: resolved ticket reopens on requester write-back and reopen starts a new epoch", async () => {
   const program = prog("safe-reopen", ["U-HELPER"]);
@@ -158,14 +152,12 @@ test("safety: resolved ticket reopens on requester write-back and reopen starts 
   assert.ok(epochOffer, "reopen opens a fresh pool offer");
   assert.equal(epochOffer.to, null);
 
-  // The new epoch pages again — exactly once.
   await escalate(program, "t-safe-reopen", "U-req", client, "still broken");
   assert.equal(pings(client.posts).length, 2);
   await escalate(program, "t-safe-reopen", "U-req", client, "still broken x2");
   assert.equal(pings(client.posts).length, 2, "the new epoch dedupes too");
 });
 
-/* ------------------------------- helper reply stops repeated offers -- */
 
 test("safety: helper reply in thread stops repeated offers", async () => {
   const program = prog("safe-replied", ["U-HELPER", "U-OTHER"]);
@@ -173,7 +165,6 @@ test("safety: helper reply in thread stops repeated offers", async () => {
   const ticket = await escalate(program, "t-safe-replied", "U-req", client);
   assert.equal(pings(client.posts).length, 1);
 
-  // A roster helper answers in the thread (no takeover mark: no parentUserId).
   tickets.noteThreadActivity({ channel: "C-safe-replied", threadTs: "t-safe-replied", userId: "U-OTHER" });
   assert.ok(db.listTicketEvents(ticket.id).some((e) => e.event_type === "helper_reply"));
 
@@ -185,7 +176,6 @@ test("safety: helper reply in thread stops repeated offers", async () => {
   assert.equal(pings(c2.posts).length, 0);
 });
 
-/* --------------------------------------- ping fatigue is deterministic -- */
 
 test("safety: ping fatigue lowers rank deterministically", () => {
   const program = prog("safe-fatigue", ["U-A", "U-B"]);
@@ -193,7 +183,6 @@ test("safety: ping fatigue lowers rank deterministically", () => {
   for (const h of ["U-A", "U-B"]) {
     helperRoute.recordResolution({ programId: "safe-fatigue", userId: h, category: "general_support" });
   }
-  // U-B absorbs all recent automated pages; U-A absorbs none.
   for (let i = 0; i < 3; i += 1) {
     const id = db.createTicket({
       programId: "safe-fatigue", channel: "C-safe-fatigue", threadTs: `t-safe-fatigue-${i}`,
@@ -207,7 +196,6 @@ test("safety: ping fatigue lowers rank deterministically", () => {
   assert.equal(first[0].userId, "U-A", "the less-pinged helper wins the tie");
 });
 
-/* ------------------------------------------- wrong-program isolation -- */
 
 test("safety: a helper of another program is never selected", async () => {
   prog("safe-iso-a", ["U-FOREIGN"]);
@@ -224,7 +212,6 @@ test("safety: a helper of another program is never selected", async () => {
   assert.equal(pings(client.posts).length, 0);
 });
 
-/* --------------------------------------------- deterministic selection -- */
 
 test("safety: helper selection is deterministic for identical inputs", () => {
   prog("safe-determ", ["U-1", "U-2", "U-3"]);
@@ -236,7 +223,6 @@ test("safety: helper selection is deterministic for identical inputs", () => {
   assert.equal(a[0].userId, "U-2");
 });
 
-/* --------------------------------------------- full lifecycle traversal -- */
 
 test("lifecycle: create -> open -> waiting_for_helper -> engaged -> resolved -> reopened, with history and attribution", async () => {
   const program = prog("safe-life", ["U-HELPER"]);

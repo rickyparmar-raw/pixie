@@ -1,13 +1,3 @@
-// Duplicate suggestions and incident detection, both deterministic.
-//
-// Duplicates rank same-program open/recent tickets by wording overlap; a
-// helper confirms, and confirmation writes the canonical relation plus audit.
-// Nothing auto-merges.
-//
-// Incidents cluster recent open tickets by wording (reusing gap clustering).
-// A cluster at/above threshold becomes one candidate; later tickets in the
-// same cluster link to the existing candidate inside its cooldown instead of
-// spawning fifty incidents for one outage. Announcements are drafts only.
 import db = require("./db");
 import audit = require("./audit");
 import gapClusters = require("./gapClusters");
@@ -15,7 +5,24 @@ import programs = require("./programs");
 import slackMessages = require("./slackMessages");
 import retrieve = require("./retrieve");
 
-type Row = Record<string, any>;
+interface Row {
+  id?: number;
+  program_id?: string;
+  status?: string;
+  kind?: string;
+  created_at?: number;
+  updated_at?: number;
+  question?: string;
+  summary?: string;
+  title?: string;
+  description?: string | null;
+  thread_ts?: string;
+  channel?: string;
+  requester_id?: string | null;
+  ticket_id?: number | null;
+  notified_at?: number | null;
+  [key: string]: unknown;
+}
 
 // WHY: one shared "same report" line so duplicates, bursts, and live matching
 // agree — three thresholds would let a pair count as duplicate but not incident.
@@ -33,7 +40,6 @@ const INCIDENT_THRESHOLD = 4;
 // link to the live candidate instead of opening a second row for the same shape.
 const INCIDENT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
-// Pure wording score, no I/O — the single definition of "similar enough".
 function similarityScore(a: string, b: string): number {
   return gapClusters.pairOverlap(a, b);
 }
@@ -51,7 +57,7 @@ function clampLimit(limit: number): number {
 // WHY: rounding is part of the contract — callers display this number, so it
 // must equal the scored value rather than a longer float.
 function scoreDuplicate(question: string, row: Row): number {
-  return Number(similarityScore(question, row.question).toFixed(3));
+  return Number(similarityScore(question, String(row.question || "")).toFixed(3));
 }
 
 function rankDuplicateCandidates(question: string, rows: Row[], ticketId: number | null, limit: number): Row[] {
@@ -70,7 +76,6 @@ function rankDuplicateCandidates(question: string, rows: Row[], ticketId: number
     .slice(0, clampLimit(limit));
 }
 
-// Pure best-match over already-fetched confirmed incidents — DB stays in the caller.
 function pickBestIncident(question: string, active: Row[]): Row | null {
   let best = null;
   let bestScore = 0;
@@ -110,7 +115,7 @@ function incidentSimilarity(question: string, incident: Row): number {
     const incidentTermsForText = incidentTerms(text);
     const namesAffectedThing = [...questionTerms].some((term) => incidentTermsForText.has(term));
     if (!namesAffectedThing) continue;
-    const wordingScore = similarityScore(question, text);
+    const wordingScore = similarityScore(question, String(text));
     const genericServiceMatch = questionTerms.has("incident_service") && incidentTermsForText.has("incident_service");
     if (wordingScore >= SIMILARITY_THRESHOLD || genericServiceMatch) {
       score = Math.max(score, wordingScore, genericServiceMatch ? 0.5 : 0);
@@ -159,7 +164,7 @@ function fetchLiveIncidents(programId: string, now: number): Row[] {
 }
 
 function findCooldownIncident(live: Row[], representative: string): Row | undefined {
-  return live.find((inc) => isSimilar(inc.title, representative));
+  return live.find((inc) => isSimilar(String(inc.title || ""), representative));
 }
 
 // WHY: position-keyed so identical questions from different tickets never
@@ -167,8 +172,9 @@ function findCooldownIncident(live: Row[], representative: string): Row | undefi
 function buildQuestionIndex(rows: Row[]): Map<string, number[]> {
   const index = new Map<string, number[]>();
   rows.forEach((r, i) => {
-    if (!index.has(r.question)) index.set(r.question, []);
-    const positions = index.get(r.question);
+    const question = String(r.question || "");
+    if (!index.has(question)) index.set(question, []);
+    const positions = index.get(question);
     if (positions) positions.push(i);
   });
   return index;
@@ -233,7 +239,7 @@ function detectBursts({ programId, windowMs = INCIDENT_WINDOW_MS, threshold = IN
   const rows = fetchRecentTickets(programId, now - windowMs);
   if (rows.length < threshold) return { candidates: [] };
 
-  const groups = gapClusters.clusterQuestions(rows.map((r) => r.question));
+  const groups = gapClusters.clusterQuestions(rows.map((r) => String(r.question || "")));
   const questionIndex = buildQuestionIndex(rows);
   const used = new Set<number>();
   const out: Row[] = [];
@@ -241,13 +247,11 @@ function detectBursts({ programId, windowMs = INCIDENT_WINDOW_MS, threshold = IN
     if (members.length < threshold) continue;
     const memberRows = resolveBurstMembers(rows, members, questionIndex, used);
     if (memberRows.length < threshold) continue;
-    const startedAt = Math.min(...memberRows.map((r) => r.created_at));
-    const representative = memberRows.sort((a, b) => a.created_at - b.created_at)[0].question;
-    // Cooldown: link into a live candidate with the same shape instead of
-    // opening a second incident for the same burst.
+    const startedAt = Math.min(...memberRows.map((r) => Number(r.created_at)));
+    const representative = String(memberRows.sort((a, b) => Number(a.created_at) - Number(b.created_at))[0].question || "");
     const same = findCooldownIncident(fetchLiveIncidents(programId, now), representative);
     if (same) {
-      const linked = linkRowsToIncident(same.id, memberRows, programId, now);
+      const linked = linkRowsToIncident(Number(same.id), memberRows, programId, now);
       out.push({ incidentId: same.id, title: same.title, status: same.status, linked, deduped: true });
       continue;
     }
@@ -258,12 +262,6 @@ function detectBursts({ programId, windowMs = INCIDENT_WINDOW_MS, threshold = IN
   return { candidates: out };
 }
 
-// Declare turns a candidate into the authoritative ACTIVE incident: the
-// description and public_message become what Pixie tells matching askers
-// (see matchActiveIncident / lib/tickets.js escalateTicket) instead of a
-// generic acknowledgement. Reuses the existing confirmed/resolved/dismissed
-// status machine — DECLARED and ACTIVE are the same state here, entered in
-// one step, since there is no useful organizer action between them.
 function declareIncident({ incidentId, actorId = null, description = null, publicMessage = null }: { incidentId: number; actorId?: string | null; description?: string | null; publicMessage?: string | null }): Row {
   const inc = getIncident(incidentId);
   if (!inc) return { error: "incident not found" };
@@ -302,11 +300,6 @@ function createIncident({ programId, title, description = null, publicMessage = 
   return { ok: true, incident: getIncident(incidentId) };
 }
 
-// The single match point for incident-aware answering: an ACTIVE (status =
-// confirmed) incident whose title overlaps the asker's question closely
-// enough that this is very likely the same report, not a coincidence.
-// Reuses the same similarity threshold as burst detection and duplicate
-// suggestion so "similar enough to be one incident" means one thing everywhere.
 function matchActiveIncident({ programId, question }: { programId?: string; question?: string }): Row | null {
   if (!programId || !question) return null;
   const active = listIncidents(programId, "confirmed", 20);
@@ -314,9 +307,6 @@ function matchActiveIncident({ programId, question }: { programId?: string; ques
   return pickBestIncident(question, active);
 }
 
-// One row per distinct thread that got the incident answer instead of a
-// ticket — the count "notify affected users" later shows, and the list it
-// idempotently walks through.
 function recordAffectedReport({ incidentId, programId, ticketId = null, requesterId, channel, threadTs }: { incidentId: number; programId: string; ticketId?: number | null; requesterId?: string | null; channel: string; threadTs: string }): Row {
   const already = db.handle().query("SELECT 1 FROM incident_reports WHERE incident_id = ? AND channel = ? AND thread_ts = ?").get(incidentId, channel, threadTs);
   if (already) return { ok: true, deduped: true };
@@ -331,22 +321,18 @@ function affectedReports(incidentId: number, onlyUnnotified = false): Row[] {
   return db.handle().query(`SELECT * FROM incident_reports WHERE incident_id = ? ${clause} ORDER BY created_at ASC`).all(incidentId);
 }
 
-// Idempotent, retry-safe: only reports without notified_at are messaged, and
-// each success is marked before moving to the next, so a re-run after a
-// partial failure only reaches the ones still pending. Requires a real Slack
-// client — this never fires automatically, only from an explicit organizer action.
 async function notifyAffectedUsers({ incidentId, actorId = null, client, resolutionMessage = null }: { incidentId: number; actorId?: string | null; client?: Row; resolutionMessage?: string | null }): Promise<Row> {
   const inc = getIncident(incidentId);
   if (!inc) return { error: "incident not found" };
   if (!client) return { error: "slack client unavailable" };
   const prog = programs.get(inc.program_id);
   const pending = affectedReports(incidentId, true);
-  const text = resolutionMessage || defaultResolutionText(inc.title);
+  const text = resolutionMessage || defaultResolutionText(String(inc.title || ""));
   let notified = 0;
   const errors = [];
   for (const r of pending) {
     try {
-      await slackMessages.sendProgramMessage({ client, program: prog, channel: r.channel, threadTs: r.thread_ts, text });
+      await slackMessages.sendProgramMessage({ client, program: prog, channel: String(r.channel || ""), threadTs: (r.thread_ts || null) as unknown as null, text });
       db.handle().query("UPDATE incident_reports SET notified_at = ? WHERE id = ?").run(Date.now(), r.id);
       notified += 1;
     } catch (e: any) {

@@ -39,7 +39,6 @@ function createResolvedTicket(suffix) {
 test("summary success uses the full Slack thread and persists the result", async () => {
   const ticket = createResolvedTicket("success");
   let request = null;
-  // The learning step also calls the model; capture only the summary request.
   llm.complete = async (options, label) => {
     if (label === "resolution-summary") request = options;
     return { text: "The requester needed submission help; the helper directed them to the form." };
@@ -99,7 +98,6 @@ test("resolution succeeds when the pipeline throws", async () => {
     requesterId: "U-requester",
     question: "Why does this fail?",
   });
-  // Run the real scheduled path (off by default under test) with a step that throws.
   const savedSteps = pipeline.steps.splice(0, pipeline.steps.length, { name: "boom", run: async () => { throw new Error("pipeline failed"); } });
   process.env.PIXIE_RESOLUTION_PIPELINE = "true";
   try {

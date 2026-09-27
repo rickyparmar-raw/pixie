@@ -106,9 +106,6 @@ test("candidate API is tenant- and actor-gated", async () => {
   assert.ok(Array.isArray(listed));
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
-// Resolution memory: extraction validates shape and size; state machine
-// rejects bad transitions instead of corrupting the corpus.
 
 test("char: validateExtraction enforces shape and size bounds", () => {
   assert.equal(memory.validateExtraction(null), null);

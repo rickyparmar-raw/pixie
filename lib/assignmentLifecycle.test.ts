@@ -36,7 +36,6 @@ function metricCount(kind) {
   return db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = ?").get(kind).c;
 }
 
-/* --------------------------------------------------------------- claim -- */
 
 test("a program helper claims an offered ticket and it counts as accepted", () => {
   prog("al-claim", ["U-h1"]);
@@ -93,7 +92,6 @@ test("a duplicate claim (Slack retry) does not append a second claimed event", (
   assert.equal(events("al-dup", id).filter((t) => t === "helper_assignment_claimed").length, 1);
 });
 
-/* ------------------------------------------------------------- decline -- */
 
 test("decline records an event without touching ticket status or resolution", () => {
   prog("al-decline", ["U-d"]);
@@ -113,7 +111,6 @@ test("decline records an event without touching ticket status or resolution", ()
   assert.equal(stats.acceptedAssignments, 0);
 });
 
-/* ------------------------------------------------------------- release -- */
 
 test("release after claim records a distinct released event and re-offers the ticket", () => {
   prog("al-release", ["U-h"]);
@@ -126,12 +123,10 @@ test("release after claim records a distinct released event and re-offers the ti
   assert.equal(db.getTicket(id).assignee_id, null);
   const trail = events("al-release", id);
   assert.ok(trail.includes("helper_assignment_released"));
-  // released is not a decline and does not lower the accept rate
   const stats = lifecycle.helperAcceptStats("al-release", "U-h");
   assert.equal(stats.releasedAssignments, 1);
   assert.equal(stats.declinedAssignments, 0);
   assert.equal(stats.acceptedAssignments, 1);
-  // the ticket is offered to the pool again
   assert.equal(trail.filter((t) => t === "helper_assignment_offered").length, 2);
 });
 
@@ -144,7 +139,6 @@ test("release without a prior claim is rejected", () => {
   assert.equal(events("al-norelease", id).includes("helper_assignment_released"), false);
 });
 
-/* ------------------------------------------------------------- timeout -- */
 
 test("the timeout sweep is a no-op until the program sets helper_offer_timeout_ms", () => {
   prog("al-noto", ["U-h"]);
@@ -169,7 +163,6 @@ test("a stale offer times out once and only once when a timeout is configured", 
   assert.equal(events("al-to", id).filter((t) => t === "helper_assignment_timed_out").length, 1);
 });
 
-/* -------------------------------------------------------- accept rate -- */
 
 test("accept rate is claimed / (claimed + declined + timed-out), sample size exposed", () => {
   prog("al-rate", ["U-x"]);
@@ -206,7 +199,6 @@ test("pending offers are excluded from the accept-rate denominator", () => {
 test("pre-lifecycle tickets never fabricate an accept rate", () => {
   prog("al-legacy", ["U-old"]);
   const id = newTicket("al-legacy");
-  // Old-style transitions only — no helper_assignment_* events at all.
   db.addTicketEvent({ ticketId: id, programId: "al-legacy", actorId: "U-old", eventType: "claimed" });
   db.addTicketEvent({ ticketId: id, programId: "al-legacy", actorId: "U-old", eventType: "resolved" });
   const stats = lifecycle.helperAcceptStats("al-legacy", "U-old");
@@ -237,7 +229,6 @@ test("helper accept stats are program-scoped", () => {
   assert.equal(lifecycle.helperAcceptStats("al-scopeB", "U-s").assignmentLifecycle, "unsupported");
 });
 
-/* --------------------------------------------------- routing retry (capability) -- */
 
 test("nextEligibleHelper skips a helper who declined", () => {
   prog("al-retry", ["U-1", "U-2", "U-3"]);
@@ -248,18 +239,12 @@ test("nextEligibleHelper skips a helper who declined", () => {
   assert.ok(next && next.userId !== "U-1");
 });
 
-// Was previously wired to nothing automatic. lib/tickets.js's
-// declineAssignment now calls this after a targeted decline closes an open
-// offer — "declined helper -> next eligible helper gets exactly one ping" is
-// a required invariant (see the [epoch] fixtures in tickets.test.js), and a
-// decline is exactly the "something meaningful happened" that permits it.
 test("nextEligibleHelper is wired into tickets.js's decline path", () => {
   const fs = require("fs");
   const src = readSource("tickets.js");
   assert.ok(src.includes("nextEligibleHelper"));
 });
 
-/* ---------------------------------------------------- coexistence / safety -- */
 
 test("shadow routing and the lifecycle offer coexist on the same escalation", () => {
   prog("pixl", ["U-sh1", "U-sh2"]);
@@ -269,7 +254,6 @@ test("shadow routing and the lifecycle offer coexist on the same escalation", ()
   const trail = events("pixl", id);
   assert.ok(trail.includes("helper_routing_recommended"), "shadow routing still snapshots");
   assert.ok(trail.includes("helper_assignment_offered"), "a pool offer is recorded");
-  // the shadow snapshot is unchanged in shape
   const snap = db.listTicketEvents(id).find((e) => e.event_type === "helper_routing_recommended");
   const detail = JSON.parse(snap.detail);
   assert.equal(detail.mode, "shadow");

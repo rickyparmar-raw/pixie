@@ -1,20 +1,67 @@
-// Ticket metrics are the read-side source of truth for support reporting.
-//
-// A ticket is resolved only while its current status is exactly `resolved`.
-// `closed`, `duplicate`, `spam`, reopened, and every other state are not
-// resolved. A resolution window is always bounded by `resolved_at`, never by
-// ticket creation time. Exactly one helper may receive credit for a resolved
-// ticket: `resolved_credit_id`, written when the ticket is resolved. Rows from
-// before that column existed use the historical fallback below, which accepts
-// any program helper who replied (including helpers who are inactive now),
-// then the assignee, then `resolved_by`.
-//
-// All queries are program-scoped and use the indexed tickets/ticket_events
-// tables. The small JS reductions are only for medians and response-shape
-// assembly; no metric calls the live routing attribution logic.
 import db = require("./db");
 
-type DbRow = Record<string, any>;
+interface MetricRow {
+  active?: number;
+  at?: number;
+  category?: string | null;
+  created_at?: number;
+  first_human_response_at?: number | null;
+  first_response_at?: number | null;
+  n?: number;
+  reopen_count?: number | null;
+  resolved_at?: number;
+  role?: string;
+  ticket_id?: number;
+  userId?: string;
+  user_id?: string;
+  [key: string]: unknown;
+}
+
+interface HelperRow extends MetricRow {
+  user_id: string;
+}
+
+interface ProgramTotals {
+  programId: string;
+  since: number;
+  created: number;
+  open: number;
+  waiting: number;
+  resolved: number;
+  resolvedInWindow: number;
+  closed: number;
+  reopened: number;
+  medianFirstResponseMs: number | null;
+  medianHumanResponseMs: number | null;
+  medianResolveMs: number | null;
+}
+
+interface HelperTotals {
+  programId: string;
+  userId: string;
+  since: number;
+  resolved: number;
+  open: number;
+  replies: number;
+  assigned: number;
+  reopened: number;
+  reopenRate: number | null;
+  medianFirstResponseMs: number | null;
+  medianResolutionMs: number | null;
+  categoryResolved: Array<{ category: string; resolved: number }>;
+}
+
+interface LeaderboardEntry {
+  userId: string;
+  role?: string;
+  active: boolean;
+  resolved: number;
+  replies: number;
+  open: number;
+  reopened: number;
+  reopenRate: number | null;
+  points: number;
+}
 
 interface SinceOptions { since?: unknown; }
 
@@ -49,7 +96,7 @@ const CREDIT_SQL = `COALESCE(
   t.resolved_by
 )`;
 
-function programTotals(programId: string, { since }: SinceOptions = {}): Record<string, any> {
+function programTotals(programId: string, { since }: SinceOptions = {}): ProgramTotals {
   const cutoff = sinceValue(since);
   const h = db.handle();
   const counts = h.query(
@@ -61,21 +108,21 @@ function programTotals(programId: string, { since }: SinceOptions = {}): Record<
        SUM(CASE WHEN status = 'closed' THEN 1 ELSE 0 END) AS closed,
        SUM(CASE WHEN COALESCE(reopen_count, 0) > 0 THEN 1 ELSE 0 END) AS reopened
      FROM tickets WHERE program_id = ? AND created_at >= ?`,
-  ).get(...OPEN_STATUSES, programId, cutoff) as DbRow;
+  ).get(...OPEN_STATUSES, programId, cutoff) as MetricRow;
   const resolvedInWindow = h.query(
     `SELECT COUNT(*) AS n FROM tickets
      WHERE program_id = ? AND status = 'resolved' AND resolved_at IS NOT NULL AND resolved_at >= ?`,
-  ).get(programId, cutoff) as DbRow;
+  ).get(programId, cutoff) as MetricRow;
   const times = h.query(
     `SELECT created_at, first_response_at, first_human_response_at, resolved_at, status
      FROM tickets WHERE program_id = ? AND created_at >= ?`,
-  ).all(programId, cutoff) as DbRow[];
+  ).all(programId, cutoff) as MetricRow[];
   const resolutionTimes = h.query(
     "SELECT created_at, resolved_at FROM tickets WHERE program_id = ? AND status = 'resolved' AND resolved_at IS NOT NULL AND resolved_at >= ?",
-  ).all(programId, cutoff) as DbRow[];
-  const lag = (field: string, rows: DbRow[] = times) => rows
+  ).all(programId, cutoff) as MetricRow[];
+  const lag = (field: string, rows: MetricRow[] = times) => rows
     .filter((row) => row[field] !== null && row[field] !== undefined)
-    .map((row) => row[field] - row.created_at);
+    .map((row) => Number(row[field]) - Number(row.created_at));
 
   const values = (row: unknown) => Number(row || 0);
   return {
@@ -85,16 +132,16 @@ function programTotals(programId: string, { since }: SinceOptions = {}): Record<
     open: values(counts.open),
     waiting: values(counts.waiting),
     resolved: values(counts.resolved),
-    resolvedInWindow: Number((resolvedInWindow as DbRow).n || 0),
+    resolvedInWindow: Number(resolvedInWindow.n || 0),
     closed: values(counts.closed),
     reopened: values(counts.reopened),
     medianFirstResponseMs: median(lag("first_response_at")),
     medianHumanResponseMs: median(lag("first_human_response_at")),
-    medianResolveMs: median(resolutionTimes.map((row) => row.resolved_at - row.created_at)),
+    medianResolveMs: median(resolutionTimes.map((row) => Number(row.resolved_at) - Number(row.created_at))),
   };
 }
 
-function helperTotals(programId: string, userId: string, { since }: SinceOptions = {}): Record<string, any> {
+function helperTotals(programId: string, userId: string, { since }: SinceOptions = {}): HelperTotals {
   const cutoff = sinceValue(since);
   const h = db.handle();
   const creditedWhere = `${CREDIT_SQL} = ?`;
@@ -102,27 +149,30 @@ function helperTotals(programId: string, userId: string, { since }: SinceOptions
     `SELECT t.id, t.category, t.created_at, t.resolved_at, t.reopen_count
      FROM tickets t WHERE t.program_id = ? AND t.status = 'resolved'
        AND t.resolved_at IS NOT NULL AND t.resolved_at >= ? AND ${creditedWhere}`,
-  ).all(programId, cutoff, userId) as DbRow[];
+  ).all(programId, cutoff, userId) as MetricRow[];
   const open = h.query(
     `SELECT COUNT(*) AS n FROM tickets
      WHERE program_id = ? AND assignee_id = ? AND status IN (${OPEN_SQL}) AND created_at >= ?`,
-  ).get(programId, userId, ...OPEN_STATUSES, cutoff) as DbRow;
+  ).get(programId, userId, ...OPEN_STATUSES, cutoff) as MetricRow;
   const replies = h.query(
     `SELECT e.ticket_id, e.created_at AS at, t.created_at
      FROM ticket_events e JOIN tickets t ON t.id = e.ticket_id AND t.program_id = e.program_id
      WHERE e.program_id = ? AND e.actor_id = ? AND e.event_type = 'helper_reply'
        AND e.created_at >= ? ORDER BY e.created_at ASC, e.id ASC`,
-  ).all(programId, userId, cutoff) as DbRow[];
+  ).all(programId, userId, cutoff) as MetricRow[];
   const assigned = h.query(
     `SELECT COUNT(DISTINCT ticket_id) AS n FROM ticket_events
      WHERE program_id = ? AND created_at >= ? AND
        ((event_type = 'claimed' AND actor_id = ?) OR
         (event_type = 'assigned' AND detail LIKE ?))`,
-  ).get(programId, cutoff, userId, `%"to":"${String(userId).replace(/"/g, "\\\"")}"%`) as DbRow;
+  ).get(programId, cutoff, userId, `%"to":"${String(userId).replace(/"/g, "\\\"")}"%`) as MetricRow;
   const reopenCount = resolved.filter((row) => Number(row.reopen_count || 0) > 0).length;
   const categoryResolved = new Map<string, number>();
   const firstReplyAt = new Map<number, number>();
-  for (const reply of replies) if (!firstReplyAt.has(reply.ticket_id)) firstReplyAt.set(reply.ticket_id, reply.at - reply.created_at);
+  for (const reply of replies) {
+    const ticketId = Number(reply.ticket_id);
+    if (!firstReplyAt.has(ticketId)) firstReplyAt.set(ticketId, Number(reply.at) - Number(reply.created_at));
+  }
   for (const row of resolved) {
     const category = row.category || "general";
     categoryResolved.set(category, (categoryResolved.get(category) || 0) + 1);
@@ -138,19 +188,20 @@ function helperTotals(programId: string, userId: string, { since }: SinceOptions
     reopened: reopenCount,
     reopenRate: rate(reopenCount, resolved.length),
     medianFirstResponseMs: median([...firstReplyAt.values()]),
-    medianResolutionMs: median(resolved.map((row) => row.resolved_at - row.created_at)),
+    medianResolutionMs: median(resolved.map((row) => Number(row.resolved_at) - Number(row.created_at))),
     categoryResolved: [...categoryResolved.entries()].map(([category, count]) => ({ category, resolved: count })),
   };
 }
 
-function leaderboard(programId: string, { since }: SinceOptions = {}): Array<Record<string, any>> {
+function leaderboard(programId: string, { since }: SinceOptions = {}): LeaderboardEntry[] {
   const cutoff = sinceValue(since);
-  const helperRows = db.listHelpers(programId, false) as DbRow[];
+  const helperRows = db.listHelpers(programId, false) as HelperRow[];
   const credited = db.handle().query(
     `SELECT DISTINCT ${CREDIT_SQL} AS userId FROM tickets t
      WHERE t.program_id = ? AND t.status = 'resolved' AND t.resolved_at IS NOT NULL
        AND t.resolved_at >= ? AND ${CREDIT_SQL} IS NOT NULL`,
-  ).all(programId, cutoff).map((row: DbRow) => row.userId).filter(Boolean);
+  ).all(programId, cutoff).map((row: MetricRow): string | undefined => row.userId)
+    .filter((userId: string | undefined): userId is string => Boolean(userId));
   const known = new Map(helperRows.map((helper) => [helper.user_id, helper]));
   for (const userId of credited) if (!known.has(userId)) known.set(userId, { user_id: userId, role: "helper", active: 0 });
   return [...known.values()].map((helper) => {

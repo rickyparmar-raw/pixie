@@ -16,7 +16,6 @@ after(() => {
   programs.invalidate();
 });
 
-/* STEP 1 characterization pins (SUPPORT waitTime): formula + edge cases. */
 
 function seedLag(programId, threadTs, createdAgoMs, lagMs, category = null) {
   const id = db.createTicket({ programId, workspaceId: "T1", channel: `C-${programId}`, threadTs, requesterId: "U1", question: "q", category });
@@ -92,7 +91,6 @@ test("char: wait never bleeds across programs and ignores stale/negative lags", 
   assert.equal(a.sampleSize, 3);
   assert.equal(a.medianWaitMs, 60000);
 
-  // 8-day-old rows fall outside the 7-day window; negative lags are dropped.
   const stale = db.createTicket({ programId: "char-wait-iso-a", workspaceId: "T1", channel: "C-A", threadTs: "char-wiso-stale", requesterId: "U1", question: "q" });
   db.handle().query("UPDATE tickets SET created_at = ?, first_human_response_at = ?, status='resolved' WHERE id = ?").run(Date.now() - 8 * 86400000, Date.now() - 8 * 86400000 + 60000, stale);
   const neg = db.createTicket({ programId: "char-wait-iso-a", workspaceId: "T1", channel: "C-A", threadTs: "char-wiso-neg", requesterId: "U1", question: "q" });
@@ -108,7 +106,6 @@ test("char: wait queueAhead counts older open-family tickets in-program only", (
   const second = db.createTicket({ programId: "char-wait-q", workspaceId: "T1", channel: "C-Q", threadTs: "char-wq-2", requesterId: "U1", question: "q" });
   db.createTicket({ programId: "char-wait-q-other", workspaceId: "T1", channel: "C-QO", threadTs: "char-wq-o", requesterId: "U1", question: "q" });
   db.handle().query("UPDATE tickets SET created_at = ? WHERE id = ?").run(Date.now() - 10000, first);
-  // Insufficient history returns unavailable with no queueAhead key at all.
   const noHist = wait.estimate({ programId: "char-wait-q", ticketId: second });
   assert.equal(noHist.available, false);
   assert.equal("queueAhead" in noHist, false);
@@ -117,13 +114,11 @@ test("char: wait queueAhead counts older open-family tickets in-program only", (
   assert.equal(withHistory.available, true);
   assert.equal(withHistory.queueAhead, 1);
   assert.equal(wait.estimate({ programId: "char-wait-q", ticketId: first }).queueAhead, 0);
-  // Closed tickets are not queued ahead.
   db.resolveTicket(first, "done");
   assert.equal(wait.estimate({ programId: "char-wait-q", ticketId: second }).queueAhead, 0);
 });
 
 test("char: wait formatWait labels minutes/hours, never fake precision", () => {
-  // Math.round(ms/60000): <30s rounds to 0 (under a minute), 30s rounds to 1.
   assert.equal(wait.formatWait({ available: true, medianWaitMs: 10000 }), "usually under a minute");
   assert.equal(wait.formatWait({ available: true, medianWaitMs: 30000 }), "usually around 1 minute");
   assert.equal(wait.formatWait({ available: true, medianWaitMs: 60000 }), "usually around 1 minute");

@@ -8,8 +8,59 @@ import jobLease = require("./jobLease");
 import lastWord = require("./lastWord");
 import configModule = require("./config");
 
-type Row = Record<string, any>;
+interface Row {
+  id?: number;
+  ticket_id?: number;
+  program_id?: string;
+  status?: string;
+  created_at?: number;
+  updated_at?: number;
+  event_type?: string;
+  actor_id?: string | null;
+  detail?: Detail;
+  ts?: string | number | null;
+  text?: string;
+  content?: string;
+  user?: string;
+  bot_id?: string;
+  requester_id?: string;
+  thread_ts?: string;
+  channel?: string;
+  workspace_id?: string | null;
+  question?: string;
+  resolution?: string | null;
+  claimed_at?: number | null;
+  confidence?: number;
+  verdict?: string;
+  errorKind?: string;
+  reason?: string;
+  role?: string;
+  userId?: string | null;
+  autoResolve?: boolean;
+  [key: string]: unknown;
+}
+
+interface Detail {
+  ts?: string;
+  text?: string;
+  messageKey?: string;
+  [key: string]: unknown;
+}
+
+interface Client {
+  conversations?: {
+    replies?: (args: Record<string, unknown>) => Promise<{ messages: Row[] }>;
+  };
+}
+
+type Judge = typeof resolutionJudge.judgeResolution;
+type JudgeResult = Awaited<ReturnType<Judge>>;
 const { config } = configModule;
+
+function errorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) return String((error as { message?: unknown }).message);
+  return String(error);
+}
 
 interface TranscriptRow {
   ts?: string | number | null;
@@ -23,20 +74,15 @@ const DEBOUNCE_MS = 2 * 60 * 1000;
 const STALE_QUIET_MS = 6 * 60 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 30 * 60 * 1000;
 const RECENT_CLAIM_MS = 10 * 60 * 1000;
-// Jev's free lane is shared with live message classification, so the
-// watcher must never starve it: a sweep judges only a few tickets, spaced
-// out, and any rate limit pauses judging entirely for a while.
 const SWEEP_MAX_JUDGEMENTS = 5;
 const SWEEP_SPACING_MS = 20 * 1000;
 const STARTUP_SWEEP_DELAY_MS = 10 * 60 * 1000;
 const JEV_BACKOFF_MS = 15 * 60 * 1000;
-// Each ticket a sweep examines costs one conversations.replies call, shared
-// with live Pixie: pace them and cap how many one sweep looks at.
 const SWEEP_MAX_EXAMINED = 40;
 const SWEEP_EXAMINE_SPACING_MS = 3000;
 const BACKOFF_ERRORS = new Set(["rate_limit", "quota"]);
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
-const backlog: Array<{ ticketId: number; client: Row | null; program: Row | null; judge: (args: Row) => Promise<Row> }> = [];
+const backlog: Array<{ ticketId: number; client: Client | null; program: Row | null; judge: Judge }> = [];
 const backlogIds = new Set<string>();
 let backlogTimer: ReturnType<typeof setTimeout> | null = null;
 let backlogRunning = false;
@@ -51,12 +97,12 @@ function openStatus(status: unknown): boolean {
 }
 
 function autoResolveEnabled(ticket: Row, program: Row | null): boolean {
-  const behavior = program ? programModel.behaviorFor(program) as unknown as Row : null;
+  const behavior = program ? programModel.behaviorFor(program as never) as unknown as { help?: { autoResolve?: boolean } } : null;
   return !!behavior && behavior.help?.autoResolve === true;
 }
 
-function parseDetail(event: Row): Row {
-  try { return JSON.parse(event.detail || "{}"); } catch (_) { return {}; }
+function parseDetail(event: Row): Detail {
+  try { return JSON.parse(String(event.detail || "{}")) as Detail; } catch (_) { return {}; }
 }
 
 function eventRoleMap(ticket: Row): Map<string, Row> {
@@ -84,13 +130,13 @@ function normalizeSlackMessages(messages: Row[], ticket: Row): TranscriptRow[] {
   return (messages || [])
     .map((message: Row): TranscriptRow => {
       const who = slackRole(message, ticket, helperReplies);
-      return { ts: message.ts || null, role: who.role, userId: who.userId, text: String(message.text || "").trim() };
+      return { ts: message.ts || null, role: who.role || "other", userId: who.userId, text: String(message.text || "").trim() };
     })
     .filter((message) => Boolean(message.text));
 }
 
 function fallbackTranscript(ticket: Row): TranscriptRow[] {
-  const rows: TranscriptRow[] = [{ ts: ticket.created_at, role: "requester", userId: ticket.requester_id, text: ticket.question }];
+  const rows: TranscriptRow[] = [{ ts: ticket.created_at || null, role: "requester", userId: ticket.requester_id || null, text: ticket.question || "" }];
   for (const row of db.listTicketEvents(ticket.id) as Row[]) {
     const detail = parseDetail(row);
     if (row.event_type === "helper_reply") rows.push({ ts: row.created_at, role: "helper", userId: row.actor_id, text: detail.text || "A helper replied in the thread." });
@@ -103,13 +149,13 @@ function fallbackTranscript(ticket: Row): TranscriptRow[] {
   return rows;
 }
 
-async function fetchTranscript(ticket: Row, client: Row | null): Promise<TranscriptRow[]> {
+async function fetchTranscript(ticket: Row, client: Client | null): Promise<TranscriptRow[]> {
   if (client?.conversations?.replies) {
     try {
       const result = await client.conversations.replies({ channel: ticket.channel, ts: ticket.thread_ts, limit: 100 });
-      return normalizeSlackMessages(result.messages, ticket);
-    } catch (error: any) {
-      log.debug("resolution", `thread fetch failed for #${ticket.id}: ${error.message}`);
+      return normalizeSlackMessages(result.messages || [], ticket);
+    } catch (error: unknown) {
+      log.debug("resolution", `thread fetch failed for #${ticket.id}: ${errorMessage(error)}`);
     }
   }
   return fallbackTranscript(ticket);
@@ -125,7 +171,7 @@ function wasJudged(ticketId: number, messageKey: string): boolean {
   return (db.listTicketEvents(ticketId) as Row[]).some((event: Row) => event.event_type === "resolution_judged" && parseDetail(event).messageKey === messageKey);
 }
 
-function recordJudgement(ticket: Row, messageKey: string, decision: Row): void {
+function recordJudgement(ticket: Row, messageKey: string, decision: JudgeResult): void {
   const addTicketEvent = db.addTicketEvent as unknown as (event: Record<string, unknown>) => unknown;
   addTicketEvent({
     ticketId: ticket.id,
@@ -147,11 +193,10 @@ function hasAnswer(transcript: TranscriptRow[]): boolean {
 
 function recentClaimWithoutReply(ticket: Row, now: number): boolean {
   if (!ticket.claimed_at || now - ticket.claimed_at >= RECENT_CLAIM_MS) return false;
-  return !(db.listTicketEvents(ticket.id) as Row[]).some((event: Row) => event.event_type === "helper_reply" && event.created_at >= ticket.claimed_at);
+  const claimedAt = Number(ticket.claimed_at);
+  return !(db.listTicketEvents(ticket.id) as Row[]).some((event: Row) => event.event_type === "helper_reply" && Number(event.created_at) >= claimedAt);
 }
 
-// When the conversation actually ended: Slack ts strings are seconds, stored
-// event fallbacks are already ms.
 function lastMessageAt(transcript: TranscriptRow[]): number | null {
   let latest = null;
   for (const row of transcript) {
@@ -163,18 +208,12 @@ function lastMessageAt(transcript: TranscriptRow[]): number | null {
   return latest;
 }
 
-// `historical` marks the backlog lane (old tickets from the history import or
-// the stale backlog): the resolve is dated to the thread's last message and
-// skips the Slack card update and the summary/learning pipeline, exactly like
-// a backfill resolve.
-async function judgeTicketOnce(ticketId: number, { client = null, program = null, now = Date.now(), judge = resolutionJudge.judgeResolution, historical = false }: { client?: Row | null; program?: Row | null; now?: number; judge?: (args: Row) => Promise<Row>; historical?: boolean } = {}): Promise<Row> {
+async function judgeTicketOnce(ticketId: number, { client = null, program = null, now = Date.now(), judge = resolutionJudge.judgeResolution, historical = false }: { client?: Client | null; program?: Row | null; now?: number; judge?: Judge; historical?: boolean } = {}): Promise<Row> {
   let ticket = db.getTicket(ticketId);
   const prog = program || (ticket && programs.get(ticket.program_id));
   if (!ticket || !openStatus(ticket.status) || !autoResolveEnabled(ticket, prog)) return { skipped: true };
   if (Date.now() < backoffUntil) return { skipped: true, reason: "backoff" };
   const transcript = await fetchTranscript(ticket, client);
-  // The owner's rule comes first and needs no Jev call: a helper had the
-  // last word and the requester stayed quiet for 2+ days.
   const helperLast = lastWord.helperLastWord({
     programId: ticket.program_id,
     requesterId: ticket.requester_id,
@@ -209,29 +248,25 @@ async function judgeTicketOnce(ticketId: number, { client = null, program = null
     recordJudgement(ticket, messageKey, { verdict: "recent_claim" });
     return { skipped: true, reason: "recent_claim" };
   }
-  let decision: Row;
+  let decision: JudgeResult;
   try {
     decision = await judge({ ticket, transcript });
   } catch (_) {
     decision = { verdict: "unknown" };
   }
-  if (decision.verdict === "unknown" && BACKOFF_ERRORS.has(decision.errorKind)) {
-    // Not recorded as judged, so a later sweep retries this ticket.
+  if (decision.verdict === "unknown" && typeof decision.errorKind === "string" && BACKOFF_ERRORS.has(decision.errorKind)) {
     backoffUntil = Date.now() + JEV_BACKOFF_MS;
     log.warn("resolution", `jev ${decision.errorKind}; pausing auto-resolve judgements for ${JEV_BACKOFF_MS / 60000} min`);
     return { decision, skipped: true, reason: "backoff" };
   }
   recordJudgement(ticket, messageKey, decision);
-  if (decision.verdict !== "resolved" || decision.confidence < RESOLUTION_CONFIDENCE) return { decision };
+  if (decision.verdict !== "resolved" || Number(decision.confidence) < RESOLUTION_CONFIDENCE) return { decision };
   ticket = db.getTicket(ticket.id);
   if (!ticket || !openStatus(ticket.status) || recentClaimWithoutReply(ticket, now)) return { skipped: true, reason: "ticket_changed" };
   const tickets = require("./tickets");
   const reason = String(decision.reason || "Jev found clear evidence that the issue was solved.").replace(/\s+/g, " ").trim().slice(0, 160);
   const result = tickets.resolveTicket({
     ticketId: ticket.id,
-    // A system resolve: Pixie is the actor, and finishResolve credits the
-    // helper who did the work (former helpers included). Passing that helper
-    // as the actor would fail authorization once they're no longer active.
     actorId: null,
     resolution: `auto-resolved: ${reason}`,
     source: historical ? "backfill" : "auto",
@@ -245,7 +280,7 @@ async function judgeTicketOnce(ticketId: number, { client = null, program = null
   return { decision, result };
 }
 
-function judgeTicket(ticketId: number, options: Row = {}): Promise<Row> {
+function judgeTicket(ticketId: number, options: { client?: Client | null; program?: Row | null; now?: number; judge?: Judge; historical?: boolean } = {}): Promise<Row> {
   const key = String(ticketId);
   const existing = inFlight.get(key);
   if (existing) return existing;
@@ -256,20 +291,20 @@ function judgeTicket(ticketId: number, options: Row = {}): Promise<Row> {
   return run;
 }
 
-function schedule({ ticketId, client = null, program = null, delayMs = DEBOUNCE_MS, judge = resolutionJudge.judgeResolution }: { ticketId?: number; client?: Row | null; program?: Row | null; delayMs?: number; judge?: (args: Row) => Promise<Row> } = {}): ReturnType<typeof setTimeout> | null {
+function schedule({ ticketId, client = null, program = null, delayMs = DEBOUNCE_MS, judge = resolutionJudge.judgeResolution }: { ticketId?: number; client?: Client | null; program?: Row | null; delayMs?: number; judge?: Judge } = {}): ReturnType<typeof setTimeout> | null {
   if (!ticketId) return null;
   const prior = timers.get(String(ticketId));
   if (prior) clearTimeout(prior);
   const timer = setTimeout(() => {
     timers.delete(String(ticketId));
-    void judgeTicket(ticketId, { client, program, judge }).catch((error: any) => log.warn("resolution", `judgement failed for #${ticketId}: ${error.message}`));
+    void judgeTicket(ticketId, { client, program, judge }).catch((error: unknown) => log.warn("resolution", `judgement failed for #${ticketId}: ${errorMessage(error)}`));
   }, delayMs);
   if (timer.unref) timer.unref();
   timers.set(String(ticketId), timer);
   return timer;
 }
 
-function enqueueForJudge({ ticketId, client = null, program = null, judge = resolutionJudge.judgeResolution, autoStart = true }: { ticketId: number; client?: Row | null; program?: Row | null; judge?: (args: Row) => Promise<Row>; autoStart?: boolean }): boolean {
+function enqueueForJudge({ ticketId, client = null, program = null, judge = resolutionJudge.judgeResolution, autoStart = true }: { ticketId: number; client?: Client | null; program?: Row | null; judge?: Judge; autoStart?: boolean }): boolean {
   const key = String(ticketId || "");
   if (!key || backlogIds.has(key)) return false;
   backlogIds.add(key);
@@ -284,7 +319,7 @@ async function drainBacklog({ now = Date.now(), spacingMs = SWEEP_SPACING_MS }: 
     if (!backlogTimer) {
       backlogTimer = setTimeout(() => {
         backlogTimer = null;
-        void drainBacklog({ spacingMs }).catch((error: any) => log.warn("resolution", `backlog drain failed: ${error.message}`));
+        void drainBacklog({ spacingMs }).catch((error: unknown) => log.warn("resolution", `backlog drain failed: ${errorMessage(error)}`));
       }, Math.max(1, backoffUntil - now));
       if (backlogTimer.unref) backlogTimer.unref();
     }
@@ -295,7 +330,7 @@ async function drainBacklog({ now = Date.now(), spacingMs = SWEEP_SPACING_MS }: 
     if (!backlogTimer) {
       backlogTimer = setTimeout(() => {
         backlogTimer = null;
-        void drainBacklog({ spacingMs }).catch((error: any) => log.warn("resolution", `backlog drain failed: ${error.message}`));
+        void drainBacklog({ spacingMs }).catch((error: unknown) => log.warn("resolution", `backlog drain failed: ${errorMessage(error)}`));
       }, spacingMs - elapsed);
       if (backlogTimer.unref) backlogTimer.unref();
     }
@@ -314,7 +349,7 @@ async function drainBacklog({ now = Date.now(), spacingMs = SWEEP_SPACING_MS }: 
     if (backlog.length > 0 && !backlogTimer) {
       backlogTimer = setTimeout(() => {
         backlogTimer = null;
-      void drainBacklog({ spacingMs }).catch((error: any) => log.warn("resolution", `backlog drain failed: ${error.message}`));
+      void drainBacklog({ spacingMs }).catch((error: unknown) => log.warn("resolution", `backlog drain failed: ${errorMessage(error)}`));
       }, spacingMs);
       if (backlogTimer.unref) backlogTimer.unref();
     }
@@ -336,7 +371,7 @@ async function sweepStale({
   spacingMs = SWEEP_SPACING_MS,
   maxExamined = SWEEP_MAX_EXAMINED,
   examineSpacingMs = SWEEP_EXAMINE_SPACING_MS,
-}: { client?: Row | null; now?: number; quietMs?: number; useLease?: boolean; judge?: (args: Row) => Promise<Row>; maxJudgements?: number; spacingMs?: number; maxExamined?: number; examineSpacingMs?: number } = {}): Promise<Row> {
+}: { client?: Client | null; now?: number; quietMs?: number; useLease?: boolean; judge?: Judge; maxJudgements?: number; spacingMs?: number; maxExamined?: number; examineSpacingMs?: number } = {}): Promise<Row> {
   const run = async () => {
     const seen = new Set();
     let judged = 0;
@@ -363,15 +398,14 @@ async function sweepStale({
   return (await jobLease.runOnce("ticket-resolution-sweep", 25 * 60 * 1000, run)).result || { judged: 0 };
 }
 
-function start(client: Row, { intervalMs = SWEEP_INTERVAL_MS }: { intervalMs?: number } = {}): ReturnType<typeof setInterval> {
+function start(client: Client, { intervalMs = SWEEP_INTERVAL_MS }: { intervalMs?: number } = {}): ReturnType<typeof setInterval> {
   if (sweepTimer) return sweepTimer;
-  // Delayed so a deploy never bursts Jev while Slack traffic is catching up.
   startupTimer = setTimeout(() => {
-    void sweepStale({ client }).catch((error: any) => log.warn("resolution", `startup sweep failed: ${error.message}`));
+    void sweepStale({ client }).catch((error: unknown) => log.warn("resolution", `startup sweep failed: ${errorMessage(error)}`));
   }, STARTUP_SWEEP_DELAY_MS);
   if (startupTimer.unref) startupTimer.unref();
   sweepTimer = setInterval(() => {
-    void sweepStale({ client }).catch((error: any) => log.warn("resolution", `stale sweep failed: ${error.message}`));
+    void sweepStale({ client }).catch((error: unknown) => log.warn("resolution", `stale sweep failed: ${errorMessage(error)}`));
   }, intervalMs);
   if (sweepTimer.unref) sweepTimer.unref();
   return sweepTimer;

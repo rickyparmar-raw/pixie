@@ -102,7 +102,6 @@ test("notifyAffectedUsers is idempotent and retry-safe: only unnotified reports 
   assert.ok(t1.notified_at);
   assert.equal(t2.notified_at, null);
 
-  // Re-running only reaches the still-pending report — t1 is never messaged twice.
   const workingClient = { chat: { postMessage: async (payload) => { sent.push(payload); return { ts: "9.1" }; } } };
   const retry = await incidents.notifyAffectedUsers({ incidentId: id, actorId: "U1", client: workingClient });
   assert.equal(retry.notified, 1);
@@ -141,22 +140,18 @@ test("char: suggestDuplicates reports exact rounded overlap, filters <0.35, excl
 
   const res = incidents.suggestDuplicates({ programId: prog, question: q });
   assert.ok(res.candidates.length >= 2);
-  // Exact rounding contract.
   for (const c of res.candidates) {
     const expected = Number(gapClusters.pairOverlap(q, c.question).toFixed(3));
     assert.equal(c.similarity, expected);
     assert.ok(c.similarity >= 0.35);
   }
-  // Sorted best-first: the identical question (1.0) outranks the partial one.
   assert.equal(res.candidates[0].ticketId, exactId);
   assert.ok(res.candidates[0].similarity >= res.candidates[1].similarity);
 
-  // Self-exclusion: asking from exactId's own ticket hides that row.
   const withoutSelf = incidents.suggestDuplicates({ programId: prog, ticketId: exactId, question: q });
   assert.ok(withoutSelf.candidates.every((c) => c.ticketId !== exactId));
   assert.ok(withoutSelf.candidates.some((c) => c.ticketId === closeId));
 
-  // Required-args contract.
   assert.equal(incidents.suggestDuplicates({ question: q }).error, "programId and question required");
   assert.equal(incidents.suggestDuplicates({ programId: prog }).error, "programId and question required");
 });
@@ -178,7 +173,6 @@ test("char: suggestDuplicates is program-scoped and drops tickets older than 30d
   const ids = res.candidates.map((c) => c.ticketId);
   assert.ok(ids.includes(freshId));
   assert.ok(!ids.includes(oldId));
-  // The other program's identical ticket is invisible here; it is visible there.
   const otherRes = incidents.suggestDuplicates({ programId: other, question });
   assert.ok(otherRes.candidates.length >= 1);
   assert.ok(!ids.some((id) => otherRes.candidates.some((c) => c.ticketId === id && c.ticketId !== freshId)));
@@ -318,7 +312,6 @@ test("char: lifecycle transitions, error shapes, link/unlink, and audit writes",
   assert.ok(audits.some((a) => a.action === "incident.resolved"));
   assert.ok(audits.length >= baseAudit + 2);
 
-  // Link guards program scope; unlink removes; draft counts linked tickets.
   const ticketId = db.createTicket({ programId: prog, channel: "C-l", threadTs: "char-life-t1", requesterId: "U1", question: "lifecycle outage title" });
   db.saveProgram({ id: "char-life-other", name: "Other" });
   const otherId = makeCandidate("char-life-other", "lifecycle outage title");
@@ -330,7 +323,6 @@ test("char: lifecycle transitions, error shapes, link/unlink, and audit writes",
   assert.equal(incidents.unlinkTicket({ incidentId: id, ticketId }).ok, true);
   assert.equal(incidents.incidentTickets(id).length, 0);
 
-  // Status-filtered listing is exact; dismissed is terminal and listed.
   incidents.setIncidentStatus({ incidentId: id, status: "dismissed", actorId: "U-org" });
   assert.equal(incidents.listIncidents(prog, "resolved").length, 0);
   assert.equal(incidents.listIncidents(prog, "dismissed").length, 1);
@@ -346,15 +338,12 @@ test("char: matchActiveIncident honors the 0.35 boundary, best-match, and progra
   incidents.declareIncident({ incidentId: id, actorId: "U1" });
   assert.equal(incidents.matchActiveIncident({ programId: prog, question: "delta offline" }), null);
   assert.equal(incidents.matchActiveIncident({ programId: prog, question: "alpha beta outage" }).id, id);
-  // Missing args never throw, never match.
   assert.equal(incidents.matchActiveIncident({ question: "alpha beta delta" }), null);
   assert.equal(incidents.matchActiveIncident({ programId: prog }), null);
   assert.equal(incidents.matchActiveIncident({ programId: prog, question: "" }), null);
-  // Best-match: exact title beats partial title.
   const partialId = makeCandidate(prog, "alpha beta outage zeta eta theta iota");
   incidents.declareIncident({ incidentId: partialId, actorId: "U1" });
   assert.equal(incidents.matchActiveIncident({ programId: prog, question: "alpha beta offline" }).id, id);
-  // Cross-program isolation.
   db.saveProgram({ id: "char-match-other", name: "Other" });
   assert.equal(incidents.matchActiveIncident({ programId: "char-match-other", question: "alpha beta offline" }), null);
 });
@@ -368,14 +357,11 @@ test("char: recordAffectedReport dedupes on (incident, channel, thread) only", (
   const id = makeCandidate(prog, "aff outage");
   incidents.declareIncident({ incidentId: id, actorId: "U1" });
   assert.deepEqual(incidents.recordAffectedReport({ incidentId: id, programId: prog, requesterId: "U-a", channel: "C1", threadTs: "t1" }), { ok: true, deduped: false });
-  // Same triple, different program/requester -> still deduped (key ignores them).
   assert.deepEqual(incidents.recordAffectedReport({ incidentId: id, programId: "other-prog", requesterId: "U-b", channel: "C1", threadTs: "t1" }), { ok: true, deduped: true });
   assert.equal(incidents.affectedReports(id).length, 1);
-  // Same incident, different thread or channel -> new row.
   assert.deepEqual(incidents.recordAffectedReport({ incidentId: id, programId: prog, requesterId: "U-a", channel: "C1", threadTs: "t2" }), { ok: true, deduped: false });
   assert.deepEqual(incidents.recordAffectedReport({ incidentId: id, programId: prog, requesterId: "U-a", channel: "C2", threadTs: "t1" }), { ok: true, deduped: false });
   assert.equal(incidents.affectedReports(id).length, 3);
-  // Different incident, same channel+thread -> new row (incident is in the key).
   const id2 = makeCandidate(prog, "aff outage two");
   incidents.declareIncident({ incidentId: id2, actorId: "U1" });
   assert.deepEqual(incidents.recordAffectedReport({ incidentId: id2, programId: prog, requesterId: "U-a", channel: "C1", threadTs: "t1" }), { ok: true, deduped: false });
@@ -404,13 +390,11 @@ test("char: notifyAffectedUsers contract — errors, messages, filter, audit", a
   assert.ok(audits.length >= baseAudit + 1);
   assert.ok(audits.some((a) => a.action === "incident.notified_affected"));
 
-  // Second run sends nothing (idempotent); onlyUnnotified filter agrees.
   const again = await incidents.notifyAffectedUsers({ incidentId: id, actorId: "U1", client });
   assert.equal(again.notified, 0);
   assert.equal(incidents.affectedReports(id, true).length, 0);
   assert.equal(incidents.affectedReports(id, false).length, 1);
 
-  // Custom resolutionMessage replaces the default text verbatim.
   incidents.recordAffectedReport({ incidentId: id, programId: prog, requesterId: "U-b", channel: "C1", threadTs: "char-nc-t2" });
   sent.length = 0;
   const custom = await incidents.notifyAffectedUsers({ incidentId: id, actorId: "U1", client, resolutionMessage: "custom fix live" });

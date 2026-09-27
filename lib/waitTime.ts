@@ -1,6 +1,3 @@
-// Wait-time estimation from real support history. Medians over recent
-// resolved tickets, never model-invented numbers. Small samples return
-// unavailable with a labeled fallback instead of fake precision.
 import db = require("./db");
 
 interface LagRow { lag: number | null; }
@@ -16,15 +13,10 @@ interface WaitEstimate {
   error?: string;
 }
 
-// Only the last week counts: older lags describe a different staffing reality.
 const WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-// Fewer than 5 same-category samples is noise — fall back to the program median.
 const MIN_CATEGORY_SAMPLE = 5;
-// Fewer than 3 program samples is still a guess — admit it instead.
 const MIN_PROGRAM_SAMPLE = 3;
-// Window label echoes WINDOW_MS so the UI never drifts from the query.
 const WINDOW_DAYS = 7;
-// Queue counts only live states: resolved/closed tickets are not ahead of anyone.
 const QUEUE_STATUSES = ["open", "waiting_for_helper", "escalated", "reopened"];
 const MS_PER_MINUTE = 60000;
 

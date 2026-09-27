@@ -1,4 +1,3 @@
-// Deterministic ticket classification: channel, then keyword, then fallback.
 
 interface KeywordRule {
   category?: unknown;
@@ -31,14 +30,12 @@ function defaultTaxonomy(): CategoryRules {
   };
 }
 
-// Must match helperRoute tag shape.
 function normalize(value: unknown): string | null {
   if (!value) return null;
   const clean = String(value).trim().toLowerCase().slice(0, 60);
   return clean || null;
 }
 
-// Whole-word only.
 function mentions(haystack: string, term: unknown): boolean {
   const clean = String(term || "").trim().toLowerCase();
   if (!clean) return false;
@@ -51,7 +48,6 @@ function byChannel(rules: CategoryRules, channel: string | null): string | null 
   return normalize(rules.byChannel[channel]);
 }
 
-// First rule wins.
 function byKeyword(rules: CategoryRules, question: unknown): string | null {
   if (!Array.isArray(rules.byKeyword) || !question) return null;
   const haystack = String(question).toLowerCase();
@@ -67,7 +63,6 @@ function classify({ question = "", channel = null, rules = null }: { question?: 
   return byChannel(rules, channel) || byKeyword(rules, question) || normalize(rules.fallback);
 }
 
-// Categories these rules can produce.
 function configuredCategories(rules: CategoryRules | null | undefined): string[] {
   if (!rules || typeof rules !== "object") return [];
   const found = new Set();

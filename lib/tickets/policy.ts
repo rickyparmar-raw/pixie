@@ -1,21 +1,25 @@
-// One decision table for ticket/helper behavior, driven by the channel's
-// role settings. Callers ask "what may happen for this program in this role"
-// and get plain booleans; lib/tickets.js applies them at its entry points.
-//
-//   help role: help.enabled, help.ticketsEnabled (a ticket exists at all),
-//     help.autoCreateTickets (create on first support message vs only on
-//     escalation), help.escalateUnknown (unknown question -> waiting_for_helper),
-//     help.helperPings (Slack mention of a helper), help.expertiseRouting
-//     (category/expertise selection vs plain workload selection).
-//   main role: tickets only if main.ticketsEnabled; escalation/pings only if
-//     main.helperEscalationEnabled (both default OFF).
-//
-// ticketVisibility is deliberately NOT here — it only decides which Slack
-// surfaces show a ticket, never whether one exists.
 import programModel = require("../programModel");
 import type { Program, ChannelRole } from "../types";
 
-type PolicyRow = Record<string, any>;
+interface PolicyHelp {
+  enabled: boolean;
+  ticketsEnabled: boolean;
+  autoCreateTickets: boolean;
+  escalateUnknown: boolean;
+  helperPings: boolean;
+  expertiseRouting: boolean;
+}
+
+interface PolicyMain {
+  enabled: boolean;
+  ticketsEnabled: boolean;
+  helperEscalationEnabled: boolean;
+}
+
+interface PolicyBehavior {
+  help: PolicyHelp;
+  main: PolicyMain;
+}
 
 const DENY_ALL = Object.freeze({
   createOnSupport: false,
@@ -25,16 +29,10 @@ const DENY_ALL = Object.freeze({
   expertiseRouting: false,
 });
 
-// The single exported decision helper.
-// `role` is "help" | "main" | "dm" | "none". Unknown programs fail closed:
-// the legacy pipeline only ever acted on a known program, and the settings
-// defaults read permissive (help pings default ON) so they must never apply
-// to a program we cannot even name.
 function ticketPolicy({ program = null, role = "help" }: { program?: Program | null; role?: ChannelRole | "organizer" } = {}): Record<string, boolean> {
   if (!program) return { ...DENY_ALL };
-  // Organizer channels are where ticket cards land; they never file tickets.
   if (role === "organizer") return { ...DENY_ALL };
-  const behavior = programModel.behaviorFor(program) as unknown as PolicyRow;
+  const behavior = programModel.behaviorFor(program) as unknown as PolicyBehavior;
   if (role === "help") {
     const h = behavior.help;
     const recordTicket = h.enabled && h.ticketsEnabled;
@@ -42,9 +40,6 @@ function ticketPolicy({ program = null, role = "help" }: { program?: Program | n
       createOnSupport: recordTicket && h.autoCreateTickets,
       recordTicket,
       escalate: recordTicket && h.escalateUnknown,
-      // Pinging a helper into the thread needs no ticket: a ticketless
-      // program that opted into helper pings (Pixl) gets the ticket-free
-      // mention in lib/tickets.js pingThreadHelper, ranked by expertise.
       pingHelpers: h.enabled && h.helperPings,
       expertiseRouting: h.enabled && h.expertiseRouting,
     };
@@ -64,11 +59,6 @@ function ticketPolicy({ program = null, role = "help" }: { program?: Program | n
   return { ...DENY_ALL };
 }
 
-// Which role applies to this call. An explicit `role` wins (the orchestrator
-// resolves it once via channelPolicy and passes it down). Otherwise resolve
-// via channelPolicy — THE way to know a channel's role — and fall back to
-// the passed program object's own shape for ad-hoc/unclaimed channels that
-// the registry does not know (tests, legacy paths). Never throws.
 function resolveTicketRole({ program = null, channel = null, workspaceId = null, role = null }: { program?: Program | null; channel?: string | null; workspaceId?: string | null; role?: ChannelRole | "organizer" | null }): ChannelRole | "organizer" {
   if (role === "help" || role === "main" || role === "organizer" || role === "dm" || role === "none") return role;
   if (channel) {
@@ -77,12 +67,9 @@ function resolveTicketRole({ program = null, channel = null, workspaceId = null,
       const resolved = channelPolicy.resolve(channel, workspaceId);
       if (resolved && (resolved.role === "help" || resolved.role === "main" || resolved.role === "organizer")) return resolved.role;
     } catch (_) {
-      // Fall through to the program-shape inference below.
     }
     if (program) {
       if (program.helpChannel === channel) return "help";
-      // Hosted programs store their organizer channel inside channels[]; it
-      // must never be mistaken for a main channel.
       if (program.organizerChannel === channel) return "organizer";
       try {
         if (require("../channelPolicy").isOrganizerChannel(program, channel, workspaceId)) return "organizer";
@@ -92,10 +79,6 @@ function resolveTicketRole({ program = null, channel = null, workspaceId = null,
       if (Array.isArray(program.channels) && program.channels.includes(channel)) return "main";
     }
   }
-  // An explicitly passed program with no resolvable channel is a deliberate
-  // human escalation path (escalateTicket with paging) — treat it as help so
-  // it is not silently dropped on unclaimed channels. No program at all
-  // means nobody claimed anything: none.
   return program ? "help" : "none";
 }
 

@@ -1,12 +1,15 @@
-// Per-program SLA and stale-ticket automation. Thresholds live on the program
-// row; unset means the rule is off. Violations are computed from stored
-// timestamps, notifications are cooldown-guarded per (program, ticket, rule),
-// and delivery payloads are returned for the caller to send — this module
-// never touches Slack itself, so it stays testable without a client.
 import db = require("./db");
 import audit = require("./audit");
 
-type DbRow = Record<string, any>;
+interface DbRow {
+  id?: number;
+  program_id?: string;
+  status?: string;
+  created_at?: number;
+  first_response_at?: number | null;
+  resolved_at?: number | null;
+  [key: string]: unknown;
+}
 
 interface Thresholds extends DbRow {
   sla_unassigned_ms?: number | null;
@@ -48,6 +51,11 @@ const SKIPPED_PROGRAM_ID = "ysws-global";
 // WHY: the digest stays readable on a phone screen — 5 lines plus a count.
 const SLA_DIGEST_PREVIEW_LINES = 5;
 
+function errorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) return String((error as { message?: unknown }).message);
+  return String(error);
+}
+
 function programThresholds(programId: string): Thresholds {
   const row = db.handle().query(
     "SELECT sla_unassigned_ms, sla_assigned_ms, sla_waiting_ms, sla_target_ms, sla_notify_channel FROM programs WHERE id = ?",
@@ -62,8 +70,6 @@ function openTickets(programId: string): SlaTicket[] {
   ).all(programId, ...SLA_OPEN_STATUSES);
 }
 
-// Pure: one ticket plus the program's thresholds decides a violation. A null
-// threshold means the rule is off — never a violation, never an error.
 function violationForTicket(ticket: SlaTicket, t: Thresholds, now: number): Violation | null {
   const age = now - ticket.created_at;
   if (ticket.status === "open" && t.sla_unassigned_ms && age > t.sla_unassigned_ms) {
@@ -113,10 +119,6 @@ function suggestAction(violation: Violation, _ticket?: SlaTicket): string {
   return "follow up or suggest closure to the requester";
 }
 
-// Background loop: single-flight across replicas via jobLease, quiet unless
-// a program configured thresholds. Notifications go to the program's notify
-// channel (or help channel) with cooldowns, so organizers hear once per day
-// per ticket-rule, not once per check.
 function startSlaLoop(client: unknown, intervalMin = Number(process.env.PIXIE_SLA_CHECK_MIN || SLA_LOOP_DEFAULT_MIN)): ReturnType<typeof setInterval> | null {
   if (!client || !intervalMin || intervalMin <= 0) return null;
   const log = require("./log");
@@ -129,19 +131,17 @@ function startSlaLoop(client: unknown, intervalMin = Number(process.env.PIXIE_SL
       for (const prog of programs.all()) {
         if (!prog || prog.id === SKIPPED_PROGRAM_ID) continue;
         if (prog.shadowMode === true) continue;
-        // Helper-offer timeout sweep — a no-op for every program that has not
-        // set helper_offer_timeout_ms, so this automates no production routing.
         try {
           const swept = require("./assignmentLifecycle").sweepProgramTimeouts({ programId: prog.id });
           if (swept.swept > 0) log.info("assignmentLifecycle", `${prog.id}: timed out ${swept.swept} unclaimed offer(s)`);
-        } catch (e: any) {
-          log.warn("assignmentLifecycle", `timeout sweep failed for ${prog.id}: ${e.message}`);
+        } catch (e: unknown) {
+          log.warn("assignmentLifecycle", `timeout sweep failed for ${prog.id}: ${errorMessage(e)}`);
         }
         let checked;
         try {
           checked = checkProgram({ programId: prog.id });
-        } catch (e: any) {
-          log.warn("sla", `check failed for ${prog.id}: ${e.message}`);
+        } catch (e: unknown) {
+          log.warn("sla", `check failed for ${prog.id}: ${errorMessage(e)}`);
           continue;
         }
         if ("error" in checked || checked.violations.length === 0) continue;
@@ -162,11 +162,11 @@ function startSlaLoop(client: unknown, intervalMin = Number(process.env.PIXIE_SL
             text: reply.plainDashes(`:alarm_clock: ${due.length} stale ticket${due.length === 1 ? "" : "s"} need attention\n${lines.join("\n")}${more}`),
           });
           for (const v of due) markNotified({ programId: prog.id, ticketId: v.ticketId, rule: v.rule });
-        } catch (e: any) {
-          log.warn("sla", `notify failed for ${prog.id}: ${e.message}`);
+        } catch (e: unknown) {
+          log.warn("sla", `notify failed for ${prog.id}: ${errorMessage(e)}`);
         }
       }
-    }).catch((e: any) => log.error("sla", `loop failed: ${e.message}`));
+    }).catch((e: unknown) => log.error("sla", `loop failed: ${errorMessage(e)}`));
   }, intervalMin * 60 * 1000);
   if (timer.unref) timer.unref();
   return timer;

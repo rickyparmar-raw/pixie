@@ -36,7 +36,6 @@ function setup() {
 
 function fakeClient(rawMessages, repliesByTs, posts = []) {
   const calls = { history: 0, replies: 0 };
-  // Real conversations.history carries reply_count on thread parents.
   const messages = rawMessages.map((m) => ({ ...m, reply_count: Math.max(0, (repliesByTs[m.ts] || []).length - 1) || ((repliesByTs[m.ts] || []).length ? 1 : 0) }));
   return {
     calls,
@@ -84,7 +83,6 @@ test("history import creates, enriches, resolves, closes, queues, and stays sile
 
   const rows = db.getTicketsForProgram(program.id);
   assert.equal(rows.length, 5);
-  // thanks + checkmark + last word (the helper replied last, requester quiet 4 days)
   assert.equal(rows.filter((row) => row.status === "resolved").length, 3);
   const lastWord = rows.find((row) => row.requester_id === "U-FIVE");
   assert.equal(lastWord.resolved_credit_id, "U-HELPER");

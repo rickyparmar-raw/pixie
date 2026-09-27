@@ -35,7 +35,6 @@ test("routing recommends by expertise and load, never stale members", () => {
   assert.ok(recs[0].reasons.some((r) => r.includes("verified ordering")));
   assert.ok(!recs.some((r) => r.userId === "U-gone"), "removed helpers are never routed");
 
-  // Load penalty: pile open tickets on the expert and the newcomer wins.
   for (let i = 0; i < 6; i++) {
     const id = db.createTicket({ programId: "rt-hwy", workspaceId: "T1", channel: "C-HWY", threadTs: `rt-load-${i}`, requesterId: "U1", question: "q" });
     db.assignTicket(id, "U-expert");

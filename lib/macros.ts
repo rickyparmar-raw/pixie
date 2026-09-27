@@ -1,32 +1,41 @@
-// Program-scoped support macros (?shipping). Organizers define approved
-// templates; helpers search/preview/send them from the dashboard. Templates
-// interpolate a fixed safe value set by plain token replacement. Unknown
-// tokens stay literal (visible, never executed), and there is no expression
-// evaluation of any kind.
 import db = require("./db");
 import audit = require("./audit");
 
-type Row = Record<string, any>;
+interface Row {
+  id?: number;
+  program_id?: string;
+  name?: string;
+  description?: string;
+  content?: string;
+  category?: string;
+  enabled?: number;
+  updated_at?: number;
+  trigger?: string;
+  on_send_transition?: string | null;
+  allowed_roles?: string | null;
+  requester_id?: string;
+  status?: string;
+  score?: number;
+  created_at?: number;
+  conversations?: {
+    replies?: (args: Record<string, unknown>) => Promise<{ messages?: Array<{ bot_id?: string; user?: string }> }>;
+  };
+  [key: string]: unknown;
+}
 
-// Lowercase sigil + short slug: triggers stay typable and unique per program.
 const TRIGGER_RE = /^[?!][a-z0-9][a-z0-9_-]{0,30}$/;
-// The only interpolatable names — anything else stays literal, never executed.
 const SAFE_KEYS = new Set([
   "requester", "ticket_id", "program", "status", "helper",
   "queue_depth", "typical_wait", "position",
 ]);
-// Canonical terminal states a macro may land after sending — via db.* only.
 const SEND_TRANSITIONS = new Set(["resolved", "closed", "snoozed"]);
 const OPEN_STATUSES = new Set(["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"]);
-// Snooze parks the ticket for a day so the helper loop re-surfaces it.
 const SNOOZE_MS = 24 * 60 * 60 * 1000;
 const BULK_MAX_TICKETS = 50;
 const BULK_DELAY_MS = 100;
 const MAX_NAME = 80;
 const MAX_CONTENT = 2000;
 
-// These are suggestions only. The dashboard may copy one into its create
-// form; Core never persists or sends them automatically.
 const SUGGESTED_TEMPLATES = [
   {
     key: "queue-delay",
@@ -59,8 +68,6 @@ const SUGGESTED_TEMPLATES = [
   },
 ];
 
-// The only live queue tokens. Values are computed at send time from this
-// ticket's program and category; no arbitrary database fields are exposed.
 const PLACEHOLDER_DOCS = [
   { token: "{queue_depth}", description: "Open queue tickets waiting for a helper; category-scoped when this ticket has a category." },
   { token: "{typical_wait}", description: "The recent median wait in human-friendly text, or \"a little while\" with insufficient history." },
@@ -160,7 +167,7 @@ function get(id: number): Row | null {
 }
 
 function matchesQuery(row: Row, needle: string): boolean {
-  return row.trigger.includes(needle)
+  return String(row.trigger || "").includes(needle)
     || (row.name || "").toLowerCase().includes(needle)
     || (row.description || "").toLowerCase().includes(needle);
 }
@@ -225,8 +232,6 @@ function scoreMacro(macro: Row, qterms: Set<string>): Row {
   return { id: macro.id, trigger: macro.trigger, name: macro.name, description: macro.description, score: Number((overlap / qterms.size).toFixed(3)) };
 }
 
-// Keyword-overlap suggestion for the copilot draft path. Ranked, never
-// auto-applied, and permissions still gate the actual send.
 function suggestFor({ programId, question, limit = 3 }: { programId: string; question: string; limit?: number }): Row[] {
   const enabled = list(programId, { enabledOnly: true });
   if (!question || enabled.length === 0) return [];
@@ -235,8 +240,8 @@ function suggestFor({ programId, question, limit = 3 }: { programId: string; que
   if (qterms.size === 0) return [];
   return enabled
     .map((m) => scoreMacro(m, qterms))
-    .filter((s) => s.score > 0)
-    .sort((a, b) => b.score - a.score)
+    .filter((s) => Number(s.score || 0) > 0)
+    .sort((a, b) => Number(b.score || 0) - Number(a.score || 0))
     .slice(0, limit);
 }
 
@@ -296,16 +301,13 @@ async function threadStarter(client: Row, channel: string, threadTs: string): Pr
   }
 }
 
-// A macro typed in a thread that has no ticket: there is no ticket to reply
-// through or transition, so Pixie just posts the text into the thread.
-// Program-wide queue numbers stand in for the ticket's own.
 async function sendToThread({ id, program, channel, threadTs, actorId, client }: { id: number; program: Row; channel: string; threadTs: string; actorId: string; client: Row }): Promise<Row> {
   const macro = get(id);
   if (!macro) return { error: "macro not found" };
   if (!macro.enabled) return { error: "macro is disabled" };
   if (!program || program.id !== macro.program_id) return { error: "program mismatch" };
   const allowed = macro.allowed_roles ? JSON.parse(macro.allowed_roles) : null;
-  const role = actorRole(program.id, actorId);
+  const role = actorRole(String(program.id), actorId);
   if (!role) return { error: "actor is not a helper of this program" };
   if (allowed && !allowed.includes(role)) return { error: `macro requires role: ${allowed.join("/")}` };
 
@@ -332,8 +334,8 @@ async function sendToThread({ id, program, channel, threadTs, actorId, client }:
 function waitingTicketIds({ programId, category = null }: { programId: string; category?: string | null } = {} as { programId: string; category?: string | null }): number[] {
   return (db.getTicketsForProgram as unknown as (id: string, status: string) => Row[])(programId, "waiting_for_helper")
     .filter((ticket: Row) => !category || ticket.category === category)
-    .sort((a: Row, b: Row) => b.created_at - a.created_at || b.id - a.id)
-    .map((ticket: Row) => ticket.id);
+    .sort((a: Row, b: Row) => Number(b.created_at) - Number(a.created_at) || Number(b.id) - Number(a.id))
+    .map((ticket: Row) => Number(ticket.id));
 }
 
 function delay(ms: number): Promise<void> {

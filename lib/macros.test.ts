@@ -197,10 +197,6 @@ test("bulk macro send is bounded, scoped, audited, and available over its intern
   assert.equal(db.handle().query("SELECT COUNT(*) AS n FROM program_macros WHERE program_id = ?").get(programId).n, 1);
 });
 
-/* ------------------------------------------------------------------ */
-/* STEP 1 characterization pins (SUPPORT macros): scoping + expansion  */
-/* + transition effects. Append-only.                                  */
-/* ------------------------------------------------------------------ */
 
 test("char: macros are per-program — triggers/names/lists never leak", () => {
   db.saveProgram({ id: "char-mc-a", name: "A", helpChannel: "C-A", channels: ["C-A"] });
@@ -216,7 +212,6 @@ test("char: macros are per-program — triggers/names/lists never leak", () => {
   assert.ok(lb.includes("?char-scope"));
   assert.equal(macros.list("char-mc-a").find((m) => m.trigger === "?char-scope").content, "a {program}");
   assert.equal(macros.list("char-mc-b").find((m) => m.trigger === "?char-scope").content, "b {program}");
-  // Enabled-only filter and search stay inside the program.
   macros.create({ programId: "char-mc-a", trigger: "?char-off", name: "Off", content: "off", enabled: false });
   assert.ok(!macros.list("char-mc-a", { enabledOnly: true }).some((m) => m.trigger === "?char-off"));
   assert.ok(macros.list("char-mc-a", { q: "scope" }).some((m) => m.trigger === "?char-scope"));
@@ -231,8 +226,6 @@ test("char: interpolate expands only SAFE_KEYS — unknown/missing stay literal"
   assert.deepEqual(vals, { requester: "<@U1>", ticket_id: "42", program: "Highway", status: "open", helper: "<@U9>" });
   assert.equal(macros.interpolate("Hi {requester} {ticket_id} {program} {status} {helper}", vals), "Hi <@U1> 42 Highway open <@U9>");
   assert.equal(macros.interpolate("keep {evil} and {requester}", vals), "keep {evil} and <@U1>");
-  // Empty-string values interpolate to empty (known keys); null/undefined and
-  // unknown keys stay literal instead of printing null/undefined.
   assert.equal(macros.interpolate("t {ticket_id} p {program}", macros.valuesFor({})), "t  p ");
   assert.equal(macros.interpolate("x {ticket_id} y {evil}", { ticket_id: null }), "x {ticket_id} y {evil}");
   assert.equal(macros.interpolate(null, vals), "");
@@ -251,13 +244,11 @@ test("char: macro send gates + transitions go through canonical db states", asyn
   assert.match((await macros.send({ id: dis.macro.id, ticketId: tDis, actorId: "U-char-helper", client })).error, /disabled/);
   assert.equal(noop.length, 0);
 
-  // Cross-program ticket/macro pair is rejected before any post.
   const foreign = macros.create({ programId: "char-mc-t", trigger: "?char-foreign", name: "F", content: "hi" });
   const otherTicket = db.createTicket({ programId: "char-mc-u", workspaceId: "T1", channel: "C-U", threadTs: "char-mc-other", requesterId: "U1", question: "q" });
   assert.match((await macros.send({ id: foreign.macro.id, ticketId: otherTicket, actorId: "U-char-helper", client })).error, /program mismatch/);
   assert.equal(noop.length, 0);
 
-  // Each on-send transition lands the canonical db status.
   for (const [trigger, want] of [["?char-res", "resolved"], ["?char-clo", "closed"], ["?char-sno", "snoozed"]]) {
     const created = macros.create({ programId: "char-mc-t", trigger, name: want, content: "done {ticket_id}", onSendTransition: want === "snoozed" ? "snoozed" : want });
     assert.equal(created.ok, true);
@@ -266,13 +257,11 @@ test("char: macro send gates + transitions go through canonical db states", asyn
     assert.equal(sent.ok, true);
     assert.equal(db.getTicket(tid).status, want);
   }
-  // No transition leaves the ticket open.
   const plain = macros.create({ programId: "char-mc-t", trigger: "?char-plain", name: "Plain", content: "hi {ticket_id}" });
   const tPlain = db.createTicket({ programId: "char-mc-t", workspaceId: "T1", channel: "C-T", threadTs: "char-mc-plain", requesterId: "U1", question: "q" });
   assert.equal((await macros.send({ id: plain.macro.id, ticketId: tPlain, actorId: "U-char-helper", client })).ok, true);
   assert.equal(db.getTicket(tPlain).status, "open");
 
-  // Invalid transition rejected at create; role gate enforced at send.
   assert.match(macros.create({ programId: "char-mc-t", trigger: "?char-bad", name: "Bad", content: "x", onSendTransition: "escalated" }).error, /transition/);
   const roleGated = macros.create({ programId: "char-mc-t", trigger: "?char-admin", name: "Adm", content: "x", allowedRoles: ["admin"] });
   const tRole = db.createTicket({ programId: "char-mc-t", workspaceId: "T1", channel: "C-T", threadTs: "char-mc-role", requesterId: "U1", question: "q" });
@@ -294,8 +283,6 @@ test("char: a sent macro never enters learned_facts or the answer corpus", async
   assert.equal(sent.ok, true);
   assert.ok(posted.some((p) => (p.text || "").includes(token)), "the macro text did go out to Slack");
 
-  // ...but it was learned nowhere: no learned_fact in any status may carry it,
-  // and the answer corpus must not surface it.
   for (const status of ["candidate", "pending", "approved"]) {
     const rows = db.handle().query(
       "SELECT id FROM learned_facts WHERE status = ? AND (question LIKE ? OR answer LIKE ?)",
@@ -303,7 +290,6 @@ test("char: a sent macro never enters learned_facts or the answer corpus", async
     assert.equal(rows.length, 0, `no ${status} learned fact may contain macro text`);
   }
   assert.ok(!String(knowledge.getContext(`what is ${token}`, "char-mc-iso")).includes(token));
-  // It lives in exactly one place: the macro table.
   const owners = db.handle().query("SELECT id FROM program_macros WHERE content LIKE ?").all(`%${token}%`);
   assert.equal(owners.length, 1);
 });

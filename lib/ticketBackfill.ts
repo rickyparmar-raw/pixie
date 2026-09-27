@@ -8,21 +8,108 @@ import lastWord = require("./lastWord");
 import configModule = require("./config");
 import type { Program } from "./types";
 
-type AnyRow = Record<string, any>;
-type SlackClientLike = Record<string, any>;
+interface AnyRow {
+  id?: number;
+  program_id?: string;
+  workspace_id?: string | null;
+  workspaceId?: string | null;
+  status?: string;
+  cursor?: string | null;
+  newest_ts_done?: string | null;
+  rulesVersion?: number;
+  messagesScanned?: number;
+  ticketsCreated?: number;
+  ticketsEnriched?: number;
+  resolved?: number;
+  closed?: number;
+  queuedForJudge?: number;
+  messages_scanned?: number;
+  tickets_created?: number;
+  tickets_enriched?: number;
+  queued_for_judge?: number;
+  completedAt?: number | null;
+  last_error?: string | null;
+  detail?: unknown;
+  ts?: string;
+  text?: string;
+  user?: string;
+  thread_ts?: string;
+  reply_count?: number;
+  subtype?: string;
+  bot_id?: string;
+  reactions?: Array<{ name?: string; users?: string[] }>;
+  event_type?: string;
+  category?: string | null;
+  supportActive?: boolean;
+  helpChannel?: string | null;
+  channels?: unknown[];
+  user_id?: string;
+  channelId?: string;
+  channel_id?: string;
+  kind?: string;
+  retryAfter?: number;
+  retry_after?: number;
+  headers?: Record<string, unknown>;
+  code?: string | number;
+  error?: string;
+  data?: { retryAfter?: number; retry_after?: number; error?: string };
+  ok?: boolean;
+  response_metadata?: { next_cursor?: string };
+  metadata?: { next_cursor?: string };
+  messages?: AnyRow[];
+  visibility?: unknown;
+  question?: string;
+  requester_id?: string;
+  assigned_at?: number;
+  started_at?: number;
+  rules_version?: number;
+  newestTsDone?: string | null;
+  sleepFn?: (ms: number) => Promise<void>;
+  spacingMs?: number;
+  now?: () => number;
+  throttle?: SlackThrottle;
+  client?: SlackClientLike;
+  judge?: (args: Record<string, unknown>) => Promise<unknown>;
+  autoStartJudge?: boolean;
+  [key: string]: unknown;
+}
+
+interface SlackClientLike {
+  conversations: {
+    history: (args: Record<string, unknown>) => Promise<AnyRow>;
+    replies: (args: Record<string, unknown>) => Promise<AnyRow>;
+  };
+}
+
+interface ImportOptions extends AnyRow {
+  now?: () => number;
+  throttle?: SlackThrottle;
+  client?: SlackClientLike;
+  judge?: (args: Record<string, unknown>) => Promise<unknown>;
+  autoStartJudge?: boolean;
+}
+
+interface ProgressRow extends AnyRow {
+  program_id: string;
+  channel_id: string;
+  status: string;
+}
 const { config } = configModule;
+
+function errorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) return String((error as { message?: unknown }).message);
+  return String(error);
+}
+
+function errorRow(error: unknown): AnyRow {
+  return error && typeof error === "object" ? error as AnyRow : {};
+}
 const upsertProgress = db.upsertHistoryImportProgress as unknown as (programId: string, channelId: string, patch: AnyRow) => AnyRow;
 const ensureSupportTicket = tickets.ensureSupportTicket as unknown as (options: AnyRow) => Promise<AnyRow | null>;
 const getImportProgress = db.getHistoryImportProgress as unknown as (programId: string, channelId: string) => AnyRow | null;
 
-// Bump when the resolution rules change, so every channel is re-walked once
-// from the beginning and old tickets are re-evaluated. v2: last-word rule.
-// v3: tickets regardless of the program's ticket toggles (v2 created none for Pixl).
 const RULES_VERSION = 3;
 
-// Slack allows ~50 conversations.replies calls a minute per app, shared with
-// live Pixie. The import runs just under that (1.2s) and drops to 3s for the
-// rest of the run the first time Slack rate-limits it, so live replies win.
 const MIN_INTERVAL_MS = Number(process.env.PIXIE_HISTORY_IMPORT_SPACING_MS) || 1200;
 const BACKOFF_INTERVAL_MS = 3000;
 const QUIET_CLOSE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -68,7 +155,7 @@ class SlackThrottle {
     this.lastCallAt = null;
   }
 
-  async call(fn: () => Promise<any>): Promise<any> {
+  async call(fn: () => Promise<AnyRow>): Promise<AnyRow> {
     while (true) {
       if (this.lastCallAt !== null) {
         const wait = this.spacingMs - (this.now() - this.lastCallAt);
@@ -79,10 +166,10 @@ class SlackThrottle {
         const result = await fn();
         if (result && result.ok === false && isRateLimited(result)) throw result;
         return result;
-      } catch (error: any) {
-        if (!isRateLimited(error)) throw error;
+      } catch (error: unknown) {
+        if (!isRateLimited(errorRow(error))) throw error;
         if (this.spacingMs > 0) this.spacingMs = Math.max(this.spacingMs, BACKOFF_INTERVAL_MS);
-        const retry = retryAfterMs(error);
+        const retry = retryAfterMs(errorRow(error));
         await this.sleep(Math.max(this.spacingMs, retry === null ? this.spacingMs : retry));
       }
     }
@@ -93,18 +180,15 @@ function channelIdOf(channel: unknown): string | null {
   if (typeof channel === "string") return channel;
   if (!channel || typeof channel !== "object") return null;
   const value = channel as AnyRow;
-  return value.channelId || value.channel_id || value.id || null;
+  return String(value.channelId || value.channel_id || value.id || "") || null;
 }
 
-// Help channels only: a program's main/discussion channels are chatter, and
-// walking their history would spend thousands of Slack calls on messages that
-// never become tickets.
 function helpChannels(program: AnyRow): string[] {
   const ids = new Set<string>();
   if (program?.helpChannel) ids.add(program.helpChannel);
   for (const channel of Array.isArray(program?.channels) ? program.channels : []) {
     const id = channelIdOf(channel);
-    if (id && programs.isHelpChannel(id, program.workspaceId || program.workspace_id || null)) ids.add(id);
+    if (id && programs.isHelpChannel(id, (program.workspaceId || program.workspace_id || null) as unknown as null)) ids.add(id);
   }
   try {
     for (const row of db.listProgramChannels(program.id)) {
@@ -146,15 +230,13 @@ async function replies(client: SlackClientLike, channel: string, threadTs: strin
 }
 
 function parseDetail(event: AnyRow): AnyRow {
-  try { return JSON.parse(event.detail || "{}"); } catch (_) { return {}; }
+  try { return JSON.parse(String(event.detail || "{}")) as AnyRow; } catch (_) { return {}; }
 }
 
 function hasEventTs(ticketId: number, ts: unknown): boolean {
   return (db.listTicketEvents(ticketId, 500) as AnyRow[]).some((event) => String(parseDetail(event).ts || "") === String(ts));
 }
 
-// History import credits anyone who was ever on the roster, not just today's
-// active helpers, so a helper who has since left keeps their past replies.
 function isHelper(programId: string, userId: string | null): boolean {
   if (!userId) return false;
   if (tickets.isActorAllowed(programId, userId, false)) return true;
@@ -162,7 +244,7 @@ function isHelper(programId: string, userId: string | null): boolean {
 }
 
 function recordEvent(ticket: AnyRow, eventType: string, actorId: string | null, message: AnyRow, detail: AnyRow = {}): boolean {
-  if (hasEventTs(ticket.id, message.ts)) return false;
+  if (hasEventTs(Number(ticket.id), message.ts)) return false;
   const addTicketEvent = db.addTicketEvent as unknown as (event: Record<string, unknown>) => unknown;
   addTicketEvent({
     ticketId: ticket.id,
@@ -194,13 +276,11 @@ function addReplyEvents(ticket: AnyRow, program: AnyRow, messages: AnyRow[]): { 
       else requesterMessages.push(message);
       continue;
     }
-    if (isHelper(program.id, userId)) {
+    if (isHelper(String(program.id), userId)) {
       const recorded = recordEvent(ticket, "helper_reply", userId, message, { backfill: true });
       helperMessages.push(message);
       const recordFirstResponse = db.recordFirstResponse as unknown as (...args: unknown[]) => unknown;
       recordFirstResponse(ticket.id, true, tsMs(message.ts));
-      // Only a newly recorded reply counts toward expertise, so reruns and
-      // replies the live path already recorded never inflate it.
       if (recorded) {
         try { require("./helperRoute").recordReply({ programId: ticket.program_id, userId, category: ticket.category }); } catch (_) {}
       }
@@ -215,7 +295,7 @@ function reactionConfirms(messages: AnyRow[], ticket: AnyRow, program: AnyRow): 
     for (const reaction of message.reactions || []) {
       if (!CHECKMARKS.has(String(reaction.name || "").toLowerCase())) continue;
       const users = Array.isArray(reaction.users) ? reaction.users : [];
-      if (users.some((userId: string) => userId === ticket.requester_id || isHelper(program.id, userId))) {
+      if (users.some((userId: string) => userId === ticket.requester_id || isHelper(String(program.id), userId))) {
         latest = Math.max(latest || 0, tsMs(message.ts));
       }
     }
@@ -274,7 +354,6 @@ async function resolveOrQueue(ticket: AnyRow, program: AnyRow, messages: AnyRow[
     const resolveTicket = tickets.resolveTicket as unknown as (options: AnyRow) => AnyRow;
     const result = resolveTicket({
       ticketId: ticket.id,
-      // System resolve; finishResolve credits the worker (see resolutionWatcher).
       actorId: null,
       resolution: "resolved from historical confirmation",
       source: "backfill",
@@ -293,26 +372,25 @@ async function resolveOrQueue(ticket: AnyRow, program: AnyRow, messages: AnyRow[
 function incrementProgress(progress: AnyRow, patch: AnyRow): AnyRow {
   const next: AnyRow = {};
   for (const key of ["messagesScanned", "ticketsCreated", "ticketsEnriched", "resolved", "closed", "queuedForJudge"]) {
-    if (patch[key]) next[key] = (progress[key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)] || 0) + patch[key];
+    if (patch[key]) next[key] = Number(progress[key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)] || 0) + Number(patch[key]);
   }
-  return upsertProgress(progress.program_id, progress.channel_id, next);
+  return upsertProgress(String(progress.program_id || ""), String(progress.channel_id || ""), next);
 }
 
 async function importChannel(program: AnyRow, channel: string, client: SlackClientLike, options: AnyRow = {}): Promise<AnyRow> {
   const clock = options.now || Date.now;
   const throttle = options.throttle || new SlackThrottle(options);
-  let progress = getImportProgress(program.id, channel);
+  let progress = getImportProgress(String(program.id), channel);
   if (!progress) {
-    progress = upsertProgress(program.id, channel, { status: "pending", rulesVersion: RULES_VERSION });
+    progress = upsertProgress(String(program.id), channel, { status: "pending", rulesVersion: RULES_VERSION });
   } else if (Number(progress.rules_version || 1) < RULES_VERSION) {
-    // New rules: start over from the channel's first message with fresh counts.
-    progress = upsertProgress(program.id, channel, {
+    progress = upsertProgress(String(program.id), channel, {
       status: "pending", cursor: null, newestTsDone: null, rulesVersion: RULES_VERSION,
       messagesScanned: 0, ticketsCreated: 0, ticketsEnriched: 0, resolved: 0, closed: 0, queuedForJudge: 0, completedAt: null,
     });
   }
   const wasDone = progress.status === "done";
-  progress = upsertProgress(program.id, channel, { status: "running", lastError: null, startedAt: progress.started_at || clock() });
+    progress = upsertProgress(String(program.id), channel, { status: "running", lastError: null, startedAt: progress.started_at || clock() });
   let cursor = progress.cursor || null;
   const oldest = wasDone ? (progress.newest_ts_done || "0") : "0";
   try {
@@ -322,7 +400,8 @@ async function importChannel(program: AnyRow, channel: string, client: SlackClie
       for (const message of messages) {
         if (!isTopLevelHuman(message)) continue;
         const timestamp = tsMs(message.ts, clock());
-        const before = db.getTicketByChannelThreadTs(channel, message.ts, program.workspaceId || program.workspace_id || null, program.id);
+        const getTicketByThread = db.getTicketByChannelThreadTs as unknown as (channel: string, threadTs: string, workspaceId: null, programId: string) => AnyRow | null;
+        const before = getTicketByThread(channel, String(message.ts), (program.workspaceId || program.workspace_id || null) as unknown as null, String(program.id));
         const ticket = await ensureSupportTicket({
           program,
           channel,
@@ -337,7 +416,7 @@ async function importChannel(program: AnyRow, channel: string, client: SlackClie
         });
         if (!ticket) continue;
         let counts = { messagesScanned: !before || !before.visibility ? 1 : 0, ticketsCreated: before ? 0 : 1, ticketsEnriched: before && (!before.visibility || !before.question || !before.requester_id) ? 1 : 0, resolved: 0, closed: 0, queuedForJudge: 0 };
-        const thread = (message.reply_count || 0) > 0 ? await replies(client, channel, message.ts, throttle) : [message];
+        const thread = (message.reply_count || 0) > 0 ? await replies(client, channel, String(message.ts), throttle) : [message];
         const state = addReplyEvents(ticket, program, thread);
         const outcome = await resolveOrQueue(db.getTicket(ticket.id), program, thread, state, clock(), options);
         counts.resolved = outcome.resolved ? 1 : 0;
@@ -345,14 +424,14 @@ async function importChannel(program: AnyRow, channel: string, client: SlackClie
         counts.queuedForJudge = outcome.queued ? 1 : 0;
         progress = incrementProgress(progress, counts);
         const newestTsDone = Math.max(Number(progress.newest_ts_done || 0), Number(message.ts || 0));
-        progress = upsertProgress(program.id, channel, { newestTsDone: String(newestTsDone) });
+        progress = upsertProgress(String(program.id), channel, { newestTsDone: String(newestTsDone) });
       }
       cursor = nextCursor(page);
-      progress = upsertProgress(program.id, channel, { cursor });
+      progress = upsertProgress(String(program.id), channel, { cursor });
     } while (cursor);
-    return upsertProgress(program.id, channel, { status: "done", cursor: null, completedAt: clock(), lastError: null });
-  } catch (error: any) {
-    upsertProgress(program.id, channel, { status: "error", cursor, lastError: String(error?.message || error), completedAt: null });
+    return upsertProgress(String(program.id), channel, { status: "done", cursor: null, completedAt: clock(), lastError: null });
+  } catch (error: unknown) {
+    upsertProgress(String(program.id), channel, { status: "error", cursor, lastError: errorMessage(error), completedAt: null });
     throw error;
   }
 }
@@ -362,14 +441,14 @@ async function importProgram(program: AnyRow, client: SlackClientLike, options: 
   if (!client?.conversations?.history || !client?.conversations?.replies) throw new Error("Slack conversations client required");
   const channels = helpChannels(program);
   for (const channel of channels) await importChannel(program, channel, client, options);
-  return getProgress(program.id, channels);
+  return getProgress(String(program.id), channels);
 }
 
 function progressShape(programId: string, rows: AnyRow[], channels: string[]): AnyRow {
   const list = channels.map((channel) => rows.find((row) => row.channel_id === channel) || {
     program_id: programId, channel_id: channel, status: "pending", messages_scanned: 0, tickets_created: 0, tickets_enriched: 0, resolved: 0, closed: 0, queued_for_judge: 0,
   });
-  const totals = list.reduce((out, row) => {
+  const totals = list.reduce<Record<string, number>>((out, row) => {
     for (const key of ["messages_scanned", "tickets_created", "tickets_enriched", "resolved", "closed", "queued_for_judge"]) out[key] += Number(row[key] || 0);
     return out;
   }, { messages_scanned: 0, tickets_created: 0, tickets_enriched: 0, resolved: 0, closed: 0, queued_for_judge: 0 });
@@ -399,8 +478,8 @@ function startProgramImport(programId: string, client: SlackClientLike, options:
   const program = programs.get(programId);
   if (!program) return Promise.resolve({ error: "unknown program" });
   const run = jobLease.runOnce(`ticket-history-backfill:${programId}`, LEASE_TTL_MS, () => importProgram(program, client, options))
-    .catch((error: any) => {
-      log.warn("ticketBackfill", `history import failed for ${programId}: ${error.message}`);
+    .catch((error: unknown) => {
+      log.warn("ticketBackfill", `history import failed for ${programId}: ${errorMessage(error)}`);
       return getProgress(programId);
     })
     .finally(() => inFlight.delete(programId));
@@ -408,32 +487,22 @@ function startProgramImport(programId: string, client: SlackClientLike, options:
   return run;
 }
 
-// Imports every eligible program: a full pass the first time (or after a
-// rules change), then only messages newer than the last one done, so every
-// new help-channel request becomes a dashboard ticket within RETRY_MS even
-// when the program's own ticket toggles are off. Idempotent: per-program
-// leases and the in-flight map make repeat calls no-ops while one runs.
 async function runPendingImports(client: SlackClientLike): Promise<void> {
-  // Passive programs still track dashboard tickets, so they're imported too;
-  // only programs whose support is off or paused are skipped. Busiest first.
   const eligible = (programs.all() as AnyRow[]).filter((program: AnyRow) => program.supportActive !== false && program.status !== "paused");
-  const tracked = (program: AnyRow) => db.getTicketsForProgram(program.id).length;
+  const tracked = (program: AnyRow) => db.getTicketsForProgram(String(program.id)).length;
   eligible.sort((a: AnyRow, b: AnyRow) => tracked(b) - tracked(a));
   for (const program of eligible) {
     if (helpChannels(program).length === 0) continue;
-    await startProgramImport(program.id, client);
+    await startProgramImport(String(program.id), client);
   }
 }
 
-// Runs shortly after boot, then retries every RETRY_MS: a lease left behind by
-// an instance that was replaced mid-import only blocks until it expires,
-// instead of skipping the import until the next deploy.
 const RETRY_MS = 10 * 60 * 1000;
 let retryTimer: ReturnType<typeof setInterval> | null = null;
 
 function start(client: SlackClientLike, { delayMs = STARTUP_DELAY_MS, retryMs = RETRY_MS }: { delayMs?: number; retryMs?: number } = {}): ReturnType<typeof setTimeout> | null {
   if (startupTimer || retryTimer) return startupTimer || retryTimer;
-  const tick = () => void runPendingImports(client).catch((error: any) => log.warn("ticketBackfill", `history import pass failed: ${error.message}`));
+  const tick = () => void runPendingImports(client).catch((error: unknown) => log.warn("ticketBackfill", `history import pass failed: ${errorMessage(error)}`));
   startupTimer = setTimeout(() => {
     startupTimer = null;
     tick();

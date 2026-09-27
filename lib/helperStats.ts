@@ -1,10 +1,61 @@
-// Program-scoped helper performance reporting. This module only reads the
-// existing ticket/event/feedback rows; routing remains owned by helperRoute.
 import db = require("./db");
 import assignmentLifecycle = require("./assignmentLifecycle");
 import ticketMetrics = require("./ticketMetrics");
 
-type DbRow = Record<string, any>;
+interface DbRow {
+  id: number;
+  user_id?: string;
+  role?: string;
+  active?: number;
+  assignee_id?: string;
+  resolved_by?: string;
+  status: string;
+  assigned_at?: number;
+  updated_at: number;
+  created_at: number;
+  resolved_at?: number;
+  ticket_id: number;
+  actor_id?: string;
+  event_type?: string;
+  detail?: Detail;
+  category?: string;
+  reopen_count?: number;
+  [key: string]: unknown;
+}
+
+interface Detail {
+  ts?: string;
+  to?: string;
+  [key: string]: unknown;
+}
+
+interface HelperRow extends DbRow {
+  user_id: string;
+  role: string;
+  active: number;
+}
+
+interface HelperStatsResult {
+  programId: string;
+  userId: string;
+  role?: string;
+  active: boolean;
+  expertise: unknown[];
+  categoryResolved: Array<{ category: string; resolved: number }>;
+  totals: { assigned: number; resolved: number; open: number; reopened: number };
+  reopenRate: number | null;
+  replies: number;
+  medianFirstResponseMs: number | null;
+  medianResolutionMs: number | null;
+  helpfulCount: number;
+  unhelpfulCount: number;
+  helpfulPercentage: number | null;
+  lastActivity: number | null;
+  acceptRate: unknown;
+  assignmentLifecycle: unknown;
+  assignments: Record<string, unknown>;
+  recentTickets: Array<Record<string, unknown>>;
+}
 
 interface HelperStatsOptions {
   recentLimit?: number;
@@ -24,17 +75,17 @@ function rate(numerator: number, denominator: number): number | null {
   return denominator > 0 ? Number((numerator / denominator).toFixed(3)) : null;
 }
 
-function detail(row: DbRow | null | undefined): DbRow {
+function detail(row: DbRow | null | undefined): Detail {
   if (!row) return {};
   try {
-    return row.detail ? JSON.parse(row.detail) : {};
+    return row.detail ? JSON.parse(String(row.detail)) as Detail : {};
   } catch (_) {
     return {};
   }
 }
 
-function helperStats(programId: string, userId: string, { recentLimit = 20, since = 0 }: HelperStatsOptions = {}): Record<string, any> | null {
-  const helper = (db.listHelpers(programId, false) as DbRow[]).find((row) => row.user_id === userId) || null;
+function helperStats(programId: string, userId: string, { recentLimit = 20, since = 0 }: HelperStatsOptions = {}): HelperStatsResult | null {
+  const helper = (db.listHelpers(programId, false) as HelperRow[]).find((row) => row.user_id === userId) || null;
   if (!helper) return null;
   const limit = Number.isInteger(recentLimit) && recentLimit > 0 ? Math.min(recentLimit, 100) : 20;
   const totals = ticketMetrics.helperTotals(programId, userId, { since });
@@ -45,7 +96,7 @@ function helperStats(programId: string, userId: string, { recentLimit = 20, sinc
   ).all(programId).map((event: DbRow) => ({ ...event, detail: detail(event) })) as DbRow[];
   const assignments = events.filter((event) =>
     (event.event_type === "claimed" && event.actor_id === userId) ||
-    (event.event_type === "assigned" && event.detail.to === userId),
+    (event.event_type === "assigned" && event.detail?.to === userId),
   );
   const replies = events.filter((event) => event.event_type === "helper_reply" && event.actor_id === userId);
   const resolutions = db.handle().query(
@@ -67,9 +118,9 @@ function helperStats(programId: string, userId: string, { recentLimit = 20, sinc
   let helpful = 0;
   let unhelpful = 0;
   for (const reply of replies) {
-    const messageTs = reply.detail.ts;
+    const messageTs = reply.detail?.ts;
     if (!messageTs) continue;
-    const rows = db.handle().query("SELECT user_id, vote FROM feedback WHERE message_ts = ?").all(messageTs);
+    const rows = db.handle().query("SELECT user_id, vote FROM feedback WHERE message_ts = ?").all(messageTs) as Array<{ user_id: string; vote: number }>;
     for (const row of rows) {
       const key = `${messageTs}:${row.user_id}`;
       if (feedbackKeys.has(key)) continue;
@@ -97,9 +148,6 @@ function helperStats(programId: string, userId: string, { recentLimit = 20, sinc
     }));
   const lastActivity = events.filter((event) => event.actor_id === userId || assignments.includes(event)).at(-1)?.created_at || null;
 
-  // Explicit assignment lifecycle (offered/claimed/declined/released/timed_out).
-  // acceptRate stays null until enough offers have reached a terminal state —
-  // it is never inferred from pre-lifecycle tickets. See lib/assignmentLifecycle.
   const accept = assignmentLifecycle.helperAcceptStats(programId, userId);
 
   return {
@@ -140,8 +188,8 @@ function helperStats(programId: string, userId: string, { recentLimit = 20, sinc
   };
 }
 
-function listHelperStats(programId: string, { recentLimit = 20, since = 0 }: HelperStatsOptions = {}): Array<Record<string, any> | null> {
-  return (db.listHelpers(programId, false) as DbRow[]).map((helper) => helperStats(programId, helper.user_id, { recentLimit, since }));
+function listHelperStats(programId: string, { recentLimit = 20, since = 0 }: HelperStatsOptions = {}): Array<HelperStatsResult | null> {
+  return (db.listHelpers(programId, false) as HelperRow[]).map((helper) => helperStats(programId, helper.user_id, { recentLimit, since }));
 }
 
 export = { helperStats, listHelperStats, median, rate };

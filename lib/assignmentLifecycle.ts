@@ -1,25 +1,28 @@
-// Explicit helper-assignment lifecycle. An append-only trail of five
-// ticket_events records what happened to every offer of a ticket to a human:
-//
-//   helper_assignment_offered     — a ticket was put in front of a helper
-//                                   (to a specific one, or the pool)
-//   helper_assignment_claimed     — a helper took it (the offer was accepted)
-//   helper_assignment_declined    — a helper passed on it (not a resolution
-//                                   failure — the ticket stays available)
-//   helper_assignment_released    — a helper who had claimed it gave it back
-//   helper_assignment_timed_out   — an offer sat unclaimed past the program's
-//                                   configured window
-//
-// Ticket status and assignee_id are still owned by lib/tickets.js + lib/db.js;
-// nothing here changes them. This module only appends events, reads them back
-// as accept-rate stats, and answers "which offers have gone stale" for the
-// timeout sweep. Routing retry is a pure capability here (nextEligibleHelper)
-// and is deliberately wired to nothing automatic.
 import db = require("./db");
 import log = require("./log");
 
-type DbRow = Record<string, any>;
-type TicketLike = DbRow & { id: number; program_id: string; status?: string };
+interface DbRow {
+  id: number;
+  ticket_id: number;
+  actor_id: string | null;
+  event_type: string;
+  detail: EventDetail;
+  created_at: number;
+  helper_offer_timeout_ms?: number;
+  [key: string]: unknown;
+}
+
+interface EventDetail {
+  to?: string | null;
+  source?: string | null;
+  [key: string]: unknown;
+}
+
+interface TicketLike {
+  id: number;
+  program_id: string;
+  status?: string;
+}
 
 interface Offer {
   offeredAt: number;
@@ -41,17 +44,14 @@ const EVENT_TYPES = [OFFERED, CLAIMED, DECLINED, RELEASED, TIMED_OUT];
 // the helper's rate is null and the lifecycle is reported "insufficient".
 const MIN_COMPLETED_OFFERS_FOR_RATE = 3;
 
-// A conservative default a caller MAY pass to the sweep. Nothing in production
-// uses it — programs opt in by setting helper_offer_timeout_ms, and until they
-// do the sweep is a no-op.
 const DEFAULT_OFFER_TIMEOUT_MS = 30 * 60 * 1000;
 
 const CLOSED_TICKET_STATUSES = new Set(["resolved", "closed"]);
 
-function parseDetail(value: unknown): DbRow {
+function parseDetail(value: unknown): EventDetail {
   if (!value) return {};
   try {
-    return typeof value === "string" ? JSON.parse(value) : value;
+    return (typeof value === "string" ? JSON.parse(value) : value) as EventDetail;
   } catch (_) {
     return {};
   }
@@ -72,10 +72,6 @@ function lifecycleEvents(programId: string, ticketId: number | null = null): DbR
   return (rows as DbRow[]).map((row) => ({ ...row, detail: parseDetail(row.detail) }));
 }
 
-// Walk one ticket's lifecycle events into a list of offers, each with its
-// outcome. An `offered` opens an offer; a claim/timeout closes it; a decline
-// closes it only when it targeted that same recipient (a pool decline leaves
-// the offer open for someone else); a fresh `offered` supersedes a stale one.
 function offersFromEvents(events: DbRow[]): Offer[] {
   const offers: Offer[] = [];
   let open: Offer | null = null;
@@ -117,7 +113,6 @@ function openOfferFor(programId: string, ticketId: number): Offer | null {
   return last && last.outcome === "pending" ? last : null;
 }
 
-/* ----------------------------------------------------------- append trail -- */
 
 function guardTicket(ticket: TicketLike | null | undefined): ticket is TicketLike {
   return Boolean(ticket && ticket.id && ticket.program_id);
@@ -147,9 +142,6 @@ function emit({ ticket, eventType, actorId = null, detail = null, metricDetail =
   return eventId;
 }
 
-// A ticket enters the queue, or is routed/reassigned to one helper. `to` is a
-// Slack user id for a targeted offer, or null for a pool offer. Idempotent:
-// an offer with the same target already open is not re-emitted.
 function recordOffer({ ticket, to = null, source = "queue", actorId = null }: { ticket: TicketLike; to?: string | null; source?: string; actorId?: string | null }): Record<string, unknown> {
   if (!guardTicket(ticket)) return { recorded: false };
   if (ticket.status !== undefined && CLOSED_TICKET_STATUSES.has(ticket.status)) return { recorded: false };
@@ -165,12 +157,6 @@ function recordOffer({ ticket, to = null, source = "queue", actorId = null }: { 
   return { recorded: !!eventId, eventId };
 }
 
-// A helper took the ticket. Called only after db.claimTicket won its
-// conditional UPDATE, so exactly one concurrent claim reaches here. A claim is
-// a lifecycle event only when it closes a real open offer — claiming a ticket
-// that was never offered (an artificial or dashboard-only path) records
-// nothing, so no accept rate is ever inferred without an offer. Idempotent
-// against a Slack retry: the open offer is already gone on the second call.
 function recordClaim({ ticket, userId }: { ticket: TicketLike; userId?: string }): Record<string, unknown> {
   if (!guardTicket(ticket) || !userId) return { recorded: false };
   const open = openOfferFor(ticket.program_id, ticket.id);
@@ -180,9 +166,6 @@ function recordClaim({ ticket, userId }: { ticket: TicketLike; userId?: string }
   return { recorded: !!eventId, eventId, source };
 }
 
-// A helper passed on a ticket they had not claimed. Does not touch ticket
-// status, assignee, or resolution — the ticket stays offered to everyone else.
-// Idempotent per (ticket, helper) until that helper claims it.
 function recordDecline({ ticket, userId, reason = null }: { ticket: TicketLike; userId?: string; reason?: unknown }): Record<string, unknown> {
   if (!guardTicket(ticket) || !userId) return { recorded: false };
   if (!openOfferFor(ticket.program_id, ticket.id)) return { recorded: false, noOffer: true };
@@ -204,18 +187,12 @@ function recordDecline({ ticket, userId, reason = null }: { ticket: TicketLike; 
   return { recorded: !!eventId, eventId };
 }
 
-// A helper who had claimed the ticket gave it back. Distinct from decline:
-// the offer was accepted first. The caller is responsible for the status
-// change (back to the queue) and for re-offering to the pool.
 function recordRelease({ ticket, userId }: { ticket: TicketLike; userId?: string }): Record<string, unknown> {
   if (!guardTicket(ticket) || !userId) return { recorded: false };
   const eventId = emit({ ticket, eventType: RELEASED, actorId: userId, detail: {}, metricDetail: "released" });
   return { recorded: !!eventId, eventId };
 }
 
-// An offer sat unclaimed past the window. Recorded by the sweep only.
-// Idempotent: an offer already closed (claimed, declined, timed out) is not
-// timed out again.
 function recordTimeout({ ticket, to = null, offeredAt = null }: { ticket: TicketLike; to?: string | null; offeredAt?: number | null }): Record<string, unknown> {
   if (!guardTicket(ticket)) return { recorded: false };
   const open = openOfferFor(ticket.program_id, ticket.id);
@@ -230,19 +207,7 @@ function recordTimeout({ ticket, to = null, offeredAt = null }: { ticket: Ticket
   return { recorded: !!eventId, eventId };
 }
 
-/* --------------------------------------------------------------- reading -- */
 
-// Per-helper accept-rate stats, program-scoped. Only the five lifecycle events
-// count — a pre-lifecycle ticket, or a ticket resolved with no explicit offer,
-// contributes nothing, so accept rates are never inferred from history.
-//
-//   acceptRate = distinct tickets this helper CLAIMED
-//              / (that same count + distinct tickets they DECLINED
-//                 + distinct tickets whose targeted timeout named them)
-//
-// Pending offers are excluded (they are in none of those sets). A release does
-// not lower the rate — the helper accepted the offer first — but is counted on
-// its own. Below MIN_COMPLETED_OFFERS_FOR_RATE the rate is null.
 function helperAcceptStats(programId: string, userId: string): Record<string, unknown> {
   const events = lifecycleEvents(programId);
   const claimed = new Set();
@@ -257,7 +222,6 @@ function helperAcceptStats(programId: string, userId: string): Record<string, un
     else if (event.event_type === RELEASED && event.actor_id === userId) released.add(event.ticket_id);
     else if (event.event_type === TIMED_OUT && event.detail.to === userId) timedOut.add(event.ticket_id);
   }
-  // Accepting a ticket outranks a stale decline of the same ticket.
   for (const ticketId of claimed) declined.delete(ticketId);
   const acceptedAssignments = claimed.size;
   const declinedAssignments = declined.size;
@@ -278,7 +242,6 @@ function helperAcceptStats(programId: string, userId: string): Record<string, un
   };
 }
 
-// Program-level roll-up across every helper's completed offers.
 function programAcceptStats(programId: string): Record<string, unknown> {
   const events = lifecycleEvents(programId);
   const claimedByTicket = new Set<number>();
@@ -303,11 +266,7 @@ function programAcceptStats(programId: string): Record<string, unknown> {
   };
 }
 
-/* --------------------------------------------------------------- timeout -- */
 
-// Which of this program's offers have sat pending longer than timeoutMs.
-// Pure over the event trail plus `now`; the sweep turns each into a
-// helper_assignment_timed_out. Never returns offers on resolved/closed tickets.
 function pendingTimeoutOffers({ programId, timeoutMs, now = Date.now() }: { programId: string; timeoutMs: number; now?: number }): Array<{ ticketId: number; to: string | null; offeredAt: number }> {
   if (!timeoutMs || timeoutMs <= 0) return [];
   const events = lifecycleEvents(programId);
@@ -330,9 +289,6 @@ function pendingTimeoutOffers({ programId, timeoutMs, now = Date.now() }: { prog
   return stale;
 }
 
-// Background sweep for one program. A no-op unless the program set
-// helper_offer_timeout_ms — so adding this to the loop automates nothing for a
-// program that has not opted in. Records timeouts only; it does not reassign.
 function sweepProgramTimeouts({ programId, now = Date.now() }: { programId: string; now?: number }): { swept: number } {
   let row;
   try {
@@ -354,9 +310,7 @@ function sweepProgramTimeouts({ programId, now = Date.now() }: { programId: stri
   return { swept };
 }
 
-/* ----------------------------------------------------- routing retry (capability) -- */
 
-// Helpers who declined this ticket or let a targeted offer time out.
 function helpersWhoPassed(programId: string, ticketId: number): Set<string> {
   const passed = new Set<string>();
   for (const event of lifecycleEvents(programId, ticketId)) {
@@ -366,12 +320,6 @@ function helpersWhoPassed(programId: string, ticketId: number): Set<string> {
   return passed;
 }
 
-// The next helper routing would pick, skipping anyone who already declined or
-// timed out on this ticket (and any caller-supplied exclusions). This is a
-// capability only — no automatic path calls it. A gated retry, or an
-// organizer's reassign menu, can. `exclude` also carries the requester (never
-// page someone to answer their own question); the bot user is excluded inside
-// recommend itself.
 function nextEligibleHelper({ programId, ticketId, category = null, exclude = [], expertiseRouting = true }: { programId: string; ticketId: number; category?: string | null; exclude?: string[]; expertiseRouting?: boolean }): Record<string, unknown> | null {
   const helperRoute = require("./helperRoute");
   const skip = helpersWhoPassed(programId, ticketId);

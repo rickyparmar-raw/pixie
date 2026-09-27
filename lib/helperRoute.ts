@@ -1,15 +1,19 @@
-// Smart routing: transparent helper recommendations from deterministic
-// signals. No LLM picks a human — scoring is membership + declared expertise
-// + verified resolutions in the ticket's category + current open load +
-// recency, with reasons attached so the recommendation is inspectable.
-// Stale members (active=0) are never routed. Default is recommend-only;
-// auto-assignment runs only when the program explicitly enables it.
-//
-// Tie-break is roster order: equal scores keep listHelpers() order
-// (program_helpers.added_at ASC), so the longest-standing member wins ties.
 import db = require("./db");
 
-type DbRow = Record<string, any>;
+interface DbRow {
+  program_id?: string;
+  user_id?: string;
+  role?: string;
+  tag?: string;
+  solved_count?: number;
+  reply_count?: number;
+  ping_eligible?: number;
+  n?: number;
+  at?: number;
+  created_at?: number;
+  detail?: unknown;
+  [key: string]: unknown;
+}
 
 interface ExpertiseRow extends DbRow {
   tag: string;
@@ -45,7 +49,6 @@ const BASE_SCORE = 1;
 const CATEGORY_MATCH_BASE = 2;
 // WHY: one prolific helper must not starve every newcomer forever.
 const CATEGORY_SOLVED_CAP = 10;
-// A reply is worth a fifth of a resolution.
 const CATEGORY_REPLY_WEIGHT = 0.2;
 const CATEGORY_REPLY_CAP = 15;
 // WHY: breadth across categories is weaker evidence than depth in the ticket's
@@ -70,18 +73,12 @@ const ROLE_BONUS = 0.5;
 // WHY: the card select the recommendation feeds has no room for a phone book.
 const MAX_RECOMMENDATIONS = 10;
 
-// Ping-fatigue: a deliberately small, purely subtractive signal so an
-// all-rounder who answers everything doesn't also eat every automated page.
-// Capped well below a single category-match point (2) so it can only ever
-// decide a near-tie between similarly-qualified helpers, never overturn real
-// expertise — a genuine specialist still beats a weak, rarely-pinged one.
 const PING_FATIGUE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const PING_FATIGUE_WEIGHT = 0.15;
 const PING_FATIGUE_CAP = 5;
 const PING_FATIGUE_RECENT_MS = 60 * 60 * 1000;
 const PING_FATIGUE_RECENT_PENALTY = 0.25;
 
-// Declarations never erase observed history.
 function setExpertise({ programId, userId, tags = [] }: { programId: string; userId: string; tags?: unknown[] }): string[] {
   const clean = [...new Set(tags.map((t) => String(t || "").trim().toLowerCase()).filter(Boolean))].slice(0, 20);
   const existing = db.handle().query(
@@ -104,11 +101,9 @@ function setExpertise({ programId, userId, tags = [] }: { programId: string; use
 }
 
 function getExpertise(programId: string | undefined, userId: string): ExpertiseRow[] {
-  return db.handle().query("SELECT tag, solved_count, reply_count FROM helper_expertise WHERE program_id = ? AND user_id = ?").all(programId, userId);
+  return db.handle().query("SELECT tag, solved_count, reply_count FROM helper_expertise WHERE program_id = ? AND user_id = ?").all(programId, userId) as ExpertiseRow[];
 }
 
-// Called whenever a ticket resolves with an assignee: verified category
-// experience accrues only from real outcomes, never self-declared alone.
 function recordResolution({ programId, userId, category = null }: { programId?: string; userId?: string; category?: unknown }): void {
   if (!programId || !userId) return;
   const tag = String(category || "general").trim().toLowerCase().slice(0, 60);
@@ -119,7 +114,6 @@ function recordResolution({ programId, userId, category = null }: { programId?: 
   ).run(programId, userId, tag, t);
 }
 
-// Answering is not closing.
 function recordReply({ programId, userId, category = null }: { programId?: string; userId?: string; category?: unknown }): void {
   if (!programId || !userId) return;
   const tag = String(category || "general").trim().toLowerCase().slice(0, 60);
@@ -134,38 +128,34 @@ function openLoad(programId: string | undefined, userId: string): number {
   const row = db.handle().query(
     "SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND assignee_id = ? AND status IN ('claimed','assigned','waiting_for_helper','escalated','reopened')",
   ).get(programId, userId);
-  return row ? row.n : 0;
+  return row ? Number((row as DbRow).n || 0) : 0;
 }
 
 function recentActivity(programId: string | undefined, userId: string): number | null {
   const row = db.handle().query(
     "SELECT MAX(created_at) AS at FROM ticket_events WHERE program_id = ? AND actor_id = ?",
   ).get(programId, userId);
-  return row ? row.at : null;
+  return row ? Number((row as DbRow).at) : null;
 }
 
-// How much automated paging this helper has already absorbed. Every
-// helper_assignment_offered event targeting them (queue pool offers excluded
-// — those have to = null) counts, whatever routing decision produced it:
-// the initial ping, an auto-assign, or a post-decline reassignment.
 function pingFatigue(programId: string | undefined, userId: string, now = Date.now()): Fatigue {
   const rows = db.handle().query(
     `SELECT created_at, detail FROM ticket_events
       WHERE program_id = ? AND event_type = 'helper_assignment_offered' AND created_at >= ?
       ORDER BY created_at DESC`,
-  ).all(programId, now - PING_FATIGUE_WINDOW_MS);
+  ).all(programId, now - PING_FATIGUE_WINDOW_MS) as DbRow[];
   let count = 0;
   let lastPingAt = null;
   for (const row of rows) {
     let detail;
     try {
-      detail = row.detail ? JSON.parse(row.detail) : {};
+      detail = row.detail ? JSON.parse(String(row.detail)) : {};
     } catch (_) {
       detail = {};
     }
     if (detail.to !== userId) continue;
     count += 1;
-    if (lastPingAt === null || row.created_at > lastPingAt) lastPingAt = row.created_at;
+    if (lastPingAt === null || Number(row.created_at) > lastPingAt) lastPingAt = Number(row.created_at);
   }
   return { count, lastPingAt };
 }
@@ -211,9 +201,6 @@ function hasRoleBonus(role: string): boolean {
   return role === "organizer" || role === "owner";
 }
 
-// Pure scorer: no DB, no clock — every signal arrives via ctx, so tests can
-// pin weights without a database. helper is { user_id, role };
-// ctx is { tag, expertise, load, lastActiveAt, now }.
 function scoreHelper(helper: HelperRow, ctx: ScoringContext = {}): { userId: string; role: string; score: number; load: number; reasons: string[] } {
   const { tag = null, expertise = [], load = 0, lastActiveAt = null, fatigue = null, now = Date.now() } = ctx;
   const reasons = ["active program member"];
@@ -222,7 +209,6 @@ function scoreHelper(helper: HelperRow, ctx: ScoringContext = {}): { userId: str
   const hit = matchBonus(expertise, tag);
   if (hit) {
     score += hit.pts;
-    // Name each kind separately.
     const evidence = [];
     if (hit.solved > 0) evidence.push(`${hit.solved} verified ${tag} resolution${hit.solved === 1 ? "" : "s"}`);
     if (hit.replies > 0) evidence.push(`${hit.replies} ${tag} repl${hit.replies === 1 ? "y" : "ies"}`);
@@ -264,8 +250,6 @@ function clampLimit(limit: number): number {
   return Math.min(Math.max(limit, 1), MAX_RECOMMENDATIONS);
 }
 
-// Pixie's own bot user is never a helper candidate, even if it somehow lands
-// on the roster. Read lazily so tests can pin config.slack.botUserId.
 function botUserId() {
   try {
     return require("./config").config?.slack?.botUserId || null;
@@ -274,9 +258,6 @@ function botUserId() {
   }
 }
 
-// Plain workload selection for programs with expertiseRouting off: no
-// category/expertise signal, no recency/role/fatigue — open load decides and
-// roster order breaks ties, so the longest-standing member wins determinism.
 function scoreWorkload(helper: HelperRow, load: number): { userId: string; role: string; score: number; load: number; reasons: string[] } {
   return {
     userId: helper.user_id,
@@ -293,12 +274,9 @@ function recommend({ programId, category = null, limit = 3, exclude = [], expert
   const skip = new Set((exclude || []).filter(Boolean));
   const bot = botUserId();
   if (bot) skip.add(bot);
-  // Helpers who opted out of pings stay on the roster but are never offered.
   const eligible = helpers.filter((h) => !skip.has(h.user_id) && h.ping_eligible !== 0);
   if (eligible.length === 0) return [];
   const tag = normalizeCategory(category);
-  // Roster order is the tie-break source of truth — filter first so an
-  // excluded member never shifts anyone else's index.
   const baseOrder = new Map(helpers.map((h, i) => [h.user_id, i]));
   const ranked = eligible.map((h) => ({
     entry: expertiseRouting

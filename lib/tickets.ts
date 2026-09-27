@@ -12,22 +12,47 @@ import assignmentLifecycleModule = require("./assignmentLifecycle");
 import ticketCategoryModule = require("./ticketCategory");
 import resolutionPipelineModule = require("./resolutionPipeline");
 import policy = require("./tickets/policy");
+import type { Program, SlackClient, Ticket } from "./types";
+import type {
+  FinishResolveOptions,
+  IncidentCheckOptions,
+  ParsedTicketAction,
+  SlackBlock,
+  SlackError,
+  TicketActionApp,
+  TicketActionBody,
+  TicketActionInput,
+  TicketActionResult,
+  TicketCandidate,
+  TicketPolicy,
+  TicketDatabaseRow,
+  TicketRoutingOptions,
+  TicketUIProjection,
+  EnsureSupportTicketOptions,
+  ResolveTicketOptions,
+} from "./tickets.types";
 
-type Row = Record<string, any>;
-type Client = Record<string, any>;
+type ModuleShim = Record<string, unknown>;
 const { config, isAdmin } = configModule;
 const { ticketPolicy, resolveTicketRole } = policy;
-const db = dbModule as unknown as Row;
-const reply = replyModule as unknown as Row;
-const log = logModule as unknown as Row;
-const slackMessages = slackMessagesModule as unknown as Row;
-const programs = programsModule as unknown as Row;
-const audit = auditModule as unknown as Row;
-const helperRoute = helperRouteModule as unknown as Row;
-const incidents = incidentsModule as unknown as Row;
-const assignmentLifecycle = assignmentLifecycleModule as unknown as Row;
-const ticketCategory = ticketCategoryModule as unknown as Row;
-const resolutionPipeline = resolutionPipelineModule as unknown as Row;
+const db = dbModule as unknown as ModuleShim;
+const reply = replyModule as unknown as ModuleShim;
+const log = logModule as unknown as ModuleShim;
+const slackMessages = slackMessagesModule as unknown as ModuleShim;
+const programs = programsModule as unknown as ModuleShim;
+const audit = auditModule as unknown as ModuleShim;
+const helperRoute = helperRouteModule as unknown as ModuleShim;
+const incidents = incidentsModule as unknown as ModuleShim;
+const assignmentLifecycle = assignmentLifecycleModule as unknown as ModuleShim;
+const ticketCategory = ticketCategoryModule as unknown as ModuleShim;
+const resolutionPipeline = resolutionPipelineModule as unknown as ModuleShim;
+
+function errorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message);
+  }
+  return String(error);
+}
 
 const CLAIMABLE = ["open", "waiting_for_helper", "reopened"];
 const WORKABLE = ["claimed", "assigned"];
@@ -35,9 +60,6 @@ const CLOSED = ["resolved", "closed"];
 const renderedTicketUI = new WeakMap();
 const reconcilingTicketUI = new WeakMap();
 
-// The requester-facing ticket in the help thread. Namespaced so it can't
-// collide with the organizer-card actions, and stable so a button that has
-// been sitting in a thread for a week still routes.
 const SUPPORT_RESOLVE_ACTION = "st_resolve";
 const SUPPORT_REOPEN_ACTION = "st_reopen";
 const STATUS_EMOJI = {
@@ -52,20 +74,20 @@ function isActorAllowed(programId: string, actorId: string | null, allowEmpty = 
   if (!actorId) return false;
   try {
     if (isAdmin && isAdmin(actorId)) return true;
-  } catch (e: any) {
-    log.debug("tickets", `isAdmin check failed: ${e.message}`);
+  } catch (e: unknown) {
+    log.debug("tickets", `isAdmin check failed: ${errorMessage(e)}`);
   }
   try {
     const helpers = db.listHelpers(programId);
     if (helpers.length === 0) return !!allowEmpty;
     if (db.isHelper(programId, actorId)) return true;
-  } catch (e: any) {
-    log.debug("tickets", `helper check failed: ${e.message}`);
+  } catch (e: unknown) {
+    log.debug("tickets", `helper check failed: ${errorMessage(e)}`);
   }
   return false;
 }
 
-function authorize(ticket: Row | null, { programId, workspaceId, actorId }: { programId?: string | null; workspaceId?: string | null; actorId?: string | null }): string | null {
+function authorize(ticket: Ticket | null, { programId, workspaceId, actorId }: { programId?: string | null; workspaceId?: string | null; actorId?: string | null }): string | null {
   if (!ticket) return "ticket not found";
   if (programId && ticket.program_id !== programId) return "program mismatch";
   if (workspaceId && ticket.workspace_id && ticket.workspace_id !== workspaceId) return "workspace mismatch";
@@ -73,7 +95,7 @@ function authorize(ticket: Row | null, { programId, workspaceId, actorId }: { pr
   return null;
 }
 
-function getOrganizerChannel(program: Row | null, workspaceId: string | null = null): string | null {
+function getOrganizerChannel(program: Program | null, workspaceId: string | null = null): string | null {
   if (!program) return null;
   const direct = program.organizerChannel || program.organizer_channel || program.organizer_channel_id;
   if (direct) return direct;
@@ -81,26 +103,26 @@ function getOrganizerChannel(program: Row | null, workspaceId: string | null = n
     try {
       const channels = db.listProgramChannels(program.id);
       const ws = workspaceId || program.workspaceId || program.workspace_id;
-      const match = channels.find((c: Row) => c.kind === "organizer" && (!ws || c.workspace_id === ws));
+      const match = channels.find((c: TicketDatabaseRow) => c.kind === "organizer" && (!ws || c.workspace_id === ws));
       if (match) return match.channel_id;
-      const anyOrg = channels.find((c: Row) => c.kind === "organizer");
+      const anyOrg = channels.find((c: TicketDatabaseRow) => c.kind === "organizer");
       if (anyOrg) return anyOrg.channel_id;
     } catch (e) {
-      log.debug("tickets", `getOrganizerChannel queries failed: ${e.message}`);
+      log.debug("tickets", `getOrganizerChannel queries failed: ${errorMessage(e)}`);
     }
   }
   return null;
 }
 
-function getTicketCardDestination(program: Row | null, workspaceId: string | null = null): string | null {
+function getTicketCardDestination(program: Program | null, workspaceId: string | null = null): string | null {
   return getOrganizerChannel(program, workspaceId);
 }
 
-function recordTransition(ticket: Row, actorId: string | null, eventType: string, detail: unknown = null, createdAt: number | null = null): void {
+function recordTransition(ticket: Ticket, actorId: string | null, eventType: string, detail: unknown = null, createdAt: number | null = null): void {
   try {
     db.addTicketEvent({ ticketId: ticket.id, programId: ticket.program_id, actorId, eventType, detail, createdAt });
-  } catch (e: any) {
-    log.debug("tickets", `event record failed: ${e.message}`);
+  } catch (e: unknown) {
+    log.debug("tickets", `event record failed: ${errorMessage(e)}`);
   }
   try {
     audit.record({
@@ -111,26 +133,22 @@ function recordTransition(ticket: Row, actorId: string | null, eventType: string
       entityId: ticket.id,
       metadata: detail,
     });
-  } catch (e: any) {
-    log.debug("tickets", `audit record failed: ${e.message}`);
+  } catch (e: unknown) {
+    log.debug("tickets", `audit record failed: ${errorMessage(e)}`);
   }
 }
 
-// A reopen starts a new assignment epoch: the prior round's offers stay in
-// the trail as history, but a fresh pool offer reopens the routing gate so a
-// later escalation can page again instead of deduping against a stale
-// outstanding offer from before the resolve. DB-only — never posts.
-function startNewEpoch(ticket: Row | null): void {
+function startNewEpoch(ticket: Ticket | null): void {
   if (!ticket || !ticket.id || !ticket.program_id) return;
   try {
     const fresh = db.getTicket(ticket.id) || ticket;
     assignmentLifecycle.recordOffer({ ticket: fresh, to: null, source: "reopened" });
-  } catch (e: any) {
-    log.debug("tickets", `reopen epoch record failed for #${ticket.id}: ${e.message}`);
+  } catch (e: unknown) {
+    log.debug("tickets", `reopen epoch record failed for #${ticket.id}: ${errorMessage(e)}`);
   }
 }
 
-function buildTicketCardBlocks(ticket: Row, program: Row | null, candidates: Row[] | null = null): Row[] {
+function buildTicketCardBlocks(ticket: Ticket, program: Program | null, candidates: TicketCandidate[] | null = null): SlackBlock[] {
   const statusEmoji = STATUS_EMOJI[ticket.status] || ":sos:";
   const progName = program ? program.name : ticket.program_id || "YSWS";
   const assigneeStr = ticket.assignee_id ? ` • Claimed by <@${ticket.assignee_id}>` : "";
@@ -246,7 +264,7 @@ function buildTicketCardBlocks(ticket: Row, program: Row | null, candidates: Row
             }));
         }
       } catch (e) {
-        log.debug("tickets", `helper recommendation failed: ${e.message}`);
+        log.debug("tickets", `helper recommendation failed: ${errorMessage(e)}`);
         list = [];
       }
     }
@@ -254,9 +272,8 @@ function buildTicketCardBlocks(ticket: Row, program: Row | null, candidates: Row
     try {
       passed = assignmentLifecycle.helpersWhoPassed(ticket.program_id, ticket.id);
     } catch (e) {
-      log.debug("tickets", `helpersWhoPassed lookup failed for #${ticket.id}: ${e.message}`);
+      log.debug("tickets", `helpersWhoPassed lookup failed for #${ticket.id}: ${errorMessage(e)}`);
     }
-    // The requester is never offered as a reassign target either.
     const botId = (() => { try { return require("./config").config?.slack?.botUserId || null; } catch (_) { return null; } })();
     const filtered = (list || []).filter((r) => r.userId !== ticket.assignee_id && !passed.has(r.userId) && r.userId !== ticket.requester_id && r.userId !== botId);
     if (filtered.length > 0) {
@@ -297,30 +314,22 @@ function friendlyStatusLabel(status: string): string {
   return TICKET_STATUS_LABELS[status] || status;
 }
 
-function ticketStatusLabel(ticket: Row | null): string | null {
+function ticketStatusLabel(ticket: Ticket | null): string | null {
   return TICKET_STATUS_LABELS[ticket && ticket.status] || (ticket && ticket.status);
 }
 
-// The canonical user-facing ticket identifier — always the numeric primary
-// key, never a Slack channel/routing id.
-function ticketRef(ticket: Row | null): string {
+function ticketRef(ticket: Ticket | null): string {
   const n = Number(ticket && ticket.id);
   return Number.isInteger(n) && n > 0 ? `#${n}` : "";
 }
 
-/* ----------------------------------------- requester-facing support ticket -- */
 
-function docsLink(prog: Row | null): string | null {
+function docsLink(prog: Program | null): string | null {
   const links = (prog && prog.links) || {};
   return links.docs || links.site || null;
 }
 
-// The one message in the help thread that represents the ticket. Two states:
-// open (a helper is coming, one Resolve button) and resolved (who resolved it,
-// one Reopen button). It is chat.update-d in place on every transition, so a
-// stale "Mark as resolved" button never lingers next to a resolved ticket.
-// Claim/assign/reassign and everything else stay on the organizer card.
-function supportTicketBlocks(ticket: Row, prog: Row | null): Row[] {
+function supportTicketBlocks(ticket: Ticket, prog: Program | null): SlackBlock[] {
   if (CLOSED.includes(ticket.status)) {
     const by = ticket.resolved_by ? ` by <@${ticket.resolved_by}>` : "";
     return [
@@ -336,7 +345,7 @@ function supportTicketBlocks(ticket: Row, prog: Row | null): Row[] {
   ];
 }
 
-function ticketUIProjection(ticket: Row, prog: Row | null, candidates: Row[] | null = null): Row {
+function ticketUIProjection(ticket: Ticket, prog: Program | null, candidates: TicketCandidate[] | null = null): TicketUIProjection {
   return {
     card: {
       text: `[Ticket #${ticket.id}] ${friendlyStatusLabel(ticket.status)}`,
@@ -350,7 +359,7 @@ function ticketUIProjection(ticket: Row, prog: Row | null, candidates: Row[] | n
   };
 }
 
-function projectionKey(ticket: Row, projection: Row): string {
+function projectionKey(ticket: Ticket, projection: TicketUIProjection): string {
   return JSON.stringify({
     id: ticket.id,
     status: ticket.status,
@@ -363,7 +372,7 @@ function projectionKey(ticket: Row, projection: Row): string {
   });
 }
 
-async function reconcileTicketUI({ client, ticket, program = null, cardText = null }: { client: Client; ticket: Row; program?: Row | null; cardText?: string | null }): Promise<boolean | undefined> {
+async function reconcileTicketUI({ client, ticket, program = null, cardText = null }: { client: SlackClient; ticket: Ticket; program?: Program | null; cardText?: string | null }): Promise<boolean | undefined> {
   if (!client || !ticket) return;
   let queues = reconcilingTicketUI.get(client);
   if (!queues) {
@@ -381,17 +390,14 @@ async function reconcileTicketUI({ client, ticket, program = null, cardText = nu
   return current;
 }
 
-async function reconcileTicketUIOnce({ client, ticket, program = null, cardText = null }: { client: Client; ticket: Row; program?: Row | null; cardText?: string | null }): Promise<boolean> {
-  // A queued reconciliation may outlive the mutation that scheduled it. Read
-  // the authoritative row again so an older snapshot can never repaint Slack
-  // back to a previous lifecycle state.
+async function reconcileTicketUIOnce({ client, ticket, program = null, cardText = null }: { client: SlackClient; ticket: Ticket; program?: Program | null; cardText?: string | null }): Promise<boolean> {
   ticket = db.getTicket(ticket.id) || ticket;
   const prog = program || (ticket.program_id ? programs.get(ticket.program_id) : null);
   let candidates = [];
   try {
     candidates = helperRoute.recommend({ programId: ticket.program_id, category: ticket.category, limit: 5, ...routingOptions(prog, ticket) });
   } catch (e) {
-    log.debug("tickets", `helper recommendation failed: ${e.message}`);
+    log.debug("tickets", `helper recommendation failed: ${errorMessage(e)}`);
   }
   const projection = ticketUIProjection(ticket, prog, candidates);
   if (cardText) projection.card.text = cardText;
@@ -420,7 +426,7 @@ async function reconcileTicketUIOnce({ client, ticket, program = null, cardText 
   return cardSynced && supportSynced;
 }
 
-async function syncSupportTicketUI(client: Client, ticket: Row, prog: Row | null, projection: Row | null = null): Promise<boolean> {
+async function syncSupportTicketUI(client: SlackClient, ticket: Ticket, prog: Program | null, projection: TicketUIProjection | null = null): Promise<boolean> {
   const view = projection || ticketUIProjection(ticket, prog);
   let synced = true;
   if (client?.chat?.update && ticket.public_ack_ts) {
@@ -439,15 +445,10 @@ async function syncSupportTicketUI(client: Client, ticket: Row, prog: Row | null
   return synced && await syncTicketReactions(client, ticket, prog);
 }
 
-// A marker emoji on the requester's own message, so the collapsed channel
-// timeline (which shows reactions but not thread replies) makes clear the
-// message has a ticket. Swapped open <-> resolved on every transition. Both
-// swaps are best-effort — already_reacted / no_reaction errors are expected.
-async function syncTicketReactions(client: Client, ticket: Row, program: Row | null = null): Promise<boolean> {
+async function syncTicketReactions(client: SlackClient, ticket: Ticket, program: Program | null = null): Promise<boolean> {
   const open = config.ticketOpenReaction;
   const done = config.ticketResolvedReaction;
   if (!client?.reactions?.add || !ticket?.thread_ts || !ticket?.channel || (!open && !done)) return true;
-  // A reaction is a visible mark too.
   if (!ticketSurfaces(program || programs.get(ticket.program_id)).thread) return true;
   let synced = true;
   const closed = CLOSED.includes(ticket.status);
@@ -459,27 +460,18 @@ async function syncTicketReactions(client: Client, ticket: Row, program: Row | n
   return synced;
 }
 
-// Is `channel` this program's help channel? Trusts the program object's own
-// helpChannel (callers pass ad-hoc program objects that aren't in the
-// registry) and falls back to the registry lookup.
-function isHelpChannelFor(prog: Row | null, channel: string | null, workspaceId: string | null = null): boolean {
+function isHelpChannelFor(prog: Program | null, channel: string | null, workspaceId: string | null = null): boolean {
   if (!prog || !channel) return false;
   if (prog.helpChannel === channel) return true;
   return programs.isHelpChannel(channel, workspaceId);
 }
 
-// Settings for this call, or null when the program is unknown — in which case
-// callers keep the legacy behavior (which fails closed on pings: helperPing
-// was opt-in). Unknown programs never get the permissive settings defaults.
-function policyFor(prog: Row | null, { channel = null, workspaceId = null, role = null }: { channel?: string | null; workspaceId?: string | null; role?: string | null } = {}): Row | null {
+function policyFor(prog: Program | null, { channel = null, workspaceId = null, role = null }: { channel?: string | null; workspaceId?: string | null; role?: string | null } = {}): TicketPolicy | null {
   if (!prog) return null;
   return ticketPolicy({ program: prog, role: resolveTicketRole({ program: prog, channel, workspaceId, role }) });
 }
 
-// Selection mode + exclusions shared by every helper-ranking call site: the
-// requester is never a candidate, and programs with expertiseRouting off get
-// plain workload selection instead of category/expertise ranking.
-function routingOptions(prog: Row | null, ticket: Row | null): Row {
+function routingOptions(prog: Program | null, ticket: Ticket | null): TicketRoutingOptions {
   const pol = policyFor(prog, { channel: ticket && ticket.channel, workspaceId: ticket && ticket.workspace_id });
   return {
     expertiseRouting: pol ? pol.expertiseRouting : true,
@@ -487,23 +479,8 @@ function routingOptions(prog: Row | null, ticket: Row | null): Row {
   };
 }
 
-// Whether a support ticket may be opened here. The channel role's settings
-// decide whether a ticket exists at all (recordTicket) and whether the
-// per-question path creates one visibly (createOnSupport/autoCreateTickets);
-// explicit human paging bypasses only that second bit. Posture is NOT checked
-// here — the per-question log (getOrCreateOpenTicket) records passive
-// programs too; only the requester-facing paths (ensureSupportTicket) skip
-// passive.
-//   paging=false (per-question path): help channel only, publicTicketsEnabled
-//     honoured everywhere.
-//   paging=true  (human paging — sensitive content, explicit escalation): a
-//     ticket even outside the help channel; publicTicketsEnabled only gates
-//     the help channel itself.
-function ticketCreationAllowed({ prog, channel, workspaceId = null, paging = false, role = null, backfill = false }: { prog: Row | null; channel: string | null; workspaceId?: string | null; paging?: boolean; role?: string | null; backfill?: boolean }): boolean {
+function ticketCreationAllowed({ prog, channel, workspaceId = null, paging = false, role = null, backfill = false }: { prog: Program | null; channel: string | null; workspaceId?: string | null; paging?: boolean; role?: string | null; backfill?: boolean }): boolean {
   if (!prog) return false;
-  // The history import / silent tracker records dashboard-only tickets for
-  // every help-channel request, whatever the program's ticket toggles say:
-  // it never posts, pings or escalates, and it's what the dashboard counts.
   if (backfill) return channel ? isHelpChannelFor(prog, channel, workspaceId) : false;
   const pol = policyFor(prog, { channel, workspaceId, role });
   if (!pol || !pol.recordTicket) return false;
@@ -518,8 +495,7 @@ function ticketCreationAllowed({ prog, channel, workspaceId = null, paging = fal
   return true;
 }
 
-// Where a ticket may appear.
-function ticketSurfaces(prog: Row | null): { thread: boolean; organizer: boolean } {
+function ticketSurfaces(prog: Program | null): { thread: boolean; organizer: boolean } {
   const mode = (prog && prog.ticketVisibility) || "thread";
   return {
     thread: mode === "thread",
@@ -527,13 +503,13 @@ function ticketSurfaces(prog: Row | null): { thread: boolean; organizer: boolean
   };
 }
 
-function categoryRules(prog: Row | null): Row | null {
+function categoryRules(prog: Program | null): TicketActionResult | null {
   if (prog?.categories && typeof prog.categories === "object") return prog.categories;
   if (prog?.ticketsEnabled === false) return null;
   return ticketCategory.defaultTaxonomy();
 }
 
-function applyCategory(ticketId: number, { prog, channel, question }: { prog: Row | null; channel: string | null; question: string }): string | null {
+function applyCategory(ticketId: number, { prog, channel, question }: { prog: Program | null; channel: string | null; question: string }): string | null {
   const rules = categoryRules(prog);
   if (!ticketId || !prog || !rules) return null;
   try {
@@ -541,12 +517,12 @@ function applyCategory(ticketId: number, { prog, channel, question }: { prog: Ro
     if (category) db.setTicketTriage(ticketId, { category, categorySource: "classifier" });
     return category;
   } catch (e) {
-    log.debug("tickets", `classify failed for #${ticketId}: ${e.message}`);
+    log.debug("tickets", `classify failed for #${ticketId}: ${errorMessage(e)}`);
     return null;
   }
 }
 
-function reclassifyOnFollowUp(ticket: Row | null, { prog, question, requesterId }: { prog: Row | null; question: string | null; requesterId: string }): Row | null {
+function reclassifyOnFollowUp(ticket: Ticket | null, { prog, question, requesterId }: { prog: Program | null; question: string | null; requesterId: string }): TicketActionResult | null {
   if (!ticket || !prog || ticket.status === "resolved" || ticket.status === "closed") return ticket;
   if (!question || requesterId !== ticket.requester_id || question === ticket.question) return ticket;
   const followUps = [];
@@ -569,12 +545,8 @@ function reclassifyOnFollowUp(ticket: Row | null, { prog, question, requesterId 
   return db.getTicket(ticket.id) || ticket;
 }
 
-// The reliable baseline: a ticket for every eligible root support question in
-// an active help channel, created and shown BEFORE we know whether Pixie can
-// answer. Idempotent — a Slack retry finds the same ticket by thread and skips
-// both Slack posts because their ts is already stored. `paging` relaxes the
-// help-channel gate for the human-escalation path (see ticketCreationAllowed).
-async function ensureSupportTicket({ program, channel, threadTs, requesterId, question, client, workspaceId = null, paging = false, role = null, silent = false, backfill = false, createdAt = null, source = null }: { program: Row | null; channel: string; threadTs: string; requesterId: string; question: string; client?: Client | null; workspaceId?: string | null; paging?: boolean; role?: string | null; silent?: boolean; backfill?: boolean; createdAt?: number | null; source?: string | null }): Promise<Row | null> {
+async function ensureSupportTicket(options: EnsureSupportTicketOptions): Promise<Ticket | null> {
+  const { program, channel, threadTs, requesterId, question, client, workspaceId = null, paging = false, role = null, silent = false, backfill = false, createdAt = null, source = null } = options;
   if (!threadTs) return null;
   const prog = program || (channel ? programs.forChannel(channel, workspaceId) : null);
   if (!prog) return null;
@@ -584,7 +556,6 @@ async function ensureSupportTicket({ program, channel, threadTs, requesterId, qu
     ? db.getTicketByChannelThreadTs(channel, threadTs, wsId, prog.id)
     : db.getTicketByThreadTs(threadTs, wsId, prog.id);
   if (!ticket) {
-    // Passive blocks visible tickets only.
     const surfaces = ticketSurfaces(prog);
     if (!backfill && prog.posture === "passive" && (surfaces.thread || surfaces.organizer)) return null;
     if (!ticketCreationAllowed({ prog, channel, workspaceId: wsId, paging, role, backfill })) return null;
@@ -615,12 +586,11 @@ async function ensureSupportTicket({ program, channel, threadTs, requesterId, qu
         ticket.public_ack_ts = res.ts;
         db.recordFirstResponse(ticket.id, false);
       } else if (res?.ts) {
-        // A concurrent caller already attached the ack — drop this duplicate.
         await client.chat.delete({ channel, ts: res.ts }).catch(() => {});
       }
     } catch (e) {
       recordSlackSyncFailure("thread_post", ticket, e);
-      log.warn("tickets", `support ticket UI post failed for #${ticket.id}: ${e.message}`);
+      log.warn("tickets", `support ticket UI post failed for #${ticket.id}: ${errorMessage(e)}`);
     }
   }
   const fresh = db.getTicket(ticket.id);
@@ -631,26 +601,14 @@ async function ensureSupportTicket({ program, channel, threadTs, requesterId, qu
   return db.getTicket(ticket.id);
 }
 
-// One escalation epoch, one ping: an already-open offer (targeted or pool)
-// means routing already started for this go-round, so nothing re-declares
-// the pool. A fresh pool offer only belongs at the moment nobody has been
-// offered this ticket yet — a decline/release/timeout closes the prior offer
-// first (see declineAssignment / unclaimTicket / assignmentLifecycle), which
-// is what legitimately reopens this gate.
-function hasOpenOffer(ticket: Row): boolean {
+function hasOpenOffer(ticket: Ticket): boolean {
   return !!assignmentLifecycle.openOfferFor(ticket.program_id, ticket.id);
 }
 
-// A roster helper already talking in the thread outranks any automated pick
-// — paging a second person over someone already on it is exactly the "ping
-// fatigue" this exists to prevent.
 function hasHelperReplied(ticketId: number): boolean {
   return db.listTicketEvents(ticketId).some((event) => event.event_type === "helper_reply");
 }
 
-// The requester already @-mentioned a real, active helper of this program —
-// that IS the page. An automated ping on top of it would be a second one for
-// the exact same ask.
 function helperMentionedIn(programId: string, text: string | null): boolean {
   if (!programId || !text) return false;
   const eligibility = require("./eligibility");
@@ -661,23 +619,12 @@ function helperMentionedIn(programId: string, text: string | null): boolean {
   });
 }
 
-// Pixie couldn't answer a ticket it's holding — move it to waiting_for_helper,
-// run helper routing (recommend-only, or auto-assign when the program opts in),
-// and refresh the organizer card. The thread UI already says a helper is
-// coming, so it doesn't change and nothing new is posted there.
-function markWaitingForHelper({ ticketId, client = null, program = null, question = null, role = null, explicit = false }: { ticketId: number; client?: Client | null; program?: Row | null; question?: string | null; role?: string | null; explicit?: boolean }): Row | null {
+function markWaitingForHelper({ ticketId, client = null, program = null, question = null, role = null, explicit = false }: { ticketId: number; client?: SlackClient | null; program?: Program | null; question?: string | null; role?: string | null; explicit?: boolean }): TicketActionResult | null {
   const ticket = db.getTicket(ticketId);
-  // Snoozed is an organizer's "not now" — a promotion must not wake it.
   if (!ticket || CLOSED.includes(ticket.status) || ticket.status === "snoozed") return ticket || null;
-  // Durable suppression: a muted thread gets no further automated side
-  // effects at all — not just no ping — until an explicit wake clears it.
   if (db.isThreadMuted(ticket.thread_ts) || db.isTakeover(ticket.thread_ts)) return ticket;
   const prog = program || programs.get(ticket.program_id);
   const pol = policyFor(prog, { channel: ticket.channel, workspaceId: ticket.workspace_id, role });
-  // Automatic escalation (Pixie could not answer) honors the channel's
-  // escalateUnknown setting; an explicit human escalation always moves. The
-  // pool offer and the routing snapshot below are audit trail, not
-  // escalation, so they are recorded either way.
   const autoBlocked = pol && !explicit && !pol.escalate;
   let updated = db.getTicket(ticketId);
   if (!autoBlocked && !WORKABLE.includes(updated.status) && updated.status !== "waiting_for_helper") {
@@ -685,22 +632,18 @@ function markWaitingForHelper({ ticketId, client = null, program = null, questio
     if (changed) recordTransition(db.getTicket(ticketId), null, "escalated", { by: "ai_no_answer" });
     updated = db.getTicket(ticketId);
   }
-  // The ticket is now in front of the helper pool — the first lifecycle offer,
-  // and ONLY the first: an already-open offer means this ticket's epoch is
-  // already underway, so re-declaring a pool offer here would supersede
-  // (and un-dedupe) whatever targeted ping is already outstanding.
   const alreadyOffered = hasOpenOffer(updated);
   if (updated && !updated.assignee_id && !alreadyOffered) {
     try {
       assignmentLifecycle.recordOffer({ ticket: updated, to: null, source: "queue" });
     } catch (e) {
-      log.debug("tickets", `pool offer record failed for #${ticketId}: ${e.message}`);
+      log.debug("tickets", `pool offer record failed for #${ticketId}: ${errorMessage(e)}`);
     }
   }
   try {
     require("./shadowRouting").snapshotForTicket(updated);
   } catch (e) {
-    log.warn("tickets", `shadow routing snapshot failed for #${ticketId}: ${e.message}`);
+    log.warn("tickets", `shadow routing snapshot failed for #${ticketId}: ${errorMessage(e)}`);
   }
   if (!autoBlocked && prog && prog.autoAssign === true && !updated.assignee_id && !alreadyOffered) {
     try {
@@ -711,25 +654,24 @@ function markWaitingForHelper({ ticketId, client = null, program = null, questio
         try {
           assignmentLifecycle.recordOffer({ ticket: updated, to: top.userId, source: "auto" });
         } catch (e) {
-          log.debug("tickets", `auto offer record failed for #${ticketId}: ${e.message}`);
+          log.debug("tickets", `auto offer record failed for #${ticketId}: ${errorMessage(e)}`);
         }
       }
     } catch (e) {
-      log.warn("tickets", `auto-assign failed for #${ticketId}: ${e.message}`);
+      log.warn("tickets", `auto-assign failed for #${ticketId}: ${errorMessage(e)}`);
     }
   }
   const mayPing = !autoBlocked && (pol ? pol.pingHelpers : (prog && prog.helperPing === true));
   if (mayPing) {
     void pingRecommendedHelper({ client, ticket: updated, program: prog, question, role }).catch((e) => {
-      log.warn("tickets", `helper ping failed for #${ticketId}: ${e.message}`);
+      log.warn("tickets", `helper ping failed for #${ticketId}: ${errorMessage(e)}`);
     });
   }
   if (!autoBlocked && client && updated.card_ts) void syncCard(client, updated, `[Ticket #${updated.id}] Waiting for a helper`).catch(() => {});
   return updated;
 }
 
-// Ticket optional: mention works either way.
-async function handOffToHelper({ client, program, channel, threadTs, question, ticket = null, requesterId = null, workspaceId = null, role = null }: { client: Client; program: Row | null; channel: string; threadTs: string; question: string; ticket?: Row | null; requesterId?: string | null; workspaceId?: string | null; role?: string | null }): Promise<Row | string | null> {
+async function handOffToHelper({ client, program, channel, threadTs, question, ticket = null, requesterId = null, workspaceId = null, role = null }: { client: SlackClient; program: Program | null; channel: string; threadTs: string; question: string; ticket?: Ticket | null; requesterId?: string | null; workspaceId?: string | null; role?: string | null }): Promise<TicketActionResult | string | null> {
   if (ticket) return markWaitingForHelper({ ticketId: ticket.id, client, program, question, role, explicit: true });
   if (!program) return null;
   const pol = policyFor(program, { channel, workspaceId, role });
@@ -737,10 +679,7 @@ async function handOffToHelper({ client, program, channel, threadTs, question, t
   return pingThreadHelper({ client, program, channel, threadTs, question, requesterId, workspaceId, role });
 }
 
-// Ticket-free mention, once per thread. The requester is never a candidate:
-// paging someone to answer their own question is the failure this guard
-// exists to prevent (seen live: a helper asking Pixie got paged themself).
-async function pingThreadHelper({ client, program, channel, threadTs, question, requesterId = null, workspaceId = null, role = null }: { client: Client; program: Row | null; channel: string; threadTs: string; question: string; requesterId?: string | null; workspaceId?: string | null; role?: string | null }): Promise<string | null> {
+async function pingThreadHelper({ client, program, channel, threadTs, question, requesterId = null, workspaceId = null, role = null }: { client: SlackClient; program: Program | null; channel: string; threadTs: string; question: string; requesterId?: string | null; workspaceId?: string | null; role?: string | null }): Promise<string | null> {
   if (!client || !program || !threadTs || !channel) return null;
   const pol = policyFor(program, { channel, workspaceId, role });
   if (pol ? !pol.pingHelpers : program.helperPing !== true) return null;
@@ -757,7 +696,6 @@ async function pingThreadHelper({ client, program, channel, threadTs, question, 
     logRoutingDecision({ ticket: { channel, thread_ts: threadTs, program_id: program.id }, program, category, candidates, selected, posted, skipReason });
   if (!top) return logDecision("no_eligible_helper"), null;
 
-  // Claim before posting.
   db.touchThread(threadTs, channel, { helperPinged: true });
 
   const ask = `<@${top.userId}> — could you take a look at this one?`;
@@ -772,10 +710,7 @@ async function pingThreadHelper({ client, program, channel, threadTs, question, 
   return top.userId;
 }
 
-// One structured event per ping decision — the answer to "why did Pixie ping
-// X" (or why it didn't) should always be findable in a single log line, never
-// spread across several or reconstructed from hidden model reasoning.
-function logRoutingDecision({ ticket, program, category, candidates = [], selected = null, posted = false, skipReason = null }: { ticket: Row; program: Row | null; category?: string | null; candidates?: Row[]; selected?: string | null; posted?: boolean; skipReason?: string | null }): void {
+function logRoutingDecision({ ticket, program, category, candidates = [], selected = null, posted = false, skipReason = null }: { ticket: Ticket; program: Program | null; category?: string | null; candidates?: TicketCandidate[]; selected?: string | null; posted?: boolean; skipReason?: string | null }): void {
   const ranked = candidates.slice(0, 5).map((c) => `${c.userId}:${c.score}`).join(",");
   log.info(
     "routing",
@@ -786,40 +721,24 @@ function logRoutingDecision({ ticket, program, category, candidates = [], select
   );
 }
 
-// Mention on an escalated ticket. Offer recorded first.
-// Every path that pages one specific named helper on a ticket — routing's
-// top pick, the ticket's assignee, or whoever routing retry names after a
-// decline — funnels through here, so no caller can page someone by skipping
-// a guard another caller remembered. The lifecycle offer (recordOffer) is the
-// actual dedupe boundary; everything above it is a reason to never even try.
-async function pingSpecificHelper({ client, ticket, program, userId, question = null, source = "ping", candidates = [], role = null }: { client: Client; ticket: Row | null; program: Row | null; userId: string; question?: string | null; source?: string; candidates?: Row[]; role?: string | null }): Promise<string | null> {
+async function pingSpecificHelper({ client, ticket, program, userId, question = null, source = "ping", candidates = [], role = null }: { client: SlackClient; ticket: Ticket | null; program: Program | null; userId: string; question?: string | null; source?: string; candidates?: TicketCandidate[]; role?: string | null }): Promise<string | null> {
   const logDecision = (skipReason, posted = false) =>
     logRoutingDecision({ ticket, program, category: ticket?.category, candidates, selected: userId, posted, skipReason });
 
   if (!client || !ticket || !program || !userId) return logDecision("missing_args"), null;
-  // Opt-in enforced here too — the channel role's helper-ping setting.
   const pol = policyFor(program, { channel: ticket.channel, workspaceId: ticket.workspace_id, role });
   if (pol ? !pol.pingHelpers : program.helperPing !== true) return logDecision("helper_ping_disabled"), null;
   if (CLOSED.includes(ticket.status)) return logDecision("ticket_closed"), null;
   if (programs.isShadow(program)) return logDecision("shadow_mode"), null;
-  // Pixie's own bot user is never paged, even if it lands on the roster.
   try {
     const bot = require("./config").config?.slack?.botUserId;
     if (bot && userId === bot) return logDecision("bot_user"), null;
   } catch (_) {
-    // No config — no bot to exclude.
   }
-  // Durable suppression: honored here too, not just at the eligibility gate —
-  // this is reachable from a retry/decline path that never re-consults it.
   if (db.isThreadMuted(ticket.thread_ts)) return logDecision("thread_muted"), null;
-  // Paging the requester themself (a roster helper asking Pixie a question)
-  // is never useful — decline the page rather than self-pinging.
   if (userId && ticket.requester_id && userId === ticket.requester_id) return logDecision("requester_is_candidate"), null;
   if (db.isTakeover(ticket.thread_ts)) return logDecision("human_engaged"), null;
-  // A helper is already in the thread; paging a second one is exactly the
-  // fatigue this exists to prevent.
   if (hasHelperReplied(ticket.id)) return logDecision("helper_already_replied"), null;
-  // The requester already @-mentioned a real helper themselves.
   if (helperMentionedIn(ticket.program_id, question) || helperMentionedIn(ticket.program_id, ticket.question)) {
     return logDecision("requester_already_mentioned_helper"), null;
   }
@@ -839,10 +758,8 @@ async function pingSpecificHelper({ client, ticket, program, userId, question = 
   return userId;
 }
 
-async function pingRecommendedHelper({ client, ticket, program, question = null, role = null }: { client: Client | null; ticket: Row | null; program: Row | null; question?: string | null; role?: string | null }): Promise<string | null> {
+async function pingRecommendedHelper({ client, ticket, program, question = null, role = null }: { client: SlackClient | null; ticket: Ticket | null; program: Program | null; question?: string | null; role?: string | null }): Promise<string | null> {
   if (!client || !ticket || !program) return null;
-  // Tell the assignee, not a second pick — unless the assignee IS the
-  // requester, in which case there is nobody to page.
   let userId = ticket.assignee_id || null;
   if (userId && ticket.requester_id && userId === ticket.requester_id) {
     logRoutingDecision({ ticket, program, category: ticket.category, candidates: [], selected: userId, posted: false, skipReason: "assignee_is_requester" });
@@ -861,21 +778,17 @@ async function pingRecommendedHelper({ client, ticket, program, question = null,
   return pingSpecificHelper({ client, ticket, program, userId, question, source: "ping", candidates, role });
 }
 
-// A failed Slack sync is non-fatal — the domain state is already written and
-// the next card render self-heals — but it should not be invisible. Records
-// only the ticket id, program, and the Slack error code; never the ticket
-// question, a token, or any message content.
-function recordSlackSyncFailure(surface: string, ticket: Row | null, err: Row): void {
+function recordSlackSyncFailure(surface: string, ticket: Ticket | null, err: SlackError): void {
   const code = (err && (err.code || (err.data && err.data.error))) || "unknown";
   log.warn("tickets", `slack ${surface} sync failed for #${ticket?.id ?? "?"}: ${code}`);
   try {
     db.recordMetric("ticket_slack_sync_failure", null, `${surface}:${String(code).slice(0, 40)}`, ticket?.program_id || null);
   } catch (e) {
-    log.debug("tickets", `sync failure metric failed: ${e.message}`);
+    log.debug("tickets", `sync failure metric failed: ${errorMessage(e)}`);
   }
 }
 
-async function syncSlack({ client, channel, ts, text, blocks }: { client: Client; channel: string | null; ts: string | null; text: string; blocks: Row[] }, ticket: Row | null = null): Promise<boolean> {
+async function syncSlack({ client, channel, ts, text, blocks }: { client: SlackClient; channel: string | null; ts: string | null; text: string; blocks: SlackBlock[] }, ticket: Ticket | null = null): Promise<boolean> {
   if (!client?.chat?.update || !channel || !ts) return true;
   try {
     await client.chat.update({
@@ -891,18 +804,19 @@ async function syncSlack({ client, channel, ts, text, blocks }: { client: Client
   }
 }
 
-async function syncCard(client: Client, ticket: Row, text: string): Promise<void> {
+async function syncCard(client: SlackClient, ticket: Ticket, text: string): Promise<void> {
   await reconcileTicketUI({ client, ticket, cardText: text });
 }
 
-function resolveProg({ program, channel, workspaceId }: { program: Row | null; channel: string; workspaceId: string | null }): { prog: Row | null; programId: string; resolvedWorkspaceId: string | null } {
+function resolveProg({ program, channel, workspaceId }: { program: Program | null; channel: string; workspaceId: string | null }): { prog: Program | null; programId: string; resolvedWorkspaceId: string | null } {
   const prog = program || (channel ? programs.forChannel(channel, workspaceId) : null);
   const programId = prog ? prog.id : "pixl";
   const resolvedWorkspaceId = workspaceId || (prog ? prog.workspaceId || prog.workspace_id || null : null);
   return { prog, programId, resolvedWorkspaceId };
 }
 
-async function checkIncident({ prog, programId, question, ticket, client, channel, threadTs, requesterId, resolvedWorkspaceId, placeholder, bypassIncidentMatch }: Row): Promise<Row> {
+async function checkIncident(options: IncidentCheckOptions): Promise<TicketActionResult> {
+  const { prog, programId, question, ticket, client, channel, threadTs, requesterId, resolvedWorkspaceId, placeholder, bypassIncidentMatch } = options;
   if (bypassIncidentMatch) return { done: false };
   const incidentMode = prog?.incidentMode || "ANSWER_AND_TRACK";
   if (incidentMode === "NORMAL_TICKET" || !client) return { done: false };
@@ -910,14 +824,11 @@ async function checkIncident({ prog, programId, question, ticket, client, channe
   try {
     matched = incidents.matchActiveIncident({ programId, question });
   } catch (e) {
-    log.debug("tickets", `incident match failed: ${e.message}`);
+    log.debug("tickets", `incident match failed: ${errorMessage(e)}`);
   }
   if (!matched) return { done: false };
   const text = reply.plainDashes(matched.public_message || `We're currently aware of an issue with "${matched.title}". The team is investigating — I'll update this thread when there's a confirmed resolution.`);
   try {
-    // The incident note is a normal thread reply — it never resolves or
-    // annotates the ticket. Whatever ticket the thread has stays open until a
-    // human resolves it.
     if (placeholder) {
       await reply.finalize(client, channel, threadTs, placeholder, text, { program: prog });
     } else {
@@ -929,12 +840,12 @@ async function checkIncident({ prog, programId, question, ticket, client, channe
     log.info("tickets", `posted active incident #${matched.id} note to the thread (${programId})`);
     return { done: true, ticket: ticket ? db.getTicket(ticket.id) : null };
   } catch (e) {
-    log.warn("tickets", `incident-aware reply failed, falling back to a normal escalation: ${e.message}`);
+    log.warn("tickets", `incident-aware reply failed, falling back to a normal escalation: ${errorMessage(e)}`);
     return { done: false };
   }
 }
 
-async function postCard({ prog, programId, resolvedWorkspaceId, ticket, client, requesterId, question }: { prog: Row | null; programId: string; resolvedWorkspaceId: string | null; ticket: Row; client: Client; requesterId: string; question: string }): Promise<Row> {
+async function postCard({ prog, programId, resolvedWorkspaceId, ticket, client, requesterId, question }: { prog: Program | null; programId: string; resolvedWorkspaceId: string | null; ticket: Ticket; client: SlackClient; requesterId: string; question: string }): Promise<TicketActionResult> {
   // WHY: cards route strictly to the organizer channel — never the public
   // help channel, and no fallback on error.
   const organizerChannel = getOrganizerChannel(prog, resolvedWorkspaceId);
@@ -948,7 +859,7 @@ async function postCard({ prog, programId, resolvedWorkspaceId, ticket, client, 
       try {
         candidates = helperRoute.recommend({ programId, category: ticket.category, limit: 5, ...routingOptions(prog, ticket) });
       } catch (e) {
-        log.debug("tickets", `helper recommendation failed: ${e.message}`);
+        log.debug("tickets", `helper recommendation failed: ${errorMessage(e)}`);
       }
       const cardBlocks = reply.plainDashesInBlocks(buildTicketCardBlocks(ticket, prog, candidates));
       const res = await slackMessages.sendProgramMessage({
@@ -967,19 +878,13 @@ async function postCard({ prog, programId, resolvedWorkspaceId, ticket, client, 
       }
     } catch (e) {
       recordSlackSyncFailure("card_post", ticket, e);
-      log.error("tickets", `failed to post ticket card to organizer channel ${organizerChannel} for program ${programId}: ${e.message}`);
+      log.error("tickets", `failed to post ticket card to organizer channel ${organizerChannel} for program ${programId}: ${errorMessage(e)}`);
     }
   }
   return ticket;
 }
 
-// A support request that needs a human right now — a sensitive-category
-// question (no AI answer allowed) or a gap Pixie could not fill. It runs the
-// one ticket path: ensureSupportTicket opens the ticket and posts the
-// Pixorpheus thread UI + organizer card (idempotent by thread), then
-// markWaitingForHelper moves it past "open" and routes helpers. No separate
-// ticket machinery, no ai_answered, no status footer.
-async function escalateTicket({ program, channel, threadTs, requesterId, question, client, workspaceId = null, placeholder = null, bypassIncidentMatch = false, role = null }: { program: Row | null; channel: string; threadTs: string; requesterId: string; question: string; client: Client; workspaceId?: string | null; placeholder?: string | null; bypassIncidentMatch?: boolean; role?: string | null }): Promise<Row | null> {
+async function escalateTicket({ program, channel, threadTs, requesterId, question, client, workspaceId = null, placeholder = null, bypassIncidentMatch = false, role = null }: { program: Program | null; channel: string; threadTs: string; requesterId: string; question: string; client: SlackClient; workspaceId?: string | null; placeholder?: string | null; bypassIncidentMatch?: boolean; role?: string | null }): Promise<Ticket | null> {
   const { prog, programId, resolvedWorkspaceId } = resolveProg({ program, channel, workspaceId });
   const existing = db.getTicketByThreadTs(threadTs, resolvedWorkspaceId, prog?.id || null);
 
@@ -1008,7 +913,7 @@ async function escalateTicket({ program, channel, threadTs, requesterId, questio
   return promoted || ticket;
 }
 
-function getOrCreateOpenTicket({ program, channel, threadTs, requesterId, question, workspaceId = null, role = null }: { program: Row | null; channel: string; threadTs: string; requesterId: string; question: string; workspaceId?: string | null; role?: string | null }): Row | null {
+function getOrCreateOpenTicket({ program, channel, threadTs, requesterId, question, workspaceId = null, role = null }: { program: Program | null; channel: string; threadTs: string; requesterId: string; question: string; workspaceId?: string | null; role?: string | null }): TicketActionResult | null {
   if (!threadTs) return null;
   const prog = program || (channel ? programs.forChannel(channel, workspaceId) : null);
   const resolvedWorkspaceId = workspaceId || (prog ? prog.workspaceId || prog.workspace_id || null : null);
@@ -1030,7 +935,7 @@ function getOrCreateOpenTicket({ program, channel, threadTs, requesterId, questi
 // thread UI flips back to "someone will be here soon", the organizer card
 // updates, and the reopen is announced in the thread.
 // Credit a thread answer, once per helper.
-function creditThreadReply(ticket: Row, userId: string): void {
+function creditThreadReply(ticket: Ticket, userId: string): void {
   try {
     const already = db
       .listTicketEvents(ticket.id)
@@ -1040,15 +945,10 @@ function creditThreadReply(ticket: Row, userId: string): void {
     db.recordFirstResponse(ticket.id, true);
     helperRoute.recordReply({ programId: ticket.program_id, userId, category: ticket.category });
   } catch (e) {
-    log.debug("tickets", `thread reply credit failed for #${ticket.id}: ${e.message}`);
+    log.debug("tickets", `thread reply credit failed for #${ticket.id}: ${errorMessage(e)}`);
   }
 }
 
-// A roster helper speaking in someone else's thread means a human is on it:
-// mark the thread taken over so no automated ping (or answer) talks over them.
-// Works with or without a ticket — ticketless programs (tickets disabled) never
-// had any record of helper replies, which is how Pixie kept paging people into
-// threads a helper was already working.
 function noteHelperEngaged({ channel, threadTs, userId, parentUserId, workspaceId }: { channel: string; threadTs: string; userId: string; parentUserId?: string | null; workspaceId?: string | null }): void {
   if (!parentUserId || parentUserId === userId) return;
   try {
@@ -1056,18 +956,17 @@ function noteHelperEngaged({ channel, threadTs, userId, parentUserId, workspaceI
     if (!prog || !isActorAllowed(prog.id, userId, false)) return;
     if (!db.isTakeover(threadTs)) db.markTakeover(threadTs, channel, userId);
   } catch (e) {
-    log.debug("tickets", `helper engagement mark failed: ${e.message}`);
+    log.debug("tickets", `helper engagement mark failed: ${errorMessage(e)}`);
   }
 }
 
-function noteThreadActivity({ channel, threadTs, userId, text = null, workspaceId = null, client = null, parentUserId = null }: { channel: string; threadTs: string; userId: string; text?: string | null; workspaceId?: string | null; client?: Client | null; parentUserId?: string | null }): Row | null {
+function noteThreadActivity({ channel, threadTs, userId, text = null, workspaceId = null, client = null, parentUserId = null }: { channel: string; threadTs: string; userId: string; text?: string | null; workspaceId?: string | null; client?: SlackClient | null; parentUserId?: string | null }): TicketActionResult | null {
   if (!threadTs || !userId) return null;
   noteHelperEngaged({ channel, threadTs, userId, parentUserId, workspaceId });
   let ticket = db.getTicketByThreadTs(threadTs, workspaceId);
   if (!ticket) return null;
   const prog = programs.get(ticket.program_id);
   ticket = reclassifyOnFollowUp(ticket, { prog, question: text, requesterId: userId });
-  // Roster helpers only.
   if (userId !== ticket.requester_id && isActorAllowed(ticket.program_id, userId, false)) {
     creditThreadReply(ticket, userId);
   }
@@ -1090,24 +989,21 @@ function noteThreadActivity({ channel, threadTs, userId, text = null, workspaceI
           threadTs: updated.thread_ts,
           text: reply.plainDashes(`Ticket reopened by <@${userId}>.`),
         })
-        .catch((e) => log.debug("tickets", `reopen notice failed for #${updated.id}: ${e.message}`));
+        .catch((e) => log.debug("tickets", `reopen notice failed for #${updated.id}: ${errorMessage(e)}`));
     }
   }
   try {
     require("./resolutionWatcher").schedule({ ticketId: updated.id, client, program: prog });
   } catch (e) {
-    log.debug("tickets", `resolution watcher schedule failed for #${updated.id}: ${e.message}`);
+    log.debug("tickets", `resolution watcher schedule failed for #${updated.id}: ${errorMessage(e)}`);
   }
   return updated;
 }
 
-function claimTicket({ ticketId, actorId, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId: string; programId?: string | null; workspaceId?: string | null; client?: Client | null; program?: Row | null }): Row {
+function claimTicket({ ticketId, actorId, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId: string; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
-  // db.claimTicket's conditional UPDATE is the race guard: exactly one of two
-  // simultaneous claims moves the row out of the open set, so only the winner
-  // reaches here. recordClaim is itself idempotent against a Slack retry.
   const ok = db.claimTicket(ticketId, actorId);
   if (!ok) return { error: "ticket is not open" };
   const updated = db.getTicket(ticketId);
@@ -1115,21 +1011,17 @@ function claimTicket({ ticketId, actorId, programId = null, workspaceId = null, 
   try {
     assignmentLifecycle.recordClaim({ ticket: updated, userId: actorId });
   } catch (e) {
-    log.debug("tickets", `claim lifecycle record failed for #${ticketId}: ${e.message}`);
+    log.debug("tickets", `claim lifecycle record failed for #${ticketId}: ${errorMessage(e)}`);
   }
   const prog = program || programs.get(ticket.program_id);
   if (client && updated.card_ts) void syncCard(client, updated, `[Ticket #${updated.id}] Claimed by <@${actorId}>`).catch(() => {});
   return { ok: true, ticket: updated };
 }
 
-// Unclaim === release: a helper who had claimed the ticket gives it back to
-// the queue. Recorded as helper_assignment_released (distinct from a decline,
-// which is a pass before any claim), then re-offered to the pool.
-function unclaimTicket({ ticketId, actorId = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; programId?: string | null; workspaceId?: string | null; client?: Client | null; program?: Row | null }): Row {
+function unclaimTicket({ ticketId, actorId = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
-  // Release is a post-claim action: there must be a claim to give back.
   if (!WORKABLE.includes(ticket.status) || !ticket.assignee_id) {
     return { error: "ticket is not claimed" };
   }
@@ -1142,18 +1034,14 @@ function unclaimTicket({ ticketId, actorId = null, programId = null, workspaceId
     assignmentLifecycle.recordRelease({ ticket: updated, userId: releasedBy });
     assignmentLifecycle.recordOffer({ ticket: updated, to: null, source: "released" });
   } catch (e) {
-    log.debug("tickets", `release lifecycle record failed for #${ticketId}: ${e.message}`);
+    log.debug("tickets", `release lifecycle record failed for #${ticketId}: ${errorMessage(e)}`);
   }
   const prog = program || programs.get(ticket.program_id);
   if (client && updated.card_ts) void syncCard(client, updated, `[Ticket #${updated.id}] Released to the queue`).catch(() => {});
   return { ok: true, ticket: updated };
 }
 
-// A helper passes on a ticket they have not claimed. Purely a lifecycle
-// record: ticket status, assignee, and resolution are untouched, and the
-// ticket stays offered to everyone else. Same program-scoped authorization as
-// claim — a helper can only decline tickets in a program they are active in.
-function declineAssignment({ ticketId, actorId = null, reason = null, programId = null, workspaceId = null, client = null, program = null, role = null }: { ticketId: number; actorId?: string | null; reason?: unknown; programId?: string | null; workspaceId?: string | null; client?: Client | null; program?: Row | null; role?: string | null }): Row {
+function declineAssignment({ ticketId, actorId = null, reason = null, programId = null, workspaceId = null, client = null, program = null, role = null }: { ticketId: number; actorId?: string | null; reason?: unknown; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null; role?: string | null }): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1162,20 +1050,12 @@ function declineAssignment({ ticketId, actorId = null, reason = null, programId 
   if (ticket.assignee_id === actorId) {
     return { error: "you have claimed this ticket — release it instead of declining" };
   }
-  // A decline only closes a real open offer when it targeted this decliner —
-  // a pool decline leaves the pool offer open for someone else, so nothing
-  // reroutes. See assignmentLifecycle.offersFromEvents.
   const wasTargetedAtDecliner = assignmentLifecycle.openOfferFor(ticket.program_id, ticketId)?.to === actorId;
   const res = assignmentLifecycle.recordDecline({ ticket, userId: actorId, reason });
   if (!res.recorded) return { ok: true, ticket, deduped: true };
   recordTransition(ticket, actorId, "assignment_declined", reason ? { reason: String(reason).slice(0, 40) } : null);
   if (client && ticket.card_ts) void syncCard(client, db.getTicket(ticketId), `[Ticket #${ticket.id}] <@${actorId}> passed`).catch(() => {});
 
-  // The one helper who had this ticket just passed on it: that's the
-  // "something meaningful happened" this system requires before a NEW page
-  // goes out. Route again, skipping everyone who already declined/timed out,
-  // for exactly one fresh ping to the next eligible name — never a second one
-  // for the decliner.
   if (wasTargetedAtDecliner && client) {
     const prog = program || programs.get(ticket.program_id);
     const pol = policyFor(prog, { channel: ticket.channel, workspaceId: ticket.workspace_id, role });
@@ -1189,7 +1069,7 @@ function declineAssignment({ ticketId, actorId = null, reason = null, programId 
       });
       if (next) {
         void pingSpecificHelper({ client, ticket: db.getTicket(ticketId), program: prog, userId: next.userId, source: "reassign_ping", role }).catch((e) => {
-          log.warn("tickets", `reassign ping failed for #${ticketId}: ${e.message}`);
+          log.warn("tickets", `reassign ping failed for #${ticketId}: ${errorMessage(e)}`);
         });
       }
     }
@@ -1197,7 +1077,7 @@ function declineAssignment({ ticketId, actorId = null, reason = null, programId 
   return { ok: true, ticket };
 }
 
-function resolveTicketWorker(ticket: Row | null, resolvingActorId: string | null = null): string | null {
+function resolveTicketWorker(ticket: Ticket | null, resolvingActorId: string | null = null): string | null {
   if (!ticket || !ticket.program_id || !ticket.id) return null;
   const helpers = new Set(db.listHelpers(ticket.program_id, false).map((helper) => helper.user_id));
   const activeHelpers = new Set(db.listHelpers(ticket.program_id, true).map((helper) => helper.user_id));
@@ -1216,7 +1096,8 @@ function resolveTicketWorker(ticket: Row | null, resolvingActorId: string | null
 // the caller owns all I/O. `source` is the only thing that distinguishes a
 // dashboard resolve from a Slack one; it lands in the audit metadata and
 // nowhere in the ticket's domain state.
-function finishResolve({ ticket, actorId, resolution, source = null, resolutionMeta = null, client = null, resolvedAt = null, creditId = null }: { ticket: Row; actorId: string | null; resolution: string | null; source?: string | null; resolutionMeta?: Row | null; client?: Client | null; resolvedAt?: number | null; creditId?: string | null }): Row {
+function finishResolve(options: FinishResolveOptions): TicketActionResult {
+  const { ticket, actorId, resolution, source = null, resolutionMeta = null, client = null, resolvedAt = null, creditId = null } = options;
   const resText = resolution || (actorId ? `resolved by <@${actorId}>` : "resolved");
   const ok = db.resolveTicket(ticket.id, resText, actorId || null, resolvedAt);
   if (!ok) return { error: "ticket could not be resolved" };
@@ -1225,20 +1106,18 @@ function finishResolve({ ticket, actorId, resolution, source = null, resolutionM
   recordTransition(updated, actorId, "resolved", detail, resolvedAt);
   let workerId = null;
   try {
-    // creditId: a rule already knows who did the work (e.g. the last-word rule).
     workerId = creditId || resolveTicketWorker(ticket, actorId);
-    // A system resolve (auto-resolve, history import) has no clicking actor,
-    // so the credited helper is also shown as the resolver.
     db.handle().query("UPDATE tickets SET resolved_credit_id = ?, resolved_by = COALESCE(resolved_by, ?) WHERE id = ?").run(workerId, actorId ? null : workerId, ticket.id);
     if (workerId) helperRoute.recordResolution({ programId: ticket.program_id, userId: workerId, category: ticket.category });
   } catch (e) {
-    log.warn("tickets", `recordResolution failed: ${e.message}`);
+    log.warn("tickets", `recordResolution failed: ${errorMessage(e)}`);
   }
   if (source !== "backfill") resolutionPipeline.schedule({ ticket: updated, client, actorId, workerId });
   return { updated, cardText: `[Ticket #${updated.id}] Resolved`, ackText: `✅ Resolved${actorId ? ` by <@${actorId}>` : ""}.` };
 }
 
-function resolveTicket({ ticketId, actorId = null, resolution = null, source = null, resolutionMeta = null, programId = null, workspaceId = null, client = null, program = null, resolvedAt = null, creditId = null }: { ticketId: number; actorId?: string | null; resolution?: string | null; source?: string | null; resolutionMeta?: Row | null; programId?: string | null; workspaceId?: string | null; client?: Client | null; program?: Row | null; resolvedAt?: number | null; creditId?: string | null }): Row {
+function resolveTicket(options: ResolveTicketOptions): TicketActionResult {
+  const { ticketId, actorId = null, resolution = null, source = null, resolutionMeta = null, programId = null, workspaceId = null, client = null, program = null, resolvedAt = null, creditId = null } = options;
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1249,10 +1128,7 @@ function resolveTicket({ ticketId, actorId = null, resolution = null, source = n
   return { ok: true, ticket: d.updated };
 }
 
-// The thread's "Mark as resolved" button. Requester or a program helper only.
-// Idempotent: a ticket already resolved returns deduped with no second write
-// and no second Slack message.
-function publicResolveTicket({ ticketId, actorId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; workspaceId?: string | null; client?: Client | null; program?: Row | null }): Row {
+function publicResolveTicket({ ticketId, actorId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   if (!ticket) return { error: "ticket not found" };
   if (workspaceId && ticket.workspace_id && ticket.workspace_id !== workspaceId) return { error: "workspace mismatch" };
@@ -1267,10 +1143,7 @@ function publicResolveTicket({ ticketId, actorId = null, workspaceId = null, cli
   return { ok: true, ticket: d.updated };
 }
 
-// The resolved message's "Reopen" button. Same authorization as resolve.
-// Idempotent via the guarded db call: only a resolved/closed ticket moves, so
-// a double-click bumps reopen_count once and posts one "reopened" line.
-async function publicReopenTicket({ ticketId, actorId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; workspaceId?: string | null; client?: Client | null; program?: Row | null }): Promise<Row> {
+async function publicReopenTicket({ ticketId, actorId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): Promise<TicketActionResult> {
   const ticket = db.getTicket(ticketId);
   if (!ticket) return { error: "ticket not found" };
   if (workspaceId && ticket.workspace_id && ticket.workspace_id !== workspaceId) return { error: "workspace mismatch" };
@@ -1295,13 +1168,13 @@ async function publicReopenTicket({ ticketId, actorId = null, workspaceId = null
         text: reply.plainDashes(`Ticket reopened${actorId ? ` by <@${actorId}>` : ""}.`),
       });
     } catch (e) {
-      log.debug("tickets", `reopen notice failed for #${updated.id}: ${e.message}`);
+      log.debug("tickets", `reopen notice failed for #${updated.id}: ${errorMessage(e)}`);
     }
   }
   return { ok: true, ticket: updated };
 }
 
-function assignTicket({ ticketId, actorId = null, assigneeId, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; assigneeId: string; programId?: string | null; workspaceId?: string | null; client?: Client | null; program?: Row | null }): Row {
+function assignTicket({ ticketId, actorId = null, assigneeId, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; assigneeId: string; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1311,7 +1184,7 @@ function assignTicket({ ticketId, actorId = null, assigneeId, programId = null, 
   try {
     helpers = db.listHelpers(ticket.program_id);
   } catch (e) {
-    log.debug("tickets", `listHelpers failed during assign: ${e.message}`);
+    log.debug("tickets", `listHelpers failed during assign: ${errorMessage(e)}`);
   }
   const memberIds = new Set(helpers.map((h) => h.user_id));
   let actorOk = true;
@@ -1319,12 +1192,12 @@ function assignTicket({ ticketId, actorId = null, assigneeId, programId = null, 
   try {
     if (actorId && helpers.length > 0 && !memberIds.has(actorId) && !(isAdmin && isAdmin(actorId))) actorOk = false;
   } catch (e) {
-    log.debug("tickets", `actor isAdmin check failed during assign: ${e.message}`);
+    log.debug("tickets", `actor isAdmin check failed during assign: ${errorMessage(e)}`);
   }
   try {
     if (helpers.length > 0 && !memberIds.has(assigneeId) && !(isAdmin && isAdmin(assigneeId))) assigneeOk = false;
   } catch (e) {
-    log.debug("tickets", `assignee isAdmin check failed during assign: ${e.message}`);
+    log.debug("tickets", `assignee isAdmin check failed during assign: ${errorMessage(e)}`);
   }
   if (!actorOk) return { error: "actor is not a helper of this program" };
   if (!assigneeOk) return { error: "assignee is not a helper of this program" };
@@ -1332,20 +1205,17 @@ function assignTicket({ ticketId, actorId = null, assigneeId, programId = null, 
   if (!ok) return { error: "ticket is not assignable" };
   const updated = db.getTicket(ticketId);
   recordTransition(updated, actorId, "assigned", { to: assigneeId });
-  // A targeted offer: routing (or an organizer via the reassign menu) put this
-  // ticket in front of one helper. It becomes a claimed offer only when that
-  // helper claims — assignment alone is not an accept.
   try {
     assignmentLifecycle.recordOffer({ ticket: updated, to: assigneeId, source: actorId ? "reassign" : "auto", actorId });
   } catch (e) {
-    log.debug("tickets", `assign offer record failed for #${ticketId}: ${e.message}`);
+    log.debug("tickets", `assign offer record failed for #${ticketId}: ${errorMessage(e)}`);
   }
   const prog = program || programs.get(ticket.program_id);
   if (client && updated.card_ts) void syncCard(client, updated, `[Ticket #${updated.id}] Assigned to <@${assigneeId}>`).catch(() => {});
   return { ok: true, ticket: updated };
 }
 
-function snoozeTicket({ ticketId, actorId = null, until, programId = null, workspaceId = null }: { ticketId: number; actorId?: string | null; until: number; programId?: string | null; workspaceId?: string | null }): Row {
+function snoozeTicket({ ticketId, actorId = null, until, programId = null, workspaceId = null }: { ticketId: number; actorId?: string | null; until: number; programId?: string | null; workspaceId?: string | null }): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1360,7 +1230,7 @@ function snoozeTicket({ ticketId, actorId = null, until, programId = null, works
   return { ok: true, ticket: updated };
 }
 
-function duplicateTicket({ ticketId, actorId = null, canonicalId, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; canonicalId: number; programId?: string | null; workspaceId?: string | null; client?: Client | null; program?: Row | null }): Row {
+function duplicateTicket({ ticketId, actorId = null, canonicalId, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; canonicalId: number; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1377,7 +1247,7 @@ function duplicateTicket({ ticketId, actorId = null, canonicalId, programId = nu
   return { ok: true, ticket: updated };
 }
 
-function escalateStatusTicket({ ticketId, actorId = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; programId?: string | null; workspaceId?: string | null; client?: Client | null; program?: Row | null }): Row {
+function escalateStatusTicket({ ticketId, actorId = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1390,7 +1260,7 @@ function escalateStatusTicket({ ticketId, actorId = null, programId = null, work
   return { ok: true, ticket: updated };
 }
 
-function reopenTicket({ ticketId, actorId = null, source = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; source?: string | null; programId?: string | null; workspaceId?: string | null; client?: Client | null; program?: Row | null }): Row {
+function reopenTicket({ ticketId, actorId = null, source = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; source?: string | null; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1404,7 +1274,7 @@ function reopenTicket({ ticketId, actorId = null, source = null, programId = nul
   return { ok: true, ticket: updated };
 }
 
-function closeTicket({ ticketId, actorId = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; programId?: string | null; workspaceId?: string | null; client?: Client | null; program?: Row | null }): Row {
+function closeTicket({ ticketId, actorId = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1423,7 +1293,7 @@ function closeTicket({ ticketId, actorId = null, programId = null, workspaceId =
 // thread) can tell who's actually behind the branded identity; replies coming
 // from Slack itself (the reply modal, macros) skip it since the human is
 // already the one typing in the thread.
-async function replyToTicket({ ticketId, authorId, text, client, programId = null, workspaceId = null, program = null, source = null, requireOpen = false }: { ticketId: number; authorId: string; text: string; client: Client; programId?: string | null; workspaceId?: string | null; program?: Row | null; source?: string | null; requireOpen?: boolean }): Promise<Row> {
+async function replyToTicket({ ticketId, authorId, text, client, programId = null, workspaceId = null, program = null, source = null, requireOpen = false }: { ticketId: number; authorId: string; text: string; client: SlackClient; programId?: string | null; workspaceId?: string | null; program?: Program | null; source?: string | null; requireOpen?: boolean }): Promise<TicketActionResult> {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId: authorId });
   if (err) return { error: err };
@@ -1449,27 +1319,26 @@ async function replyToTicket({ ticketId, authorId, text, client, programId = nul
     });
     ts = res?.ts || null;
   } catch (e) {
-    log.error("tickets", `dashboard reply failed for #${ticketId}: ${e.message}`);
-    return { error: e.message };
+    log.error("tickets", `dashboard reply failed for #${ticketId}: ${errorMessage(e)}`);
+    return { error: errorMessage(e) };
   }
   db.recordFirstResponse(ticketId, true);
-  // Learn from the reply; never fail on it.
   try {
     helperRoute.recordReply({ programId: ticket.program_id, userId: authorId, category: ticket.category });
   } catch (e) {
-    log.debug("tickets", `reply expertise record failed for #${ticketId}: ${e.message}`);
+    log.debug("tickets", `reply expertise record failed for #${ticketId}: ${errorMessage(e)}`);
   }
   const refreshed = db.getTicket(ticketId);
   recordTransition(refreshed, authorId, "helper_reply", { ts, text: clean });
   try {
     require("./resolutionWatcher").schedule({ ticketId, client, program: prog });
   } catch (e) {
-    log.debug("tickets", `resolution watcher schedule failed for #${ticketId}: ${e.message}`);
+    log.debug("tickets", `resolution watcher schedule failed for #${ticketId}: ${errorMessage(e)}`);
   }
   return { ok: true, ts, ticket: refreshed };
 }
 
-function addInternalNote({ ticketId, authorId, body, programId = null, workspaceId = null }: { ticketId: number; authorId: string; body: string; programId?: string | null; workspaceId?: string | null }): Row {
+function addInternalNote({ ticketId, authorId, body, programId = null, workspaceId = null }: { ticketId: number; authorId: string; body: string; programId?: string | null; workspaceId?: string | null }): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId: authorId });
   if (err) return { error: err };
@@ -1482,7 +1351,7 @@ function addInternalNote({ ticketId, authorId, body, programId = null, workspace
   return { ok: true, noteId: id };
 }
 
-function parseTicketAction(action: Row, body: Row): Row {
+function parseTicketAction(action: TicketActionInput, body: TicketActionBody): ParsedTicketAction {
   const raw = action?.selected_option?.value || action?.value || "";
   const [idStr, extra] = String(raw).split(":");
   return {
@@ -1494,7 +1363,7 @@ function parseTicketAction(action: Row, body: Row): Row {
   };
 }
 
-function registerActions(app: Row): void {
+function registerActions(app: TicketActionApp): void {
   app.action("claim_ticket", async ({ action, body, ack, client }) => {
     await ack();
     const { ticketId, actorId, workspaceId } = parseTicketAction(action, body);
@@ -1514,9 +1383,6 @@ function registerActions(app: Row): void {
     const { ticketId, actorId, workspaceId } = parseTicketAction(action, body);
     if (!ticketId || !actorId) return;
     const res = await declineAssignment({ ticketId, actorId, workspaceId, client });
-    // Clicker-only acknowledgement so a Decline isn't a silent void — never a
-    // channel post, never a ping. Silent on a plain failure, like every other
-    // organizer-card action; the one hint is "you already claimed this".
     const channel = body.channel?.id;
     let text = null;
     if (res.ok) text = `Noted — you passed on ticket #${ticketId}. It stays open for the others.`;
@@ -1527,7 +1393,7 @@ function registerActions(app: Row): void {
     try {
       await client.chat.postEphemeral({ channel, user: actorId, text });
     } catch (e) {
-      log.debug("tickets", `decline ack failed for #${ticketId}: ${e.message}`);
+      log.debug("tickets", `decline ack failed for #${ticketId}: ${errorMessage(e)}`);
     }
   });
 
@@ -1552,8 +1418,6 @@ function registerActions(app: Row): void {
     await closeTicket({ ticketId, actorId, workspaceId, client });
   });
 
-  // The thread's "Mark as resolved" — st_resolve is the current id;
-  // public_resolve_ticket stays wired for buttons posted before this change.
   const onPublicResolve = async ({ action, body, ack, client }) => {
     await ack();
     const { ticketId, actorId, workspaceId } = parseTicketAction(action, body);
@@ -1567,7 +1431,7 @@ function registerActions(app: Row): void {
           text: "Only the person who asked, or a helper, can resolve this one.",
         });
       } catch (e) {
-        log.debug("tickets", `ephemeral notice failed: ${e.message}`);
+        log.debug("tickets", `ephemeral notice failed: ${errorMessage(e)}`);
       }
     }
   };
@@ -1587,7 +1451,7 @@ function registerActions(app: Row): void {
           text: "Only the person who asked, or a helper, can reopen this one.",
         });
       } catch (e) {
-        log.debug("tickets", `ephemeral notice failed: ${e.message}`);
+        log.debug("tickets", `ephemeral notice failed: ${errorMessage(e)}`);
       }
     }
   });
@@ -1624,7 +1488,7 @@ function registerActions(app: Row): void {
         },
       });
     } catch (e) {
-      log.warn("tickets", `failed to open reply modal for #${ticketId}: ${e.message}`);
+      log.warn("tickets", `failed to open reply modal for #${ticketId}: ${errorMessage(e)}`);
     }
   });
 
@@ -1633,7 +1497,7 @@ function registerActions(app: Row): void {
     try {
       ({ ticketId } = JSON.parse(view.private_metadata || "{}"));
     } catch (e) {
-      log.debug("tickets", `failed to parse view metadata: ${e.message}`);
+      log.debug("tickets", `failed to parse view metadata: ${errorMessage(e)}`);
       await ack({ response_action: "errors", errors: { reply_block: "could not read ticket — reopen and try again" } });
       return;
     }

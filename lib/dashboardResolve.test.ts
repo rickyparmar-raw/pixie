@@ -24,7 +24,6 @@ function ticket(programId, status = "waiting_for_helper") {
   return id;
 }
 
-/* --------------------------------------------------- identity resolution -- */
 
 test("internalUserInfoBatch dedupes, resolves the name variants, and never throws", async () => {
   api.setSlackClient({
@@ -41,7 +40,6 @@ test("internalUserInfoBatch dedupes, resolves the name variants, and never throw
   assert.equal(res.users["U-A"].realName, "Real Name");
   assert.equal(res.users["U-A"].username, "handle");
   assert.equal(res.users["U-A"].slackId, "U-A");
-  // No display name or real name — the username is the last name variant.
   assert.equal(res.users["U-NONICK"].displayName, "handle");
   assert.equal(res.users["U-NONICK"].username, "handle");
   assert.equal(res.users["U-DELETED"], null); // deleted/unknown user resolves to null, not an error
@@ -61,7 +59,6 @@ test("internalUserInfo caches a lookup so a page full of one user's rows costs o
   assert.equal(calls, 1);
 });
 
-/* ------------------------------------------------- dashboard resolve path -- */
 
 test("an authorized program helper resolves a ticket from the dashboard, recorded with source", async () => {
   program("dr-ok", ["U-helper"]);

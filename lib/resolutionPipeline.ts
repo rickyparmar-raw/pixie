@@ -5,12 +5,40 @@ import configModule = require("./config");
 import activeLearning = require("./activeLearning");
 import type { Ticket, SlackClient } from "./types";
 
-type DbRow = Record<string, any>;
+interface DbRow {
+  thread_ts?: string;
+  channel?: string;
+  created_at?: number;
+  detail?: unknown;
+  text?: string;
+  user?: string;
+  user_id?: string;
+  role?: string;
+  content?: string;
+  event_type?: string;
+  actor_id?: string;
+  ts?: string;
+  [key: string]: unknown;
+}
 const { config } = configModule;
 
+function errorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) return String((error as { message?: unknown }).message);
+  return String(error);
+}
+
 interface SlackResponse {
-  messages?: Array<Record<string, any>>;
+  messages?: SlackMessage[];
   response_metadata?: { next_cursor?: string };
+}
+
+interface SlackMessage {
+  text?: string;
+  content?: string;
+  bot_id?: string;
+  user?: string;
+  user_id?: string;
+  role?: string;
 }
 
 interface ThreadClient {
@@ -37,16 +65,15 @@ const SUMMARY_SYSTEM_PROMPT = [
   "Be concise and factual. Do not add advice, greetings, or facts that are not in the thread.",
 ].join(" ");
 
-// ticket id -> the running pipeline, so a second caller awaits the same run.
 const inFlight = new Map<number, Promise<unknown>>();
 
-function formatSlackMessage(message: Record<string, any>): string | null {
+function formatSlackMessage(message: SlackMessage): string | null {
   if (!message?.text) return null;
   const who = message.bot_id ? "Pixie" : (message.user ? `<@${message.user}>` : "Requester");
   return `${who}: ${message.text}`;
 }
 
-function formatStoredMessage(message: Record<string, any>): string | null {
+function formatStoredMessage(message: SlackMessage): string | null {
   if (!message?.content) return null;
   const who = message.user_id || message.role || "Requester";
   return `${who}: ${message.content}`;
@@ -56,7 +83,7 @@ function formatTimeline(events: DbRow[]): string {
   return events
     .map((event) => {
       let detail = event.detail;
-      try { detail = detail ? JSON.stringify(JSON.parse(detail)) : null; } catch (_) {}
+      try { detail = detail ? JSON.stringify(JSON.parse(String(detail))) : null; } catch (_) {}
       return `${event.event_type}${event.actor_id ? ` by ${event.actor_id}` : ""}${detail ? ` (${detail})` : ""}`;
     })
     .join("; ");
@@ -96,15 +123,15 @@ async function loadThread({ ticket, client }: { ticket: Ticket; client?: ThreadC
       } while (cursor && messages.length < MAX_THREAD_MESSAGES);
       const transcript = boundTranscript(messages.map(formatSlackMessage).filter((message): message is string => message !== null));
       if (transcript.length > 0) return transcript;
-    } catch (e: any) {
-      log.warn("resolution", `thread fetch failed for #${ticket.id}: ${e.message}`);
+    } catch (e: unknown) {
+      log.warn("resolution", `thread fetch failed for #${ticket.id}: ${errorMessage(e)}`);
     }
   }
 
   try {
-    return boundTranscript(db.getThreadMessages(ticket.thread_ts).map((message: Record<string, any>) => formatStoredMessage(message)).filter((message: string | null): message is string => message !== null));
-  } catch (e: any) {
-    log.warn("resolution", `stored thread fetch failed for #${ticket.id}: ${e.message}`);
+    return boundTranscript(db.getThreadMessages(ticket.thread_ts).map((message: SlackMessage) => formatStoredMessage(message)).filter((message: string | null): message is string => message !== null));
+  } catch (e: unknown) {
+    log.warn("resolution", `stored thread fetch failed for #${ticket.id}: ${errorMessage(e)}`);
     return [];
   }
 }
@@ -120,7 +147,7 @@ async function summarizeResolution({ ticket, client }: { ticket: Ticket; client?
       transcript.length > 0 ? `Thread:\n${transcript.join("\n")}` : null,
       timeline.length > 0 ? `Timeline:\n${formatTimeline(timeline)}` : null,
     ].filter(Boolean).join("\n\n").slice(0, MAX_TRANSCRIPT_CHARS);
-    const answerConfig = config.answer as unknown as Record<string, any>;
+    const answerConfig = config.answer as unknown as { onRateLimited?: unknown };
     const { text } = await llm.complete(
       {
         baseUrl: config.answer.baseUrl,
@@ -143,14 +170,12 @@ async function summarizeResolution({ ticket, client }: { ticket: Ticket; client?
     );
     const summary = llm.stripThinking((text || "").trim());
     return summary || fallback;
-  } catch (e: any) {
-    log.warn("resolution", `summary generation failed for #${ticket.id}: ${e.message}`);
+  } catch (e: unknown) {
+    log.warn("resolution", `summary generation failed for #${ticket.id}: ${errorMessage(e)}`);
     return fallback;
   }
 }
 
-// Each step owns its own idempotency, so a reopened ticket that is resolved
-// again still reaches the steps that have work left to do.
 async function summaryStep({ ticket, client }: PipelineArgs): Promise<string | null> {
   if (db.getResolutionSummary(ticket.id)?.resolution_summary) return null;
   const summary = await summarizeResolution({ ticket, client });
@@ -184,8 +209,8 @@ async function runSteps({ ticket, client, actorId, workerId }: PipelineArgs): Pr
       try {
         await step.run({ ticket, client, actorId, workerId });
         results.push({ name: step.name, ok: true });
-      } catch (e: any) {
-        log.warn("resolution", `${step.name} step failed for #${ticket.id}: ${e.message}`);
+      } catch (e: unknown) {
+        log.warn("resolution", `${step.name} step failed for #${ticket.id}: ${errorMessage(e)}`);
         results.push({ name: step.name, ok: false });
       }
     }
@@ -195,9 +220,6 @@ async function runSteps({ ticket, client, actorId, workerId }: PipelineArgs): Pr
   }
 }
 
-// Resolution work runs on its own after finishResolve returns. It is on by
-// default; lib/test-setup.js pins it off so unit tests that resolve tickets
-// never start model calls, and the tests that cover it call onResolved directly.
 function autoRunEnabled() {
   return process.env.PIXIE_RESOLUTION_PIPELINE !== "false";
 }
@@ -206,7 +228,7 @@ function schedule(args: PipelineArgs): void {
   if (!autoRunEnabled()) return;
   void Promise.resolve()
     .then(() => onResolved(args))
-    .catch((e: any) => log.warn("resolution", `pipeline failed for #${args.ticket?.id}: ${e.message}`));
+    .catch((e: unknown) => log.warn("resolution", `pipeline failed for #${args.ticket?.id}: ${errorMessage(e)}`));
 }
 
 export = {

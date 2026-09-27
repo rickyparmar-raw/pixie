@@ -50,7 +50,6 @@ function mainProg(main = {}) {
   };
 }
 
-// help role: every dimension that materially changes behavior.
 const HELP_CASES = [
   {
     name: "help all on",
@@ -95,8 +94,6 @@ for (const c of HELP_CASES) {
   });
 }
 
-// main role: tickets only with main.ticketsEnabled, escalation/pings only
-// with main.helperEscalationEnabled (both default OFF).
 const MAIN_CASES = [
   {
     name: "main all on",
@@ -138,7 +135,6 @@ test("main role defaults deny (both flags default OFF)", () => {
 });
 
 test("legacy flags derive the same policy (no stored behavior)", () => {
-  // helperPing was opt-in: absent means no pings, everything else on.
   const noPing = { id: "pol-leg", posture: "active", helpChannel: "C-l", channels: ["C-l"] };
   assert.deepEqual(ticketPolicy({ program: noPing, role: "help" }), {
     createOnSupport: true,
@@ -157,7 +153,6 @@ test("legacy flags derive the same policy (no stored behavior)", () => {
     pingHelpers: false,
     expertiseRouting: true,
   });
-  // Pixl's shape: tickets off, helper pings opted in.
   assert.equal(ticketPolicy({ program: { ...noTickets, helperPing: true }, role: "help" }).pingHelpers, true);
 });
 
@@ -187,11 +182,8 @@ test("resolveTicketRole: explicit role wins, program shape is the fallback", () 
   assert.equal(resolveTicketRole({ program: prog, channel: "C-main", role: "help" }), "help");
   assert.equal(resolveTicketRole({ program: prog, channel: "C-help" }), "help");
   assert.equal(resolveTicketRole({ program: prog, channel: "C-main" }), "main");
-  // Unclaimed channel + explicit program: help, so deliberate human escalation
-  // is never silently dropped.
   assert.equal(resolveTicketRole({ program: prog, channel: "C-unknown" }), "help");
   assert.equal(resolveTicketRole({ program: prog }), "help");
-  // Nobody claimed anything and no program was passed: none.
   assert.equal(resolveTicketRole({ channel: "C-unknown" }), "none");
   assert.equal(resolveTicketRole({}), "none");
 });

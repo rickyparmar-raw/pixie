@@ -75,7 +75,6 @@ test("resolved judgement uses canonical resolve, credits the helper, and schedul
   assert.equal(resolved.resolved_by, "U-HELPER");
   assert.match(resolved.resolution, /^auto-resolved:/);
   assert.deepEqual(JSON.parse(event.detail), { source: "auto", verdict: "resolved", confidence: 0.91, reason: "requester confirmed the fix" });
-  // A system resolve: Pixie is the actor, the helper gets the credit.
   assert.equal(event.actor_id, null);
   assert.equal(resolved.resolved_credit_id, "U-HELPER");
 });

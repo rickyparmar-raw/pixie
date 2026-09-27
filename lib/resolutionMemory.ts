@@ -1,8 +1,3 @@
-// Verified resolution memory: resolved tickets become knowledge only after
-// human review. A candidate is proposed (LLM-extracted, validated, or
-// human-written), an authorized helper approves/edits/rejects it, and only
-// approved rows enter the corpus through the existing learned_facts path —
-// the same invalidateCorpus() that teaching uses, so caches stay coherent.
 import db = require("./db");
 import log = require("./log");
 import audit = require("./audit");
@@ -10,7 +5,16 @@ import learn = require("./learn");
 import configModule = require("./config");
 import type { Ticket } from "./types";
 
-type DbRow = Record<string, any>;
+interface DbRow {
+  id?: number;
+  ticket_id?: number;
+  program_id?: string;
+  event_type?: string;
+  actor_id?: string;
+  detail?: unknown;
+  created_at?: number;
+  [key: string]: unknown;
+}
 const { config } = configModule;
 
 interface CandidateExtraction {
@@ -23,11 +27,16 @@ interface CandidateExtraction {
 const CANDIDATE = "candidate";
 const REJECTED = "rejected";
 
+function errorMessage(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) return String((error as { message?: unknown }).message);
+  return String(error);
+}
+
 function existingCandidate(ticketId: number): DbRow | null {
   try {
     return db.candidateForTicket(ticketId);
-  } catch (e: any) {
-    log.warn("resolution-memory", `failed to fetch existing candidate for ticket ${ticketId}: ${e.message}`);
+  } catch (e: unknown) {
+    log.warn("resolution-memory", `failed to fetch existing candidate for ticket ${ticketId}: ${errorMessage(e)}`);
     return null;
   }
 }
@@ -50,8 +59,8 @@ async function extractCandidate(ticket: Ticket, _events: DbRow[]): Promise<Candi
   try {
     const msgs = db.getThreadMessages(ticket.thread_ts) || [];
     for (const m of msgs.slice(-10)) threadBits.push(`${m.role}: ${(m.content || "").slice(0, 400)}`);
-  } catch (e: any) {
-    log.warn("resolution-memory", `failed to get thread messages for ticket ${ticket.thread_ts}: ${e.message}`);
+  } catch (e: unknown) {
+    log.warn("resolution-memory", `failed to get thread messages for ticket ${ticket.thread_ts}: ${errorMessage(e)}`);
   }
   const prompt = [
     "Extract a reusable support fact from this resolved ticket as JSON:",
@@ -79,8 +88,8 @@ async function extractCandidate(ticket: Ticket, _events: DbRow[]): Promise<Candi
   if (!match) return null;
   try {
     return validateExtraction(JSON.parse(match[0]));
-  } catch (e: any) {
-    log.debug("resolution-memory", `failed to parse candidate JSON: ${e.message}`);
+  } catch (e: unknown) {
+    log.debug("resolution-memory", `failed to parse candidate JSON: ${errorMessage(e)}`);
     return null;
   }
 }
@@ -95,8 +104,8 @@ async function proposeFromTicket({ ticketId, actorId }: { ticketId: number; acto
   let extraction = null;
   try {
     extraction = await extractCandidate(ticket, db.listTicketEvents(ticketId, 50));
-  } catch (e: any) {
-    log.warn("resolution-memory", `extraction failed for #${ticketId}: ${e.message}`);
+  } catch (e: unknown) {
+    log.warn("resolution-memory", `extraction failed for #${ticketId}: ${errorMessage(e)}`);
   }
   const question = extraction ? extraction.problem : ticket.question;
   const answer = extraction
@@ -129,7 +138,6 @@ function approveCandidate({ id, actorId, edits = {} }: { id: number; actorId: st
     const updateLearnedFact = db.updateLearnedFact as unknown as (factId: number, patch: Record<string, unknown>) => unknown;
     updateLearnedFact(id, { question: edits.question || null, answer: edits.answer || null, category: edits.category || null });
   }
-  // learn.approve() stamps verified_at and invalidates caches + corpus.
   if (!learn.approve(id)) return { error: "approval failed" };
   const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: row.program_id, actorId, action: "knowledge.candidate_approved", entityType: "learned_fact", entityId: id, metadata: { ticketId: row.ticket_id } });

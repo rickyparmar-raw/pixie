@@ -26,7 +26,6 @@ function newTicket(programId, overrides = {}) {
   return db.getTicket(id);
 }
 
-/* ------------------------------------------------------- pingFatigue ---- */
 
 test("pingFatigue counts only offers targeting this helper, ignoring pool offers and other helpers", () => {
   prog("fatigue-a", ["U-A", "U-B"]);
@@ -50,15 +49,12 @@ test("pingFatigue only counts offers within the trailing 24h window", () => {
   const ticket = newTicket("fatigue-b");
   const old = Date.now() - 30 * 60 * 60 * 1000; // 30h ago
   db.addTicketEvent({ ticketId: ticket.id, programId: "fatigue-b", eventType: "helper_assignment_offered", detail: { to: "U-A", source: "ping" } });
-  // Backdate the row directly — the module has no clock injection, so this is
-  // the only way to exercise the window boundary deterministically.
   db.handle().query("UPDATE ticket_events SET created_at = ? WHERE program_id = 'fatigue-b' AND event_type = 'helper_assignment_offered'").run(old);
 
   const fatigue = helperRoute.pingFatigue("fatigue-b", "U-A");
   assert.equal(fatigue.count, 0, "an offer outside the 24h window must not count toward fatigue");
 });
 
-/* --------------------------------------------------------- scoreHelper -- */
 
 test("fatigue is a small penalty that can only break a near-tie, never outrank real category expertise", () => {
   const specialist = helperRoute.scoreHelper(
@@ -85,7 +81,6 @@ test("fatigue breaks a near-tie in favor of the less-recently/less-frequently pi
   assert.ok(fresh.score - fatigued.score < 2, "the fatigue gap must stay smaller than a single category-match point");
 });
 
-/* ------------------------------------------------------------ recommend -- */
 
 test("recommend never returns an inactive or non-roster helper", () => {
   prog("fair-active", ["U-active"]);
@@ -100,7 +95,6 @@ test("recommend prefers the less-recently-pinged helper between two similarly-qu
   helperRoute.recordResolution({ programId: "fair-tiebreak", userId: "U-quiet", category: "general_support" });
   helperRoute.recordResolution({ programId: "fair-tiebreak", userId: "U-busy", category: "general_support" });
 
-  // U-busy has already absorbed several automated pings recently; U-quiet has not.
   const ticket = newTicket("fair-tiebreak");
   for (let i = 0; i < 3; i += 1) {
     const t = newTicket("fair-tiebreak");
@@ -116,8 +110,6 @@ test("recommend still lets a genuine specialist win even against a fatigued but 
   helperRoute.recordResolution({ programId: "fair-specialist", userId: "U-specialist", category: "hardware" });
   helperRoute.recordResolution({ programId: "fair-specialist", userId: "U-specialist", category: "hardware" });
   helperRoute.recordResolution({ programId: "fair-specialist", userId: "U-specialist", category: "hardware" });
-  // The all-rounder has broad history but nothing in this category, and is
-  // completely un-pinged (fatigue would otherwise favor them).
   helperRoute.recordResolution({ programId: "fair-specialist", userId: "U-allrounder", category: "general_support" });
   helperRoute.recordResolution({ programId: "fair-specialist", userId: "U-allrounder", category: "shop_orders" });
 
@@ -146,7 +138,6 @@ test("expertiseRouting off selects by plain workload in roster order", () => {
   for (let i = 0; i < 4; i += 1) {
     helperRoute.recordResolution({ programId: "fair-plain", userId: "U-old-expert", category: "pcb" });
   }
-  // Pile open tickets on the expert; the idle newcomer has no expertise at all.
   for (let i = 0; i < 3; i += 1) {
     const id = db.createTicket({
       programId: "fair-plain",
@@ -162,7 +153,6 @@ test("expertiseRouting off selects by plain workload in roster order", () => {
   assert.ok(!top.reasons.some((r) => /verified|declared|resolutions/.test(r)), "plain reasons never cite expertise");
   assert.ok(top.reasons.some((r) => /no open assigned tickets/.test(r)));
 
-  // No load anywhere: roster order wins, deterministically.
   prog("fair-plain-tie", ["U-first", "U-second"]);
   const a = helperRoute.recommend({ programId: "fair-plain-tie", limit: 2, expertiseRouting: false });
   const b = helperRoute.recommend({ programId: "fair-plain-tie", limit: 2, expertiseRouting: false });

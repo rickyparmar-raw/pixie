@@ -1,8 +1,6 @@
 // @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
-// End-to-end: one resolution drives routing credit, the stored summary and
-// active learning together, all attributed to the helper who answered.
 const { test, before } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -37,7 +35,6 @@ function openTicket(programId, suffix, question) {
   return db.getTicket(id);
 }
 
-// Summary calls and extraction calls share llm.complete; answer by label.
 function stubModel(extraction) {
   const original = llm.complete;
   llm.complete = async (_opts, label) => (label === "resolution-summary"
@@ -49,7 +46,6 @@ function stubModel(extraction) {
 async function resolveAndSettle(ticket, actorId, resolution) {
   const result = tickets.resolveTicket({ ticketId: ticket.id, actorId, programId: ticket.program_id, resolution });
   assert.equal(result.ok, true);
-  // The pipeline is fire-and-forget; run it to completion deterministically.
   await resolutionPipeline.onResolved({ ticket: db.getTicket(ticket.id), actorId, workerId: tickets.resolveTicketWorker(db.getTicket(ticket.id), actorId) });
   return db.getTicket(ticket.id);
 }

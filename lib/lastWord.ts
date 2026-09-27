@@ -1,8 +1,3 @@
-// The "last word" resolution rule, agreed with the owner: a help thread is
-// resolved when a helper had the last human reply and the requester didn't
-// come back for LAST_WORD_QUIET_MS. The helper who had the last word gets the
-// credit, and the resolution is dated to that reply. Anyone who was ever on
-// the program's roster counts as a helper, so past helpers keep their credit.
 import db = require("./db");
 
 interface ThreadRow {
@@ -22,15 +17,12 @@ function everHelper(programId: string | null | undefined, userId: string | null)
   return (db.listHelpers(programId, false) as Array<{ user_id?: string }>).some((row) => row.user_id === userId);
 }
 
-// Slack ts strings are seconds; stored event fallbacks are already ms.
 function toMs(ts: unknown): number | null {
   const raw = Number(ts);
   if (!Number.isFinite(raw) || raw <= 0) return null;
   return raw < 1e11 ? Math.round(raw * 1000) : raw;
 }
 
-// rows: [{ ts, userId, isBot }] in any order, parent included or not.
-// Returns { helperId, at } when the rule fires, else null.
 function helperLastWord({ programId, requesterId, threadTs = null, rows = [], now = Date.now() }: { programId?: string; requesterId?: string; threadTs?: string | null; rows?: ThreadRow[]; now?: number } = {}): { helperId: string; at: number } | null {
   const humans = rows
     .filter((row): row is ThreadRow & { userId: string } => Boolean(row && row.userId && !row.isBot && (threadTs === null || String(row.ts) !== String(threadTs))))

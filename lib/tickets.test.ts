@@ -36,7 +36,6 @@ test("escalateTicket creates a ticket in DB and builds card blocks", async () =>
   assert.ok(ticket);
   assert.equal(ticket.program_id, "sprig");
   assert.equal(ticket.question, "how do i solder the screen");
-  // In-thread ack first, organizer-channel card second.
   assert.equal(posted.length, 2);
   assert.match(posted[0].text, /Someone will be here to help you soon/);
   assert.equal(posted[0].channel, "C-sprig");
@@ -180,26 +179,21 @@ test("cross-program routing: Program A and Program B cards route strictly to the
   assert.ok(ticketB);
   assert.equal(ticketB.program_id, "prog-b");
 
-  // 4 posts total: 2 in-thread acks + 2 organizer cards
   assert.equal(posts.length, 4);
 
-  // Program A in-thread ack goes to C-help-a thread
   assert.equal(posts[0].channel, "C-help-a");
   assert.equal(posts[0].thread_ts, "t-a-1");
   assert.match(posts[0].text, /Someone will be here to help you soon/);
 
-  // Program A card goes ONLY to C-org-a
   assert.equal(posts[1].channel, "C-org-a");
   assert.notEqual(posts[1].channel, "C-help-a");
   assert.notEqual(posts[1].channel, "C-org-b");
   assert.match(posts[1].text, /\[Ticket #\d+\]/);
 
-  // Program B in-thread ack goes to C-help-b thread
   assert.equal(posts[2].channel, "C-help-b");
   assert.equal(posts[2].thread_ts, "t-b-1");
   assert.match(posts[2].text, /Someone will be here to help you soon/);
 
-  // Program B card goes ONLY to C-org-b
   assert.equal(posts[3].channel, "C-org-b");
   assert.notEqual(posts[3].channel, "C-help-b");
   assert.notEqual(posts[3].channel, "C-org-a");
@@ -235,7 +229,6 @@ test("never fall back to public help channel if no organizer channel is configur
   });
 
   assert.ok(ticket);
-  // Only the in-thread ack is posted into C-public-help; no ticket card is ever posted to C-public-help
   assert.equal(posts.length, 1);
   assert.equal(posts[0].channel, "C-public-help");
   assert.equal(posts[0].thread_ts, "t-no-org");
@@ -277,7 +270,6 @@ test("never fall back to public help channel if delivery to organizer channel fa
   });
 
   assert.ok(ticket);
-  // Only the in-thread ack was posted in C-public-help-2; no fallback card posted
   assert.equal(posts.length, 1);
   assert.equal(posts[0].channel, "C-public-help-2");
   assert.equal(posts[0].thread_ts, "t-fail-org");
@@ -359,7 +351,6 @@ test("tenant isolation on claim, assign, snooze, resolve, and unclaim", async ()
     question: "alpha issue",
   });
 
-  // 1. Cross-program mismatch rejection
   const progMismatchClaim = await tickets.claimTicket({
     ticketId: ticketAlphaId,
     actorId: "U-helper-alpha",
@@ -367,7 +358,6 @@ test("tenant isolation on claim, assign, snooze, resolve, and unclaim", async ()
   });
   assert.equal(progMismatchClaim.error, "program mismatch");
 
-  // 2. Cross-workspace mismatch rejection
   const wsMismatchClaim = await tickets.claimTicket({
     ticketId: ticketAlphaId,
     actorId: "U-helper-alpha",
@@ -375,7 +365,6 @@ test("tenant isolation on claim, assign, snooze, resolve, and unclaim", async ()
   });
   assert.equal(wsMismatchClaim.error, "workspace mismatch");
 
-  // 3. Non-helper actor rejection
   const foreignActorClaim = await tickets.claimTicket({
     ticketId: ticketAlphaId,
     actorId: "U-helper-beta",
@@ -384,7 +373,6 @@ test("tenant isolation on claim, assign, snooze, resolve, and unclaim", async ()
   });
   assert.equal(foreignActorClaim.error, "actor is not a helper of this program");
 
-  // 4. Authorized helper claim succeeds
   const updates = [];
   const client = {
     chat: {
@@ -406,11 +394,9 @@ test("tenant isolation on claim, assign, snooze, resolve, and unclaim", async ()
   assert.equal(goodClaim.ok, true);
   assert.equal(goodClaim.ticket.status, "claimed");
   assert.equal(goodClaim.ticket.assignee_id, "U-helper-alpha");
-  // Card update went to alpha's organizer channel
   assert.equal(updates.length, 1);
   assert.equal(updates[0].channel, "C-alpha-org");
 
-  // 5. Tenant isolation on snooze
   const badSnooze = tickets.snoozeTicket({
     ticketId: ticketAlphaId,
     actorId: "U-helper-alpha",
@@ -429,7 +415,6 @@ test("tenant isolation on claim, assign, snooze, resolve, and unclaim", async ()
   assert.equal(goodSnooze.ok, true);
   assert.equal(goodSnooze.ticket.status, "snoozed");
 
-  // 6. Tenant isolation on assign
   const badAssign = await tickets.assignTicket({
     ticketId: ticketAlphaId,
     actorId: "U-helper-alpha",
@@ -438,7 +423,6 @@ test("tenant isolation on claim, assign, snooze, resolve, and unclaim", async ()
   });
   assert.equal(badAssign.error, "assignee is not a helper of this program");
 
-  // 7. Tenant isolation on resolve
   const badResolve = await tickets.resolveTicket({
     ticketId: ticketAlphaId,
     actorId: "U-helper-beta",
@@ -482,7 +466,6 @@ test("replyToTicket and addInternalNote: tenant isolation, in-thread replies, an
     question: "secret issue",
   });
 
-  // 1. Add internal note
   const noteMismatch = tickets.addInternalNote({
     ticketId,
     authorId: "U-helper-sec",
@@ -501,10 +484,8 @@ test("replyToTicket and addInternalNote: tenant isolation, in-thread replies, an
   assert.equal(noteSuccess.ok, true);
   assert.ok(noteSuccess.noteId);
 
-  // Internal note must NEVER touch Slack
   assert.equal(posts.length, 0);
 
-  // 2. replyToTicket tenant mismatch
   const replyMismatch = await tickets.replyToTicket({
     ticketId,
     authorId: "U-helper-sec",
@@ -523,7 +504,6 @@ test("replyToTicket and addInternalNote: tenant isolation, in-thread replies, an
   });
   assert.equal(replyWsMismatch.error, "workspace mismatch");
 
-  // 3. Authorized replyToTicket posts to user thread with program branding
   const replyOk = await tickets.replyToTicket({
     ticketId,
     authorId: "U-helper-sec",
@@ -534,18 +514,15 @@ test("replyToTicket and addInternalNote: tenant isolation, in-thread replies, an
   });
   assert.equal(replyOk.ok, true);
 
-  // Delivered into requester's original channel and thread
   assert.equal(posts.length, 1);
   assert.equal(posts[0].channel, "C-sec-help");
   assert.equal(posts[0].thread_ts, "thread-user-1");
   assert.equal(posts[0].text, "We have fixed your issue!");
   assert.equal(posts[0].username, "SecA Support");
 
-  // Ensure internal note is NEVER leaked into the post or reply return value
   assert.ok(!posts[0].text.includes("Confidential"));
   assert.ok(!JSON.stringify(replyOk).includes("Confidential"));
 
-  // Verify internal notes remain strictly in database
   const notes = db.listTicketNotes(ticketId);
   assert.equal(notes.length, 1);
   assert.equal(notes[0].body, "Confidential investigative note");
@@ -1127,7 +1104,6 @@ test("a failed Slack card sync records ticket_slack_sync_failure and never block
   assert.equal(db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = 'ticket_slack_sync_failure'").get().c > before, true);
   assert.match(after.detail, /^(card|thread):message_not_found$/);
   assert.equal(after.program_id, "sync-fail");
-  // the detail is a surface tag + slack error code — never the ticket question
   assert.equal(after.detail.includes("help"), false);
 });
 
@@ -1207,7 +1183,6 @@ test("pingRecommendedHelper @-mentions the best-matched helper, once, and only w
   const ticketId = db.createTicket({ programId: "ping-a", channel: "C-ping-a", threadTs: "t-ping-a", requesterId: "U-req", question: "review question", category: "reviews" });
   const ticket = db.getTicket(ticketId);
 
-  // Opt-in is the whole gate: an unconfigured program pings nobody.
   assert.equal(await tickets.pingRecommendedHelper({ client, ticket, program: { id: "ping-a", name: "PingA" } }), null);
   assert.equal(posts.length, 0);
 
@@ -1219,7 +1194,6 @@ test("pingRecommendedHelper @-mentions the best-matched helper, once, and only w
   assert.match(posts[0].text, /<@U-REVIEWS>/);
   assert.doesNotMatch(posts[0].text, /verified|repl|declared/, "the ping names the person, not the scoring");
 
-  // Re-running the escalation path must not mention the same person again.
   assert.equal(await tickets.pingRecommendedHelper({ client, ticket, program }), null);
   assert.equal(posts.length, 1);
 });
@@ -1277,7 +1251,6 @@ test("a ticket is classified on creation when its program has rules, and routing
   });
   assert.equal(db.getTicketByThreadTs("t-cat-2", null, "cat-a").category, "support");
 
-  // The point of classifying: the specialist now wins the review ticket.
   const [top] = helperRoute.recommend({ programId: "cat-a", category: reviewTicket.category, limit: 1 });
   assert.equal(top.userId, "U-REVIEWER");
   assert.ok(top.reasons.some((r) => r.includes("verified review resolution")));
@@ -1317,10 +1290,8 @@ test("handOffToHelper mentions a helper with no ticket at all, once per thread",
   assert.equal(posts.length, 1);
   assert.match(posts[0].text, /<@U-THR-REVIEW>/);
   assert.equal(posts[0].thread_ts, "thr-1");
-  // No ticket was created by the mention path.
   assert.equal(db.getTicketByThreadTs("thr-1", null, "thr-a"), null);
 
-  // A follow-up in the same thread must not mention them again.
   assert.equal(await tickets.handOffToHelper({
     client, program, channel: "C-thr", threadTs: "thr-1",
     question: "still waiting on review", ticket: null,
@@ -1328,13 +1299,6 @@ test("handOffToHelper mentions a helper with no ticket at all, once per thread",
   assert.equal(posts.length, 1);
 });
 
-/* ============================================================
- * One escalation epoch, one ping — regression fixtures.
- * These reproduce the live bug (repeat markWaitingForHelper calls, one per
- * ungrounded follow-up, each re-declaring a pool offer that superseded the
- * already-outstanding targeted offer and un-deduped the next ping) and lock
- * in the fix: a pool offer is only ever recorded once per epoch.
- * ============================================================ */
 
 function pingHelper(id, helpers) {
   const program = { id, name: id, helpChannel: `C-${id}`, channels: [`C-${id}`], helperPing: true };
@@ -1386,8 +1350,6 @@ test("[epoch] resolved then a normal follow-up reopens the ticket but does not a
   assert.equal(posts.filter((p) => /could you take a look/.test(p.text)).length, 1);
 
   tickets.resolveTicket({ ticketId: ticket.id, actorId: "U-HELPER", programId: "epoch-resolved" });
-  // The requester speaks again in the now-resolved thread — reopens it, but
-  // is not itself an escalation event and must not ping anyone.
   tickets.noteThreadActivity({ channel: "C-epoch-resolved", threadTs: "t-epoch-resolved", userId: "U-req", client });
 
   assert.equal(db.getTicket(ticket.id).status, "reopened");
@@ -1435,7 +1397,6 @@ test("[epoch] a declined helper hands off to exactly one next eligible helper", 
   assert.equal(pings.length, 2, "exactly one new ping goes out after the decline");
   assert.match(pings[1].text, /<@U-SECOND>/);
 
-  // U-FIRST must never be paged again for this ticket.
   assert.ok(!pings.slice(1).some((p) => p.text.includes("U-FIRST")));
 });
 
@@ -1449,10 +1410,8 @@ test("[epoch] a helper already replying in the thread gets zero new automated pi
   });
   assert.equal(posts.filter((p) => /could you take a look/.test(p.text)).length, 1);
 
-  // A roster helper jumps in and replies without formally claiming.
   tickets.noteThreadActivity({ channel: "C-epoch-replied", threadTs: "t-epoch-replied", userId: "U-OTHER", client });
 
-  // Another ungrounded follow-up tries to escalate again.
   await tickets.escalateTicket({
     program, channel: "C-epoch-replied", threadTs: "t-epoch-replied", requesterId: "U-req", question: "still stuck", client,
   });
@@ -1465,9 +1424,6 @@ test("[epoch] the Slack handler firing twice for one event still yields one ping
   const client = { chat: { postMessage: async (p) => { posts.push(p); return { ts: `e7-${posts.length}` }; } } };
   const program = pingHelper("epoch-dup-event", ["U-HELPER"]);
 
-  // db.claimMessage is the actual Slack-event dedupe boundary in
-  // lib/handlers.js — a retried delivery of the same event ts never reaches
-  // a second call to escalateTicket at all.
   const eventTs = "1234567890.000100";
   const runHandlerOnce = async () => {
     if (!db.claimMessage(eventTs, "C-epoch-dup-event")) return;
@@ -1485,8 +1441,6 @@ test("[epoch] the Slack handler firing twice for one event still yields one ping
 test("[epoch] the requester's own explicit @mention of a roster helper suppresses the automated ping", async () => {
   const posts = [];
   const client = { chat: { postMessage: async (p) => { posts.push(p); return { ts: `e8-${posts.length}` }; } } };
-  // Slack-shaped id (no hyphen) — the mention regex only matches [A-Z0-9]+,
-  // same as real Slack ids, which is why the fixture uses one here.
   const program = pingHelper("epoch-explicit-mention", ["UHELPER1"]);
 
   await tickets.escalateTicket({
@@ -1600,7 +1554,6 @@ test("a helper answering in the thread is credited once, and the requester never
     requesterId: "U-ASKER", question: "review question", category: "review",
   });
 
-  // The requester talking in their own thread is not support work.
   tickets.noteThreadActivity({ channel: "C-credit", threadTs: "t-credit", userId: "U-ASKER" });
   assert.equal(helperRoute.getExpertise("credit-a", "U-ASKER").length, 0);
 
@@ -1609,12 +1562,10 @@ test("a helper answering in the thread is credited once, and the requester never
   assert.equal(after.reply_count, 1);
   assert.ok(db.getTicket(id).first_human_response_at, "the reply counts as the first human response");
 
-  // Four messages is still one answered question.
   tickets.noteThreadActivity({ channel: "C-credit", threadTs: "t-credit", userId: "U-HELPER" });
   tickets.noteThreadActivity({ channel: "C-credit", threadTs: "t-credit", userId: "U-HELPER" });
   assert.equal(helperRoute.getExpertise("credit-a", "U-HELPER").find((r) => r.tag === "review").reply_count, 1);
 
-  // And it shows up as a helper_reply event, which is what the dashboard reads.
   const events = db.listTicketEvents(id).filter((e) => e.event_type === "helper_reply");
   assert.equal(events.length, 1);
   assert.equal(events[0].actor_id, "U-HELPER");
@@ -1649,7 +1600,6 @@ test("a passive program still records a dashboard-only ticket, but never a visib
   assert.ok(recorded, "a silent ticket is a record, not participation");
   assert.equal(posts.length, 0);
 
-  // A passive program that would post is still blocked, exactly as before.
   const visible = {
     id: "pas-thread", name: "PasThread", posture: "passive",
     helpChannel: "C-pas-thread", channels: ["C-pas-thread"],
@@ -1668,12 +1618,10 @@ test("[epoch] ticketless: a roster helper replying in the thread stops every lat
   const program = pingHelper("epoch-ticketless", ["UHELPER2", "UHELPER3"]);
   const ask = (q, ts) => tickets.handOffToHelper({ client, program, channel: "C-epoch-ticketless", threadTs: ts, question: q, ticket: null });
 
-  // Thread A: a helper jumps in before Pixie ever pages anyone.
   tickets.noteThreadActivity({ channel: "C-epoch-ticketless", threadTs: "t-tl-a", userId: "UHELPER2", parentUserId: "UREQ1" });
   assert.equal(await ask("how long is review?", "t-tl-a"), null);
   assert.equal(posts.length, 0, "a human is already on the thread, so no page");
 
-  // Thread B: nobody replied, so the first ask still pages exactly one person.
   assert.ok(await ask("how long is review?", "t-tl-b"));
   assert.equal(posts.length, 1);
 });
@@ -1696,8 +1644,6 @@ test("[epoch] a taken-over thread with a ticket never pings on escalation retrie
   assert.equal(posts.filter((p) => /could you take a look/.test(p.text)).length, 0);
 });
 
-// Regression: Pixl runs with tickets off and helper pings on. The help-role
-// policy used to tie pings to tickets, so nobody was ever paged in #pixl-help.
 test("ticketless program with helper pings on pages the category's best helper, once per thread", async () => {
   const prog = {
     id: "ticketless-ping",
@@ -1709,7 +1655,6 @@ test("ticketless program with helper pings on pages the category's best helper, 
     channels: ["C-TLP-HELP"],
     categories: { byChannel: {}, byKeyword: [{ category: "shop_orders", match: ["shop", "my order"] }], fallback: "general_support" },
   };
-  // The shop expert joins last, so roster-order tie-breaking cannot pick them by luck.
   for (const u of ["U-TLP-OTHER", "U-TLP-SHOP"]) db.syncHelper({ programId: prog.id, userId: u, source: "manual" });
   require("./helperRoute").setExpertise({ programId: prog.id, userId: "U-TLP-SHOP", tags: ["shop_orders"] });
   const posted = [];

@@ -103,7 +103,6 @@ async function ask(client, threadTs, question, { messageTs, mode = respond.ALWAY
   });
 }
 
-/* -------------------------------------------------------- knows the answer -- */
 
 test("knows the answer: ticket opens, answer posts in the same thread, ticket stays OPEN", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "yes, as long as it's public" });
@@ -119,11 +118,9 @@ test("knows the answer: ticket opens, answer posts in the same thread, ticket st
   assert.ok(texts.some((t) => /public/.test(t)), "Pixie's answer in the same thread");
   const uiMsg = client.posts.find((p) => /Someone will be here/.test(p.text || ""));
   assert.ok(uiMsg.blocks.find((b) => b.type === "actions")?.elements.some((e) => e.action_id === "st_resolve"));
-  // The docs link the program configured, not a hardcoded one.
   assert.match(JSON.stringify(uiMsg.blocks), /example\.test\/docs/);
 });
 
-/* --------------------------------------------------- doesn't know the answer */
 
 test("doesn't know the answer: the ticket opens identically and moves to waiting_for_helper", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: null, answer: "", unclear: true });
@@ -137,7 +134,6 @@ test("doesn't know the answer: the ticket opens identically and moves to waiting
   assert.ok(client.posts.some((p) => p.channel === ORG), "organizer card posted");
 });
 
-/* --------------------------------------------------- duplicate Slack event -- */
 
 test("the same root event delivered twice yields exactly one ticket and one ticket UI", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
@@ -151,7 +147,6 @@ test("the same root event delivered twice yields exactly one ticket and one tick
   assert.equal(uiMsgs.length, 1, "the open ticket UI is posted once");
 });
 
-/* --------------------------------------------------------- thread replies -- */
 
 test("a reply inside an existing ticket thread does not open a second ticket", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
@@ -159,7 +154,6 @@ test("a reply inside an existing ticket thread does not open a second ticket", a
   await ask(client, "t-thread", "root question about demos");
   const before = db.getTicketByThreadTs("t-thread").id;
 
-  // a follow-up: same thread, its own message ts
   await ask(client, "t-thread", "and what about a CLI?", { messageTs: "t-thread-reply-1", mode: respond.HELP_ONLY });
 
   const rows = db.handle().query("SELECT id FROM tickets WHERE thread_ts = ?").all("t-thread");
@@ -167,7 +161,6 @@ test("a reply inside an existing ticket thread does not open a second ticket", a
   assert.equal(rows[0].id, before);
 });
 
-/* -------------------------------------------------------------- resolve x2 -- */
 
 test("resolve is idempotent: two clicks, one transition, one confirmation, no stale button", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
@@ -188,7 +181,6 @@ test("resolve is idempotent: two clicks, one transition, one confirmation, no st
   assert.ok(updates.some((ui) => JSON.stringify(ui.blocks).includes("st_reopen")));
 });
 
-/* ---------------------------------------------------------- reopen cycle --- */
 
 test("resolve -> reopen -> resolve repeats without corrupting state", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
@@ -210,15 +202,12 @@ test("resolve -> reopen -> resolve repeats without corrupting state", async () =
   assert.match(client.posts.map((p) => p.text || "").join(" "), /Ticket reopened by <@U-cyc>/);
 });
 
-/* ----------------------------------------------- channel-visible marker --- */
 
 test("a ticket puts a marker reaction on the requester's message, swapped for a check on resolve", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
   const client = clientSpy();
   await ask(client, "t-react", "a real question", { userId: "U-react" });
 
-  // The collapsed channel view shows reactions but not thread replies, so the
-  // ticket has to leave a mark on the message itself.
   const opened = client.reactionsAdded.find((r) => r.timestamp === "t-react");
   assert.ok(opened, "a reaction lands on the root message");
   assert.equal(opened.name, "ticket");
@@ -229,13 +218,8 @@ test("a ticket puts a marker reaction on the requester's message, swapped for a 
   assert.ok(client.reactionsRemoved.some((r) => r.timestamp === "t-react" && r.name === "ticket"), "resolve drops the open marker");
 });
 
-/* ------------------------------------------------------------ bot output --- */
 
 test("help channel chatter opens no ticket; the engagement classifier filters it (spec §20)", async () => {
-  // Bot output is filtered upstream (handlers.onMessage, event.bot_id) and
-  // never reaches respond(). Human chatter in the help channel used to open a
-  // ticket unconditionally; a help channel handles genuine support activity,
-  // not every sentence, so chatter is now classified and dropped.
   intent.classifyIntent = async () => intent.CASUAL_CHAT;
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: null, answer: "haha" });
   const client = clientSpy();
@@ -244,7 +228,6 @@ test("help channel chatter opens no ticket; the engagement classifier filters it
   assert.equal(client.posts.length, 0, "and nothing is posted");
 });
 
-/* --------------------------------------------------------- cross-program --- */
 
 test("a passive program (Pixl) opens no ticket; the active program does", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
@@ -272,7 +255,6 @@ test("tickets and their organizer channel belong to the question's own program",
   assert.ok(card, "card goes to this program's organizer channel, not another's");
 });
 
-/* ------------------------ answer confidence never decides ticket-worthiness --- */
 
 test("a classified support message Pixie can't answer still opens a ticket", async () => {
   intent.classifyIntent = async () => intent.HELP_NEEDED;
@@ -286,7 +268,6 @@ test("a classified support message Pixie can't answer still opens a ticket", asy
   assert.ok(client.posts.some((p) => /Someone will be here to help you soon/.test(p.text || "")), "ticket UI is posted");
 });
 
-/* --------------------------------------------------- sensitive / paged escalation */
 
 test("escalateTicket (sensitive, no AI answer) opens the Pixorpheus ticket UI and never an ai_answered footer", async () => {
   const client = clientSpy();
@@ -311,7 +292,6 @@ test("escalateTicket (sensitive, no AI answer) opens the Pixorpheus ticket UI an
   assert.ok(!/public_resolve_ticket/.test(blob), "no legacy footer button");
 });
 
-/* ------------------------------------------- requester reopens a resolved thread */
 
 test("the requester writing back in a resolved thread reopens it and re-shows the open UI", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
