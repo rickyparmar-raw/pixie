@@ -1,3 +1,4 @@
+// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, beforeEach } = require("node:test");
@@ -199,3 +200,4 @@ test("decideAction follows the intent; probability only settles follow-ups", () 
   assert.equal(act(null, 0.8), "engage");
   assert.equal(act(null, 0.6), "silence");
 });
+export {};

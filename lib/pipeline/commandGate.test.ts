@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Commands are recognized and authorized before any conversational handling.
 process.env.PIXIE_DB_PATH = ":memory:";
 const { test, expect, beforeAll, afterAll, beforeEach } = require("bun:test");
@@ -93,3 +94,4 @@ test("main-channel commands switched off: refused with a clear reason, even for 
   expect(ephemerals).toHaveLength(1);
   expect(sums).toHaveLength(0);
 });
+export {};

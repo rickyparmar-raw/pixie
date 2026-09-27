@@ -12,15 +12,18 @@
 // "error" (or "existing" when disabled). This module never maps failures to
 // escalate/silence — the orchestrator decides per channel role. Callers fall
 // back to the existing safe pipeline and never crash the Slack handler.
-const { config, jevConfig } = require("./config");
-const log = require("./log");
+import configModule = require("./config");
+import log = require("./log");
+
+const { config, jevConfig } = configModule;
+type Legacy = Record<string, any>;
 
 const JEV_MODEL_DEFAULT = "jev-latest:free";
 const JEV_BASE_URL_DEFAULT = "https://api.experientiallabs.ai/v1/systemone";
 const MAX_MESSAGE_CHARS = 1000;
 const MAX_CONTEXT_CHARS = 1500;
 
-function truncate(text, max) {
+function truncate(text: string, max: number): string {
   const s = String(text || "");
   if (s.length <= max) return s;
   return `${s.slice(0, max)}…[truncated ${s.length - max} chars]`;
@@ -52,7 +55,7 @@ function isEnabled(cfg = effectiveConfig()) {
 // Free-lane-only billing rule: only models whose name ends in `:free` or
 // `-free` may be
 // evaluated. Anything else is refused before any HTTP is attempted.
-function isFreeModel(model) {
+function isFreeModel(model: unknown): boolean {
   return typeof model === "string" && /[:-]free$/.test(model.trim());
 }
 
@@ -60,7 +63,7 @@ function isFreeModel(model) {
 // context, program identity (id + name only), channel posture, and the
 // addressed flag. It NEVER receives documentation, corpus text, or answer
 // drafts — retrieval and grounding decide answerability after this step.
-function buildJevState({ message, conversationContext, program, channelPosture, addressed = false }) {
+function buildJevState({ message, conversationContext, program, channelPosture, addressed = false }: Legacy): Legacy {
   const prog = program && typeof program === "object"
     ? { id: program.id || null, name: program.name || null }
     : { id: typeof program === "string" ? program : null, name: null };
@@ -112,18 +115,18 @@ function buildJevQuestions() {
   };
 }
 
-function probOf(answer) {
+function probOf(answer: Legacy): number | null {
   const p = answer && typeof answer.probability === "number" ? answer.probability : null;
   return typeof p === "number" && Number.isFinite(p) ? Math.min(1, Math.max(0, p)) : null;
 }
 
-function boolFrom(answer) {
+function boolFrom(answer: Legacy): Legacy {
   const p = probOf(answer);
   if (p === null) return { value: false, confidence: undefined };
   return { value: p >= 0.5, confidence: p >= 0.5 ? p : 1 - p };
 }
 
-function parseEvaluationResult(result) {
+function parseEvaluationResult(result: Legacy): Legacy {
   const answers = (result && result.answers) || {};
   const engage = boolFrom(answers.shouldEngage);
   const intent = answers.intent && typeof answers.intent.choice === "string" && Object.hasOwn(INTENT_CHOICES, answers.intent.choice)
@@ -142,7 +145,7 @@ function parseEvaluationResult(result) {
   };
 }
 
-function maxProb(probs) {
+function maxProb(probs: Legacy): number | undefined {
   if (!probs || typeof probs !== "object") return undefined;
   const vals = Object.values(probs).filter((v) => typeof v === "number" && Number.isFinite(v));
   return vals.length > 0 ? Math.max(...vals) : undefined;
@@ -166,7 +169,7 @@ const SILENT_INTENT = new Set(["unrelated_chatter", "human_conversation"]);
 
 // Intent first; the engage probability only decides the genuinely uncertain
 // cases (a follow-up with context, or no usable intent at all).
-function decideAction(decision, cfg = effectiveConfig(), state = {}) {
+function decideAction(decision: Legacy, cfg: Legacy = effectiveConfig(), state: Legacy = {}): { action: string; reason: string } {
   if (!decision || decision.source === "existing") return { action: "existing", reason: "jev_disabled" };
   const engageP = decision.probabilities?.shouldEngage;
   const intent = decision.intent;
@@ -188,7 +191,7 @@ function decideAction(decision, cfg = effectiveConfig(), state = {}) {
 
 const ERROR_KINDS = new Set(["auth", "quota", "rate_limit", "timeout", "bad_response", "unavailable", "network", "config", "unknown"]);
 
-function classifyError(err) {
+function classifyError(err: Legacy): string {
   if (!err) return "unknown";
   // Provider adapters pre-classify their own failures; trust that label since
   // it was assigned next to the status code and body that produced it.
@@ -233,7 +236,7 @@ function experientialApiKey() {
   return (process.env.JEV_API_KEY || process.env.EXPERIENTIAL_API_KEY || "").trim() || null;
 }
 
-function cacheKeyFor({ model, state }) {
+function cacheKeyFor({ model, state }: Legacy): string {
   const fingerprint = JSON.stringify({
     model,
     message: state.message,
@@ -257,8 +260,8 @@ function clearDecisionCache() {
 // Structured decision log. Carries the verdict, the model, and a hash of the
 // cache key for correlation — never message text, context text, program
 // names, or credentials.
-function logDecision({ intent, shouldEngageP, action, reason, latencyMs, errorKind, enabled, model, keyHash }) {
-  const fmt = (v) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(2) : "?");
+function logDecision({ intent, shouldEngageP, action, reason, latencyMs, errorKind, enabled, model, keyHash }: Legacy): void {
+  const fmt = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(2) : "?");
   log.info(
     "jev",
     `[jev] enabled=${enabled} provider=experiential model=${model || "?"} jev_intent=${intent || "?"} ` +
@@ -275,9 +278,9 @@ function logDecision({ intent, shouldEngageP, action, reason, latencyMs, errorKi
 // keep the pre-Jev pipeline; "error" = evaluation failed, orchestrator
 // decides per channel role).
 async function evaluateSupportDecision(
-  { message, conversationContext = "", program = null, channelPosture = "main", addressed = false } = {},
-  deps = {},
-) {
+  { message, conversationContext = "", program = null, channelPosture = "main", addressed = false }: Legacy = {},
+  deps: Legacy = {},
+): Promise<Legacy> {
   const cfg = deps.config || effectiveConfig();
   const startedAt = Date.now();
   if (!isEnabled(cfg)) {
@@ -308,7 +311,7 @@ async function evaluateSupportDecision(
   const questions = deps.questions || buildJevQuestions();
   // Exactly one adapter, exactly one bounded request, no fallback path: any
   // failure below fails closed as action "error".
-  const evaluateFn = deps.evaluateFn || ((args) =>
+  const evaluateFn = deps.evaluateFn || ((args: Legacy) =>
     require("./jevExperiential").experientialEvaluate(
       {
         baseUrl: cfg.baseUrl || JEV_BASE_URL_DEFAULT,
@@ -369,7 +372,7 @@ async function evaluateSupportDecision(
   try {
     return await run;
   } catch (err) {
-    const errorKind = classifyError(err);
+    const errorKind = classifyError(err as Legacy);
     const latencyMs = Date.now() - startedAt;
     const reason = `jev_error_${errorKind}`;
     logDecision({ intent: null, shouldEngageP: null, action: "error", reason, latencyMs, errorKind, enabled: true, model, keyHash });
@@ -382,7 +385,7 @@ async function evaluateSupportDecision(
   }
 }
 
-async function evaluateCustomDecision({ state, questions } = {}, deps = {}) {
+async function evaluateCustomDecision({ state, questions }: Legacy = {}, deps: Legacy = {}): Promise<Legacy> {
   const cfg = deps.config || effectiveConfig();
   const startedAt = Date.now();
   if (!isEnabled(cfg)) return { status: "disabled", latencyMs: Date.now() - startedAt };
@@ -392,7 +395,7 @@ async function evaluateCustomDecision({ state, questions } = {}, deps = {}) {
     return { status: "error", errorKind: "config", latencyMs: Date.now() - startedAt };
   }
 
-  const evaluateFn = deps.evaluateFn || ((args) =>
+  const evaluateFn = deps.evaluateFn || ((args: Legacy) =>
     require("./jevExperiential").experientialEvaluate(
       {
         baseUrl: cfg.baseUrl || JEV_BASE_URL_DEFAULT,
@@ -416,14 +419,14 @@ async function evaluateCustomDecision({ state, questions } = {}, deps = {}) {
     log.info("jev", `[jev] task=custom status=ok latency_ms=${latencyMs}`);
     return { status: "ok", result, latencyMs };
   } catch (err) {
-    const errorKind = classifyError(err);
+    const errorKind = classifyError(err as Legacy);
     const latencyMs = Date.now() - startedAt;
     log.info("jev", `[jev] task=custom status=error error=${errorKind} latency_ms=${latencyMs}`);
     return { status: "error", errorKind, latencyMs };
   }
 }
 
-module.exports = {
+export = {
   evaluateSupportDecision,
   evaluateCustomDecision,
   providerOf,

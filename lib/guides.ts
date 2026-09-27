@@ -5,16 +5,19 @@
 // every alternate branch was unreachable and "wait, what?" marched the user to
 // the next step. Progression is now model-checked: the reply is classified as
 // advancing, stuck (with which alternate), off-topic, or done.
-const { config } = require("./config");
+import configModule = require("./config");
 // Module object rather than a destructured `complete`, so tests can stub it —
 // destructuring binds at load time. Same reason lib/learn.js holds it this way.
-const llm = require("./llm");
+import llm = require("./llm");
 // Module object rather than destructured — same stubbing reason as the note
 // on lib/respond.js's `answer` import.
-const answer = require("./answer");
-const { looksLikeHelpRequest } = require("./intent");
-const db = require("./db");
-const log = require("./log");
+import answer = require("./answer");
+import intent = require("./intent");
+import db = require("./db");
+import log = require("./log");
+
+const { config } = configModule;
+const { looksLikeHelpRequest } = intent;
 
 const MAX_TOKENS = 20;
 const TIMEOUT_MS = 10000;
@@ -27,12 +30,17 @@ const ADVANCE = "ADVANCE";
 const STUCK = "STUCK";
 const OTHER = "OTHER";
 const DONE = "DONE";
+type Legacy = Record<string, any>;
+interface GuideTrigger {
+  subject: string[][];
+  hints: string[];
+}
 
 // Typed anywhere in a guide thread, bails out immediately. Checked before the
 // model call so quitting is always free and always works.
 const EXIT_PATTERN = /^\s*(?:stop|quit|exit|cancel|nvm|nevermind|never mind|forget it|no thanks|nah im good|nah i'm good)\b/i;
 
-const GUIDES = {
+const GUIDES: Record<string, Legacy> = {
   "create-hackpad": {
     name: "How to Build Your Own Hackpad (Macropad)",
     steps: [
@@ -846,12 +854,12 @@ const GUIDES = {
   },
 };
 
-function availableFor(program) {
+function availableFor(program: Legacy | null): Array<[string, Legacy]> {
   const ids = Array.isArray(program?.guides) ? program.guides : [];
   return ids.filter((id) => GUIDES[id]).map((id) => [id, GUIDES[id]]);
 }
 
-function isAvailable(program, guideId) {
+function isAvailable(program: Legacy | null, guideId: string): boolean {
   return availableFor(program).some(([id]) => id === guideId);
 }
 
@@ -869,7 +877,7 @@ function isAvailable(program, guideId) {
 // here means that guide is unreachable for anyone who doesn't name it. Hence
 // "hours" — "how do i make my coding hours count" is a hackatime question that
 // never says hackatime.
-const GUIDE_TRIGGERS = [
+const GUIDE_TRIGGERS: Array<[string, GuideTrigger]> = [
   [
     "start-live",
     {
@@ -1029,7 +1037,7 @@ const GUIDE_TRIGGERS = [
 // Budget scales with length because a fixed one is wrong at both ends: 2 edits
 // on a three-letter word turns "get" into "git", while 1 edit isn't enough slack
 // for a word as long as "hackatime".
-function editBudget(word) {
+function editBudget(word: string): number {
   if (word.length <= 4) return 0;
   if (word.length <= 7) return 1;
   return 2;
@@ -1044,7 +1052,7 @@ function editBudget(word) {
 // Stops as soon as an entire row exceeds the budget — this runs per token per
 // guide on every message, so the early exit matters more than the exact distance
 // once we're past the threshold.
-function withinEdits(a, b, budget) {
+function withinEdits(a: string, b: string, budget: number): boolean {
   if (Math.abs(a.length - b.length) > budget) return false;
 
   let prevPrev = null;
@@ -1069,13 +1077,13 @@ function withinEdits(a, b, budget) {
   return prev[b.length] <= budget;
 }
 
-function matchesToken(tokens, word) {
+function matchesToken(tokens: string[], word: string): boolean {
   const budget = editBudget(word);
   return tokens.some((t) => (budget === 0 ? t === word : withinEdits(t, word, budget)));
 }
 
 // Splitting the question into words once, shared by every pass below.
-function tokensOf(question) {
+function tokensOf(question: string): string[] {
   return (question || "")
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, " ")
@@ -1084,7 +1092,7 @@ function tokensOf(question) {
 }
 
 // The free pass. Returns a guide id or null; never makes a network call.
-function detectGuideByKeyword(question) {
+function detectGuideByKeyword(question: string): string | null {
   const tokens = tokensOf(question);
   if (tokens.length === 0) return null;
 
@@ -1119,7 +1127,7 @@ function guideChooserPrompt() {
 // WHY: the guide's classifier-shaped calls share everything but budget and
 // words. One builder so a tier move edits one place instead of three pasted
 // request objects (detectGuideByModel, classifyStepReply).
-function intentTierRequest({ maxTokens, temperature, messages }) {
+function intentTierRequest({ maxTokens, temperature, messages }: Legacy): Legacy {
   return {
     baseUrl: config.intent.baseUrl,
     apiKey: config.intent.apiKey,
@@ -1138,9 +1146,9 @@ function intentTierRequest({ maxTokens, temperature, messages }) {
 // in respond.handleGuideMenu and the slash-command picker in
 // commands.guideCommand. Same buttons, same 5-per-row chunking; one builder
 // so a new guide shows up in both or neither, never just one.
-function guideMenuBlocks({ heading, entries }) {
-  const blocks = [{ type: "section", text: { type: "mrkdwn", text: heading } }];
-  const buttons = entries.map(([id, g]) => ({
+function guideMenuBlocks({ heading, entries }: Legacy): Legacy[] {
+  const blocks: Legacy[] = [{ type: "section", text: { type: "mrkdwn", text: heading } }];
+  const buttons = entries.map(([id, g]: [string, Legacy]) => ({
     type: "button",
     text: { type: "plain_text", text: g.name.slice(0, 75) },
     value: id,
@@ -1156,7 +1164,7 @@ function guideMenuBlocks({ heading, entries }) {
 // already a help request, so ordinary chat never pays for it. Runs before the
 // answer path rather than alongside it — a guide match replaces the answer call
 // instead of adding to it.
-async function detectGuideByModel(question) {
+async function detectGuideByModel(question: string): Promise<string | null> {
   try {
     const { text } = await llm.complete(
       intentTierRequest({
@@ -1172,7 +1180,7 @@ async function detectGuideByModel(question) {
 
     const label = (text || "").trim().toLowerCase();
     return Object.keys(GUIDES).find((id) => label.startsWith(id)) || null;
-  } catch (e) {
+  } catch (e: any) {
     log.debug("guides", `guide selection failed: ${e.message}`);
     return null;
   }
@@ -1186,7 +1194,7 @@ async function detectGuideByModel(question) {
 // keyword pass missed, which is nearly all of them: ~1700ms of latency added in
 // front of the answer call, to return NONE. A question that never mentions a
 // region, git or hackatime — however badly typed — has no guide to choose.
-function mentionsGuideSubject(question) {
+function mentionsGuideSubject(question: string): boolean {
   const tokens = tokensOf(question);
   if (tokens.length === 0) return false;
   return GUIDE_TRIGGERS.some(([, trigger]) =>
@@ -1208,12 +1216,12 @@ function mentionsGuideSubject(question) {
 // (see guideChooserPrompt: "Pick a walkthrough only when they want to be
 // taken through the process"). Only a message that mentions no guide subject
 // at all skips the model call, since there's nothing for it to confirm.
-function isExplicitGuideRequest(question) {
+function isExplicitGuideRequest(question: string): boolean {
   const text = (question || "").toLowerCase();
   return /\b(guide|walkthrough|tutorial|step-by-step|step by step|walk me through|take me through)\b/i.test(text);
 }
 
-function detectGuideBySubject(question) {
+function detectGuideBySubject(question: string): string | null {
   const tokens = tokensOf(question);
   if (tokens.length === 0) return null;
   for (const [id, trigger] of GUIDE_TRIGGERS) {
@@ -1223,7 +1231,7 @@ function detectGuideBySubject(question) {
   return null;
 }
 
-async function detectGuideIntent(question) {
+async function detectGuideIntent(question: string): Promise<string | null> {
   if (isExplicitGuideRequest(question)) {
     const bySubject = detectGuideBySubject(question);
     if (bySubject) return bySubject;
@@ -1235,11 +1243,11 @@ async function detectGuideIntent(question) {
   return detectGuideByModel(question);
 }
 
-function isExitRequest(text) {
+function isExitRequest(text: string): boolean {
   return EXIT_PATTERN.test(text || "");
 }
 
-function stepPayload(step, guideName = null) {
+function stepPayload(step: Legacy, guideName: string | null = null): Legacy {
   return {
     message: step.message,
     checkNext: step.checkNext || null,
@@ -1248,7 +1256,7 @@ function stepPayload(step, guideName = null) {
   };
 }
 
-function startGuide(guideId, threadTs, userId) {
+function startGuide(guideId: string, threadTs: string, userId: string): Legacy | null {
   const guide = GUIDES[guideId];
   if (!guide) return null;
 
@@ -1265,15 +1273,15 @@ function startGuide(guideId, threadTs, userId) {
   return stepPayload(guide.steps[0], guide.name);
 }
 
-function isInGuide(threadTs) {
+function isInGuide(threadTs: string): boolean {
   return !!db.getGuide(threadTs);
 }
 
-function cancelGuide(threadTs) {
+function cancelGuide(threadTs: string): void {
   db.deleteGuide(threadTs);
 }
 
-function classifierPrompt(guide, step, alternateKeys) {
+function classifierPrompt(guide: Legacy, step: Legacy, alternateKeys: string[]): string {
   const alternates = alternateKeys.map((k, i) => `STUCK_${i + 1}: they hit this specific problem — ${k}`).join("\n");
 
   return [
@@ -1296,7 +1304,7 @@ function classifierPrompt(guide, step, alternateKeys) {
 
 // Classifies the user's reply against the current step. Falls back to ADVANCE
 // on failure so an API outage can't strand someone mid-guide.
-async function classifyStepReply(guide, step, alternateKeys, userResponse) {
+async function classifyStepReply(guide: Legacy, step: Legacy, alternateKeys: string[], userResponse: string): Promise<Legacy> {
   try {
     const { text } = await llm.complete(
       intentTierRequest({
@@ -1322,13 +1330,13 @@ async function classifyStepReply(guide, step, alternateKeys, userResponse) {
       return { kind: STUCK, alternateKey: "question or troubleshooting for this step" };
     }
     return { kind: ADVANCE };
-  } catch (e) {
+  } catch (e: any) {
     log.debug("guides", `step classification failed (${e.message}), advancing`);
     return { kind: ADVANCE };
   }
 }
 
-function stuckAnswerPrompt(guide, step, alternateKey, canned, inHelpChannel) {
+function stuckAnswerPrompt(guide: Legacy, step: Legacy, alternateKey: string, canned: string, inHelpChannel: boolean): string {
   return [
     `A user is being walked through: "${guide.name}".`,
     `The exact step they're currently on: "${step.message}"`,
@@ -1356,7 +1364,7 @@ function stuckAnswerPrompt(guide, step, alternateKey, canned, inHelpChannel) {
 // answer what was asked, the same way pixie already does for any other
 // general (non-Pixl-specific) question. Falls back to the canned text on any
 // failure — an API hiccup should never leave someone stuck with nothing.
-async function answerStuckQuestion(guide, step, alternateKey, userResponse, inHelpChannel = false) {
+async function answerStuckQuestion(guide: Legacy, step: Legacy, alternateKey: string, userResponse: string, inHelpChannel = false): Promise<string> {
   const canned = guide.alternateSteps[alternateKey];
   try {
     const { text } = await llm.complete(
@@ -1365,7 +1373,7 @@ async function answerStuckQuestion(guide, step, alternateKey, userResponse, inHe
         apiKey: config.answer.apiKey,
         model: config.answer.model,
         fallback: config.answer.fallback,
-        onRateLimited: config.answer.onRateLimited,
+      onRateLimited: (config.answer as typeof config.answer & { onRateLimited?: unknown }).onRateLimited,
         maxTokens: STUCK_ANSWER_MAX_TOKENS,
         temperature: 0.3,
         thinking: { type: "disabled" },
@@ -1380,7 +1388,7 @@ async function answerStuckQuestion(guide, step, alternateKey, userResponse, inHe
 
     const reply = (text || "").trim();
     return reply ? answer.normalizeEmoji(reply) : canned;
-  } catch (e) {
+  } catch (e: any) {
     log.debug("guides", `stuck-answer generation failed (${e.message}), using canned reply`);
     return canned;
   }
@@ -1388,7 +1396,7 @@ async function answerStuckQuestion(guide, step, alternateKey, userResponse, inHe
 
 // Shared by continueGuide's ADVANCE branch and advanceGuideByReaction — moves
 // to the next step, or finishes the guide when there isn't one.
-function advanceToNextStep(threadTs, state, guide) {
+function advanceToNextStep(threadTs: string, state: Legacy, guide: Legacy): Legacy {
   const nextIndex = state.current_step + 1;
   if (nextIndex >= guide.steps.length) {
     db.deleteGuide(threadTs);
@@ -1406,7 +1414,7 @@ function advanceToNextStep(threadTs, state, guide) {
 // reacting on the thread can't advance a walkthrough that isn't theirs.
 // Returns the same shape as continueGuide, or null when there's nothing to
 // advance (guide already gone, or this isn't the person it was started for).
-function advanceGuideByReaction(messageTsOrThreadTs, userId) {
+function advanceGuideByReaction(messageTsOrThreadTs: string | Legacy, userId: string): Legacy | null {
   let messageTs = null;
   let uid = userId;
   let state = null;
@@ -1439,7 +1447,7 @@ function advanceGuideByReaction(messageTsOrThreadTs, userId) {
 //   { message, completed: true }      -> guide finished
 //   { message, cancelled: true }      -> user bailed out
 //   null                              -> not a guide reply, answer it normally
-async function continueGuide(threadTs, userResponse, userId = null, inHelpChannel = false) {
+async function continueGuide(threadTs: string, userResponse: string, userId: string | null = null, inHelpChannel = false): Promise<Legacy | null> {
   const state = db.getGuide(threadTs);
   if (!state) return null;
 
@@ -1497,8 +1505,8 @@ const GUIDE_REACTION_HINT = "react :upvote: on this message when you're ready fo
 // full "react :upvote:..." sentence at the end of EVERY step's text was the
 // literal complaint — teach the mechanic once, in its own small context
 // block, and never repeat it.
-function buildGuideBlocks(result, baseUrl, { showReactionHint = false } = {}) {
-  const blocks = [];
+function buildGuideBlocks(result: Legacy, baseUrl: string, { showReactionHint = false }: { showReactionHint?: boolean } = {}): Legacy[] {
+  const blocks: Legacy[] = [];
 
   if (result.screenshot) {
     blocks.push({
@@ -1530,7 +1538,7 @@ function buildGuideBlocks(result, baseUrl, { showReactionHint = false } = {}) {
   return blocks;
 }
 
-module.exports = {
+export = {
   GUIDES,
   availableFor,
   isAvailable,

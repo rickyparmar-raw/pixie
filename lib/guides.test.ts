@@ -1,3 +1,4 @@
+// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after } = require("node:test");
@@ -499,3 +500,4 @@ test("CHAR: startGuide refuses to steal another user's guide slot", () => {
   assert.equal(steal, null, "one thread, one guide slot");
   guides.cancelGuide("t-char-guide-2");
 });
+export {};

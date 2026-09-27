@@ -1,3 +1,4 @@
+// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, beforeEach } = require("node:test");
@@ -88,3 +89,4 @@ test("free lane accepts the OpenCode Zen -free suffix and still refuses paid nam
   assert.equal(x.isFreeModel("jev-1.13"), false);
   assert.equal(x.isFreeModel("jev-freestyle"), false);
 });
+export {};

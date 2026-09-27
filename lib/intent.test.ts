@@ -1,3 +1,4 @@
+// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after } = require("node:test");
@@ -329,3 +330,4 @@ test("short-input: length<5 fail-softs to null", async () => {
     assert.equal(after, baseline);
   });
 }
+export {};

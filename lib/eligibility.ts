@@ -17,47 +17,79 @@
 // machine-readable; no chain-of-thought leaves this module. Side-effect
 // requests (markTakeover, clearMute, touchTicket, fileTicket) are returned as
 // flags — callers perform them, keeping this module free of I/O.
+import type { Program } from "./types";
+
+type BotNameOptions = { botUserId?: string | null; botNames?: string[] };
+interface ThreadState {
+  muted?: boolean;
+  takeover?: boolean;
+  pixieSpoke?: boolean;
+  ticketOpen?: boolean;
+}
+interface EligibilityOptions {
+  text?: string;
+  userId?: string | null;
+  botUserId?: string | null;
+  botNames?: string[];
+  isHelpChannel?: boolean;
+  isTopLevel?: boolean;
+  isDM?: boolean;
+  posture?: string;
+  program?: Program | null;
+  thread?: ThreadState | null;
+  actorIsHelper?: boolean;
+}
+interface EligibilityDecision {
+  decision: string;
+  reason: string;
+  clearMute?: boolean;
+  clearTakeover?: boolean;
+  markTakeover?: boolean;
+  fileTicket?: boolean;
+  touchTicket?: boolean;
+  noTicket?: boolean;
+}
 const REPLY = "reply";
 const SILENT = "silent";
 const ESCALATE = "escalate";
 const HUMAN_DEFER = "human_defer";
 
-function escapeRegex(value) {
+function escapeRegex(value: string): string {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function botNamePattern(botNames) {
+function botNamePattern(botNames: string[] = []): string {
   const names = [...new Set((botNames || []).filter(Boolean))].map(escapeRegex).join("|");
   return names || "pixie";
 }
 
 // All <@U…> mentions that are not the bot itself.
-function otherMentions(text, botUserId) {
+function otherMentions(text: string, botUserId: string | null = null): string[] {
   const found = String(text || "").match(/<@[A-Z0-9]+(?:\|[^>]+)?>/g) || [];
   return found.filter((m) => !botUserId || !m.includes(botUserId));
 }
 
-function directMention(text, botUserId) {
+function directMention(text: string, botUserId: string | null = null): boolean {
   return !!botUserId && String(text || "").includes(`<@${botUserId}>`);
 }
 
 // WHY: single strip for every entry point — handlers and vision ask the same
 // question (what did they say to pixie), so one pure helper answers it.
-function stripBotMention(text, botUserId) {
+function stripBotMention(text: string, botUserId: string | null = null): string {
   if (!botUserId) return String(text || "").trim();
   return String(text || "").replace(new RegExp(`<@${escapeRegex(botUserId)}(?:\\|[^>]+)?>`, "g"), "").trim();
 }
 
-function nameMentionAt(text, names) {
+function nameMentionAt(text: string, names: string[]): { token: string; index: number } | null {
   const m = String(text || "").match(new RegExp(`\\b(?:${botNamePattern(names)})\\w*\\b`, "i"));
-  return m ? { token: m[0], index: m.index } : null;
+  return m ? { token: m[0], index: m.index ?? -1 } : null;
 }
 
 // Invocation ("@Pixie how does RE work?") vs reference ("ask @Pixie next
 // time", "Pixie already answered", "@Ricky Pixie said…"). Sentence-initial
 // address is always an invocation; otherwise a nearby request verb invokes
 // while referential verbs silence. Ambiguous mentions invoke — same as today.
-function invocationAnalysis(text, { botUserId = null, botNames = [] } = {}) {
+function invocationAnalysis(text: string, { botUserId = null, botNames = [] }: BotNameOptions = {}): { addressed: boolean; invocation: boolean; referential: boolean } {
   const body = String(text || "");
   const mentioned = directMention(body, botUserId);
   const named = nameMentionAt(body, botNames);
@@ -74,7 +106,7 @@ function invocationAnalysis(text, { botUserId = null, botNames = [] } = {}) {
   const startsWithName = new RegExp(`^(?:hey|hi|hello|yo|please|pls)[\\s,]+|^\\b(?:${botNamePattern(botNames)})\\b`, "i").test(stripped);
   if (startsWithMention || startsWithName) return { addressed: true, invocation: true, referential: false };
 
-  const anchorIndex = mentioned ? body.indexOf(`<@${botUserId}>`) : named.index;
+  const anchorIndex = mentioned ? body.indexOf(`<@${botUserId}>`) : (named?.index ?? -1);
   const after = body.slice(anchorIndex, anchorIndex + 60);
   if (/(?:^|[\s,])(?:can|could|would|will|do|does|did|is|are|was|were|how|what|when|where|why|which|who|help|tell|show|give|find|check|explain|do you know|any idea|anyone know)\b/i.test(after)) {
     return { addressed: true, invocation: true, referential: false };
@@ -96,7 +128,7 @@ const DEFERRAL_RES = [
 
 // A message aimed at a named human/helper. Leading @-mention or deferral
 // verbs near a human mention. Never fires on Pixie invocations.
-function humanDirected(text, { botUserId = null } = {}) {
+function humanDirected(text: string, { botUserId = null }: { botUserId?: string | null } = {}): boolean {
   const body = String(text || "");
   const stripped = body.replace(/^[\s,.;:!?-]+/, "");
   // Bare deferral verbs need no mention syntax to be unambiguous.
@@ -127,7 +159,7 @@ const TAKEOVER_RES = [
   /\bi got this\b/i,
 ];
 
-function takeoverCue(text, botNames = []) {
+function takeoverCue(text: string, botNames: string[] = []): boolean {
   const body = String(text || "");
   const names = [...new Set([...(botNames || []), "pixie"])].map(escapeRegex).join("|");
   // "asking Pixie specifically" summons the bot — it does not hand off.
@@ -147,20 +179,20 @@ const REACTIVATE_RES = [
   /\bhelp me\b/i,
 ];
 
-function reactivationPhrase(text) {
+function reactivationPhrase(text: string): boolean {
   return REACTIVATE_RES.some((re) => re.test(String(text || "")));
 }
 
 const GREETING_RES = /^(?:hi+|hello+|hey+|yo|sup|gg+|lol|lmao|haha+|hehe|lets? go+|lfg+|wooo+|yay+|test(?:ing)?|thanks?|thx|ok|who's there)\b/i;
 
-function substantiveQuestion(text) {
+function substantiveQuestion(text: string): boolean {
   const body = String(text || "").replace(/<@[A-Z0-9]+(?:\|[^>]+)?>/g, " ").trim();
   if (/\?/.test(body)) return true;
   if (/\b(?:how|what|when|where|why|which|who|whom|whose|can|could|would|should|is|are|was|were|does|do|did|will|has|have|any|help|explain|tell|show|need|want|looking for)\b/i.test(body)) return true;
   return body.split(/\s+/).filter(Boolean).length > 6;
 }
 
-function greetingOrNoise(text) {
+function greetingOrNoise(text: string): boolean {
   const body = String(text || "").replace(/<@[A-Z0-9]+(?:\|[^>]+)?>/g, " ").replace(/:[a-z0-9_+-]+:/gi, " ").trim();
   if (!body) return true;
   // A real question is never noise, however it opens ("gg! quick q: …?",
@@ -176,7 +208,7 @@ function greetingOrNoise(text) {
 
 const ACK_RES = /^(?:thanks?|thx|ty|got it|understood|nvm|never ?mind|solved|fixed it|works now|that worked|ok|okay|k|cool|nice|perfect|awesome|great|makes sense|yes|yeah|yep|no|nope|nah)\W*$/i;
 
-function ackOnly(text) {
+function ackOnly(text: string): boolean {
   const body = String(text || "").trim();
   if (ACK_RES.test(body)) return true;
   // Self-resolution with a short tail and no question in it.
@@ -205,14 +237,14 @@ const ACCOUNT_INTERVENTION_RES = /\b(?:account|login|log[ -]?in|sign[ -]?in|acce
 // grounded answer path; "can you waive the age rule" is a human's call.
 const POLICY_EXCEPTION_RES = /\b(?:manual(?:ly)?\s+(?:override|review|check)|override|exception|waive|waiver|bypass)\b/i;
 
-function explicitHumanRequest(text) {
+function explicitHumanRequest(text: string): boolean {
   const body = String(text || "").trim();
   if (!body) return false;
   const explicitHuman = HUMAN_REQUEST_RES.test(body) && HUMAN_REQUEST_SHAPE_RES.test(body);
   return explicitHuman;
 }
 
-function humanReviewRequest(text) {
+function humanReviewRequest(text: string): boolean {
   const body = String(text || "").trim();
   if (!body) return false;
   const hasQuestion = /\?/.test(body);
@@ -221,7 +253,7 @@ function humanReviewRequest(text) {
   return explicitHumanRequest(body) || accountIntervention || policyException;
 }
 
-function sensitiveHit(text, program) {
+function sensitiveHit(text: string, program: Program | null = null): boolean {
   const cats = program && Array.isArray(program.sensitiveCategories) ? program.sensitiveCategories : [];
   const body = String(text || "");
   const liveEligibilityFact = program?.id === "live-ysws" &&
@@ -248,7 +280,7 @@ function sensitiveHit(text, program) {
 const COMMAND_RE = /^(?:!(?:teach|sum|summary|summari[sz]e|mute|stfu)\b|\/(?:[a-z0-9-]+-)?(?:teach|sum)\b)/i;
 const MENTION_COMMAND_RE = /^(?:teach|learn|remember|memorize|sum|summary|summari[sz]e)\b/i;
 
-function botCommand(body, { botUserId, botNames }) {
+function botCommand(body: string, { botUserId = null, botNames = [] }: BotNameOptions): boolean {
   const text = String(body || "").trim();
   if (COMMAND_RE.test(text)) return true;
   if (!invocationAnalysis(text, { botUserId, botNames }).invocation) return false;
@@ -271,7 +303,7 @@ function shouldPixieRespond({
   program = null,
   thread = null,
   actorIsHelper = false,
-} = {}) {
+}: EligibilityOptions = {}): EligibilityDecision {
   const t = thread || {};
   const body = String(text || "");
 
@@ -390,7 +422,7 @@ function shouldPixieRespond({
   return { decision: SILENT, reason: "main_thread_not_joined" };
 }
 
-module.exports = {
+export = {
   shouldPixieRespond,
   botCommand,
   invocationAnalysis,

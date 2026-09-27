@@ -1,3 +1,4 @@
+// @ts-nocheck
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { sendProgramMessage, brandingFor } = require("./slackMessages");
@@ -393,3 +394,4 @@ test("a permanently failing send records slack_send_failure", async () => {
   assert.equal(row.detail, "channel_not_found");
   assert.equal(row.program_id, "sf-test");
 });
+export {};

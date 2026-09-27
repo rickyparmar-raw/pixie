@@ -3,17 +3,21 @@
 // Public information for anyone who opens it — what pixie knows, what it can
 // walk them through, how well the docs are holding up — plus, for helpers only,
 // the review queue as clickable buttons.
-const knowledge = require("./knowledge");
-const reply = require("./reply");
-const guides = require("./guides");
-const learn = require("./learn");
-const db = require("./db");
-const cache = require("./cache");
-const programs = require("./programs");
-const log = require("./log");
-const brand = require("./brand");
-const { isAdmin } = require("./config");
-const { relativeTime, coverageStats, statsText } = require("./stats");
+import knowledge = require("./knowledge");
+import reply = require("./reply");
+import guides = require("./guides");
+import learn = require("./learn");
+import db = require("./db");
+import cache = require("./cache");
+import programs = require("./programs");
+import log = require("./log");
+import brand = require("./brand");
+import configModule = require("./config");
+import stats = require("./stats");
+
+const { isAdmin } = configModule;
+const { relativeTime, coverageStats, statsText } = stats;
+type Legacy = Record<string, any>;
 
 // How many candidates the home tab renders. Slack caps a view at 100 blocks and
 // each candidate costs two, so this stays well clear of the ceiling while still
@@ -32,15 +36,15 @@ const HEALTHY_COVERAGE = 50;
 
 // Small block builders so every section below reads as content, not Slack
 // shape boilerplate.
-function divider() {
+function divider(): Legacy {
   return { type: "divider" };
 }
 
-function section(text) {
+function section(text: string): Legacy {
   return { type: "section", text: { type: "mrkdwn", text } };
 }
 
-function coverageBlocks() {
+function coverageBlocks(): Legacy[] {
   const { docs, asked, rate } = coverageStats();
   if (asked === 0) return [];
 
@@ -58,11 +62,11 @@ function coverageBlocks() {
 // What pixie has picked up by being used. Separate from docs coverage on
 // purpose: coverage is a question about the docs, this is a question about
 // pixie — every answer here is one it can now give without a model call.
-function learnedBlocks() {
+function learnedBlocks(): Legacy[] {
   const { known, cacheHits, instant } = coverageStats();
   if (known === 0) return [];
 
-  const top = cache.topCached(HOME_LEARNED_LIMIT).filter((row) => row.ask_count > 1);
+  const top = cache.topCached(HOME_LEARNED_LIMIT).filter((row: Legacy) => row.ask_count > 1);
   const lines = [`*answers known cold — ${known}*`, `${cacheHits} replies (${instant}%) needed no thinking at all.`];
 
   if (top.length > 0) {
@@ -77,7 +81,7 @@ function learnedBlocks() {
 // `/pixie-approve <n>` accepts them one id at a time, which is why 96 rows
 // accumulated without a single review: matching numbers by eye across a wall of
 // ephemeral text is work nobody was going to do. Approving here is one click.
-function reviewBlocks(userId) {
+function reviewBlocks(userId: string): Legacy[] {
   if (!isAdmin(userId)) return [];
 
   const rows = learn.pending(HOME_REVIEW_LIMIT);
@@ -85,7 +89,7 @@ function reviewBlocks(userId) {
     return [divider(), section("*waiting for review*\n_nothing queued_ :yay:")];
   }
 
-  const blocks = [divider(), section(`*waiting for review* — ${rows.length} candidate answer(s)`)];
+  const blocks: Legacy[] = [divider(), section(`*waiting for review* — ${rows.length} candidate answer(s)`)];
 
   for (const row of rows) {
     // A row lib/report.js drafted from repeated help-channel questions has no
@@ -129,8 +133,8 @@ function reviewBlocks(userId) {
 // The home tab isn't in any channel, so it can't name one program the way a
 // reply can. It names them all instead — which is the same fact from the other
 // side, and the only place someone can see the full list.
-function programSummary() {
-  const named = allProgramNames().filter((n) => n);
+function programSummary(): string {
+  const named = allProgramNames().filter((n: string) => n);
   if (named.length === 0) return "Hack Club YSWS programs";
   if (named.length === 1) return named[0];
   return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
@@ -138,34 +142,34 @@ function programSummary() {
 
 // Registry reads must never break the home tab: a bot with no database yet
 // still has to render something.
-function allProgramNames() {
+function allProgramNames(): string[] {
   try {
     return programs
       .all()
-      .filter((p) => p.id !== "ysws-global")
-      .map((p) => p.name);
+      .filter((p: Legacy) => p.id !== "ysws-global")
+      .map((p: Legacy) => p.name);
   } catch (e) {
-    log.warn("home", `failed to get all program names: ${e.message}`);
+    log.warn("home", `failed to get all program names: ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
 }
 
-function safeSources() {
+function safeSources(): Legacy[] {
   try {
     return knowledge.loadSources();
   } catch (e) {
-    log.warn("home", `failed to load safe sources: ${e.message}`);
+    log.warn("home", `failed to load safe sources: ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
 }
 
-function homeBlocks(userId) {
+function homeBlocks(userId: string): Legacy[] {
   const sources = safeSources();
 
   const gaps = db.topGaps(5);
   const topics = db.getTopics(userId).slice(0, 5);
 
-  const blocks = [
+  const blocks: Legacy[] = [
     { type: "header", text: { type: "plain_text", text: brand.name(), emoji: true } },
     {
       type: "section",
@@ -187,7 +191,7 @@ function homeBlocks(userId) {
       text: {
         type: "mrkdwn",
         text: `*what i can walk you through*\n${guides.availableFor(programs.all()[0])
-          .map(([, g]) => `• ${g.name}`)
+          .map(([, g]: [string, Legacy]) => `• ${g.name}`)
           .join("\n")}`,
       },
     },
@@ -202,7 +206,7 @@ function homeBlocks(userId) {
       { type: "divider" },
       {
         type: "section",
-        text: { type: "mrkdwn", text: `*you've asked about*\n${topics.map((t) => `• ${t.topic}`).join("\n")}` },
+        text: { type: "mrkdwn", text: `*you've asked about*\n${topics.map((t: Legacy) => `• ${t.topic}`).join("\n")}` },
       },
     );
   }
@@ -214,7 +218,7 @@ function homeBlocks(userId) {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*top gaps in the docs*\n${gaps.map((g) => `• ${g.ask_count}× ${g.question.slice(0, 80)}`).join("\n")}`,
+          text: `*top gaps in the docs*\n${gaps.map((g: Legacy) => `• ${g.ask_count}× ${g.question.slice(0, 80)}`).join("\n")}`,
         },
       },
     );
@@ -236,8 +240,8 @@ function homeBlocks(userId) {
 // it disappear from the auto-ranked list (topGaps) for the same window the
 // rank itself covers — without this, a "drop" is a UI gesture that does
 // nothing to the data underneath, and the same troll beat keeps coming back.
-function reviewAction(apply, verb) {
-  return async ({ ack, body, action, client }) => {
+function reviewAction(apply: (id: number) => unknown, verb: string) {
+  return async ({ ack, body, action, client }: Legacy): Promise<void> => {
     await ack();
 
     const userId = body?.user?.id;
@@ -260,7 +264,7 @@ function reviewAction(apply, verb) {
             log.info("gaps", `rejected as gap, will hide from topGaps: "${row.question.slice(0, 80)}"`);
           }
         } catch (e) {
-          log.debug("gaps", `failed to record gap rejection: ${e.message}`);
+          log.debug("gaps", `failed to record gap rejection: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
     }
@@ -268,12 +272,12 @@ function reviewAction(apply, verb) {
     try {
       await client.views.publish({ user_id: userId, view: { type: "home", blocks: homeBlocks(userId) } });
     } catch (e) {
-      log.error("home", "republish after review failed:", e.message);
+      log.error("home", "republish after review failed:", e instanceof Error ? e.message : String(e));
     }
   };
 }
 
-async function onAppHomeOpened({ event, client }) {
+async function onAppHomeOpened({ event, client }: Legacy): Promise<void> {
   if (event.tab !== "home") return;
   try {
     await client.views.publish({
@@ -281,11 +285,11 @@ async function onAppHomeOpened({ event, client }) {
       view: { type: "home", blocks: homeBlocks(event.user) },
     });
   } catch (e) {
-    log.error("home", "publish failed:", e.message);
+    log.error("home", "publish failed:", e instanceof Error ? e.message : String(e));
   }
 }
 
-function register(app) {
+function register(app: Legacy): void {
   app.event("app_home_opened", onAppHomeOpened);
 
   // Matched by prefix because each row's action_id carries its own id, keeping
@@ -296,7 +300,7 @@ function register(app) {
   app.action(new RegExp(`^${DROP_ACTION}_`), reviewAction(learn.forget, "dropped"));
 }
 
-module.exports = {
+export = {
   register,
   homeBlocks,
   reviewBlocks,

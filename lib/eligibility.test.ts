@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Behavioral regression suite: WHEN Pixie speaks. 150+ realistic fixtures
 // driving the pure shouldPixieRespond decision — no network, no model, no
 // database. Roles generalize by addressee shape (<@U…> mentions, deferral
@@ -581,3 +582,4 @@ test("B4: ping escalate runs gap/escalate exactly once", async () => {
     config.slack.botUserId = savedBot;
   }
 });
+export {};

@@ -1,3 +1,4 @@
+// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, beforeEach } = require("node:test");
@@ -44,3 +45,4 @@ test("gate error verdict leaves terminal routing to the orchestrator", async () 
   assert.notEqual(res.action, "escalate");
   assert.notEqual(res.action, "silence");
 });
+export {};

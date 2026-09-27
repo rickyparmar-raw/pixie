@@ -1,3 +1,4 @@
+// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
@@ -165,3 +166,4 @@ test("char: reviewBlocks empty-queue copy renders for admins, nothing for outsid
   assert.ok(adminBlocks.some((b) => b.text?.text?.includes("nothing queued")));
   assert.deepEqual(reviewBlocks(OUTSIDER), []);
 });
+export {};

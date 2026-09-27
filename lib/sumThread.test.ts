@@ -1,3 +1,4 @@
+// @ts-nocheck
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const sumThread = require("./sumThread");
@@ -160,3 +161,4 @@ test("char: sumThread scope is one thread per call — no cross-thread bleed", a
   assert.equal(sumThread.buildTranscript([]), "");
   assert.match(sumThread.buildTranscript([{ bot_id: "B1", text: "bot line" }]), /assistant \(bot\): bot line/);
 });
+export {};

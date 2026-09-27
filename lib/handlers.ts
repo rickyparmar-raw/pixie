@@ -1,35 +1,52 @@
 // Slack event routing. Decides *whether* pixie should speak; lib/respond.js
 // decides what it says.
-const { config, isAdmin } = require("./config");
-const vision = require("./vision");
-const { worthClassifying } = require("./intent");
-const context = require("./context");
-const respond = require("./respond");
+import configModule = require("./config");
+import visionModule = require("./vision");
+import intent = require("./intent");
+import contextModule = require("./context");
+import respondModule = require("./respond");
 // Named replyText because `reply` is already the local for a vision answer.
-const replyText = require("./reply");
-const guides = require("./guides");
-const learn = require("./learn");
-const teachThread = require("./teachThread");
-const sumThread = require("./sumThread");
-const db = require("./db");
-const rateLimit = require("./rateLimit");
-const log = require("./log");
-const programs = require("./programs");
-const macros = require("./macros");
-const channelPolicy = require("./channelPolicy");
-const workspace = require("./workspace");
-const brand = require("./brand");
+import replyText = require("./reply");
+import guidesModule = require("./guides");
+import learnModule = require("./learn");
+import teachThreadModule = require("./teachThread");
+import sumThreadModule = require("./sumThread");
+import dbModule = require("./db");
+import rateLimitModule = require("./rateLimit");
+import log = require("./log");
+import programsModule = require("./programs");
+import macrosModule = require("./macros");
+import channelPolicyModule = require("./channelPolicy");
+import workspaceModule = require("./workspace");
+import brand = require("./brand");
+
+const { config, isAdmin } = configModule;
+const { worthClassifying } = intent;
+type Legacy = Record<string, any>;
+const context: Legacy = contextModule as Legacy;
+const vision: Legacy = visionModule as Legacy;
+const respond: Legacy = respondModule as Legacy;
+const guides: Legacy = guidesModule as Legacy;
+const learn: Legacy = learnModule as Legacy;
+const teachThread: Legacy = teachThreadModule as Legacy;
+const sumThread: Legacy = sumThreadModule as Legacy;
+const db: Legacy = dbModule as Legacy;
+const rateLimit: Legacy = rateLimitModule as Legacy;
+const programs: Legacy = programsModule as Legacy;
+const macros: Legacy = macrosModule as Legacy;
+const channelPolicy: Legacy = channelPolicyModule as Legacy;
+const workspace: Legacy = workspaceModule as Legacy;
 
 const DELETE_REACTIONS = new Set(["pixl-delete", "x", "heavy_multiplication_x"]);
 const UP_REACTIONS = new Set(["yay", "thumbs-up", "+1", "yesyes", "white_check_mark", "heavy_check_mark", "upvote", "sparkling_heart", "heart", "heart_eyes"]);
 const DOWN_REACTIONS = new Set(["nono", "-1", "thumbsdown", "sad-pf"]);
 const GUIDE_ADVANCE_REACTION = "upvote";
 
-function escapeRegex(value) {
+function escapeRegex(value: string): string {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function mentionsPixieByName(text) {
+function mentionsPixieByName(text: string): boolean {
   const customNames = (process.env.PIXIE_BOT_ALIASES || "")
     .split(",")
     .map((s) => s.trim())
@@ -40,24 +57,24 @@ function mentionsPixieByName(text) {
   return new RegExp(`\\b(?:${pattern})\\w*\\b`, "i").test(text || "");
 }
 
-function teachPattern(mentionOnly = false) {
+function teachPattern(mentionOnly = false): RegExp {
   const slug = escapeRegex(brand.slug());
   const base = mentionOnly ? `teach|learn|remember|memorize|!teach|/${slug}-teach` : `!teach|${slug}-teach|/${slug}-teach|teach\\s+this|teach\\s+thread`;
   return new RegExp(`^\\s*(?:${base})\\b`, "i");
 }
 
-function stripTeachCommand(text, mentionOnly = false) {
+function stripTeachCommand(text: string, mentionOnly = false): string {
   return String(text || "").replace(teachPattern(mentionOnly), "").trim();
 }
 
 // Bot-management commands (!teach, !sum) are for the people who run a program.
 // A global admin qualifies everywhere; a program's own roster helper qualifies
 // for that program only.
-function actorRunsCommands(userId, prog) {
+function actorRunsCommands(userId: string, prog: Legacy | null): boolean {
   return isAdmin(userId) || (!!prog && db.isHelper(prog.id, userId));
 }
 
-function sumPattern(mentionOnly = false) {
+function sumPattern(mentionOnly = false): RegExp {
   const slug = escapeRegex(brand.slug());
   const base = mentionOnly
     ? `sum|summary|summarize|summarise|!sum|!summary|!summarize|!summarise|/${slug}-sum`
@@ -65,17 +82,17 @@ function sumPattern(mentionOnly = false) {
   return new RegExp(`^\\s*(?:${base})\\b`, "i");
 }
 
-function mentionsPixieDirectly(text) {
+function mentionsPixieDirectly(text: string): boolean {
   // WHY: canonical direct check lives in eligibility — same includes, no drift.
   return require("./eligibility").directMention(text, config.slack.botUserId);
 }
 
-function stripBotMention(text) {
+function stripBotMention(text: string): string {
   // WHY: canonical strip lives in eligibility — same trim, escaped id.
   return require("./eligibility").stripBotMention(text, config.slack.botUserId);
 }
 
-function isDirectMessage(event) {
+function isDirectMessage(event: Legacy): boolean {
   return event.channel_type === "im";
 }
 
@@ -84,7 +101,7 @@ const DM_RATE_LIMIT_NOTICE = "woah slow down a sec — gimme a minute to catch u
 // DM reservations belong here for entry points that do not pass through
 // respond(). The scope is explicit so a user's DM budget cannot be shared with
 // channel traffic, and a missing Slack identity fails closed.
-async function checkDmRateLimit({ event, client, program = null, threadTs = null }) {
+async function checkDmRateLimit({ event, client, program = null, threadTs = null }: Legacy): Promise<boolean> {
   if (!isDirectMessage(event)) return true;
 
   const limit = rateLimit.check(
@@ -108,12 +125,12 @@ async function checkDmRateLimit({ event, client, program = null, threadTs = null
 
 /* ---------------------------------------------------------------- images -- */
 
-function findImage(event) {
+function findImage(event: Legacy): Legacy | null {
   if (!event.files?.length) return null;
-  return event.files.find((f) => f.mimetype?.startsWith("image/") && f.url_private) || null;
+  return event.files.find((f: Legacy) => f.mimetype?.startsWith("image/") && f.url_private) || null;
 }
 
-async function handleImage({ event, client, imageFile, program = null }) {
+async function handleImage({ event, client, imageFile, program = null }: Legacy): Promise<boolean | void> {
   const threadTs = event.thread_ts || event.ts;
   const question = stripBotMention(event.text);
 
@@ -134,7 +151,7 @@ async function handleImage({ event, client, imageFile, program = null }) {
       context.updateUserHistory(event.user, question || "image analysis", true);
       db.recordMetric("answer_vision");
     }
-  } catch (e) {
+  } catch (e: any) {
     log.error("vision", "analysis failed:", e.message);
     if (!program || !program.shadowMode) {
       await require("./slackMessages").sendProgramMessage({ client, program, channel: event.channel, threadTs, text: replyText.plainDashes(respond.ERROR_FALLBACK) });
@@ -149,7 +166,7 @@ async function handleImage({ event, client, imageFile, program = null }) {
 // has posted, the humans are talking to each other and Pixie stays out until
 // someone tags or names her (those take the named/app_mention paths).
 // Returns "addressed", "humans_talking", or "ambient".
-async function untaggedThreadTurn({ event, client }) {
+async function untaggedThreadTurn({ event, client }: Legacy): Promise<string> {
   const crowd = await context.fetchThreadCrowd(client, {
     channel: event.channel,
     threadTs: event.thread_ts,
@@ -162,7 +179,7 @@ async function untaggedThreadTurn({ event, client }) {
   return crowd.pixieIn ? "addressed" : "ambient";
 }
 
-function stayOutOfHumanThread({ event, threadTs, question, prog }) {
+function stayOutOfHumanThread({ event, threadTs, question, prog }: Legacy): void {
   log.debug("intent", "skipping thread reply — other people are talking and nobody called pixie");
   context.addToThread(threadTs, "user", question, event.user, event.channel);
   db.recordMetric("silent", null, "thread_humans_talking", prog.id);
@@ -174,13 +191,13 @@ function stayOutOfHumanThread({ event, threadTs, question, prog }) {
 const HUMAN_ONLY_REPLY = "That one needs a person to decide, so I won't guess. A helper or organizer can sort it out :hii:";
 const HUMAN_ONLY_PINGED_REPLY = "That one needs a person to decide, so I won't guess. I've asked a helper to take a look :hii:";
 
-async function escalateSensitive({ event, client, prog, workspaceId, threadTs, question, addressed }) {
+async function escalateSensitive({ event, client, prog, workspaceId, threadTs, question, addressed }: Legacy): Promise<void> {
   const tickets = require("./tickets");
   db.recordGap(question, event.user, event.channel, threadTs, prog.id);
   let ticket = null;
   try {
     ticket = await tickets.escalateTicket({ program: prog, channel: event.channel, threadTs, requesterId: event.user, question, client, workspaceId });
-  } catch (e) {
+  } catch (e: any) {
     log.warn("handlers", `sensitive escalation ticket failed: ${e.message}`);
   }
   if (ticket) {
@@ -190,7 +207,7 @@ async function escalateSensitive({ event, client, prog, workspaceId, threadTs, q
   let helper = null;
   try {
     helper = await tickets.handOffToHelper({ client, program: prog, channel: event.channel, threadTs, question, requesterId: event.user, workspaceId });
-  } catch (e) {
+  } catch (e: any) {
     log.warn("handlers", `sensitive escalation helper ping failed: ${e.message}`);
   }
   if (!addressed) {
@@ -203,11 +220,11 @@ async function escalateSensitive({ event, client, prog, workspaceId, threadTs, q
   db.recordMetric("fallback", null, "sensitive_unticketed", prog.id);
 }
 
-function threadRequiresMention(prog) {
+function threadRequiresMention(prog: Legacy | null): boolean {
   return process.env.PIXIE_THREAD_REQUIRE_MENTION === "1" || Boolean(prog?.threadRequireMention);
 }
 
-function shouldConsiderThreadReply(event, prog = null) {
+function shouldConsiderThreadReply(event: Legacy, prog: Legacy | null = null): boolean {
   if (!event.thread_ts || event.thread_ts === event.ts) return true;
   if (db.isThreadMuted(event.thread_ts)) {
     return mentionsPixieDirectly(event.text);
@@ -220,14 +237,14 @@ function shouldConsiderThreadReply(event, prog = null) {
 
 // Returns true to continue routing, false when eligibility consumed the event.
 // Thread state is read here (I/O) so lib/eligibility.js itself stays pure.
-function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }) {
+function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }: Legacy): string {
   const elig = require("./eligibility");
   const isTopLevel = !event.thread_ts || event.thread_ts === event.ts;
   let ticketOpen = false;
   try {
     const ticket = event.thread_ts ? db.getTicketByThreadTs(event.thread_ts, workspaceId) : null;
     ticketOpen = !!ticket && !["resolved", "closed"].includes(ticket.status);
-  } catch (e) {
+  } catch (e: any) {
     log.debug("handlers", `ticket lookup in eligibility: ${e.message}`);
   }
   const decision = elig.shouldPixieRespond({
@@ -257,7 +274,7 @@ function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }
     db.markTakeover(event.thread_ts, event.channel, event.user);
     try {
       require("./audit").record({ programId: prog.id, actorId: event.user, action: "thread.takeover", entityType: "thread", entityId: event.thread_ts });
-    } catch (e) {
+  } catch (e: any) {
       log.debug("handlers", `takeover audit failed: ${e.message}`);
     }
   }
@@ -279,7 +296,7 @@ function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }
 // (lib/commandRegistry.js) decides what a command is and who may run it in
 // this channel role. Returns true when the event was consumed by a refusal;
 // allowed commands fall through to their existing handlers below.
-async function refuseUnauthorizedCommand({ event, client, question, prog, policy }) {
+async function refuseUnauthorizedCommand({ event, client, question, prog, policy }: Legacy): Promise<boolean> {
   const commandRegistry = require("./commandRegistry");
   const hit = commandRegistry.match(question, { botUserId: config.slack.botUserId, botNames: [brand.name(), brand.slug()] });
   if (!hit) return false;
@@ -306,7 +323,7 @@ async function refuseUnauthorizedCommand({ event, client, question, prog, policy
 // claimed the message: the mention path claims once up front, the message path
 // claims here. claimFirst preserves exactly that. Returns true when the event
 // is consumed (including claim contention — the loser stops routing).
-async function handleTeachRequest({ event, client, question, prog, mentionOnly, claimFirst }) {
+async function handleTeachRequest({ event, client, question, prog, mentionOnly, claimFirst }: Legacy): Promise<boolean> {
   if (!event.thread_ts || !teachPattern(mentionOnly).test(question)) return false;
   if (!actorRunsCommands(event.user, prog)) {
     await client.chat.postEphemeral({ channel: event.channel, user: event.user, text: "that one's helpers-only :nono:" });
@@ -352,7 +369,7 @@ async function handleTeachRequest({ event, client, question, prog, mentionOnly, 
         : "already memorized this thread!",
     });
     return true;
-  } catch (e) {
+  } catch (e: any) {
     log.error("handlers", mentionOnly ? `teach thread on mention failed: ${e.message}` : `!teach failed: ${e.message}`);
     return false;
   }
@@ -361,7 +378,7 @@ async function handleTeachRequest({ event, client, question, prog, mentionOnly, 
 // WHY: same single-flow reasoning as handleTeachRequest — the !sum handler is
 // also pasted across onMessage and onAppMention with only the pattern flag
 // and claim ownership differing.
-async function handleSumRequest({ event, client, question, prog, mentionOnly, claimFirst }) {
+async function handleSumRequest({ event, client, question, prog, mentionOnly, claimFirst }: Legacy): Promise<boolean> {
   if (!sumPattern(mentionOnly).test(question)) return false;
   if (!actorRunsCommands(event.user, prog)) {
     await client.chat.postEphemeral({ channel: event.channel, user: event.user, text: "that one's helpers-only :nono:" });
@@ -436,7 +453,7 @@ async function handleSumRequest({ event, client, question, prog, mentionOnly, cl
       });
     }
     return true;
-  } catch (e) {
+  } catch (e: any) {
     log.error("handlers", mentionOnly ? `sum on mention failed: ${e.message}` : `!sum failed: ${e.message}`);
     await client.chat.postEphemeral({
       channel: event.channel,
@@ -451,7 +468,7 @@ async function handleSumRequest({ event, client, question, prog, mentionOnly, cl
 // Staging guardrail: with PIXIE_STAGING_ONLY_CHANNELS set, events outside
 // the allowlist are dropped before any processing — no answers, tickets,
 // reactions, or state changes. Default (unset) is production behavior.
-function stagingBlocked(channel) {
+function stagingBlocked(channel: string): boolean {
   const allow = config.slack.stagingOnlyChannels;
   if (!allow || allow.length === 0) return false;
   return !allow.includes(channel);
@@ -459,7 +476,7 @@ function stagingBlocked(channel) {
 
 const MACRO_NOTE_MAX_LENGTH = 280;
 
-function parseMacroTrigger(text) {
+function parseMacroTrigger(text: string): Legacy | null {
   const match = /^(\S+)(?:\s+([\s\S]+))?$/.exec(String(text || "").trim());
   if (!match) return null;
   const trigger = macros.normalizeTrigger(match[1]);
@@ -467,35 +484,35 @@ function parseMacroTrigger(text) {
   return { trigger };
 }
 
-async function reactToMacroMessage(client, event, name) {
+async function reactToMacroMessage(client: Legacy, event: Legacy, name: string): Promise<void> {
   if (!client?.reactions?.add) return;
   try {
     await client.reactions.add({ channel: event.channel, timestamp: event.ts, name });
-  } catch (e) {
+  } catch (e: any) {
     log.debug("macros", `reaction failed for ${event.ts}: ${e.message}`);
   }
 }
 
 // "!" is the documented sigil, but a macro saved as "?need-info" still
 // answers to "!need-info" (and the reverse), so older macros keep working.
-function findMacro(programId, trigger) {
+function findMacro(programId: string, trigger: string): Legacy | null {
   const bare = trigger.slice(1);
-  const candidates = macros.list(programId).filter((row) => String(row.trigger || "").slice(1) === bare);
-  return candidates.find((row) => row.trigger === trigger && row.enabled)
-    || candidates.find((row) => row.enabled)
+  const candidates = macros.list(programId).filter((row: Legacy) => String(row.trigger || "").slice(1) === bare);
+  return candidates.find((row: Legacy) => row.trigger === trigger && row.enabled)
+    || candidates.find((row: Legacy) => row.enabled)
     || candidates[0]
     || null;
 }
 
-async function postMacroEphemeral(client, event, text) {
+async function postMacroEphemeral(client: Legacy, event: Legacy, text: string): Promise<void> {
   try {
     await client?.chat?.postEphemeral?.({ channel: event.channel, user: event.user, thread_ts: event.thread_ts, text });
-  } catch (e) {
+  } catch (e: any) {
     log.debug("macros", `ephemeral failed for ${event.ts}: ${e.message}`);
   }
 }
 
-function macroTargetFor(event, workspaceId) {
+function macroTargetFor(event: Legacy, workspaceId: string | null): Legacy {
   let ticket = db.getTicketByThreadTs(event.thread_ts, workspaceId);
   if (!ticket && workspaceId) ticket = db.getTicketByThreadTs(event.thread_ts);
   const foreign = ticket && (ticket.channel !== event.channel || (ticket.workspace_id && workspaceId && ticket.workspace_id !== workspaceId));
@@ -510,7 +527,7 @@ function macroTargetFor(event, workspaceId) {
 // Works like !sum: any thread in a program's channels. In a ticket thread
 // the macro goes out as a ticket reply (events, transitions, audit); in any
 // other thread Pixie posts it straight into the thread.
-async function handleMacroTrigger({ event, client, workspaceId }) {
+async function handleMacroTrigger({ event, client, workspaceId }: Legacy): Promise<boolean> {
   if (!event.thread_ts || event.thread_ts === event.ts || !event.user) return false;
   if (teachPattern(false).test(event.text) || sumPattern(false).test(event.text)) return false;
   const parsed = parseMacroTrigger(event.text);
@@ -531,7 +548,7 @@ async function handleMacroTrigger({ event, client, workspaceId }) {
   if (!db.claimMessage(event.ts, event.channel)) return true;
   if (!macro || !macro.enabled) {
     await reactToMacroMessage(client, event, "question");
-    const enabled = macros.list(program.id, { enabledOnly: true }).slice(0, 5).map((row) => row.trigger);
+    const enabled = macros.list(program.id, { enabledOnly: true }).slice(0, 5).map((row: Legacy) => row.trigger);
     const suggestion = enabled.length > 0 ? enabled.join(", ") : "none yet, add one on the Macros page";
     await postMacroEphemeral(client, event, `No macro \`${parsed.trigger}\` for ${program.name}. Try: ${suggestion}`);
     return true;
@@ -549,7 +566,7 @@ async function handleMacroTrigger({ event, client, workspaceId }) {
   return true;
 }
 
-async function onMessage({ event, client }) {
+async function onMessage({ event, client }: Legacy): Promise<void> {
   if (event.bot_id || event.subtype === "bot_message") return;
   if (stagingBlocked(event.channel)) return;
 
@@ -576,14 +593,14 @@ async function onMessage({ event, client }) {
   try {
     const candidate = programs.forChannel(event.channel, workspaceId);
     if (candidate && candidate.id && candidate.id !== "ysws-global") productionProgramMatch = candidate.id;
-  } catch (error) {
+  } catch (error: any) {
     log.debug("draft", `production channel lookup failed: ${error.message}`);
   }
   if (!productionProgramMatch) {
     let draftBinding = null;
     try {
       draftBinding = require("./draftSandbox").getForChannel(event.channel, workspaceId);
-    } catch (e) {
+  } catch (e: any) {
       log.warn("draft", `channel_id=${event.channel} message_ts=${event.ts} production_program_match=null draft_binding_match=error draft_safety_pass=false suppression_reason=binding_lookup_failed`);
     }
     if (draftBinding && draftBinding.enabled) {
@@ -624,13 +641,13 @@ async function onMessage({ event, client }) {
           client,
         });
         if (!ticket) log.warn("draft", `${baseLog} draft_safety_pass=true suppression_reason=sandbox_ticket_unavailable`);
-      } catch (e) {
+  } catch (e: any) {
         log.warn("draft", `${baseLog} draft_safety_pass=true suppression_reason=sandbox_ticket_failed`);
       }
       let corpus = "";
       try {
         corpus = require("./knowledge").getDraftContext(draftProgramId, question);
-      } catch (e) {
+  } catch (e: any) {
         log.warn("draft", `${baseLog} draft_safety_pass=true suppression_reason=retrieval_error`);
         return;
       }
@@ -642,7 +659,7 @@ async function onMessage({ event, client }) {
       let answer = null;
       try {
         answer = await require("./answer").getGroundedAnswer(question, corpus, "", draftProgram, event.channel, { inHelpChannel: true });
-      } catch (e) {
+  } catch (e: any) {
         log.warn("draft", `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=error suppression_reason=generation_failed`);
         return;
       }
@@ -655,7 +672,7 @@ async function onMessage({ event, client }) {
         try {
           await require("./slackMessages").sendProgramMessage({ client, program: draftProgram, channel: event.channel, threadTs, text: fallback });
           log.info("draft", `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=fallback slack_post_result=sent suppression_reason=no_grounded_answer`);
-        } catch (e) {
+  } catch (e: any) {
           log.warn("draft", `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=fallback slack_post_result=failed suppression_reason=slack_post_failed`);
         }
         return;
@@ -663,7 +680,7 @@ async function onMessage({ event, client }) {
       try {
         await require("./slackMessages").sendProgramMessage({ client, program: draftProgram, channel: event.channel, threadTs, text: answer.answer });
         log.info("draft", `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=answered slack_post_result=sent`);
-      } catch (e) {
+  } catch (e: any) {
         log.warn("draft", `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=answered slack_post_result=failed suppression_reason=slack_post_failed`);
       }
       return;
@@ -674,7 +691,7 @@ async function onMessage({ event, client }) {
   if (event.thread_ts && event.thread_ts !== event.ts && !event.bot_id) {
     try {
       await require("./tickets").noteThreadActivity({ channel: event.channel, threadTs: event.thread_ts, userId: event.user, text: event.text || null, workspaceId, client, parentUserId: event.parent_user_id || null });
-    } catch (e) {
+  } catch (e: any) {
       log.debug("handlers", `thread activity tracking: ${e.message}`);
     }
   }
@@ -890,7 +907,7 @@ async function onMessage({ event, client }) {
   });
 }
 
-async function onAppMention({ event, client }) {
+async function onAppMention({ event, client }: Legacy): Promise<void> {
   if (event.bot_id || event.subtype === "bot_message" || event.user === config.slack.botUserId) return;
   if (stagingBlocked(event.channel)) return;
   const workspaceId = workspace.workspaceOf(event);
@@ -995,23 +1012,23 @@ async function onAppMention({ event, client }) {
 
 // Only reached when a reaction event arrives without item_user. Thread replies
 // are invisible to conversations.history, so try the thread first.
-async function messageAuthor(client, channel, ts) {
+async function messageAuthor(client: Legacy, channel: string, ts: string): Promise<string | null> {
   try {
     const replies = await client.conversations?.replies?.({ channel, ts, limit: 1, inclusive: true });
     if (replies?.messages?.[0]) return replies.messages[0].user || null;
-  } catch (e) {
+  } catch (e: any) {
     log.debug("handlers", `replies lookup failed for ${ts}: ${e.message}`);
   }
   try {
     const hist = await client.conversations?.history?.({ channel, latest: ts, limit: 1, inclusive: true });
     return hist?.messages?.[0]?.user || null;
-  } catch (e) {
+  } catch (e: any) {
     log.debug("handlers", `history lookup failed for ${ts}: ${e.message}`);
     return null;
   }
 }
 
-async function onReactionAdded({ event, client }) {
+async function onReactionAdded({ event, client }: Legacy): Promise<void> {
   if (event.item && stagingBlocked(event.item.channel)) return;
   // A reaction_added event carries the channel on event.item, not on the event
   // itself. Reading event.channel made every call below run with an undefined
@@ -1038,7 +1055,7 @@ async function onReactionAdded({ event, client }) {
 
       await client.chat.delete({ channel, ts: event.item.ts });
       log.info("handlers", `deleted message ${event.item.ts} via reaction`);
-    } catch (e) {
+  } catch (e: any) {
       // Deliberately louder than debug: a failed delete looks to whoever
       // reacted exactly like a bot that is ignoring them.
       log.warn("handlers", `could not delete ${event.item.ts}: ${e.data?.error || e.message}`);
@@ -1072,7 +1089,7 @@ async function onReactionAdded({ event, client }) {
           return;
         }
       }
-    } catch (e) {
+  } catch (e: any) {
       log.debug("guides", `reaction advance failed: ${e.message}`);
     }
   }
@@ -1084,14 +1101,14 @@ async function onReactionAdded({ event, client }) {
   }
 }
 
-async function onReactionRemoved({ event }) {
+async function onReactionRemoved({ event }: Legacy): Promise<void> {
   const normReaction = (event.reaction || "").toLowerCase();
   if (UP_REACTIONS.has(normReaction) || DOWN_REACTIONS.has(normReaction)) {
     db.removeFeedback(event.item.ts, event.user);
   }
 }
 
-module.exports = {
+export = {
   onMessage,
   onAppMention,
   onReactionAdded,

@@ -13,14 +13,48 @@
 //
 // Kept as a separate call rather than folded into the answer prompt — that was
 // tried and measured, and 6 of 15 genuine questions went silent.
-const { config } = require("./config");
+import configModule = require("./config");
 // Module object, not a destructure, so tests can stub the model call — the
 // same seam lib/respond.js and lib/lookup.js rely on.
-const llm = require("./llm");
-const { looksLikeCode } = require("./answer");
-const db = require("./db");
-const programs = require("./programs");
-const log = require("./log");
+import llm = require("./llm");
+import answer = require("./answer");
+import db = require("./db");
+import programs = require("./programs");
+import log = require("./log");
+import type { Program } from "./types";
+
+const { config } = configModule;
+const { looksLikeCode } = answer;
+const recordMetric = db.recordMetric as (...args: unknown[]) => unknown;
+const recentUserMessages = db.recentUserMessages as (userId: string, options: { channel?: string; limit: number }) => Array<{ text?: string }>;
+
+interface ContextMessageInput {
+  text: string;
+  isPixie?: boolean;
+  userId?: string;
+  speaker?: string;
+}
+interface ContextItem {
+  text: string;
+  speaker: "human" | "pixie";
+}
+interface ContextResult {
+  verdict: string;
+  addressedToPixie: boolean;
+  directedAtHuman: boolean;
+  recentPixieParticipation: boolean;
+  programRelevance: string;
+  [key: string]: unknown;
+}
+interface IntentOptions {
+  userId?: string | null;
+  channel?: string | null;
+  history?: string[] | null;
+  addressed?: boolean;
+  threadMessages?: unknown[];
+  recentMessages?: unknown[] | null;
+  returnContext?: boolean;
+}
 
 const MAX_TOKENS = 20;
 const MIN_LENGTH = 5;
@@ -40,7 +74,7 @@ const PROGRAM_RELEVANCE = new Set(["relevant", "unrelated", "unclear"]);
 // and the verdict doesn't move.
 const HISTORY_LIMIT = 3;
 
-function intentSystemPrompt(program = null, { scoped = false } = {}) {
+function intentSystemPrompt(program: Program | string | null = null, { scoped = false }: { scoped?: boolean } = {}): string {
   const name = typeof program === "string" ? program : program?.name || "Hack Club YSWS";
 
   // Answering general coding questions in a channel that only wants program
@@ -96,19 +130,21 @@ When you genuinely cannot tell, choose CASUAL_CHAT. A missed question costs noth
 // The person's own recent messages, oldest first, plus the message to judge.
 // Kept as one user turn rather than a fake multi-turn transcript so the model
 // can't mistake the history for instructions addressed to it.
-function contextMessage(message) {
+function contextMessage(message: unknown): ContextItem | null {
   if (typeof message === "string") return { text: message, speaker: "human" };
-  if (!message || typeof message !== "object" || typeof message.text !== "string" || !message.text.trim()) return null;
-  const speaker = message.isPixie || message.userId === "pixie" || message.speaker === "pixie" ? "pixie" : "human";
-  return { text: message.text.trim().slice(0, CONTEXT_TEXT_LIMIT), speaker };
+  if (!message || typeof message !== "object") return null;
+  const value = message as ContextMessageInput;
+  if (typeof value.text !== "string" || !value.text.trim()) return null;
+  const speaker = value.isPixie || value.userId === "pixie" || value.speaker === "pixie" ? "pixie" : "human";
+  return { text: value.text.trim().slice(0, CONTEXT_TEXT_LIMIT), speaker };
 }
 
-function boundedContext(messages) {
+function boundedContext(messages: unknown[]): ContextItem[] {
   if (!Array.isArray(messages)) return [];
-  return messages.slice(-CONTEXT_LIMIT).map(contextMessage).filter(Boolean);
+  return messages.slice(-CONTEXT_LIMIT).map(contextMessage).filter((item): item is ContextItem => item !== null);
 }
 
-function buildUserPrompt(message, history = [], { threadMessages = [], recentMessages = null } = {}) {
+function buildUserPrompt(message: string, history: unknown[] = [], { threadMessages = [], recentMessages = null }: { threadMessages?: unknown[]; recentMessages?: unknown[] | null } = {}): string {
   const lines = [];
 
   const recent = boundedContext(recentMessages || history);
@@ -137,7 +173,7 @@ function buildUserPrompt(message, history = [], { threadMessages = [], recentMes
 // below are untouched, so a malformed verdict still returns null and the gate
 // still fails soft to silence. It only stops a well-formed verdict from being
 // thrown away for its wrapper.
-function extractJsonObject(text) {
+function extractJsonObject(text: unknown): string | null {
   if (typeof text !== "string") return null;
   let t = text.trim();
   const fenced = t.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
@@ -151,22 +187,24 @@ function extractJsonObject(text) {
   return t;
 }
 
-function parseContextResult(text, { scoped = false } = {}) {
+function parseContextResult(text: unknown, { scoped = false }: { scoped?: boolean } = {}): ContextResult | null {
   const json = extractJsonObject(text);
   if (json === null) return null;
-  let value;
+  let value: unknown;
   try { value = JSON.parse(json); } catch (_) { return null; }
   const expected = ["addressedToPixie", "directedAtHuman", "programRelevance", "recentPixieParticipation", "verdict"].sort();
-  const keys = Object.keys(value || {}).sort();
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const keys = Object.keys(record).sort();
   if (keys.length !== expected.length || keys.some((key, i) => key !== expected[i])) return null;
   const verdicts = scoped ? [HELP_NEEDED, CASUAL_CHAT, OFF_TOPIC] : [HELP_NEEDED, CASUAL_CHAT];
-  if (!verdicts.includes(value.verdict) || typeof value.addressedToPixie !== "boolean" ||
-      typeof value.directedAtHuman !== "boolean" || typeof value.recentPixieParticipation !== "boolean" ||
-      !PROGRAM_RELEVANCE.has(value.programRelevance)) return null;
-  return value;
+  if (typeof record.verdict !== "string" || !verdicts.includes(record.verdict) || typeof record.addressedToPixie !== "boolean" ||
+      typeof record.directedAtHuman !== "boolean" || typeof record.recentPixieParticipation !== "boolean" ||
+      typeof record.programRelevance !== "string" || !PROGRAM_RELEVANCE.has(record.programRelevance)) return null;
+  return record as ContextResult;
 }
 
-function enrichContextResult(result, { addressed = false } = {}) {
+function enrichContextResult(result: ContextResult | null, { addressed = false }: { addressed?: boolean } = {}): (ContextResult & { directedAtPixie: boolean; needsHelp: boolean; shouldAttemptAnswer: boolean }) | null {
   if (!result) return null;
   const directedAtPixie = addressed || result.addressedToPixie === true;
   const directedAtHuman = result.directedAtHuman === true;
@@ -179,12 +217,13 @@ function enrichContextResult(result, { addressed = false } = {}) {
   };
 }
 
-function normalizeIntentResult(result, { addressed = false } = {}) {
+function normalizeIntentResult(result: ContextResult | string | null, { addressed = false }: { addressed?: boolean } = {}) {
   if (!result) return null;
   if (typeof result === "string") {
     return enrichContextResult({
       verdict: result,
       addressedToPixie: addressed,
+      directedAtHuman: false,
       recentPixieParticipation: false,
       programRelevance: "unclear",
     }, { addressed });
@@ -192,12 +231,11 @@ function normalizeIntentResult(result, { addressed = false } = {}) {
   return enrichContextResult(result, { addressed });
 }
 
-function historyFor(userId, channel, current) {
+function historyFor(userId: string | null, channel: string | null, current: string): string[] {
   if (!userId) return [];
   try {
-    const rows = db
-      .recentUserMessages(userId, { channel, limit: HISTORY_LIMIT + 1 })
-      .map((r) => (r.text || "").trim())
+    const rows = recentUserMessages(userId, { channel: channel || undefined, limit: HISTORY_LIMIT + 1 })
+      .map((r: { text?: string }) => (r.text || "").trim())
       .filter(Boolean);
 
     // lib/handlers.js records a message the moment it arrives, so the newest
@@ -206,7 +244,8 @@ function historyFor(userId, channel, current) {
 
     return rows.slice(-HISTORY_LIMIT);
   } catch (e) {
-    log.debug("intent", `history lookup failed: ${e.message}`);
+    const error = e instanceof Error ? e : new Error(String(e));
+    log.debug("intent", `history lookup failed: ${error.message}`);
     return [];
   }
 }
@@ -214,17 +253,17 @@ function historyFor(userId, channel, current) {
 // `addressed` is the escape hatch on scope: somebody said pixie's name and put
 // a question to her, so whether it is "about the program" stops being the
 // question. She answers.
-function scopedFor(program, addressed = false) {
+function scopedFor(program: Program | null, addressed = false): boolean {
   if (addressed) return false;
   if (!program) return false;
   return programs.isProgramScoped(program);
 }
 
 async function classifyIntent(
-  message,
-  program = null,
-  { userId = null, channel = null, history = null, addressed = false, threadMessages = [], recentMessages = null, returnContext = false } = {},
-) {
+  message: string,
+  program: Program | null = null,
+  { userId = null, channel = null, history = null, addressed = false, threadMessages = [], recentMessages = null, returnContext = false }: IntentOptions = {},
+): Promise<string | ContextResult | null> {
   // WHY: fail-soft on too-short input — HELP_ONLY stays silent (null is not
   // HELP_NEEDED) and the ticket fallback stays non-ticketworthy (shorts are
   // never code and never clear the 3-word heuristic).
@@ -240,7 +279,7 @@ async function classifyIntent(
         apiKey: config.intent.apiKey,
         model: config.intent.model,
         fallback: config.intent.fallback,
-        onRateLimited: config.intent.onRateLimited,
+        onRateLimited: (config.intent as typeof config.intent & { onRateLimited?: unknown }).onRateLimited,
         maxTokens: MAX_TOKENS,
         temperature: 0.3,
         thinking: { type: "disabled" },
@@ -261,19 +300,22 @@ async function classifyIntent(
       // regression shows up in metrics instead of as quiet gate_stream drops.
       log.warn("intent", `unparseable classifier output: ${text.slice(0, 120).replace(/\s+/g, " ")}`);
       try {
-        db.recordMetric("intent_parse_failure", null, scoped ? "scoped" : "open", program && program.id ? program.id : null);
+        recordMetric("intent_parse_failure", null, scoped ? "scoped" : "open", program && program.id ? program.id : null);
       } catch (error) {
-        log.debug("intent", `could not record classifier parse failure: ${error.message}`);
+        const failure = error instanceof Error ? error : new Error(String(error));
+        log.debug("intent", `could not record classifier parse failure: ${failure.message}`);
       }
     }
     const result = normalizeIntentResult(parsed, { addressed });
     return returnContext ? result : result?.verdict || null;
   } catch (e) {
-    log.error("intent", "classification failed:", e.message);
+    const error = e instanceof Error ? e : new Error(String(e));
+    log.error("intent", "classification failed:", error.message);
     try {
-      db.recordMetric("intent_parse_failure", null, "call_failed", program && program.id ? program.id : null);
-    } catch (error) {
-      log.debug("intent", `could not record classifier failure: ${error.message}`);
+      recordMetric("intent_parse_failure", null, "call_failed", program && program.id ? program.id : null);
+    } catch (failure) {
+      const detail = failure instanceof Error ? failure : new Error(String(failure));
+      log.debug("intent", `could not record classifier failure: ${detail.message}`);
     }
     return null;
   }
@@ -293,7 +335,7 @@ const REACTION_ONLY = new Set(
 );
 
 // Slack decoration, not words: emoji shortcodes, user/channel pings, bare links.
-function stripDecoration(text) {
+function stripDecoration(text: string): string {
   return (text || "")
     .replace(/:[a-z0-9_+-]+:/gi, " ")
     .replace(/<[@#!][^>]+>/g, " ")
@@ -301,7 +343,7 @@ function stripDecoration(text) {
     .trim();
 }
 
-function normalizeReaction(text) {
+function normalizeReaction(text: string): string {
   return stripDecoration(text)
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
@@ -312,7 +354,7 @@ function normalizeReaction(text) {
 // Is this message worth asking the model about at all? The answer is yes for
 // anything with words in it. Only emoji-only messages, empty messages and
 // bare reactions are dropped — no guess is made about what the words mean.
-function worthClassifying(text) {
+function worthClassifying(text: string): boolean {
   const raw = (text || "").trim();
   if (!raw) return false;
   if (looksLikeCode(raw)) return true;
@@ -348,11 +390,11 @@ const ASK_SHAPE =
 
 const MIN_REQUEST_WORDS = 3;
 
-function wordCount(text) {
+function wordCount(text: string): number {
   return text.split(/\s+/).length;
 }
 
-function looksLikeHelpRequest(text) {
+function looksLikeHelpRequest(text: string): boolean {
   const t = (text || "").trim();
   if (!t) return false;
   if (looksLikeCode(t)) return true;
@@ -360,13 +402,13 @@ function looksLikeHelpRequest(text) {
   return PROBLEM_WORD.test(t) || BROKEN_VERB.test(t) || ASK_SHAPE.test(t);
 }
 
-module.exports = {
+const api = {
   classifyIntent,
-  classifyIntentContext: async (message, program = null, options = {}) => {
+  classifyIntentContext: async (message: string, program: Program | null = null, options: IntentOptions = {}) => {
     // Keep test/legacy replacements of classifyIntent working while the
     // production path uses the structured result from the canonical call.
-    const result = module.exports.classifyIntent !== classifyIntent
-      ? await module.exports.classifyIntent(message, program, options)
+    const result = api.classifyIntent !== classifyIntent
+      ? await api.classifyIntent(message, program, options)
       : await classifyIntent(message, program, { ...options, returnContext: true });
     return normalizeIntentResult(result, options);
   },
@@ -384,3 +426,5 @@ module.exports = {
   CASUAL_CHAT,
   OFF_TOPIC,
 };
+
+export = api;

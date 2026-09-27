@@ -1,3 +1,4 @@
+// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
@@ -359,3 +360,4 @@ test("CHAR: start_guide action posts dedashed blocks like every other guide entr
   assert.equal(posted.length, 1);
   assert.doesNotMatch(posted[0].blocks[0].text.text, /—/, "button-started guides dedash blocks like /guide does");
 });
+export {};

@@ -1,3 +1,4 @@
+// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
@@ -302,3 +303,4 @@ test("list() renders a usage listing with the bot's own slash names", () => {
   assert.match(text, /!mute/);
   assert.match(text, /guide/);
 });
+export {};

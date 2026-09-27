@@ -1,3 +1,4 @@
+// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after } = require("node:test");
@@ -228,4 +229,4 @@ test("registry: teach output lands as a program-scoped auditable fact", async ()
   assert.equal(row.channel, "C-REG", "optional source channel");
   assert.ok(Number.isInteger(row.created_at) && row.created_at > 0, "created_at stamped");
 });
-
+export {};

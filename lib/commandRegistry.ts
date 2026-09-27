@@ -21,9 +21,28 @@
 //     "<prefix> <topic>" form from respond.handleNewGuide.
 // Slash names are never matched here: Bolt matches those exactly at
 // registration (lib/commands.js via brand.cmd), so there is nothing to parse.
-const brand = require("./brand");
+import brand = require("./brand");
 
-function escapeRegex(value) {
+type Surface = "text" | "slash" | "both";
+type Permission = "anyone" | "helper" | "organizer";
+type ChannelRole = "main" | "help" | "dm";
+interface CommandDefinition {
+  name: string;
+  aliases: string[];
+  surface: Surface;
+  permission: Permission;
+  channelRoles: ChannelRole[];
+  usage: string;
+  description: string;
+  handlerKey: string;
+}
+interface CommandMatch {
+  command: CommandDefinition | null;
+  args: string;
+}
+type AuthorizationReason = "unknown_command" | "not_organizer" | "not_helper" | "wrong_channel" | "commands_disabled" | "allowed";
+
+function escapeRegex(value: string): string {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
@@ -31,7 +50,7 @@ function escapeRegex(value) {
 // text form is helper-runnable (actorRunsCommands: admin OR program helper)
 // while the slash form is adminOnly — a single permission would either lock
 // helpers out of !teach or let them into /pixie-teach, and both are wrong.
-const COMMANDS = Object.freeze([
+const COMMANDS: readonly CommandDefinition[] = Object.freeze([
   {
     name: "ask",
     aliases: [],
@@ -211,13 +230,13 @@ const COMMANDS = Object.freeze([
   },
 ]);
 
-function byHandlerKey(handlerKey, surface = null) {
+function byHandlerKey(handlerKey: string, surface: Surface | null = null): CommandDefinition[] {
   return COMMANDS.filter(
     (c) => c.handlerKey === handlerKey && (surface === null || c.surface === surface || c.surface === "both"),
   );
 }
 
-function byName(name, surface = null) {
+function byName(name: string, surface: Surface | null = null): CommandDefinition | null {
   const want = String(name || "").toLowerCase();
   return (
     COMMANDS.find((c) => c.name === want && (surface === null || c.surface === surface)) || null
@@ -228,7 +247,7 @@ function byName(name, surface = null) {
 // brand's own slug/name plus the historical default, same set respond.js
 // uses. Lowercased once here so every matcher below stays case-insensitive
 // without inline flags on the name alternation.
-function knownNames(botNames) {
+function knownNames(botNames: string[] = []): string[] {
   const names = [...(botNames || []), brand.slug(), brand.name(), brand.DEFAULT_SLUG]
     .map((n) => String(n || "").toLowerCase())
     .filter(Boolean);
@@ -259,12 +278,12 @@ function sumMentionSource() {
 
 // Guide text shapes: the exact-match menu forms from isGuideMenuRequest plus
 // the "<prefix> <topic>" starter from handleNewGuide, over the same name set.
-function guidePrefixSource(names) {
+function guidePrefixSource(names: string[]): string {
   const escaped = names.map(escapeRegex).join("|");
   return `(?:${escaped})[-_\\s]?guides?|!guides?|/(?:${escaped})[-_\\s]?guides?|/guides?`;
 }
 
-function tryMatch(source, text) {
+function tryMatch(source: string, text: string): string | null {
   const m = String(text || "").match(new RegExp(`^\\s*(?:${source})\\b\\s*([\\s\\S]*)$`, "i"));
   if (!m) return null;
   return (m[1] || "").trim();
@@ -272,7 +291,7 @@ function tryMatch(source, text) {
 
 // Guide menu triggers are exact-phrase (no trailing args allowed on the bare
 // menu), while the topic form takes everything after the prefix as the topic.
-function tryGuideMatch(text, names) {
+function tryGuideMatch(text: string, names: string[]): string | null {
   const prefix = guidePrefixSource(names);
   const exact = String(text || "").trim().match(new RegExp(`^(?:${prefix})$`, "i"));
   if (exact) return "";
@@ -285,7 +304,7 @@ function tryGuideMatch(text, names) {
 // before matching: stripBotMention removes every <@ID>, so "<@B> !mute"
 // reaches the mention patterns as "!mute". Bare names are NOT stripped —
 // "pixie teach ..." matches nothing on the message path today either.
-function stripMention(text, botUserId) {
+function stripMention(text: string, botUserId: string | null): string {
   if (!botUserId) return String(text || "");
   return String(text || "")
     .replace(new RegExp(`<@${escapeRegex(botUserId)}(?:\\|[^>]+)?>`, "g"), "")
@@ -296,7 +315,7 @@ function stripMention(text, botUserId) {
 // after the trigger token, or null when nothing fired. Mention-only shapes
 // (bare "teach"/"sum"/"learn ...") apply solely to text that carried an
 // explicit <@mention>; everything else matches the raw channel text.
-function match(text, { botUserId = null, botNames = [] } = {}) {
+function match(text: string, { botUserId = null, botNames = [] }: { botUserId?: string | null; botNames?: string[] } = {}): CommandMatch | null {
   const raw = String(text || "");
   if (!raw.trim()) return null;
   const names = knownNames(botNames);
@@ -346,7 +365,7 @@ function match(text, { botUserId = null, botNames = [] } = {}) {
 //   - a missing role (slash context: addressed actions carry no channel
 //     scope) skips the channel check.
 // Reasons are machine-readable; the caller owns the user-facing wording.
-function authorize(command, { userId = null, isHelper = false, isOrganizer = false, role = null, commandsEnabled = true } = {}) {
+function authorize(command: CommandDefinition | string | null, { userId = null, isHelper = false, isOrganizer = false, role = null, commandsEnabled = true }: { userId?: string | null; isHelper?: boolean; isOrganizer?: boolean; role?: ChannelRole | null; commandsEnabled?: boolean } = {}): { ok: boolean; reason: AuthorizationReason } {
   const def = typeof command === "string" ? byName(command) : command;
   void userId;
   if (!def) return { ok: false, reason: "unknown_command" };
@@ -376,4 +395,4 @@ function list() {
   return [`*${brand.name()} commands*`, ...lines].join("\n");
 }
 
-module.exports = { COMMANDS, byName, byHandlerKey, match, authorize, list };
+export = { COMMANDS, byName, byHandlerKey, match, authorize, list };

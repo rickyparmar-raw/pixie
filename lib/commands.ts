@@ -1,21 +1,25 @@
 // Slash commands and the channel-join welcome. All answers here are ephemeral or
 // private by default — the point is getting help without adding noise to a
 // busy channel. The App Home tab lives in home.js.
-const knowledge = require("./knowledge");
-const answer = require("./answer");
-const respond = require("./respond");
-const reply = require("./reply");
-const context = require("./context");
-const learn = require("./learn");
-const teachThread = require("./teachThread");
-const home = require("./home");
-const report = require("./report");
-const db = require("./db");
-const log = require("./log");
-const brand = require("./brand");
-const capabilities = require("./capabilities");
-const { config, isAdmin } = require("./config");
-const { relativeTime, statsText } = require("./stats");
+import knowledge = require("./knowledge");
+import answer = require("./answer");
+import respond = require("./respond");
+import reply = require("./reply");
+import context = require("./context");
+import learn = require("./learn");
+import teachThread = require("./teachThread");
+import home = require("./home");
+import report = require("./report");
+import db = require("./db");
+import log = require("./log");
+import brand = require("./brand");
+import capabilities = require("./capabilities");
+import configModule = require("./config");
+import stats = require("./stats");
+
+const { config, isAdmin } = configModule;
+const { relativeTime, statsText } = stats;
+type Legacy = Record<string, any>;
 
 const GAP_LIMIT = 15;
 const PENDING_LIMIT = 15;
@@ -23,8 +27,8 @@ const NOT_ALLOWED = "that one's helpers-only :nono:";
 
 // Wraps a command so it only runs for PIXIE_ADMIN_USER_IDS. Used for anything
 // that changes what pixie knows or exposes the maintainer view.
-function adminOnly(handler) {
-  return async (args) => {
+function adminOnly(handler: (args: Legacy) => Promise<unknown>) {
+  return async (args: Legacy): Promise<void> => {
     if (!isAdmin(args.command?.user_id)) {
       await args.ack();
       await args.respond({ response_type: "ephemeral", text: NOT_ALLOWED });
@@ -37,11 +41,11 @@ function adminOnly(handler) {
 // Slash commands reply through Bolt's own `respond` helper rather than through
 // lib/reply.js, so they miss the de-dashing every other reply gets. Wrapping
 // the helper once here covers all of them, including `/pixie <question>`.
-function plainSpoken(handler) {
-  return async (args) => {
+function plainSpoken(handler: (args: Legacy) => Promise<unknown>) {
+  return async (args: Legacy): Promise<unknown> => {
     const original = args.respond;
     const respond = typeof original === "function"
-      ? async (payload) => {
+      ? async (payload: Legacy) => {
           if (payload && typeof payload === "object") {
             return original({
               ...payload,
@@ -59,8 +63,8 @@ function plainSpoken(handler) {
 // Same allowlist as adminOnly, but for shortcut args ({shortcut, ack, client}
 // rather than {command, ack, respond}) — a message shortcut has no `respond`
 // helper of its own the way a slash command does.
-function adminOnlyShortcut(handler) {
-  return async (args) => {
+function adminOnlyShortcut(handler: (args: Legacy) => Promise<unknown>) {
+  return async (args: Legacy): Promise<unknown> => {
     if (!isAdmin(args.shortcut?.user?.id)) {
       await args.ack();
       await args.client.chat.postEphemeral({
@@ -79,7 +83,7 @@ function adminOnlyShortcut(handler) {
 
 // The same builder the scheduled Monday post uses, so the two can never quote
 // different numbers. `last` gets the previous week instead of this one.
-async function reportCommand({ command, ack, respond: sendEphemeral }) {
+async function reportCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
   const weeksAgo = (command.text || "").trim().toLowerCase() === "last" ? 1 : 0;
@@ -89,7 +93,7 @@ async function reportCommand({ command, ack, respond: sendEphemeral }) {
 /* ------------------------------------------------------------- /pixie ---- */
 
 // Ephemeral answer: same pipeline, but only the asker sees it.
-async function askCommand({ command, ack, respond: sendEphemeral }) {
+async function askCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
   const question = (command.text || "").trim();
@@ -126,7 +130,7 @@ async function askCommand({ command, ack, respond: sendEphemeral }) {
     const chatReply = await getChatReply(question, "", command.channel_id === config.slack.helpChannel);
     await sendEphemeral({ response_type: "ephemeral", text: chatReply || respond.MENTION_FALLBACK });
     db.recordMetric(chatReply ? "answer_chat" : "fallback");
-  } catch (e) {
+  } catch (e: any) {
     log.error("commands", `${brand.cmd()} failed:`, e.message);
     await sendEphemeral({ response_type: "ephemeral", text: respond.ERROR_FALLBACK });
   }
@@ -136,7 +140,7 @@ async function askCommand({ command, ack, respond: sendEphemeral }) {
 
 const validator = require("./validator");
 
-async function checkCommand({ command, ack, respond: sendEphemeral }) {
+async function checkCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
   const input = (command.text || "").trim();
   if (!input) {
@@ -152,7 +156,7 @@ async function checkCommand({ command, ack, respond: sendEphemeral }) {
     const replyText = validator.formatValidationReport(report);
     await sendEphemeral({ response_type: "ephemeral", text: replyText });
     db.recordMetric("command_check");
-  } catch (e) {
+  } catch (e: any) {
     log.error("commands", `${brand.cmd("check")} failed:`, e.message);
     await sendEphemeral({ response_type: "ephemeral", text: `Could not inspect repository: ${e.message}` });
   }
@@ -160,7 +164,7 @@ async function checkCommand({ command, ack, respond: sendEphemeral }) {
 
 /* ---------------------------------------------------------- /pixie-calc ---- */
 
-async function calcCommand({ command, ack, respond: sendEphemeral }) {
+async function calcCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
   const input = (command.text || "").trim();
   if (!input) {
@@ -183,7 +187,7 @@ async function calcCommand({ command, ack, respond: sendEphemeral }) {
       response_type: "ephemeral",
       text: `Couldn't calculate a program reward for "${input}". Try approved hours (e.g. \`15 hours\`) or a reward name.`,
     });
-  } catch (e) {
+  } catch (e: any) {
     log.error("commands", `${brand.cmd("calc")} failed:`, e.message);
     await sendEphemeral({ response_type: "ephemeral", text: respond.ERROR_FALLBACK });
   }
@@ -191,7 +195,7 @@ async function calcCommand({ command, ack, respond: sendEphemeral }) {
 
 /* ------------------------------------------------------- /pixie-sources -- */
 
-async function sourcesCommand({ command, ack, respond: sendEphemeral }) {
+async function sourcesCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
   let sources = [];
@@ -201,7 +205,7 @@ async function sourcesCommand({ command, ack, respond: sendEphemeral }) {
     const srcPolicy = require("./channelPolicy").resolve(command?.channel_id, command?.team_id || null);
     const prog = srcPolicy.role === "none" ? null : srcPolicy.program;
     sources = prog ? [...(prog.sources || []), ...(prog.sharedSources ? require("./programs").shared().sources || [] : [])] : [];
-  } catch (e) {
+  } catch (e: any) {
     await sendEphemeral({ response_type: "ephemeral", text: `couldn't read sources.json: ${e.message}` });
     return;
   }
@@ -221,19 +225,18 @@ async function sourcesCommand({ command, ack, respond: sendEphemeral }) {
 
 /* -------------------------------------------------------- /pixie-reload -- */
 
-async function reloadCommand({ ack, respond: sendEphemeral }) {
+async function reloadCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
   try {
     // force=true — someone explicitly asked to reload the docs, so a cached
     // Firecrawl copy from earlier today isn't good enough here.
     await knowledge.refreshCorpus(true);
-    const { clearCache } = db;
-    clearCache();
+  (db as Legacy).clearCache();
     await sendEphemeral({
       response_type: "ephemeral",
       text: "refreshed the docs and cleared the answer cache :yesyes:",
     });
-  } catch (e) {
+  } catch (e: any) {
     await sendEphemeral({ response_type: "ephemeral", text: `refresh failed: ${e.message}` });
   }
 }
@@ -241,20 +244,20 @@ async function reloadCommand({ ack, respond: sendEphemeral }) {
 /* ---------------------------------------------------------- /pixie-gaps -- */
 
 // The docs to-do list: what people asked that the docs couldn't answer.
-async function gapsCommand({ ack, respond: sendEphemeral }) {
+async function gapsCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
   // Only questions judged to be real docs gaps. A miss is not the same claim as
   // "the docs should cover this" — an outage, someone's broken laptop and a
   // half-typed fragment all used to land here, which is why the list went
   // unread. See lib/report.js.
-  const gaps = db.topGaps(GAP_LIMIT, undefined, { kind: report.DOCS });
+  const gaps = db.topGaps(GAP_LIMIT, undefined, { kind: (report as Legacy).DOCS });
   if (gaps.length === 0) {
     await sendEphemeral({ response_type: "ephemeral", text: "no unanswered questions logged yet :yay:" });
     return;
   }
 
-  const lines = gaps.map((g, i) => `${i + 1}. *${g.ask_count}×* — ${g.question.slice(0, 160)}`);
+  const lines = gaps.map((g: Legacy, i: number) => `${i + 1}. *${g.ask_count}×* — ${g.question.slice(0, 160)}`);
   await sendEphemeral({
     response_type: "ephemeral",
     text: ["*questions the docs didn't cover* (last 30d)", ...lines, "", "_worth adding these to the docs_"].join("\n"),
@@ -263,14 +266,14 @@ async function gapsCommand({ ack, respond: sendEphemeral }) {
 
 /* --------------------------------------------------------- /pixie-stats -- */
 
-async function statsCommand({ ack, respond: sendEphemeral }) {
+async function statsCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
   await sendEphemeral({ response_type: "ephemeral", text: statsText() });
 }
 
 /* ------------------------------------------------------- learning loop --- */
 
-async function teachCommand({ command, ack, respond: sendEphemeral, client }) {
+async function teachCommand({ command, ack, respond: sendEphemeral, client }: Legacy): Promise<void> {
   await ack();
 
   const text = (command.text || "").trim();
@@ -303,11 +306,11 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }) {
   if (!threadTs && client && client.conversations && client.conversations.history) {
     try {
       const history = await client.conversations.history({ channel, limit: 10 });
-      const recentWithThread = (history.messages || []).find((m) => m.thread_ts || (m.reply_count && m.reply_count > 0));
+    const recentWithThread = (history.messages || []).find((m: Legacy) => m.thread_ts || (m.reply_count && m.reply_count > 0));
       if (recentWithThread) {
         threadTs = recentWithThread.thread_ts || recentWithThread.ts;
       }
-    } catch (e) {
+    } catch (e: any) {
       log.debug("commands", `could not inspect channel history for thread: ${e.message}`);
     }
   }
@@ -325,7 +328,7 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }) {
         });
         return;
       }
-    } catch (e) {
+    } catch (e: any) {
       log.error("commands", "teach thread failed:", e.message);
     }
   }
@@ -337,7 +340,7 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }) {
 }
 
 // "Teach Pixie from thread" message shortcut — right-click a message → app actions.
-async function teachThreadShortcut({ shortcut, ack, client }) {
+async function teachThreadShortcut({ shortcut, ack, client }: Legacy): Promise<void> {
   await ack();
 
   const channel = shortcut.channel.id;
@@ -365,14 +368,14 @@ async function teachThreadShortcut({ shortcut, ack, client }) {
         ? `queued for review :thinking_face:\n>*Q:* ${parsed.question}\n>*A:* ${parsed.answer}\n\n_#${id} — approve with \`/pixie-approve ${id}\`, or \`/pixie-forget ${id}\` to drop it_`
         : `already queued this thread, or couldn't save it — check \`${brand.cmd("pending")}\``,
     });
-  } catch (e) {
+  } catch (e: any) {
     log.error("commands", "teach-thread shortcut failed:", e.message);
     await client.chat.postEphemeral({ channel, user, text: respond.ERROR_FALLBACK });
   }
 }
 
 // Candidates captured from helpers answering in threads pixie missed.
-async function pendingCommand({ ack, respond: sendEphemeral }) {
+async function pendingCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
   const rows = learn.pending(PENDING_LIMIT);
@@ -381,8 +384,8 @@ async function pendingCommand({ ack, respond: sendEphemeral }) {
     return;
   }
 
-  const lines = rows.map(
-    (r) =>
+    const lines = rows.map(
+    (r: Legacy) =>
       `*#${r.id}* — asked: _${r.question.slice(0, 100)}_\n` +
       `> ${r.answer.slice(0, 240)}\n` +
       `> _from <@${r.author_id}>, ${relativeTime(r.created_at)}_`,
@@ -399,12 +402,12 @@ async function pendingCommand({ ack, respond: sendEphemeral }) {
   });
 }
 
-function parseId(text) {
+function parseId(text: string): number | null {
   const id = Number((text || "").trim().replace(/^#/, ""));
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-function parseForgetInput(text) {
+function parseForgetInput(text: string): Legacy | null {
   const raw = (text || "").trim();
   if (!raw) return null;
   if (raw === "all") return { type: "all" };
@@ -425,7 +428,7 @@ function parseForgetInput(text) {
   return null;
 }
 
-async function approveCommand({ command, ack, respond: sendEphemeral }) {
+async function approveCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
   const id = parseId(command.text);
@@ -440,7 +443,7 @@ async function approveCommand({ command, ack, respond: sendEphemeral }) {
   });
 }
 
-async function forgetCommand({ command, ack, respond: sendEphemeral }) {
+async function forgetCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
 
   const parsed = parseForgetInput(command.text);
@@ -512,7 +515,7 @@ function welcomeText() {
 }
 
 // Channel join welcome DMs are disabled per user request
-async function onMemberJoined() {
+async function onMemberJoined(): Promise<void> {
   // No-op: do not DM members joining channels
 }
 
@@ -520,7 +523,7 @@ async function onMemberJoined() {
 
 const programs = require("./programs");
 
-async function programCommand({ command, ack, respond: sendEphemeral }) {
+async function programCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
   const raw = (command.text || "").trim();
   const parts = raw.split(/\s+/);
@@ -565,7 +568,7 @@ async function programCommand({ command, ack, respond: sendEphemeral }) {
 
   if (!raw || sub === "list") {
     const allProgs = programs.all();
-    const lines = allProgs.map((p) =>
+    const lines = allProgs.map((p: Legacy) =>
       `• *${p.id}* (${p.name}): posture=\`${p.posture || "active"}\`, scope=\`${p.scope || "any"}\`, help_channel=\`${p.helpChannel || "none"}\`, channels=[\`${(p.channels || []).join("`, `")}\`]`,
     );
     await sendEphemeral({
@@ -592,7 +595,7 @@ async function programCommand({ command, ack, respond: sendEphemeral }) {
       }
       programs.saveProgram(progObj);
       await sendEphemeral({ response_type: "ephemeral", text: `saved program \`${progObj.id}\` :yesyes:` });
-    } catch (e) {
+    } catch (e: any) {
       await sendEphemeral({ response_type: "ephemeral", text: `could not add program: ${e.message}` });
     }
     return;
@@ -602,7 +605,7 @@ async function programCommand({ command, ack, respond: sendEphemeral }) {
     const id = parts[1];
     const field = parts[2]?.toLowerCase();
     const val = parts[3]?.toLowerCase();
-    const allowed = { posture: ["active", "passive"], scope: ["any", "program"] };
+    const allowed: Record<string, string[]> = { posture: ["active", "passive"], scope: ["any", "program"] };
     // hasOwnProperty, not a bare lookup: `field` is whatever someone typed into
     // Slack, and `allowed["constructor"]` is not an array.
     const choices = Object.prototype.hasOwnProperty.call(allowed, field) ? allowed[field] : null;
@@ -653,7 +656,7 @@ const guides = require("./guides");
 // so the reaction hint, dedashing and message-ts bookkeeping can't drift:
 // the button path used to post raw blocks while every other entry dedashed
 // them, so guide steps briefly talked in dashes from exactly one button.
-async function postGuideFirstStep({ client, channel, threadTs, guideId, userId }) {
+async function postGuideFirstStep({ client, channel, threadTs, guideId, userId }: Legacy): Promise<Legacy | null> {
   const result = guides.startGuide(guideId, threadTs, userId);
   if (!result) return null;
   const text = respond.formatGuideText(result);
@@ -669,7 +672,7 @@ async function postGuideFirstStep({ client, channel, threadTs, guideId, userId }
   return result;
 }
 
-async function guideCommand({ command, ack, respond: sendEphemeral, client }) {
+async function guideCommand({ command, ack, respond: sendEphemeral, client }: Legacy): Promise<void> {
   await ack();
   const text = (command.text || "").trim();
   const channel = command.channel_id;
@@ -725,7 +728,7 @@ async function guideCommand({ command, ack, respond: sendEphemeral, client }) {
 
 const tickets = require("./tickets");
 
-function register(app) {
+function register(app: Legacy): void {
   // Command names come from the bot's own slug (lib/brand.js), not from literals:
   // one image serves the whole fleet, and a bot deployed as Sol must answer /sol.
   // The Slack manifest is generated from the same slug, so what the app advertises
@@ -765,7 +768,7 @@ function register(app) {
 
   tickets.registerActions(app);
 
-  app.action(/^start_guide_.+$/, async ({ action, body, ack, client }) => {
+  app.action(/^start_guide_.+$/, async ({ action, body, ack, client }: Legacy) => {
     await ack();
     const guideId = action.value;
     const channelId = body.channel?.id;
@@ -796,14 +799,14 @@ function register(app) {
             },
           ],
         })
-        .catch((e) => log.debug("commands", `could not update guide menu message: ${e.message}`));
+        .catch((e: any) => log.debug("commands", `could not update guide menu message: ${e.message}`));
     }
 
     const result = await postGuideFirstStep({ client, channel: channelId, threadTs, guideId, userId });
     if (!result) return;
   });
 
-  app.action("sum_post_to_thread", async ({ action, body, ack, client }) => {
+  app.action("sum_post_to_thread", async ({ action, body, ack, client }: Legacy) => {
     await ack();
     try {
       const data = JSON.parse(action.value || "{}");
@@ -813,7 +816,7 @@ function register(app) {
         thread_ts: data.threadTs,
         text: reply.plainDashes(`🧵 *Thread Summary* (shared by <@${body.user.id}>):\n\n${data.summary}`),
       });
-    } catch (e) {
+    } catch (e: any) {
       log.debug("commands", `sum_post_to_thread error: ${e.message}`);
     }
   });
@@ -825,7 +828,7 @@ function register(app) {
   home.register(app);
 }
 
-module.exports = {
+export = {
   register,
   adminOnly,
   adminOnlyShortcut,

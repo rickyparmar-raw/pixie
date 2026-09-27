@@ -1,3 +1,4 @@
+// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
@@ -1431,3 +1432,4 @@ test("a resolved macro trigger uses the canonical resolve transition", async () 
   assert.ok(db.listTicketEvents(ticketId).some((row) => row.event_type === "resolved"));
   assert.ok(db.listTicketEvents(ticketId).some((row) => row.event_type === "macro_sent"));
 });
+export {};

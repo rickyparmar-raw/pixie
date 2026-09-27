@@ -1,3 +1,4 @@
+// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
@@ -17,3 +18,4 @@ test("disabled flag disables the gate", () => {
 test("there is no per-channel Jev allowlist: engagement scope is a program setting", () => {
   assert.equal(jev.isJevActiveForChannel, undefined);
 });
+export {};

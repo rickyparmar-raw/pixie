@@ -4,10 +4,28 @@
 // slash command has no way to know which thread it was typed in. A message
 // shortcut's payload does carry the thread, which is why this exists as its
 // own trigger instead of an extension of /pixie-teach.
-const { config } = require("./config");
-const llm = require("./llm");
-const learn = require("./learn");
-const { MAX_TOKENS } = require("./answer");
+import configModule = require("./config");
+import llm = require("./llm");
+import learn = require("./learn");
+import answer = require("./answer");
+
+const { config } = configModule;
+const { MAX_TOKENS } = answer;
+const answerConfig = config.answer as typeof config.answer & { onRateLimited?: unknown };
+
+interface ThreadMessage {
+  text?: string;
+  bot_id?: string;
+}
+interface ThreadClient {
+  conversations: {
+    replies(args: { channel: string; ts: string; limit: number }): Promise<{ messages?: ThreadMessage[] }>;
+  };
+}
+interface TeachResult {
+  question: string;
+  answer: string;
+}
 
 // One page of thread history is enough to judge teachability — longer threads
 // repeat themselves, and the model call stays bounded.
@@ -25,23 +43,23 @@ const SYSTEM_PROMPT = [
   `If the thread has no actionable question or resolution to remember, reply with exactly "${DECLINE_MARKER}".`,
 ].join("\n");
 
-function buildTranscript(messages) {
+function buildTranscript(messages: ThreadMessage[]): string {
   return messages
     .filter((m) => m.text)
     .map((m) => `${m.bot_id ? "assistant" : "user"}: ${m.text}`)
     .join("\n");
 }
 
-function isDeclineLine(line) {
+function isDeclineLine(line: string): boolean {
   return line.toUpperCase() === DECLINE_MARKER;
 }
 
 // Model thinking leaks back in as preamble — only a trailing parseable Q&A
 // line counts, and leaked prompt echoes never do.
-function parseModelReply(text) {
+function parseModelReply(text: string): TeachResult | null {
   const reply = llm.stripThinking((text || "").trim());
   if (!reply || reply.toUpperCase() === DECLINE_MARKER) return null;
-  const lines = reply.split("\n").map((l) => l.trim()).filter(Boolean);
+  const lines = reply.split("\n").map((l: string) => l.trim()).filter(Boolean);
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
     if (isDeclineLine(line)) return null;
@@ -55,17 +73,17 @@ function parseModelReply(text) {
 
 // Returns { question, answer } or null — either the thread had nothing worth
 // teaching, or the model declined, or its reply didn't parse.
-async function summarizeThread({ client, channel, threadTs }) {
+async function summarizeThread({ client, channel, threadTs }: { client: ThreadClient; channel: string; threadTs: string }): Promise<TeachResult | null> {
   const { messages } = await client.conversations.replies({ channel, ts: threadTs, limit: THREAD_FETCH_LIMIT });
   const transcript = buildTranscript(messages || []);
   if (!transcript) return null;
   const { text } = await llm.complete(
     {
-      baseUrl: config.answer.baseUrl,
-      apiKey: config.answer.apiKey,
-      model: config.answer.model,
-      fallback: config.answer.fallback,
-      onRateLimited: config.answer.onRateLimited,
+      baseUrl: answerConfig.baseUrl,
+      apiKey: answerConfig.apiKey,
+      model: answerConfig.model,
+      fallback: answerConfig.fallback,
+      onRateLimited: answerConfig.onRateLimited,
       maxTokens: MAX_TOKENS,
       temperature: 0,
       thinking: { type: "disabled" },
@@ -79,4 +97,4 @@ async function summarizeThread({ client, channel, threadTs }) {
   return parseModelReply(text);
 }
 
-module.exports = { summarizeThread, buildTranscript, THREAD_FETCH_LIMIT };
+export = { summarizeThread, buildTranscript, THREAD_FETCH_LIMIT };
