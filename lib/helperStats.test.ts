@@ -1,20 +1,19 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
+const db = require("./db") as typeof import("./db");
 const { helperStats, listHelperStats, median, rate } = require("./helperStats");
 
 db.open(":memory:");
 
-function program(id, userId, active = 1) {
+function program(id: string, userId: string, active = 1): void {
   db.handle().query("INSERT INTO programs (id, name, scope, updated_at) VALUES (?, ?, 'program', ?)").run(id, id, Date.now());
   db.syncHelper({ programId: id, userId, role: "helper" });
   if (!active) db.removeHelper({ programId: id, userId });
 }
 
-function ticket(programId, assigneeId, createdAt, overrides = {}) {
+function ticket(programId: string, assigneeId: string, createdAt: number, overrides: { status?: string; category?: string; assignedAt?: number; firstResponseAt?: number | null; resolvedAt?: number | null; resolvedBy?: string; reopenCount?: number } = {}): number {
   const result = db.handle().query(
     `INSERT INTO tickets (program_id, channel, thread_ts, requester_id, question, status, assignee_id, category, created_at, updated_at, assigned_at, first_human_response_at, resolved_at, resolved_by, reopen_count)
      VALUES (?, 'C', ?, 'requester', 'question', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,

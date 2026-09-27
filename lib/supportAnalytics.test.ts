@@ -1,11 +1,10 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const tickets = require("./tickets");
-const analytics = require("./supportAnalytics");
+const db = require("./db") as unknown as TestDb;
+const tickets = require("./tickets") as typeof import("./tickets");
+const analytics = require("./supportAnalytics") as typeof import("./supportAnalytics");
 
 const DAY = 86400000;
 const HOUR = 3600000;
@@ -28,7 +27,7 @@ test("overview counts every ticket surface and status within the analytics windo
     helpChannel: "C-f5",
     channels: ["C-f5"],
     ticketVisibility: "dashboard",
-  };
+  } as unknown as import("./types").Program;
   db.saveProgram(program);
 
   const insert = ({ status = "open", channel = "C-f5", threadTs, ageMs = DAY, resolvedAgeMs = null }) => {
@@ -126,3 +125,4 @@ test("overview counts every ticket surface and status within the analytics windo
   assert.equal(second.openCount, 8);
 });
 export {};
+import type { TestDb } from "./test.types";

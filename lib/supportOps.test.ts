@@ -1,14 +1,13 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const programs = require("./programs");
-const route = require("./helperRoute");
-const incidents = require("./incidents");
-const wait = require("./waitTime");
-const api = require("./web/api");
+const db = require("./db") as unknown as TestDb;
+const programs = require("./programs") as typeof import("./programs");
+const route = require("./helperRoute") as typeof import("./helperRoute");
+const incidents = require("./incidents") as unknown as TestIncidentApi;
+const wait = require("./waitTime") as typeof import("./waitTime");
+const api = require("./web/api") as typeof import("./web/api");
 
 before(() => {
   db.close();
@@ -94,3 +93,4 @@ test("wait estimates use medians and admit insufficient history", () => {
   assert.equal(est.medianWaitMs, 180000);
 });
 export {};
+import type { TestDb, TestIncidentApi } from "./test.types";

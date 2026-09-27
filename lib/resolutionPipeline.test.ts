@@ -1,13 +1,12 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const llm = require("./llm");
-const tickets = require("./tickets");
-const pipeline = require("./resolutionPipeline");
-const api = require("./web/api");
+const db = require("./db") as unknown as TestDb;
+const llm = require("./llm") as unknown as TestLlm;
+const tickets = require("./tickets") as typeof import("./tickets");
+const pipeline = require("./resolutionPipeline") as unknown as TestResolutionPipeline;
+const api = require("./web/api") as typeof import("./web/api");
 
 let realComplete;
 let realOnResolved;
@@ -122,3 +121,4 @@ test("ticket detail exposes resolutionSummary", () => {
   assert.equal(detail.ticket.resolutionSummary, "The form submission issue was resolved.");
 });
 export {};
+import type { TestDb, TestLlm, TestResolutionPipeline } from "./test.types";

@@ -1,13 +1,12 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const tickets = require("./tickets");
-const helperRoute = require("./helperRoute");
-const resolutionPipeline = require("./resolutionPipeline");
-const llm = require("./llm");
+const db = require("./db") as unknown as TestDb;
+const tickets = require("./tickets") as unknown as TestTickets;
+const helperRoute = require("./helperRoute") as typeof import("./helperRoute");
+const resolutionPipeline = require("./resolutionPipeline") as unknown as TestResolutionPipeline;
+const llm = require("./llm") as unknown as TestLlm;
 
 before(() => {
   db.close();
@@ -117,3 +116,4 @@ test("a reopened ticket resolved again still reaches the learning step", async (
   }
 });
 export {};
+import type { TestDb, TestLlm, TestResolutionPipeline, TestTickets } from "./test.types";

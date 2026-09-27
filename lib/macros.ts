@@ -305,7 +305,7 @@ async function sendToThread({ id, program, channel, threadTs, actorId, client }:
   const macro = get(id);
   if (!macro) return { error: "macro not found" };
   if (!macro.enabled) return { error: "macro is disabled" };
-  if (!program || program.id !== macro.program_id) return { error: "program mismatch" };
+  if (!program || (program.id as unknown as string) !== macro.program_id) return { error: "program mismatch" };
   const allowed = macro.allowed_roles ? JSON.parse(macro.allowed_roles) : null;
   const role = actorRole(String(program.id), actorId);
   if (!role) return { error: "actor is not a helper of this program" };

@@ -1,10 +1,9 @@
-// @ts-nocheck
 const { test, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const programs = require("./programs");
-const lease = require("./jobLease");
-const watcher = require("./resolutionWatcher");
+const db = require("./db") as unknown as TestDb;
+const programs = require("./programs") as typeof import("./programs");
+const lease = require("./jobLease") as typeof import("./jobLease");
+const watcher = require("./resolutionWatcher") as unknown as TestResolutionWatcher;
 
 let sequence = 0;
 
@@ -24,7 +23,7 @@ function setupProgram(extra = {}) {
   return program;
 }
 
-function makeTicket(program, extra = {}) {
+function makeTicket(program, extra: { status?: string; updated_at?: number; created_at?: number } = {}) {
   const id = db.createTicket({
     programId: program.id,
     channel: program.helpChannel,
@@ -268,3 +267,4 @@ test("last-word rule: a helper's last reply with the requester quiet 2+ days res
   }
 });
 export {};
+import type { TestDb, TestResolutionWatcher } from "./test.types";

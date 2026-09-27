@@ -1,4 +1,3 @@
-// @ts-nocheck
 import dbModule = require("./db");
 import replyModule = require("./reply");
 import logModule = require("./log");
@@ -12,7 +11,7 @@ import assignmentLifecycleModule = require("./assignmentLifecycle");
 import ticketCategoryModule = require("./ticketCategory");
 import resolutionPipelineModule = require("./resolutionPipeline");
 import policy = require("./tickets/policy");
-import type { Program, SlackClient, Ticket } from "./types";
+import type { ChannelRole, Program, SlackClient, Ticket } from "./types";
 import type {
   FinishResolveOptions,
   IncidentCheckOptions,
@@ -22,6 +21,7 @@ import type {
   TicketActionApp,
   TicketActionBody,
   TicketActionInput,
+  TicketActionPayload,
   TicketActionResult,
   TicketCandidate,
   TicketPolicy,
@@ -32,20 +32,146 @@ import type {
   ResolveTicketOptions,
 } from "./tickets.types";
 
-type ModuleShim = Record<string, unknown>;
+interface TicketEvent {
+  event_type: string;
+  actor_id?: string | null;
+  detail?: string | null;
+  [key: string]: unknown;
+}
+
+interface HelperRecord {
+  user_id: string;
+  [key: string]: unknown;
+}
+
+interface ProgramChannelRecord extends TicketDatabaseRow {
+  channel_id: string;
+}
+
+interface DbQuery {
+  all(...args: unknown[]): TicketEvent[];
+  get(...args: unknown[]): TicketDatabaseRow | undefined;
+  run(...args: unknown[]): unknown;
+}
+
+interface TicketDbModule {
+  addTicketEvent(...args: unknown[]): unknown;
+  addTicketNote(...args: unknown[]): number | null;
+  assignTicket(...args: unknown[]): boolean;
+  claimTicket(...args: unknown[]): boolean;
+  closeTicket(...args: unknown[]): boolean;
+  createTicket(...args: unknown[]): number | null;
+  enrichTicket(...args: unknown[]): unknown;
+  escalateTicketStatus(...args: unknown[]): boolean;
+  getTicket(...args: unknown[]): Ticket;
+  getTicketByChannelThreadTs(...args: unknown[]): Ticket | null;
+  getTicketByThreadTs(...args: unknown[]): Ticket | null;
+  getThread(...args: unknown[]): Record<string, unknown> | null;
+  handle(...args: unknown[]): { query(...queryArgs: unknown[]): DbQuery };
+  isHelper(...args: unknown[]): boolean;
+  isTakeover(...args: unknown[]): boolean;
+  isThreadMuted(...args: unknown[]): boolean;
+  listHelpers(...args: unknown[]): HelperRecord[];
+  listProgramChannels(...args: unknown[]): ProgramChannelRecord[];
+  listTicketEvents(...args: unknown[]): TicketEvent[];
+  markDuplicateTicket(...args: unknown[]): boolean;
+  markTakeover(...args: unknown[]): unknown;
+  markTicketWaitingForHelper(...args: unknown[]): boolean;
+  recordFirstResponse(...args: unknown[]): unknown;
+  recordMetric(...args: unknown[]): unknown;
+  reopenResolvedTicket(...args: unknown[]): boolean;
+  reopenTicket(...args: unknown[]): boolean;
+  resolveTicket(...args: unknown[]): boolean;
+  setTicketTriage(...args: unknown[]): unknown;
+  snoozeTicket(...args: unknown[]): boolean;
+  touchThread(...args: unknown[]): unknown;
+  unclaimTicket(...args: unknown[]): boolean;
+  updatePublicAckTs(...args: unknown[]): boolean;
+  updateTicketCardTs(...args: unknown[]): boolean;
+}
+
+interface ReplyModule {
+  discardPlaceholder(...args: unknown[]): Promise<unknown>;
+  escapeSlack(text: string): string;
+  finalize(...args: unknown[]): Promise<unknown>;
+  plainDashes(text: string): string;
+  plainDashesInBlocks(blocks: SlackBlock[]): SlackBlock[];
+}
+
+interface LogModule {
+  debug(scope: string, ...args: unknown[]): void;
+  error(scope: string, ...args: unknown[]): void;
+  info(scope: string, ...args: unknown[]): void;
+  warn(scope: string, ...args: unknown[]): void;
+}
+
+interface SlackMessagesModule {
+  sendProgramMessage(...args: unknown[]): Promise<{ ts?: string }>;
+}
+
+interface ProgramsModule {
+  forChannel(...args: unknown[]): Program | null;
+  get(...args: unknown[]): Program | null;
+  isHelpChannel(...args: unknown[]): boolean;
+  isShadow(...args: unknown[]): boolean;
+}
+
+interface AuditModule {
+  record(...args: unknown[]): unknown;
+}
+
+interface HelperRouteModule {
+  helpersWhoPassed?: never;
+  nextEligibleHelper?: never;
+  openLoad?: never;
+  recommend(...args: unknown[]): TicketCandidate[];
+  recordReply(...args: unknown[]): unknown;
+  recordResolution(...args: unknown[]): unknown;
+}
+
+interface IncidentsModule {
+  matchActiveIncident(...args: unknown[]): (TicketDatabaseRow & { public_message?: string; title?: string }) | null;
+  recordAffectedReport(...args: unknown[]): unknown;
+}
+
+interface AssignmentLifecycleModule {
+  helpersWhoPassed(...args: unknown[]): Set<string>;
+  nextEligibleHelper(...args: unknown[]): TicketCandidate | null;
+  openOfferFor(...args: unknown[]): { to?: string | null } | null;
+  recordClaim(...args: unknown[]): unknown;
+  recordDecline(...args: unknown[]): TicketActionResult & { recorded?: boolean };
+  recordOffer(...args: unknown[]): Record<string, unknown>;
+  recordRelease(...args: unknown[]): unknown;
+}
+
+interface TicketCategoryModule {
+  classify(...args: unknown[]): string | null;
+  defaultTaxonomy(...args: unknown[]): Record<string, unknown>;
+}
+
+interface ResolutionPipelineModule {
+  schedule(...args: unknown[]): void;
+}
+
+interface FinishResult extends TicketActionResult {
+  updated?: Ticket;
+  cardText?: string;
+  ackText?: string;
+}
+
 const { config, isAdmin } = configModule;
 const { ticketPolicy, resolveTicketRole } = policy;
-const db = dbModule as unknown as ModuleShim;
-const reply = replyModule as unknown as ModuleShim;
-const log = logModule as unknown as ModuleShim;
-const slackMessages = slackMessagesModule as unknown as ModuleShim;
-const programs = programsModule as unknown as ModuleShim;
-const audit = auditModule as unknown as ModuleShim;
-const helperRoute = helperRouteModule as unknown as ModuleShim;
-const incidents = incidentsModule as unknown as ModuleShim;
-const assignmentLifecycle = assignmentLifecycleModule as unknown as ModuleShim;
-const ticketCategory = ticketCategoryModule as unknown as ModuleShim;
-const resolutionPipeline = resolutionPipelineModule as unknown as ModuleShim;
+const db = dbModule as unknown as TicketDbModule;
+const reply = replyModule as unknown as ReplyModule;
+const log = logModule as unknown as LogModule;
+const slackMessages = slackMessagesModule as unknown as SlackMessagesModule;
+const programs = programsModule as unknown as ProgramsModule;
+const audit = auditModule as unknown as AuditModule;
+const helperRoute = helperRouteModule as unknown as HelperRouteModule;
+const incidents = incidentsModule as unknown as IncidentsModule;
+const assignmentLifecycle = assignmentLifecycleModule as unknown as AssignmentLifecycleModule;
+const ticketCategory = ticketCategoryModule as unknown as TicketCategoryModule;
+const resolutionPipeline = resolutionPipelineModule as unknown as ResolutionPipelineModule;
 
 function errorMessage(error: unknown): string {
   if (error && typeof error === "object" && "message" in error) {
@@ -62,7 +188,7 @@ const reconcilingTicketUI = new WeakMap();
 
 const SUPPORT_RESOLVE_ACTION = "st_resolve";
 const SUPPORT_REOPEN_ACTION = "st_reopen";
-const STATUS_EMOJI = {
+const STATUS_EMOJI: Record<string, string> = {
   claimed: ":eyes:",
   resolved: ":white_check_mark:",
   closed: ":x:",
@@ -97,12 +223,13 @@ function authorize(ticket: Ticket | null, { programId, workspaceId, actorId }: {
 
 function getOrganizerChannel(program: Program | null, workspaceId: string | null = null): string | null {
   if (!program) return null;
-  const direct = program.organizerChannel || program.organizer_channel || program.organizer_channel_id;
+  const legacyProgram = program as Program & { organizer_channel?: string; organizer_channel_id?: string; workspace_id?: string | null };
+  const direct = program.organizerChannel || legacyProgram.organizer_channel || legacyProgram.organizer_channel_id;
   if (direct) return direct;
   if (program.id) {
     try {
       const channels = db.listProgramChannels(program.id);
-      const ws = workspaceId || program.workspaceId || program.workspace_id;
+      const ws = workspaceId || program.workspaceId || legacyProgram.workspace_id;
       const match = channels.find((c: TicketDatabaseRow) => c.kind === "organizer" && (!ws || c.workspace_id === ws));
       if (match) return match.channel_id;
       const anyOrg = channels.find((c: TicketDatabaseRow) => c.kind === "organizer");
@@ -153,7 +280,7 @@ function buildTicketCardBlocks(ticket: Ticket, program: Program | null, candidat
   const progName = program ? program.name : ticket.program_id || "YSWS";
   const assigneeStr = ticket.assignee_id ? ` • Claimed by <@${ticket.assignee_id}>` : "";
   const statusStr = `*Status*: ${statusEmoji} \`${ticket.status}\`${assigneeStr}`;
-  const blocks = [
+  const blocks: SlackBlock[] = [
     {
       type: "header",
       text: { type: "plain_text", text: `[${progName}] Ticket ${ticketRef(ticket) || `#${ticket.id}`}` },
@@ -285,7 +412,7 @@ function buildTicketCardBlocks(ticket: Ticket, program: Program | null, candidat
             placeholder: { type: "plain_text", text: "🔁 Reassign to…" },
             action_id: "reassign_select",
             options: filtered.map((r) => ({
-              text: { type: "plain_text", text: `@${r.userId} — ${r.reasons[0]}`.slice(0, 75) },
+              text: { type: "plain_text", text: `@${r.userId} — ${r.reasons?.[0] || "program helper"}`.slice(0, 75) },
               value: `${ticket.id}:${r.userId}`,
             })),
           },
@@ -296,7 +423,7 @@ function buildTicketCardBlocks(ticket: Ticket, program: Program | null, candidat
   return blocks;
 }
 
-const TICKET_STATUS_LABELS = {
+const TICKET_STATUS_LABELS: Record<string, string> = {
   open: "Open",
   waiting_for_helper: "Waiting for a helper",
   assigned: "Assigned",
@@ -315,7 +442,7 @@ function friendlyStatusLabel(status: string): string {
 }
 
 function ticketStatusLabel(ticket: Ticket | null): string | null {
-  return TICKET_STATUS_LABELS[ticket && ticket.status] || (ticket && ticket.status);
+  return TICKET_STATUS_LABELS[ticket?.status || ""] || (ticket && ticket.status);
 }
 
 function ticketRef(ticket: Ticket | null): string {
@@ -372,12 +499,12 @@ function projectionKey(ticket: Ticket, projection: TicketUIProjection): string {
   });
 }
 
-async function reconcileTicketUI({ client, ticket, program = null, cardText = null }: { client: SlackClient; ticket: Ticket; program?: Program | null; cardText?: string | null }): Promise<boolean | undefined> {
+async function reconcileTicketUI({ client, ticket, program = null, cardText = null }: { client: SlackClient | null; ticket: Ticket; program?: Program | null; cardText?: string | null }): Promise<boolean | undefined> {
   if (!client || !ticket) return;
-  let queues = reconcilingTicketUI.get(client);
+  let queues = reconcilingTicketUI.get(client as object);
   if (!queues) {
     queues = new Map();
-    reconcilingTicketUI.set(client, queues);
+    reconcilingTicketUI.set(client as object, queues);
   }
   const ticketKey = String(ticket.id);
   const previous = queues.get(ticketKey);
@@ -390,10 +517,11 @@ async function reconcileTicketUI({ client, ticket, program = null, cardText = nu
   return current;
 }
 
-async function reconcileTicketUIOnce({ client, ticket, program = null, cardText = null }: { client: SlackClient; ticket: Ticket; program?: Program | null; cardText?: string | null }): Promise<boolean> {
+async function reconcileTicketUIOnce({ client, ticket, program = null, cardText = null }: { client: SlackClient | null; ticket: Ticket; program?: Program | null; cardText?: string | null }): Promise<boolean> {
+  if (!client) return false;
   ticket = db.getTicket(ticket.id) || ticket;
   const prog = program || (ticket.program_id ? programs.get(ticket.program_id) : null);
-  let candidates = [];
+  let candidates: TicketCandidate[] = [];
   try {
     candidates = helperRoute.recommend({ programId: ticket.program_id, category: ticket.category, limit: 5, ...routingOptions(prog, ticket) });
   } catch (e) {
@@ -410,9 +538,10 @@ async function reconcileTicketUIOnce({ client, ticket, program = null, cardText 
   const previous = renderedByTicket.get(String(ticket.id));
   if (previous === key) return true;
 
+  const destinationProgram = prog || ({ id: ticket.program_id } as unknown as Program);
   const cardSynced = await syncSlack({
     client,
-    channel: getOrganizerChannel(prog || { id: ticket.program_id }, ticket.workspace_id),
+    channel: getOrganizerChannel(destinationProgram, ticket.workspace_id),
     ts: ticket.card_ts,
     text: projection.card.text,
     blocks: projection.card.blocks,
@@ -438,7 +567,7 @@ async function syncSupportTicketUI(client: SlackClient, ticket: Ticket, prog: Pr
         blocks: reply.plainDashesInBlocks(view.thread.blocks),
       });
     } catch (e) {
-      recordSlackSyncFailure("thread", ticket, e);
+      recordSlackSyncFailure("thread", ticket, e as SlackError);
       synced = false;
     }
   }
@@ -468,10 +597,16 @@ function isHelpChannelFor(prog: Program | null, channel: string | null, workspac
 
 function policyFor(prog: Program | null, { channel = null, workspaceId = null, role = null }: { channel?: string | null; workspaceId?: string | null; role?: string | null } = {}): TicketPolicy | null {
   if (!prog) return null;
-  return ticketPolicy({ program: prog, role: resolveTicketRole({ program: prog, channel, workspaceId, role }) });
+  return ticketPolicy({ program: prog, role: resolveTicketRole({ program: prog, channel, workspaceId, role: role as ChannelRole | null }) }) as unknown as TicketPolicy;
 }
 
-function routingOptions(prog: Program | null, ticket: Ticket | null): TicketRoutingOptions {
+interface RoutingTicket {
+  channel: string;
+  requester_id?: string | null;
+  workspace_id?: string | null;
+}
+
+function routingOptions(prog: Program | null, ticket: RoutingTicket | null): TicketRoutingOptions {
   const pol = policyFor(prog, { channel: ticket && ticket.channel, workspaceId: ticket && ticket.workspace_id });
   return {
     expertiseRouting: pol ? pol.expertiseRouting : true,
@@ -503,7 +638,7 @@ function ticketSurfaces(prog: Program | null): { thread: boolean; organizer: boo
   };
 }
 
-function categoryRules(prog: Program | null): TicketActionResult | null {
+function categoryRules(prog: Program | null): Record<string, unknown> | null {
   if (prog?.categories && typeof prog.categories === "object") return prog.categories;
   if (prog?.ticketsEnabled === false) return null;
   return ticketCategory.defaultTaxonomy();
@@ -522,14 +657,14 @@ function applyCategory(ticketId: number, { prog, channel, question }: { prog: Pr
   }
 }
 
-function reclassifyOnFollowUp(ticket: Ticket | null, { prog, question, requesterId }: { prog: Program | null; question: string | null; requesterId: string }): TicketActionResult | null {
+function reclassifyOnFollowUp(ticket: Ticket, { prog, question, requesterId }: { prog: Program | null; question: string | null; requesterId: string }): Ticket {
   if (!ticket || !prog || ticket.status === "resolved" || ticket.status === "closed") return ticket;
   if (!question || requesterId !== ticket.requester_id || question === ticket.question) return ticket;
-  const followUps = [];
+  const followUps: string[] = [];
   for (const event of db.listTicketEvents(ticket.id)) {
     if (event.event_type !== "requester_followup") continue;
     try {
-      const detail = JSON.parse(event.detail || "{}");
+      const detail = JSON.parse(String(event.detail || "{}")) as { text?: string };
       if (detail.text) followUps.push(detail.text);
     } catch (_) {}
   }
@@ -561,7 +696,7 @@ async function ensureSupportTicket(options: EnsureSupportTicketOptions): Promise
     if (!ticketCreationAllowed({ prog, channel, workspaceId: wsId, paging, role, backfill })) return null;
     const visibility = backfill || prog.publicTicketsEnabled === false ? "dashboard" : (prog.ticketVisibility || "thread");
     const id = db.createTicket({ programId: prog.id, workspaceId: wsId, channel, threadTs, requesterId, question, createdAt, visibility });
-    applyCategory(id, { prog, channel, question });
+    if (id) applyCategory(id, { prog, channel, question });
     ticket = id ? db.getTicket(id) : db.getTicketByThreadTs(threadTs, wsId, prog.id);
     if (ticket && !db.listTicketEvents(ticket.id).some((e) => e.event_type === "created")) {
       recordTransition(ticket, requesterId, "created", { channel, workspaceId: wsId, source: source || "support_question" }, createdAt);
@@ -589,7 +724,7 @@ async function ensureSupportTicket(options: EnsureSupportTicketOptions): Promise
         await client.chat.delete({ channel, ts: res.ts }).catch(() => {});
       }
     } catch (e) {
-      recordSlackSyncFailure("thread_post", ticket, e);
+      recordSlackSyncFailure("thread_post", ticket, e as SlackError);
       log.warn("tickets", `support ticket UI post failed for #${ticket.id}: ${errorMessage(e)}`);
     }
   }
@@ -613,13 +748,13 @@ function helperMentionedIn(programId: string, text: string | null): boolean {
   if (!programId || !text) return false;
   const eligibility = require("./eligibility");
   const mentions = eligibility.otherMentions(text, config?.slack?.botUserId);
-  return mentions.some((m) => {
+  return mentions.some((m: string) => {
     const id = (m.match(/<@([A-Z0-9]+)/) || [])[1];
     return id && db.isHelper(programId, id);
   });
 }
 
-function markWaitingForHelper({ ticketId, client = null, program = null, question = null, role = null, explicit = false }: { ticketId: number; client?: SlackClient | null; program?: Program | null; question?: string | null; role?: string | null; explicit?: boolean }): TicketActionResult | null {
+function markWaitingForHelper({ ticketId, client = null, program = null, question = null, role = null, explicit = false }: { ticketId: number; client?: SlackClient | null; program?: Program | null; question?: string | null; role?: string | null; explicit?: boolean }): Ticket | null {
   const ticket = db.getTicket(ticketId);
   if (!ticket || CLOSED.includes(ticket.status) || ticket.status === "snoozed") return ticket || null;
   if (db.isThreadMuted(ticket.thread_ts) || db.isTakeover(ticket.thread_ts)) return ticket;
@@ -671,7 +806,7 @@ function markWaitingForHelper({ ticketId, client = null, program = null, questio
   return updated;
 }
 
-async function handOffToHelper({ client, program, channel, threadTs, question, ticket = null, requesterId = null, workspaceId = null, role = null }: { client: SlackClient; program: Program | null; channel: string; threadTs: string; question: string; ticket?: Ticket | null; requesterId?: string | null; workspaceId?: string | null; role?: string | null }): Promise<TicketActionResult | string | null> {
+async function handOffToHelper({ client, program, channel, threadTs, question, ticket = null, requesterId = null, workspaceId = null, role = null }: { client: SlackClient; program: Program | null; channel: string; threadTs: string; question: string; ticket?: Ticket | null; requesterId?: string | null; workspaceId?: string | null; role?: string | null }): Promise<Ticket | string | null> {
   if (ticket) return markWaitingForHelper({ ticketId: ticket.id, client, program, question, role, explicit: true });
   if (!program) return null;
   const pol = policyFor(program, { channel, workspaceId, role });
@@ -692,7 +827,7 @@ async function pingThreadHelper({ client, program, channel, threadTs, question, 
   const opts = routingOptions(program, { channel, requester_id: requesterId });
   const candidates = helperRoute.recommend({ programId: program.id, category, limit: 5, ...opts });
   const [top] = candidates;
-  const logDecision = (skipReason, posted = false, selected = null) =>
+  const logDecision = (skipReason: string | null, posted = false, selected: string | null = null) =>
     logRoutingDecision({ ticket: { channel, thread_ts: threadTs, program_id: program.id }, program, category, candidates, selected, posted, skipReason });
   if (!top) return logDecision("no_eligible_helper"), null;
 
@@ -710,7 +845,7 @@ async function pingThreadHelper({ client, program, channel, threadTs, question, 
   return top.userId;
 }
 
-function logRoutingDecision({ ticket, program, category, candidates = [], selected = null, posted = false, skipReason = null }: { ticket: Ticket; program: Program | null; category?: string | null; candidates?: TicketCandidate[]; selected?: string | null; posted?: boolean; skipReason?: string | null }): void {
+function logRoutingDecision({ ticket, program, category, candidates = [], selected = null, posted = false, skipReason = null }: { ticket: (Pick<Ticket, "channel" | "thread_ts" | "program_id"> & { id?: number }) | null; program: Program | null; category?: string | null; candidates?: TicketCandidate[]; selected?: string | null; posted?: boolean; skipReason?: string | null }): void {
   const ranked = candidates.slice(0, 5).map((c) => `${c.userId}:${c.score}`).join(",");
   log.info(
     "routing",
@@ -722,7 +857,7 @@ function logRoutingDecision({ ticket, program, category, candidates = [], select
 }
 
 async function pingSpecificHelper({ client, ticket, program, userId, question = null, source = "ping", candidates = [], role = null }: { client: SlackClient; ticket: Ticket | null; program: Program | null; userId: string; question?: string | null; source?: string; candidates?: TicketCandidate[]; role?: string | null }): Promise<string | null> {
-  const logDecision = (skipReason, posted = false) =>
+  const logDecision = (skipReason: string | null, posted = false) =>
     logRoutingDecision({ ticket, program, category: ticket?.category, candidates, selected: userId, posted, skipReason });
 
   if (!client || !ticket || !program || !userId) return logDecision("missing_args"), null;
@@ -765,7 +900,7 @@ async function pingRecommendedHelper({ client, ticket, program, question = null,
     logRoutingDecision({ ticket, program, category: ticket.category, candidates: [], selected: userId, posted: false, skipReason: "assignee_is_requester" });
     return null;
   }
-  let candidates = [];
+  let candidates: TicketCandidate[] = [];
   if (!userId) {
     candidates = helperRoute.recommend({ programId: ticket.program_id, category: ticket.category, limit: 5, ...routingOptions(program, ticket) });
     const [top] = candidates;
@@ -799,7 +934,7 @@ async function syncSlack({ client, channel, ts, text, blocks }: { client: SlackC
     });
     return true;
   } catch (e) {
-    recordSlackSyncFailure("card", ticket, e);
+    recordSlackSyncFailure("card", ticket, e as SlackError);
     return false;
   }
 }
@@ -845,7 +980,7 @@ async function checkIncident(options: IncidentCheckOptions): Promise<TicketActio
   }
 }
 
-async function postCard({ prog, programId, resolvedWorkspaceId, ticket, client, requesterId, question }: { prog: Program | null; programId: string; resolvedWorkspaceId: string | null; ticket: Ticket; client: SlackClient; requesterId: string; question: string }): Promise<TicketActionResult> {
+async function postCard({ prog, programId, resolvedWorkspaceId, ticket, client, requesterId, question }: { prog: Program | null; programId: string; resolvedWorkspaceId: string | null; ticket: Ticket; client: SlackClient; requesterId: string; question: string }): Promise<Ticket> {
   // WHY: cards route strictly to the organizer channel — never the public
   // help channel, and no fallback on error.
   const organizerChannel = getOrganizerChannel(prog, resolvedWorkspaceId);
@@ -853,9 +988,9 @@ async function postCard({ prog, programId, resolvedWorkspaceId, ticket, client, 
     log.error("tickets", `no organizer channel configured for program ${programId} — ticket #${ticket.id} card not posted`);
     return ticket;
   }
-  if (client && client.chat && client.chat.postMessage) {
+  if (client && client.chat && (client.chat as unknown as { postMessage?: unknown }).postMessage) {
     try {
-      let candidates = [];
+      let candidates: TicketCandidate[] = [];
       try {
         candidates = helperRoute.recommend({ programId, category: ticket.category, limit: 5, ...routingOptions(prog, ticket) });
       } catch (e) {
@@ -873,11 +1008,11 @@ async function postCard({ prog, programId, resolvedWorkspaceId, ticket, client, 
         if (db.updateTicketCardTs(ticket.id, res.ts)) {
           ticket.card_ts = res.ts;
         } else if (client.chat.delete) {
-          await client.chat.delete({ channel: organizerChannel, ts: res.ts }).catch((e) => recordSlackSyncFailure("card_duplicate_delete", ticket, e));
+          await client.chat.delete({ channel: organizerChannel, ts: res.ts }).catch((e) => recordSlackSyncFailure("card_duplicate_delete", ticket, e as SlackError));
         }
       }
     } catch (e) {
-      recordSlackSyncFailure("card_post", ticket, e);
+      recordSlackSyncFailure("card_post", ticket, e as SlackError);
       log.error("tickets", `failed to post ticket card to organizer channel ${organizerChannel} for program ${programId}: ${errorMessage(e)}`);
     }
   }
@@ -913,13 +1048,14 @@ async function escalateTicket({ program, channel, threadTs, requesterId, questio
   return promoted || ticket;
 }
 
-function getOrCreateOpenTicket({ program, channel, threadTs, requesterId, question, workspaceId = null, role = null }: { program: Program | null; channel: string; threadTs: string; requesterId: string; question: string; workspaceId?: string | null; role?: string | null }): TicketActionResult | null {
+function getOrCreateOpenTicket({ program, channel, threadTs, requesterId, question, workspaceId = null, role = null }: { program: Program | null; channel: string; threadTs: string; requesterId: string; question: string; workspaceId?: string | null; role?: string | null }): Ticket | null {
   if (!threadTs) return null;
   const prog = program || (channel ? programs.forChannel(channel, workspaceId) : null);
   const resolvedWorkspaceId = workspaceId || (prog ? prog.workspaceId || prog.workspace_id || null : null);
   const existing = db.getTicketByThreadTs(threadTs, resolvedWorkspaceId);
   if (existing) return existing;
   if (!ticketCreationAllowed({ prog, channel, workspaceId: resolvedWorkspaceId, role })) return null;
+  if (!prog) return null;
   const id = db.createTicket({ programId: prog.id, workspaceId: resolvedWorkspaceId, channel, threadTs, requesterId, question, visibility: prog.publicTicketsEnabled === false ? "dashboard" : (prog.ticketVisibility || "thread") });
   if (!id) return db.getTicketByThreadTs(threadTs, resolvedWorkspaceId, prog.id);
   applyCategory(id, { prog, channel, question });
@@ -960,7 +1096,7 @@ function noteHelperEngaged({ channel, threadTs, userId, parentUserId, workspaceI
   }
 }
 
-function noteThreadActivity({ channel, threadTs, userId, text = null, workspaceId = null, client = null, parentUserId = null }: { channel: string; threadTs: string; userId: string; text?: string | null; workspaceId?: string | null; client?: SlackClient | null; parentUserId?: string | null }): TicketActionResult | null {
+function noteThreadActivity({ channel, threadTs, userId, text = null, workspaceId = null, client = null, parentUserId = null }: { channel: string; threadTs: string; userId: string; text?: string | null; workspaceId?: string | null; client?: SlackClient | null; parentUserId?: string | null }): Ticket | null {
   if (!threadTs || !userId) return null;
   noteHelperEngaged({ channel, threadTs, userId, parentUserId, workspaceId });
   let ticket = db.getTicketByThreadTs(threadTs, workspaceId);
@@ -1086,8 +1222,8 @@ function resolveTicketWorker(ticket: Ticket | null, resolvingActorId: string | n
      WHERE ticket_id = ? AND event_type = 'helper_reply' AND actor_id IS NOT NULL
      ORDER BY created_at DESC, id DESC`,
   ).all(ticket.id);
-  const latestHelperReply = replies.find((event) => helpers.has(event.actor_id));
-  if (latestHelperReply) return latestHelperReply.actor_id;
+  const latestHelperReply = replies.find((event) => !!event.actor_id && helpers.has(event.actor_id));
+  if (latestHelperReply?.actor_id) return latestHelperReply.actor_id;
   if (ticket.assignee_id) return ticket.assignee_id;
   return resolvingActorId && activeHelpers.has(resolvingActorId) ? resolvingActorId : null;
 }
@@ -1096,7 +1232,7 @@ function resolveTicketWorker(ticket: Ticket | null, resolvingActorId: string | n
 // the caller owns all I/O. `source` is the only thing that distinguishes a
 // dashboard resolve from a Slack one; it lands in the audit metadata and
 // nowhere in the ticket's domain state.
-function finishResolve(options: FinishResolveOptions): TicketActionResult {
+function finishResolve(options: FinishResolveOptions): FinishResult {
   const { ticket, actorId, resolution, source = null, resolutionMeta = null, client = null, resolvedAt = null, creditId = null } = options;
   const resText = resolution || (actorId ? `resolved by <@${actorId}>` : "resolved");
   const ok = db.resolveTicket(ticket.id, resText, actorId || null, resolvedAt);
@@ -1122,7 +1258,7 @@ function resolveTicket(options: ResolveTicketOptions): TicketActionResult {
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
   const d = finishResolve({ ticket, actorId, resolution, source, resolutionMeta, client, resolvedAt, creditId });
-  if (d.error) return d;
+  if (d.error || !d.updated) return d;
   const prog = program || programs.get(ticket.program_id);
   if (source !== "backfill") void reconcileTicketUI({ client, ticket: d.updated, program: prog, cardText: d.cardText });
   return { ok: true, ticket: d.updated };
@@ -1137,7 +1273,7 @@ function publicResolveTicket({ ticketId, actorId = null, workspaceId = null, cli
   const isHelper = actorId && isActorAllowed(ticket.program_id, actorId, false);
   if (!isRequester && !isHelper) return { error: "not_authorized" };
   const d = finishResolve({ ticket, actorId, resolution: null, client });
-  if (d.error) return d;
+  if (d.error || !d.updated) return d;
   const prog = program || programs.get(ticket.program_id);
   void reconcileTicketUI({ client, ticket: d.updated, program: prog, cardText: d.cardText });
   return { ok: true, ticket: d.updated };
@@ -1180,7 +1316,7 @@ function assignTicket({ ticketId, actorId = null, assigneeId, programId = null, 
   if (err) return { error: err };
   if (!assigneeId) return { error: "assigneeId required" };
   // WHY: single membership fetch — actor and assignee checks share one read.
-  let helpers = [];
+  let helpers: HelperRecord[] = [];
   try {
     helpers = db.listHelpers(ticket.program_id);
   } catch (e) {
@@ -1418,7 +1554,7 @@ function registerActions(app: TicketActionApp): void {
     await closeTicket({ ticketId, actorId, workspaceId, client });
   });
 
-  const onPublicResolve = async ({ action, body, ack, client }) => {
+  const onPublicResolve = async ({ action, body, ack, client }: TicketActionPayload) => {
     await ack();
     const { ticketId, actorId, workspaceId } = parseTicketAction(action, body);
     if (!ticketId || !actorId) return;
@@ -1426,7 +1562,7 @@ function registerActions(app: TicketActionApp): void {
     if (res.error === "not_authorized") {
       try {
         await client.chat.postEphemeral({
-          channel: body.channel?.id,
+          channel: body.channel?.id as string,
           user: actorId,
           text: "Only the person who asked, or a helper, can resolve this one.",
         });
@@ -1446,7 +1582,7 @@ function registerActions(app: TicketActionApp): void {
     if (res.error === "not_authorized") {
       try {
         await client.chat.postEphemeral({
-          channel: body.channel?.id,
+          channel: body.channel?.id as string,
           user: actorId,
           text: "Only the person who asked, or a helper, can reopen this one.",
         });
@@ -1502,7 +1638,7 @@ function registerActions(app: TicketActionApp): void {
       return;
     }
     const text = view.state.values.reply_block?.reply_text?.value || "";
-    const userId = body.user?.id;
+    const userId = body.user?.id as string;
     const workspaceId = body.team?.id || null;
     const res = await replyToTicket({ ticketId: Number(ticketId), authorId: userId, text, client, workspaceId });
     if (res.error) {

@@ -1,11 +1,10 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const programs = require("./programs");
-const wait = require("./waitTime");
+const db = require("./db") as unknown as TestDb;
+const programs = require("./programs") as typeof import("./programs");
+const wait = require("./waitTime") as typeof import("./waitTime");
 
 before(() => {
   db.close();
@@ -127,3 +126,4 @@ test("char: wait formatWait labels minutes/hours, never fake precision", () => {
   assert.equal(wait.formatWait({ available: true, medianWaitMs: 3 * 60 * 60000 }), "usually around 3 hours");
 });
 export {};
+import type { TestDb } from "./test.types";

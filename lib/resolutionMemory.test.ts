@@ -1,13 +1,12 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const programs = require("./programs");
-const knowledge = require("./knowledge");
-const memory = require("./resolutionMemory");
-const api = require("./web/api");
+const db = require("./db") as unknown as TestDb;
+const programs = require("./programs") as typeof import("./programs");
+const knowledge = require("./knowledge") as typeof import("./knowledge");
+const memory = require("./resolutionMemory") as unknown as TestMemory;
+const api = require("./web/api") as typeof import("./web/api");
 
 before(() => {
   db.close();
@@ -129,3 +128,4 @@ test("char: listCandidates is scoped and bounded", () => {
   assert.ok(rows.every((r) => r.status === memory.CANDIDATE));
 });
 export {};
+import type { TestDb, TestMemory } from "./test.types";

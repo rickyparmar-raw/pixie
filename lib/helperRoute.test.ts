@@ -1,27 +1,26 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const helperRoute = require("./helperRoute");
-const assignmentLifecycle = require("./assignmentLifecycle");
+const db = require("./db") as typeof import("./db");
+const helperRoute = require("./helperRoute") as typeof import("./helperRoute");
+const assignmentLifecycle = require("./assignmentLifecycle") as typeof import("./assignmentLifecycle");
 
 db.open(":memory:");
 
-function prog(id, helpers = []) {
+function prog(id: string, helpers: string[] = []): void {
   db.saveProgram({ id, name: id, helpChannel: `C-${id}`, channels: [`C-${id}`] });
   for (const h of helpers) db.syncHelper({ programId: id, userId: h, source: "manual" });
 }
 
-function newTicket(programId, overrides = {}) {
+function newTicket(programId: string, overrides: { category?: string | null } = {}): ReturnType<typeof db.getTicket> {
   const id = db.createTicket({
     programId,
     channel: `C-${programId}`,
     threadTs: `t-${programId}-${Math.random().toString(36).slice(2)}`,
     requesterId: "U-req",
     question: "q",
-    category: overrides.category || null,
+    category: (overrides.category || null) as unknown as null,
   });
   return db.getTicket(id);
 }
@@ -48,7 +47,7 @@ test("pingFatigue only counts offers within the trailing 24h window", () => {
   prog("fatigue-b", ["U-A"]);
   const ticket = newTicket("fatigue-b");
   const old = Date.now() - 30 * 60 * 60 * 1000; // 30h ago
-  db.addTicketEvent({ ticketId: ticket.id, programId: "fatigue-b", eventType: "helper_assignment_offered", detail: { to: "U-A", source: "ping" } });
+  db.addTicketEvent({ ticketId: ticket.id, programId: "fatigue-b", eventType: "helper_assignment_offered", detail: { to: "U-A", source: "ping" } as unknown as null });
   db.handle().query("UPDATE ticket_events SET created_at = ? WHERE program_id = 'fatigue-b' AND event_type = 'helper_assignment_offered'").run(old);
 
   const fatigue = helperRoute.pingFatigue("fatigue-b", "U-A");

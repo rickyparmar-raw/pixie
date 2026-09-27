@@ -1,4 +1,3 @@
-// @ts-nocheck
 // The support-ticket lifecycle: a ticket for every eligible root question in an
 // active help channel, opened before and independent of whether Pixie answers,
 // resolved and reopened from the thread, and idempotent against Slack's event
@@ -7,12 +6,23 @@ process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const programs = require("./programs");
-const tickets = require("./tickets");
-const respond = require("./respond");
-const answer = require("./answer");
-const intent = require("./intent");
+const db = require("./db") as unknown as TestDb;
+const programs = require("./programs") as typeof import("./programs");
+const tickets = require("./tickets") as unknown as TestTickets;
+const respond = require("./respond") as unknown as {
+  ALWAYS: string;
+  HELP_ONLY: string;
+  respond(...args: unknown[]): Promise<unknown>;
+};
+const answer = require("./answer") as unknown as {
+  getAnswerOrChatStream: (...args: unknown[]) => Promise<unknown>;
+  getAnswerOrChat: (...args: unknown[]) => Promise<unknown>;
+};
+const intent = require("./intent") as unknown as {
+  HELP_NEEDED: string;
+  CASUAL_CHAT: string;
+  classifyIntent: (...args: unknown[]) => Promise<string>;
+};
 
 const HELP = "C-st-help";
 const ORG = "C-st-org";
@@ -91,7 +101,7 @@ afterEach(() => {
 });
 
 let askN = 0;
-async function ask(client, threadTs, question, { messageTs, mode = respond.ALWAYS, userId } = {}) {
+async function ask(client, threadTs, question, { messageTs, mode = respond.ALWAYS, userId }: { messageTs?: string; mode?: string; userId?: string } = {}) {
   return respond.respond({
     client,
     channel: HELP,
@@ -313,3 +323,4 @@ test("the requester writing back in a resolved thread reopens it and re-shows th
   assert.ok(updates.some((ui) => /Someone will be here to help you soon/.test(JSON.stringify(ui.blocks))));
 });
 export {};
+import type { TestDb, TestTickets } from "./test.types";

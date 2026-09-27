@@ -1,15 +1,16 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const programs = require("./programs");
-const metrics = require("./ticketMetrics");
-const helperStats = require("./helperStats");
-const supportAnalytics = require("./supportAnalytics");
-const dashboardApi = require("./web/dashboardApi");
-const api = require("./web/api");
+const db = require("./db") as unknown as TestDb;
+const programs = require("./programs") as typeof import("./programs");
+const metrics = require("./ticketMetrics") as typeof import("./ticketMetrics");
+const helperStats = require("./helperStats") as typeof import("./helperStats");
+const supportAnalytics = require("./supportAnalytics") as typeof import("./supportAnalytics");
+const dashboardApi = require("./web/dashboardApi") as typeof import("./web/dashboardApi");
+const api = require("./web/api") as unknown as {
+  internalAnalytics(...args: unknown[]): { byStatus: { resolved: number } };
+};
 
 before(() => {
   db.close();
@@ -76,3 +77,4 @@ test("all metric surfaces use current resolved state, resolved_at windows, and s
   assert.equal(dashboardApi.ticketSearchScoped("metrics-truth", { status: "closed" }).total, 1);
 });
 export {};
+import type { TestDb } from "./test.types";

@@ -62,6 +62,11 @@ export interface TicketActionResult {
   ts?: string | null;
   noteId?: number;
   userId?: string | null;
+  updated?: Ticket;
+  cardText?: string;
+  ackText?: string;
+  done?: boolean;
+  recorded?: boolean;
   [key: string]: unknown;
 }
 
@@ -128,7 +133,7 @@ export interface EnsureSupportTicketOptions {
   client?: SlackClient | null;
   workspaceId?: string | null;
   paging?: boolean;
-  role?: ChannelRole | "organizer" | null;
+  role?: ChannelRole | "organizer" | string | null;
   silent?: boolean;
   backfill?: boolean;
   createdAt?: number | null;
@@ -156,9 +161,24 @@ export interface TicketActionBody {
   channel?: { id?: string };
 }
 
+export interface TicketActionView {
+  private_metadata?: string;
+  state: {
+    values: Record<string, Record<string, { value?: string }>>;
+  };
+}
+
+export interface TicketActionPayload {
+  action: TicketActionInput;
+  body: TicketActionBody;
+  ack: (response?: Record<string, unknown>) => Promise<void>;
+  client: SlackClient;
+  view: TicketActionView;
+}
+
 export interface TicketActionApp {
-  action(name: string, handler: (payload: Record<string, unknown>) => Promise<void>): void;
-  view(name: string, handler: (payload: Record<string, unknown>) => Promise<void>): void;
+  action(name: string, handler: (payload: TicketActionPayload) => Promise<void>): void;
+  view(name: string, handler: (payload: TicketActionPayload) => Promise<void>): void;
 }
 
 export interface TicketDatabaseRow {

@@ -1,38 +1,37 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const tickets = require("./tickets");
-const lifecycle = require("./assignmentLifecycle");
-const helperRoute = require("./helperRoute");
+const db = require("./db") as typeof import("./db");
+const tickets = require("./tickets") as typeof import("./tickets");
+const lifecycle = require("./assignmentLifecycle") as typeof import("./assignmentLifecycle");
+const helperRoute = require("./helperRoute") as typeof import("./helperRoute");
 const { readSource } = require("./test-source");
 
 db.open(":memory:");
 
 let seq = 0;
-function prog(id, helpers = []) {
+function prog(id: string, helpers: string[] = []): void {
   db.saveProgram({ id, name: id, helpChannel: `C-${id}`, channels: [`C-${id}`] });
   for (const h of helpers) db.syncHelper({ programId: id, userId: h, source: "manual" });
 }
-function newTicket(programId, overrides = {}) {
+function newTicket(programId: string, overrides: { category?: string | null } = {}): number {
   seq += 1;
   const id = db.createTicket({
     programId,
-    workspaceId: "WS",
+    workspaceId: "WS" as unknown as null,
     channel: `C-${programId}`,
     threadTs: `t-${programId}-${seq}`,
     requesterId: "U-req",
     question: "q",
-    category: overrides.category || null,
+    category: (overrides.category || null) as unknown as null,
   });
   return id;
 }
-function events(programId, ticketId) {
-  return db.listTicketEvents(ticketId).filter((e) => e.program_id === programId).map((e) => e.event_type);
+function events(programId: string, ticketId: number): string[] {
+  return db.listTicketEvents(ticketId).filter((e: { program_id: string }) => e.program_id === programId).map((e: { event_type: string }) => e.event_type);
 }
-function metricCount(kind) {
+function metricCount(kind: string): number {
   return db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = ?").get(kind).c;
 }
 
@@ -43,7 +42,7 @@ test("a program helper claims an offered ticket and it counts as accepted", () =
   lifecycle.recordOffer({ ticket: db.getTicket(id), to: null, source: "queue" });
   const res = tickets.claimTicket({ ticketId: id, actorId: "U-h1" });
   assert.equal(res.ok, true);
-  assert.equal(res.ticket.assignee_id, "U-h1");
+  assert.equal(res.ticket!.assignee_id, "U-h1");
   assert.ok(events("al-claim", id).includes("helper_assignment_claimed"));
   const stats = lifecycle.helperAcceptStats("al-claim", "U-h1");
   assert.equal(stats.acceptedAssignments, 1);
@@ -199,8 +198,8 @@ test("pending offers are excluded from the accept-rate denominator", () => {
 test("pre-lifecycle tickets never fabricate an accept rate", () => {
   prog("al-legacy", ["U-old"]);
   const id = newTicket("al-legacy");
-  db.addTicketEvent({ ticketId: id, programId: "al-legacy", actorId: "U-old", eventType: "claimed" });
-  db.addTicketEvent({ ticketId: id, programId: "al-legacy", actorId: "U-old", eventType: "resolved" });
+  db.addTicketEvent({ ticketId: id, programId: "al-legacy", actorId: "U-old", eventType: "claimed" } as unknown as null);
+  db.addTicketEvent({ ticketId: id, programId: "al-legacy", actorId: "U-old", eventType: "resolved" } as unknown as null);
   const stats = lifecycle.helperAcceptStats("al-legacy", "U-old");
   assert.equal(stats.acceptRate, null);
   assert.equal(stats.completedOffers, 0);
@@ -254,7 +253,7 @@ test("shadow routing and the lifecycle offer coexist on the same escalation", ()
   const trail = events("pixl", id);
   assert.ok(trail.includes("helper_routing_recommended"), "shadow routing still snapshots");
   assert.ok(trail.includes("helper_assignment_offered"), "a pool offer is recorded");
-  const snap = db.listTicketEvents(id).find((e) => e.event_type === "helper_routing_recommended");
+  const snap = db.listTicketEvents(id).find((e: { event_type: string }) => e.event_type === "helper_routing_recommended");
   const detail = JSON.parse(snap.detail);
   assert.equal(detail.mode, "shadow");
   assert.ok(Array.isArray(detail.candidates));

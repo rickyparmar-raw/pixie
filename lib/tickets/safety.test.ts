@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Ticket safety invariants (§36) + the full lifecycle traversal. Each is a
 // real test against :memory: DB with stubbed Slack: no network, no LLM, no
 // production DB. Module-object seams only (config.slack.botUserId pin).
@@ -6,10 +5,10 @@ process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("../db");
-const tickets = require("../tickets");
-const helperRoute = require("../helperRoute");
-const lifecycle = require("../assignmentLifecycle");
+const db = require("../db") as unknown as TestDb;
+const tickets = require("../tickets") as unknown as TestTickets;
+const helperRoute = require("../helperRoute") as typeof import("../helperRoute");
+const lifecycle = require("../assignmentLifecycle") as typeof import("../assignmentLifecycle");
 const { config } = require("../config");
 
 before(() => {
@@ -269,3 +268,4 @@ test("lifecycle: create -> open -> waiting_for_helper -> engaged -> resolved -> 
   assert.ok(kinds.has("helper_assignment_offered"), "the epoch offer enters the assignment trail");
 });
 export {};
+import type { TestDb, TestTickets } from "../test.types";

@@ -1,14 +1,13 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 process.env.JEV_ENABLED = "false";
 process.env.PIXIE_RESOLUTION_PIPELINE = "false";
 
 const { test, beforeEach, afterEach } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const programs = require("./programs");
-const backfill = require("./ticketBackfill");
-const watcher = require("./resolutionWatcher");
+const db = require("./db") as unknown as TestDb;
+const programs = require("./programs") as typeof import("./programs");
+const backfill = require("./ticketBackfill") as unknown as TestBackfill;
+const watcher = require("./resolutionWatcher") as unknown as TestResolutionWatcher;
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 1_700_000_000_000;
@@ -238,3 +237,4 @@ test("a passive program with its ticket toggles off still gets every help thread
   assert.deepEqual(posts, []);
 });
 export {};
+import type { TestBackfill, TestDb, TestResolutionWatcher } from "./test.types";

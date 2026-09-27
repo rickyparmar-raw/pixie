@@ -46,6 +46,9 @@ export interface Program {
   behavior: Record<string, unknown> | null;
   status: ProgramStatus | null;
   requireGroundedAnswer?: boolean;
+  organizer_channel?: string;
+  organizer_channel_id?: string;
+  workspace_id?: string | null;
 }
 
 export interface ProgramSource {

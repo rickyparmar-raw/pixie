@@ -1,10 +1,9 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const tickets = require("./tickets");
+const db = require("./db") as unknown as TestDb;
+const tickets = require("./tickets") as unknown as TestTickets;
 
 before(() => {
   db.close();
@@ -83,7 +82,7 @@ test("escalateTicket skips passive programs for unprompted tickets", async () =>
 });
 
 test("buildTicketCardBlocks reflects status changes, unclaiming, and reopening", () => {
-  const ticket = { id: 5, program_id: "sprig", requester_id: "U1", channel: "C1", question: "help", status: "open" };
+  const ticket = { id: 5, program_id: "sprig", requester_id: "U1", channel: "C1", question: "help", status: "open", assignee_id: null };
   let blocks = tickets.buildTicketCardBlocks(ticket, { name: "Sprig" });
   assert.ok(blocks.length >= 3);
   assert.equal(blocks[0].text.text, "[Sprig] Ticket #5");
@@ -1086,7 +1085,7 @@ test("a failed Slack card sync records ticket_slack_sync_failure and never block
       postMessage: async () => ({ ts: "sync-card-ts" }),
       update: async () => {
         const err = new Error("message_not_found");
-        err.data = { error: "message_not_found" };
+        (err as Error & { data?: { error: string } }).data = { error: "message_not_found" };
         throw err;
       },
     },
@@ -1667,3 +1666,4 @@ test("ticketless program with helper pings on pages the category's best helper, 
   assert.match(posted[0].text, /<@U-TLP-SHOP>/);
 });
 export {};
+import type { TestDb, TestTickets } from "./test.types";

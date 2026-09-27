@@ -1,11 +1,10 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const programs = require("./programs");
-const incidents = require("./incidents");
+const db = require("./db") as unknown as TestDb;
+const programs = require("./programs") as typeof import("./programs");
+const incidents = require("./incidents") as unknown as TestIncidentApi;
 
 before(() => {
   db.close();
@@ -402,3 +401,4 @@ test("char: notifyAffectedUsers contract — errors, messages, filter, audit", a
   assert.equal(sent[0].text, "custom fix live");
 });
 export {};
+import type { TestDb, TestIncidentApi } from "./test.types";

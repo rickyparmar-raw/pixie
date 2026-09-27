@@ -1,4 +1,3 @@
-// @ts-nocheck
 // Decision table for lib/tickets/policy.js: every settings combination that
 // materially changes ticket/helper behavior gets one row. Pure — no Slack,
 // no network, no DB writes (behaviorFor reads the passed object only).

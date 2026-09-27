@@ -1,4 +1,3 @@
-// @ts-nocheck
 export {};
 
 const { test } = require("node:test");

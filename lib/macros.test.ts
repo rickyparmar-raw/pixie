@@ -1,13 +1,12 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const programs = require("./programs");
-const macros = require("./macros");
-const waitTime = require("./waitTime");
-const api = require("./web/api");
+const db = require("./db") as unknown as TestDb;
+const programs = require("./programs") as typeof import("./programs");
+const macros = require("./macros") as unknown as TestMacroApi;
+const waitTime = require("./waitTime") as typeof import("./waitTime");
+const api = require("./web/api") as unknown as TestMacroWebApi;
 
 before(() => {
   db.close();
@@ -294,3 +293,4 @@ test("char: a sent macro never enters learned_facts or the answer corpus", async
   assert.equal(owners.length, 1);
 });
 export {};
+import type { TestDb, TestMacroApi, TestMacroWebApi } from "./test.types";

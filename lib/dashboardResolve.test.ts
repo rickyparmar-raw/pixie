@@ -1,10 +1,21 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
-const db = require("./db");
-const api = require("./web/api");
+const db = require("./db") as typeof import("./db");
+interface UserInfo {
+  displayName: string;
+  realName?: string;
+  username: string;
+  slackId: string;
+}
+interface DashboardApi {
+  setSlackClient(client: unknown): void;
+  internalUserInfoBatch(ids: Array<string | null>): Promise<{ users: Record<string, UserInfo | null> }>;
+  internalUserInfo(id: string): Promise<UserInfo | null>;
+  internalTicketAction(id: number, action: string, options: { programId: string; actorId: string }): { ok?: boolean; error?: string };
+}
+const api = require("./web/api") as unknown as DashboardApi;
 
 before(() => {
   db.close();
@@ -14,12 +25,12 @@ after(() => {
   api.setSlackClient(null);
 });
 
-function program(id, helpers = []) {
+function program(id: string, helpers: string[] = []): void {
   db.saveProgram({ id, name: id, helpChannel: `C-${id}`, channels: [`C-${id}`] });
   for (const h of helpers) db.syncHelper({ programId: id, userId: h, source: "manual" });
 }
-function ticket(programId, status = "waiting_for_helper") {
-  const id = db.createTicket({ programId, workspaceId: "WS", channel: `C-${programId}`, threadTs: `t-${programId}-${Math.random()}`, requesterId: "U-req", question: "q" });
+function ticket(programId: string, status = "waiting_for_helper"): number {
+  const id = db.createTicket({ programId, workspaceId: "WS" as unknown as null, channel: `C-${programId}`, threadTs: `t-${programId}-${Math.random()}`, requesterId: "U-req", question: "q" });
   db.handle().query("UPDATE tickets SET status = ? WHERE id = ?").run(status, id);
   return id;
 }
@@ -28,7 +39,7 @@ function ticket(programId, status = "waiting_for_helper") {
 test("internalUserInfoBatch dedupes, resolves the name variants, and never throws", async () => {
   api.setSlackClient({
     users: {
-      info: async ({ user }) => {
+      info: async ({ user }: { user: string }) => {
         if (user === "U-DELETED") { throw new Error("user_not_found"); }
         return { user: { name: "handle", real_name: "Real Name", profile: { display_name: user === "U-NONICK" ? "" : "Nick", real_name: user === "U-NONICK" ? "" : "Real Name", image_192: "https://x/i.png" } } };
       },
@@ -36,12 +47,12 @@ test("internalUserInfoBatch dedupes, resolves the name variants, and never throw
   });
   const res = await api.internalUserInfoBatch(["U-A", "U-A", "U-NONICK", "U-DELETED", "", null]);
   assert.deepEqual(Object.keys(res.users).sort(), ["U-A", "U-DELETED", "U-NONICK"]);
-  assert.equal(res.users["U-A"].displayName, "Nick");
-  assert.equal(res.users["U-A"].realName, "Real Name");
-  assert.equal(res.users["U-A"].username, "handle");
-  assert.equal(res.users["U-A"].slackId, "U-A");
-  assert.equal(res.users["U-NONICK"].displayName, "handle");
-  assert.equal(res.users["U-NONICK"].username, "handle");
+  assert.equal(res.users["U-A"]!.displayName, "Nick");
+  assert.equal(res.users["U-A"]!.realName, "Real Name");
+  assert.equal(res.users["U-A"]!.username, "handle");
+  assert.equal(res.users["U-A"]!.slackId, "U-A");
+  assert.equal(res.users["U-NONICK"]!.displayName, "handle");
+  assert.equal(res.users["U-NONICK"]!.username, "handle");
   assert.equal(res.users["U-DELETED"], null); // deleted/unknown user resolves to null, not an error
 });
 
@@ -53,7 +64,7 @@ test("internalUserInfoBatch degrades to all-null when Slack is not connected", a
 
 test("internalUserInfo caches a lookup so a page full of one user's rows costs one call", async () => {
   let calls = 0;
-  api.setSlackClient({ users: { info: async ({ user }) => { calls += 1; return { user: { name: "u", profile: { display_name: "D" } } }; } } });
+  api.setSlackClient({ users: { info: async ({ user }: { user: string }) => { calls += 1; return { user: { name: "u", profile: { display_name: "D" } } }; } } });
   await api.internalUserInfoBatch(["U-CACHE", "U-CACHE"]);
   await api.internalUserInfo("U-CACHE");
   assert.equal(calls, 1);
@@ -63,7 +74,7 @@ test("internalUserInfo caches a lookup so a page full of one user's rows costs o
 test("an authorized program helper resolves a ticket from the dashboard, recorded with source", async () => {
   program("dr-ok", ["U-helper"]);
   const id = ticket("dr-ok");
-  const before = db.listAuditEvents({ programId: "dr-ok" }).length;
+  const before = db.listAuditEvents({ programId: "dr-ok" } as unknown as null).length;
   const res = api.internalTicketAction(id, "resolve", { programId: "dr-ok", actorId: "U-helper" });
   assert.equal(res.ok, true);
   const t = db.getTicket(id);
@@ -71,11 +82,11 @@ test("an authorized program helper resolves a ticket from the dashboard, recorde
   assert.equal(t.resolved_by, "U-helper");
   assert.ok(t.resolved_at > 0);
   const events = db.listTicketEvents(id);
-  const resolved = events.find((e) => e.event_type === "resolved");
+  const resolved = events.find((e: { event_type: string }) => e.event_type === "resolved");
   assert.ok(resolved);
   assert.equal(resolved.actor_id, "U-helper");
   assert.equal(JSON.parse(resolved.detail).source, "dashboard");
-  assert.ok(db.listAuditEvents({ programId: "dr-ok" }).length > before);
+  assert.ok(db.listAuditEvents({ programId: "dr-ok" } as unknown as null).length > before);
 });
 
 test("a Slack-side resolve is identical in domain state, only the source metadata differs", () => {
@@ -84,7 +95,7 @@ test("a Slack-side resolve is identical in domain state, only the source metadat
   const id = ticket("dr-slack");
   const res = tickets.resolveTicket({ ticketId: id, actorId: "U-h" }); // no source → Slack
   assert.equal(res.ok, true);
-  const resolved = db.listTicketEvents(id).find((e) => e.event_type === "resolved");
+  const resolved = db.listTicketEvents(id).find((e: { event_type: string }) => e.event_type === "resolved");
   assert.equal(resolved.detail, null); // Slack path carries no source
   assert.equal(db.getTicket(id).status, "resolved");
 });
@@ -121,7 +132,7 @@ test("resolving an already-resolved ticket follows the existing idempotency rule
   assert.equal(api.internalTicketAction(id, "resolve", { programId: "dr-idem", actorId: "U-h" }).ok, true);
   const second = api.internalTicketAction(id, "resolve", { programId: "dr-idem", actorId: "U-h" });
   assert.ok(second.error); // db.resolveTicket's guard rejects a second transition
-  assert.equal(db.listTicketEvents(id).filter((e) => e.event_type === "resolved").length, 1);
+  assert.equal(db.listTicketEvents(id).filter((e: { event_type: string }) => e.event_type === "resolved").length, 1);
 });
 
 test("resolving a nonexistent ticket is rejected", () => {
@@ -137,7 +148,7 @@ test("reopen from the dashboard also carries the dashboard source", () => {
   const res = api.internalTicketAction(id, "reopen", { programId: "dr-reopen", actorId: "U-h" });
   assert.equal(res.ok, true);
   assert.equal(db.getTicket(id).status, "reopened");
-  const reopened = db.listTicketEvents(id).find((e) => e.event_type === "reopened");
+  const reopened = db.listTicketEvents(id).find((e: { event_type: string }) => e.event_type === "reopened");
   assert.equal(JSON.parse(reopened.detail).source, "dashboard");
 });
 export {};
