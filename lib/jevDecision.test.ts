@@ -8,11 +8,12 @@ const jev = require("./jevDecision");
 const log = require("./log");
 const { readSource } = require("./test-source");
 
-// Experiential-only config shape: no Vercel fields, no gateway key.
+// The decision layer is tested with provider-shaped responses, without invoking the provider.
+// Cache tests clear the module state between cases so metrics and in-flight promises cannot leak.
 const CFG = { enabled: true, experientialApiKeyPresent: true, model: "jev-latest:free", baseUrl: "https://api.experientiallabs.ai/v1/systemone", timeoutMs: 8000, engageThreshold: 0.7 };
 const PROGRAM = { id: "pixl", name: "Pixl" };
-const input = (message, extra = {}) => ({ message, conversationContext: "", program: PROGRAM, channelPosture: "main", ...extra });
-const result = (intent, p) => ({ answers: { intent: { type: "choice", choice: intent, probabilities: { [intent]: p } }, shouldEngage: { type: "boolean", probability: p } } });
+const input = (message: any, extra: any = {}) => ({ message, conversationContext: "", program: PROGRAM, channelPosture: "main", ...extra });
+const result = (intent: any, p: any) => ({ answers: { intent: { type: "choice", choice: intent, probabilities: { [intent]: p } }, shouldEngage: { type: "boolean", probability: p } } });
 
 beforeEach(() => jev.clearDecisionCache());
 
@@ -125,11 +126,11 @@ test("quota failure makes exactly one request and returns error/quota", async ()
 });
 
 test("request body carries no documentation fields", async () => {
-  const calls = [];
-  const ok = (intent = "support_question", p = 0.95) => ({ model: "jev-latest:free", answers: { intent: { type: "choice", choice: intent, probabilities: { [intent]: p } }, shouldEngage: { type: "noul", noul: p } } });
+  const calls: any[] = [];
+  const ok = (intent: any = "support_question", p: any = 0.95) => ({ model: "jev-latest:free", answers: { intent: { type: "choice", choice: intent, probabilities: { [intent]: p } }, shouldEngage: { type: "noul", noul: p } } });
   await jev.evaluateSupportDecision(input("what is restoration energy?"), {
     config: CFG,
-    httpPost: async (url, body) => { calls.push({ url, body }); return { status: 200, data: ok() }; },
+    httpPost: async (url: any, body: any) => { calls.push({ url, body }); return { status: 200, data: ok() }; },
   });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, "https://api.experientiallabs.ai/v1/systemone");
@@ -142,9 +143,9 @@ test("request body carries no documentation fields", async () => {
 
 test("structured log line never contains message or context text", async () => {
   const marker = "zzq-canary-marker-9f31";
-  const lines = [];
+  const lines: any[] = [];
   const original = log.info;
-  log.info = (...args) => { lines.push(args.join(" ")); };
+  log.info = (...args: any[]) => { lines.push(args.join(" ")); };
   try {
     await jev.evaluateSupportDecision(
       input(`what is pixl ${marker}?`, { conversationContext: `ctx ${marker} here` }),
@@ -185,9 +186,9 @@ test("JEV_API_KEY is read first, EXPERIENTIAL_API_KEY still works", () => {
 
 test("decideAction follows the intent; probability only settles follow-ups", () => {
   const jev = require("./jevDecision");
-  const d = (intent, p) => ({ intent, shouldEngage: p >= 0.5, probabilities: { shouldEngage: p }, source: "jev" });
-  const act = (intent, p, state = {}) => jev.decideAction(d(intent, p), { engageThreshold: 0.7 }, state).action;
-  assert.equal(act("direct_program_question", 0.45), "engage"); // "what is restoration energy?" measured p=0.45
+  const d = (intent: any, p: any) => ({ intent, shouldEngage: p >= 0.5, probabilities: { shouldEngage: p }, source: "jev" });
+  const act = (intent: any, p: any, state: any = {}) => jev.decideAction(d(intent, p), { engageThreshold: 0.7 }, state).action;
+  assert.equal(act("direct_program_question", 0.45), "engage");
   assert.equal(act("support_question", 0.2), "engage");
   assert.equal(act("unrelated_chatter", 0.9), "silence");
   assert.equal(act("human_conversation", 0.8), "silence");
@@ -199,3 +200,4 @@ test("decideAction follows the intent; probability only settles follow-ups", () 
   assert.equal(act(null, 0.8), "engage");
   assert.equal(act(null, 0.6), "silence");
 });
+export {};

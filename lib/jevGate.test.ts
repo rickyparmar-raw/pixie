@@ -4,13 +4,11 @@ const { test, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const jev = require("./jevDecision");
 
-// Decision-contract tests only. The orchestrator (lib/respond.js, owned by the
-// architect) maps this flat verdict onto escalate/silence per channel role —
-// nothing here imports respond.js, so this file stays green regardless of how
-// the gate wiring evolves.
+// These cases exercise the flat gate contract consumed by the response orchestrator.
+// Inputs deliberately omit documentation and evidence because the gate only judges engagement intent.
 const CFG = { enabled: true, experientialApiKeyPresent: true, model: "jev-latest:free", baseUrl: "https://api.experientiallabs.ai/v1/systemone", timeoutMs: 8000, engageThreshold: 0.7 };
 const GATE_INPUT = { message: "what is restoration energy?", conversationContext: "", program: { id: "pixl", name: "Pixl" }, channelPosture: "main", addressed: false };
-const verdict = (intent, p) => ({ answers: { intent: { type: "choice", choice: intent, probabilities: { [intent]: p } }, shouldEngage: { type: "boolean", probability: p } } });
+const verdict = (intent: any, p: any) => ({ answers: { intent: { type: "choice", choice: intent, probabilities: { [intent]: p } }, shouldEngage: { type: "boolean", probability: p } } });
 
 beforeEach(() => jev.clearDecisionCache());
 
@@ -22,10 +20,10 @@ test("gate returns the flat classifier contract", async () => {
 });
 
 test("gate input carries intent context only: no documentation, no evidence payload", async () => {
-  let received;
+  let received: any;
   await jev.evaluateSupportDecision(
     { ...GATE_INPUT, channelPosture: "dm", addressed: true },
-    { config: CFG, evaluateFn: async (args) => { received = args; return verdict("support_question", 0.95); } },
+    { config: CFG, evaluateFn: async (args: any) => { received = args; return verdict("support_question", 0.95); } },
   );
   assert.deepEqual(Object.keys(received.state).sort(), ["addressed", "channelPosture", "conversationContext", "message", "program"]);
   assert.equal(received.state.channelPosture, "dm");
@@ -44,3 +42,4 @@ test("gate error verdict leaves terminal routing to the orchestrator", async () 
   assert.notEqual(res.action, "escalate");
   assert.notEqual(res.action, "silence");
 });
+export {};

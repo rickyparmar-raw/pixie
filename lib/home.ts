@@ -1,46 +1,41 @@
-// The App Home tab: pixie's private homepage, one per viewer.
-//
-// Public information for anyone who opens it — what pixie knows, what it can
-// walk them through, how well the docs are holding up — plus, for helpers only,
-// the review queue as clickable buttons.
-const knowledge = require("./knowledge");
-const reply = require("./reply");
-const guides = require("./guides");
-const learn = require("./learn");
-const db = require("./db");
-const cache = require("./cache");
-const programs = require("./programs");
-const log = require("./log");
-const brand = require("./brand");
-const { isAdmin } = require("./config");
-const { relativeTime, coverageStats, statsText } = require("./stats");
+// Builds Pixie's App Home view, including admin-only learning review actions.
+import knowledge = require("./knowledge");
+import reply = require("./reply");
+import guides = require("./guides");
+import learn = require("./learn");
+import db = require("./db");
+import cache = require("./cache");
+import programs = require("./programs");
+import log = require("./log");
+import brand = require("./brand");
+import configModule = require("./config");
+import stats = require("./stats");
 
-// How many candidates the home tab renders. Slack caps a view at 100 blocks and
-// each candidate costs two, so this stays well clear of the ceiling while still
-// showing enough to work through in one sitting.
+const { isAdmin } = configModule;
+const { relativeTime, coverageStats, statsText } = stats;
+interface Legacy {
+  [key: string]: any;
+}
+
 const HOME_REVIEW_LIMIT = 8;
 const HOME_LEARNED_LIMIT = 3;
 
 const APPROVE_ACTION = "learn_approve";
 const DROP_ACTION = "learn_drop";
 
-// Below this, the docs are failing more questions than they answer and the
-// message says so plainly. The number was 23% when this was written — visible
-// nowhere except one bullet in the middle of /pixie-stats, which is why nobody
-// knew the corpus needed work.
 const HEALTHY_COVERAGE = 50;
 
-// Small block builders so every section below reads as content, not Slack
-// shape boilerplate.
-function divider() {
+// Keep review rows below Slack's block limit: each candidate uses multiple blocks.
+function divider(): Legacy {
   return { type: "divider" };
 }
 
-function section(text) {
+function section(text: string): Legacy {
   return { type: "section", text: { type: "mrkdwn", text } };
 }
 
-function coverageBlocks() {
+function coverageBlocks(): Legacy[] {
+  // Coverage is hidden until there is a question sample; an empty denominator should not look like zero percent.
   const { docs, asked, rate } = coverageStats();
   if (asked === 0) return [];
 
@@ -55,14 +50,12 @@ function coverageBlocks() {
   ];
 }
 
-// What pixie has picked up by being used. Separate from docs coverage on
-// purpose: coverage is a question about the docs, this is a question about
-// pixie — every answer here is one it can now give without a model call.
-function learnedBlocks() {
+function learnedBlocks(): Legacy[] {
+  // Only repeated cache hits are useful on Home; one-off facts would crowd out actionable review data.
   const { known, cacheHits, instant } = coverageStats();
   if (known === 0) return [];
 
-  const top = cache.topCached(HOME_LEARNED_LIMIT).filter((row) => row.ask_count > 1);
+  const top = cache.topCached(HOME_LEARNED_LIMIT).filter((row: Legacy) => row.ask_count > 1);
   const lines = [`*answers known cold — ${known}*`, `${cacheHits} replies (${instant}%) needed no thinking at all.`];
 
   if (top.length > 0) {
@@ -73,11 +66,7 @@ function learnedBlocks() {
   return [divider(), section(lines.join("\n"))];
 }
 
-// The review queue, as buttons. `/pixie-pending` prints the same rows and
-// `/pixie-approve <n>` accepts them one id at a time, which is why 96 rows
-// accumulated without a single review: matching numbers by eye across a wall of
-// ephemeral text is work nobody was going to do. Approving here is one click.
-function reviewBlocks(userId) {
+function reviewBlocks(userId: string): Legacy[] {
   if (!isAdmin(userId)) return [];
 
   const rows = learn.pending(HOME_REVIEW_LIMIT);
@@ -85,13 +74,10 @@ function reviewBlocks(userId) {
     return [divider(), section("*waiting for review*\n_nothing queued_ :yay:")];
   }
 
-  const blocks = [divider(), section(`*waiting for review* — ${rows.length} candidate answer(s)`)];
+  const blocks: Legacy[] = [divider(), section(`*waiting for review* — ${rows.length} candidate answer(s)`)];
 
   for (const row of rows) {
-    // A row lib/report.js drafted from repeated help-channel questions has no
-    // author — `<@null>` would render as literal broken text instead of a
-    // mention, so it gets its own attribution rather than pretending a human
-    // wrote it.
+    // Pending rows without an author come from aggregated gaps, not a Slack member.
     const attribution = row.author_id ? `from <@${row.author_id}>` : "drafted from repeated help-channel questions";
     blocks.push(
       {
@@ -126,46 +112,42 @@ function reviewBlocks(userId) {
   return blocks;
 }
 
-// The home tab isn't in any channel, so it can't name one program the way a
-// reply can. It names them all instead — which is the same fact from the other
-// side, and the only place someone can see the full list.
-function programSummary() {
-  const named = allProgramNames().filter((n) => n);
+function programSummary(): string {
+  const named = allProgramNames().filter((n: string) => n);
   if (named.length === 0) return "Hack Club YSWS programs";
   if (named.length === 1) return named[0];
   return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
 }
 
-// Registry reads must never break the home tab: a bot with no database yet
-// still has to render something.
-function allProgramNames() {
+function allProgramNames(): string[] {
   try {
     return programs
       .all()
-      .filter((p) => p.id !== "ysws-global")
-      .map((p) => p.name);
+      .filter((p: Legacy) => p.id !== "ysws-global")
+      .map((p: Legacy) => p.name);
   } catch (e) {
-    log.warn("home", `failed to get all program names: ${e.message}`);
+    log.warn("home", `failed to get all program names: ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
 }
 
-function safeSources() {
+function safeSources(): Legacy[] {
   try {
     return knowledge.loadSources();
   } catch (e) {
-    log.warn("home", `failed to load safe sources: ${e.message}`);
+    log.warn("home", `failed to load safe sources: ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
 }
 
-function homeBlocks(userId) {
+function homeBlocks(userId: string): Legacy[] {
+  // Home is assembled from safe fallbacks so a broken source or program lookup cannot prevent publishing.
   const sources = safeSources();
 
   const gaps = db.topGaps(5);
   const topics = db.getTopics(userId).slice(0, 5);
 
-  const blocks = [
+  const blocks: Legacy[] = [
     { type: "header", text: { type: "plain_text", text: brand.name(), emoji: true } },
     {
       type: "section",
@@ -187,7 +169,7 @@ function homeBlocks(userId) {
       text: {
         type: "mrkdwn",
         text: `*what i can walk you through*\n${guides.availableFor(programs.all()[0])
-          .map(([, g]) => `• ${g.name}`)
+          .map(([, g]: [string, Legacy]) => `• ${g.name}`)
           .join("\n")}`,
       },
     },
@@ -202,7 +184,7 @@ function homeBlocks(userId) {
       { type: "divider" },
       {
         type: "section",
-        text: { type: "mrkdwn", text: `*you've asked about*\n${topics.map((t) => `• ${t.topic}`).join("\n")}` },
+        text: { type: "mrkdwn", text: `*you've asked about*\n${topics.map((t: Legacy) => `• ${t.topic}`).join("\n")}` },
       },
     );
   }
@@ -214,7 +196,7 @@ function homeBlocks(userId) {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*top gaps in the docs*\n${gaps.map((g) => `• ${g.ask_count}× ${g.question.slice(0, 80)}`).join("\n")}`,
+          text: `*top gaps in the docs*\n${gaps.map((g: Legacy) => `• ${g.ask_count}× ${g.question.slice(0, 80)}`).join("\n")}`,
         },
       },
     );
@@ -222,27 +204,16 @@ function homeBlocks(userId) {
 
   blocks.push(...reviewBlocks(userId));
 
-  // The Home tab is published straight to Slack rather than going through
-  // lib/reply.js, so it does its own de-dashing.
   return reply.plainDashesInBlocks(blocks);
 }
 
-// Both buttons do the same three things, so they share one handler: run the
-// action, then re-publish the home view so the row it acted on disappears and
-// the next candidate moves up.
-//
-// The Drop button is the one piece of human feedback the gaps system actually
-// has access to. Recording the rejected question text in gap_rejections makes
-// it disappear from the auto-ranked list (topGaps) for the same window the
-// rank itself covers — without this, a "drop" is a UI gesture that does
-// nothing to the data underneath, and the same troll beat keeps coming back.
-function reviewAction(apply, verb) {
-  return async ({ ack, body, action, client }) => {
+function reviewAction(apply: (id: number) => unknown, verb: string) {
+  // Button actions re-check the actor because a Home view can outlive the authorization that rendered it.
+  return async ({ ack, body, action, client }: Legacy): Promise<void> => {
     await ack();
 
     const userId = body?.user?.id;
-    // The buttons only render for admins, but a stale view in an old tab can
-    // still fire one, so re-check rather than trusting what was rendered.
+    // Re-check authorization because stale Home views can outlive the rendered buttons.
     if (!isAdmin(userId)) return;
 
     const id = Number(action?.value);
@@ -250,8 +221,6 @@ function reviewAction(apply, verb) {
       log.info("learn", `${verb} #${id} from app home by ${userId}`);
       apply(id);
 
-      // Look up the question this draft was for. drop the one-off noise into
-      // gap_rejections so the question text is excluded from future ranking.
       if (verb === "dropped") {
         try {
           const row = db.getLearnedFactById(id);
@@ -260,7 +229,7 @@ function reviewAction(apply, verb) {
             log.info("gaps", `rejected as gap, will hide from topGaps: "${row.question.slice(0, 80)}"`);
           }
         } catch (e) {
-          log.debug("gaps", `failed to record gap rejection: ${e.message}`);
+          log.debug("gaps", `failed to record gap rejection: ${e instanceof Error ? e.message : String(e)}`);
         }
       }
     }
@@ -268,12 +237,12 @@ function reviewAction(apply, verb) {
     try {
       await client.views.publish({ user_id: userId, view: { type: "home", blocks: homeBlocks(userId) } });
     } catch (e) {
-      log.error("home", "republish after review failed:", e.message);
+      log.error("home", "republish after review failed:", e instanceof Error ? e.message : String(e));
     }
   };
 }
 
-async function onAppHomeOpened({ event, client }) {
+async function onAppHomeOpened({ event, client }: Legacy): Promise<void> {
   if (event.tab !== "home") return;
   try {
     await client.views.publish({
@@ -281,22 +250,18 @@ async function onAppHomeOpened({ event, client }) {
       view: { type: "home", blocks: homeBlocks(event.user) },
     });
   } catch (e) {
-    log.error("home", "publish failed:", e.message);
+    log.error("home", "publish failed:", e instanceof Error ? e.message : String(e));
   }
 }
 
-function register(app) {
+function register(app: Legacy): void {
   app.event("app_home_opened", onAppHomeOpened);
 
-  // Matched by prefix because each row's action_id carries its own id, keeping
-  // every button in the view distinct. Requires Interactivity to be enabled on
-  // the Slack app — Socket Mode carries it with no Request URL, but the toggle
-  // still has to be on or the buttons silently do nothing.
   app.action(new RegExp(`^${APPROVE_ACTION}_`), reviewAction(learn.approve, "approved"));
   app.action(new RegExp(`^${DROP_ACTION}_`), reviewAction(learn.forget, "dropped"));
 }
 
-module.exports = {
+export = {
   register,
   homeBlocks,
   reviewBlocks,

@@ -1,12 +1,23 @@
-// Summarizes a Slack thread for helpers, extracting the asker, core problem,
-// troubleshooting history, and current status.
-const { config } = require("./config");
-const llm = require("./llm");
-const log = require("./log");
+// Produces a concise helper handoff from a Slack support thread.
+import configModule = require("./config");
+import llm = require("./llm");
+import log = require("./log");
 
-// One page covers a real debug arc; longer threads repeat the same attempts.
+const { config } = configModule;
+const answerConfig = config.answer as typeof config.answer & { onRateLimited?: unknown };
+
+interface ThreadMessage {
+  text?: string;
+  bot_id?: string;
+  user?: string;
+}
+interface ThreadClient {
+  conversations: {
+    replies(args: { channel: string; ts: string; limit: number }): Promise<{ messages?: ThreadMessage[] }>;
+  };
+}
+
 const THREAD_FETCH_LIMIT = 50;
-// Caps the helper summary so it stays a glanceable handoff, not a transcript.
 const SUMMARY_MAX_TOKENS = 1000;
 
 const HELPER_SUMMARY_SYSTEM_PROMPT = [
@@ -20,14 +31,16 @@ const HELPER_SUMMARY_SYSTEM_PROMPT = [
   "Keep it concise, high-signal, and factual. Do NOT include filler, conversational fluff, or introductory greetings.",
 ].join("\n");
 
-function buildTranscript(messages) {
+function buildTranscript(messages: ThreadMessage[]): string {
+  // Preserve bot versus member labels because the summarizer must not attribute Pixie's guidance to the asker.
+  // Keep speaker identity in the transcript so helper summaries distinguish bot and human replies.
   return messages
     .filter((m) => m && m.text)
     .map((m) => `${m.bot_id ? "assistant (bot)" : (m.user ? `<@${m.user}>` : "user")}: ${m.text}`)
     .join("\n");
 }
 
-async function summarizeThreadForHelper({ client, channel, threadTs }) {
+async function summarizeThreadForHelper({ client, channel, threadTs }: { client: ThreadClient; channel: string; threadTs: string }): Promise<string | null> {
   const { messages } = await client.conversations.replies({
     channel,
     ts: threadTs,
@@ -37,11 +50,11 @@ async function summarizeThreadForHelper({ client, channel, threadTs }) {
   if (!transcript) return null;
   const { text } = await llm.complete(
     {
-      baseUrl: config.answer.baseUrl,
-      apiKey: config.answer.apiKey,
-      model: config.answer.model,
-      fallback: config.answer.fallback,
-      onRateLimited: config.answer.onRateLimited,
+      baseUrl: answerConfig.baseUrl,
+      apiKey: answerConfig.apiKey,
+      model: answerConfig.model,
+      fallback: answerConfig.fallback,
+      onRateLimited: answerConfig.onRateLimited,
       maxTokens: SUMMARY_MAX_TOKENS,
       temperature: 0,
       thinking: { type: "disabled" },
@@ -56,7 +69,7 @@ async function summarizeThreadForHelper({ client, channel, threadTs }) {
   return reply || null;
 }
 
-module.exports = {
+export = {
   summarizeThreadForHelper,
   buildTranscript,
   THREAD_FETCH_LIMIT,
