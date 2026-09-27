@@ -1,4 +1,5 @@
 const log = require("../log");
+import type { ChannelRole } from "../types";
 
 const FIELDS = [
   "program_id",
@@ -20,9 +21,14 @@ const FIELDS = [
 const SAFE_VALUE = /^[A-Za-z0-9_.:-]{0,64}$/;
 type EventValue = string | number | boolean | null | undefined;
 interface EventFields { [key: string]: EventValue }
-interface EventOptions { programId?: string | null; role?: string | null; addressed?: boolean }
+interface EventOptions {
+  programId?: string | null;
+  role?: ChannelRole | null;
+  addressed?: boolean;
+}
 
 function clean(value: unknown) {
+  // Keep event values bounded to safe log tokens so telemetry cannot emit arbitrary multiline content.
   if (value === null || value === undefined) return null;
   if (typeof value === "boolean" || typeof value === "number") return value;
   const s = String(value);
@@ -34,6 +40,7 @@ function format(event: EventFields) {
 }
 
 function start({ programId = null, role = null, addressed = false }: EventOptions = {}) {
+  // One trace owns the complete decision path, including silent outcomes.
   const startedAt = Date.now();
   const event: EventFields = { program_id: programId, channel_role: role, addressed: Boolean(addressed) };
   let done = false;

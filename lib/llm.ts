@@ -1,3 +1,4 @@
+// Provides completion and streaming transport with retry and fallback handling.
 const axios = require("axios");
 const https = require("https");
 const log = require("./log");
@@ -5,8 +6,19 @@ const db = require("./db");
 const crypto = require("crypto");
 
 interface ChatMessage { role: string; content: unknown }
-interface Usage { promptTokens: number | null; cachedPromptTokens: number | null; completionTokens: number | null; totalTokens: number | null }
-interface Telemetry { operation?: string; provider?: string | null; programId?: string | null; channel?: string | null; requestId?: string; }
+interface Usage {
+  promptTokens: number | null;
+  cachedPromptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+}
+interface Telemetry {
+  operation?: string;
+  provider?: string | null;
+  programId?: string | null;
+  channel?: string | null;
+  requestId?: string;
+}
 interface CompletionOptions {
   baseUrl: string;
   apiKey: string | (() => string);
@@ -21,7 +33,16 @@ interface CompletionOptions {
   onRateLimited?: (key: string) => void;
 }
 interface LlmError extends Error { response?: { status?: number }; usedKey?: string; code?: string; cause?: { code?: string } }
-interface CompletionResult { text: string; finishReason?: string; usedKey?: string; usage?: Usage; stopped?: boolean; attempt?: number; retryCount?: number; latencyMs?: number }
+interface CompletionResult {
+  text: string;
+  finishReason?: string;
+  usedKey?: string;
+  usage?: Usage;
+  stopped?: boolean;
+  attempt?: number;
+  retryCount?: number;
+  latencyMs?: number;
+}
 interface ResultMeta extends Partial<CompletionResult> { status?: string; httpStatus?: number; errorKind?: string; eventId?: string; }
 interface Price { input: number; output: number }
 interface JsonRecord { [key: string]: unknown }
@@ -74,6 +95,7 @@ const KNOWN_PRICING = Object.freeze({
 });
 
 function costFor(model: string, usage: Usage) {
+  // Missing usage stays unknown; fabricated costs would corrupt provider telemetry.
   let prices: Record<string, Price> = { ...KNOWN_PRICING };
   try {
     const configured = JSON.parse(process.env.PIXIE_LLM_PRICING_JSON || "{}");
@@ -216,6 +238,7 @@ async function requestCompletion({ baseUrl, apiKey, model, messages, maxTokens, 
 }
 
 async function completeAttempts(options: CompletionOptions, scope: string): Promise<CompletionResult> {
+  // Retry only before visible text is emitted; fallback after partial output would rewrite the answer.
   let lastError: LlmError | null = null;
   const requestId = options.telemetry?.requestId || crypto.randomUUID();
   const instrumented = { ...options, telemetry: { ...options.telemetry, operation: options.telemetry?.operation || scope, requestId } };
@@ -253,6 +276,7 @@ function describeError(err: LlmError) {
 }
 
 async function complete(options: CompletionOptions, scope = "llm") {
+  // Resolve key functions per attempt so rate-limit rotation can take effect immediately.
   const { fallback, ...primary } = options;
 
   try {
@@ -268,6 +292,7 @@ async function complete(options: CompletionOptions, scope = "llm") {
 
 
 function parseSseChunk(buffer: string, { flush = false }: { flush?: boolean } = {}) {
+  // Keep partial SSE lines until the next chunk so terminal frames without a newline are parsed.
   const deltas: string[] = [];
   const lines = buffer.split("\n");
   let rest = lines.pop();
@@ -396,6 +421,7 @@ async function streamCompletion({ baseUrl, apiKey, model, messages, maxTokens, t
 }
 
 async function streamAttempts(options: CompletionOptions, onDelta: (delta: string, text: string) => boolean | void, scope: string) {
+  // Streaming retries preserve the same no-duplicate-text invariant as completion retries.
   let lastError: LlmError | null = null;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {

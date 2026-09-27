@@ -1,3 +1,4 @@
+// Coordinates engagement, retrieval, answer generation, ticketing, and the final Slack side effect.
 const lookup = require("./lookup");
 const reply = require("./reply");
 const context = require("./context");
@@ -14,17 +15,84 @@ const channelPolicy = require("./channelPolicy");
 const engagement = require("./pipeline/engagement");
 const messagePolicy = require("./pipeline/messagePolicy");
 const pipelineEvents = require("./pipeline/events");
-import type { Program, SlackClient } from "./types";
+import type { ChannelRole, Program, SlackClient } from "./types";
 
 type ProgramLike = Partial<Program> & { id?: string };
 interface AnswerResult { source: string | null; answer: string; direct?: boolean; unclear?: boolean }
 interface UserContext { recentTopics?: string[]; helpfulAnswers?: string[] }
 interface GuideResult { message: string; checkNext?: string; completed?: boolean; cancelled?: boolean }
-interface CacheReplyArgs { client: SlackClient; channel: string; threadTs: string; userId: string; question: string; result: AnswerResult; startedAt: number; program?: ProgramLike | null }
-interface GuideArgs { client: SlackClient; channel: string; threadTs: string; question: string; userId: string; workspaceId?: string | null; program?: ProgramLike | null }
-interface TextPostArgs { client: SlackClient; channel: string; threadTs: string; program?: ProgramLike | null; workspaceId?: string | null }
-interface SensitiveArgs { trimmed: string; prog: ProgramLike | null; programId: string | null; channel: string; threadTs: string; userId: string; client: SlackClient; workspaceId?: string | null; startedAt: number }
-interface RespondOptions { client: SlackClient; channel: string; threadTs: string; userId: string; question: string; mode?: string; seedClient?: SlackClient | null; messageTs?: string | null; addressed?: boolean; addressedHow?: string; workspaceId?: string | null; isDm?: boolean; surface?: string | null; rateLimitReserved?: boolean }
+interface CacheReplyArgs {
+  client: SlackClient;
+  channel: string;
+  threadTs: string;
+  userId: string;
+  question: string;
+  result: AnswerResult;
+  startedAt: number;
+  program?: ProgramLike | null;
+}
+interface GuideArgs {
+  client: SlackClient;
+  channel: string;
+  threadTs: string;
+  question: string;
+  userId: string;
+  workspaceId?: string | null;
+  program?: ProgramLike | null;
+}
+interface TextPostArgs {
+  client: SlackClient;
+  channel: string;
+  threadTs: string;
+  program?: ProgramLike | null;
+  workspaceId?: string | null;
+}
+interface SensitiveArgs {
+  trimmed: string;
+  prog: ProgramLike | null;
+  programId: string | null;
+  channel: string;
+  threadTs: string;
+  userId: string;
+  client: SlackClient;
+  workspaceId?: string | null;
+  startedAt: number;
+}
+interface LookupFailureArgs {
+  client: SlackClient;
+  channel: string;
+  threadTs: string;
+  userId: string;
+  question: string;
+  prog: ProgramLike | null;
+  programId: string | null;
+  inHelpChannel: boolean;
+  mayChat: boolean;
+  seedClient: SlackClient | null;
+  workspaceId: string | null;
+  placeholder: () => Promise<string | null>;
+  streamer: { settle(): Promise<void> } | null;
+  startedAt: number;
+  role: ChannelRole;
+  silencedBefore: { muted: boolean; takeover: boolean } | null;
+}
+type AnswerMode = "docs-only" | "help-only" | "always";
+interface RespondOptions {
+  client: SlackClient;
+  channel: string;
+  threadTs: string;
+  userId: string;
+  question: string;
+  mode?: AnswerMode;
+  seedClient?: SlackClient | null;
+  messageTs?: string | null;
+  addressed?: boolean;
+  addressedHow?: string;
+  workspaceId?: string | null;
+  isDm?: boolean;
+  surface?: string | null;
+  rateLimitReserved?: boolean;
+}
 
 function errorMessage(error: unknown) { return error instanceof Error ? error.message : String(error); }
 
@@ -33,9 +101,10 @@ const ERROR_FALLBACK = "having trouble thinking rn, try again in a sec :sob-pray
 const RATE_LIMITED = "woah slow down a sec — gimme a minute to catch up :sob-pray:";
 const UNCLEAR_MARKER = "UNCLEAR";
 
-const DOCS_ONLY = "docs-only";
-const HELP_ONLY = "help-only";
-const ALWAYS = "always";
+// DOCS_ONLY requires evidence, HELP_ONLY may escalate or answer supported asks, and ALWAYS is for addressed messages.
+const DOCS_ONLY: AnswerMode = "docs-only";
+const HELP_ONLY: AnswerMode = "help-only";
+const ALWAYS: AnswerMode = "always";
 
 const MAX_CLARIFY_WORDS = 25;
 
@@ -74,6 +143,7 @@ function stripChannelMentions(text: string) {
 }
 
 function isGroundedAnswer(result: AnswerResult | null) {
+  // Grounded actions require a real source and a publishable answer.
   if (!result || !result.source || !result.answer) return false;
   const source = result.source.trim().toUpperCase();
   if (!source || source === "NONE") return false;
@@ -135,6 +205,7 @@ function buildChatContext(threadContext: string | null, userContext: UserContext
 }
 
 async function replyFromCache({ client, channel, threadTs, userId, question, result, startedAt, program = null }: CacheReplyArgs) {
+  // Cache replies are safe only when there is no thread-specific context.
   const requireGrounded = process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || program?.requireGroundedAnswer;
   if (requireGrounded) {
     if (!isGroundedAnswer(result)) return false;
@@ -175,6 +246,7 @@ function formatGuideText(result: GuideResult) {
 }
 
 async function postGuideStep({ client, channel, threadTs, result, isFirstStep = false, program = null, workspaceId = null }: TextPostArgs & { result: GuideResult; isFirstStep?: boolean }) {
+  // Guide message_ts links the rendered step to later reaction advancement.
   const text = formatGuideText(result);
   const blocks = guides.buildGuideBlocks(result, config.web.baseUrl, { showReactionHint: isFirstStep });
   const prog = program || programs.forChannel(channel, workspaceId);
@@ -309,6 +381,7 @@ const link = require("./link");
 
 
 async function handleSensitiveMatch({ trimmed, prog, programId, channel, threadTs, userId, client, workspaceId, startedAt }: SensitiveArgs) {
+  // Run sensitive-category checks before model calls so these questions always reach human review.
   if (!require("./eligibility").sensitiveHit(trimmed, prog)) return false;
   log.debug("respond", `sensitive-category match, escalating without answering`);
   db.recordMetric("silent", Date.now() - startedAt, "sensitive", programId);
@@ -329,6 +402,7 @@ async function handleSensitiveMatch({ trimmed, prog, programId, channel, threadT
 
 
 async function publishReply({ client, channel, threadTs, placeholder, text, blocks, program, seededTs, seed = true, silencedBefore = null }: { client: SlackClient; channel: string; threadTs: string; placeholder: Promise<string | null>; text: string; blocks?: unknown[] | null; program: ProgramLike | null; seededTs?: string | null; seed?: boolean; silencedBefore?: { muted: boolean; takeover: boolean } | null }) {
+  // Finalize and seed feedback only after the reply lifecycle confirms it was posted.
   const postedTs = await reply.finalize(client, channel, threadTs, placeholder, text, { program, blocks, silencedBefore });
   if (seed && postedTs !== seededTs) await reply.seedFeedbackReactions(client, channel, postedTs);
   return postedTs;
@@ -340,7 +414,7 @@ function recordSpokenReply({ threadTs, channel, userId, question, text, grounded
   db.recordMetric(metric || (linkContext ? "answer_link" : grounded ? "answer_docs" : "answer_chat"), Date.now() - startedAt, null, programId);
 }
 
-async function handleLookupFailure({ client, channel, threadTs, userId, question, prog, programId, inHelpChannel, mayChat, seedClient, workspaceId, placeholder, streamer, startedAt, silencedBefore = null }: { client: SlackClient; channel: string; threadTs: string; userId: string; question: string; prog: ProgramLike | null; programId: string | null; inHelpChannel: boolean; mayChat: boolean; seedClient: SlackClient | null; workspaceId: string | null; placeholder: () => Promise<string | null>; streamer: { settle(): Promise<void> } | null; startedAt: number; role: string; silencedBefore: { muted: boolean; takeover: boolean } | null }) {
+async function handleLookupFailure({ client, channel, threadTs, userId, question, prog, programId, inHelpChannel, mayChat, seedClient, workspaceId, placeholder, streamer, startedAt, silencedBefore = null }: LookupFailureArgs) {
   if (inHelpChannel) {
     db.recordGap(question, userId, channel, threadTs, programId);
     try {
@@ -391,6 +465,7 @@ function isDeterministicAnswer(result: AnswerResult | null) {
 const RECENT_CHANNEL_CONTEXT = 5;
 
 async function recentChannelContext({ seedClient, channel, messageTs, threadTs }: { seedClient: SlackClient | null; channel: string; messageTs: string | null; threadTs: string }) {
+  // Recent channel context is bounded so ambient classification cannot grow with channel traffic.
   if (!seedClient || messageTs !== threadTs) return [];
   try {
     return await context.recentChannelMessages(seedClient, channel, messageTs || threadTs, config.slack.botUserId, RECENT_CHANNEL_CONTEXT);

@@ -17,12 +17,35 @@ const grounding = require("./grounding");
 import type { Program, ProgramSource } from "./types";
 
 type ProgramLike = Partial<Program> & { id?: string };
-type SourceLike = Partial<ProgramSource> & { siteUrl?: string; hidden?: boolean; dynamic?: boolean; content?: unknown; paths?: string[]; minutesPerApprovedHour?: number };
-interface AnswerResult { source?: string | null; answer?: string; direct?: boolean; groundingVerdict?: unknown; evidence?: unknown[]; fixtureClaims?: unknown[] }
-interface AnswerOptions { onText?: ((text: string) => void) | null; inHelpChannel?: boolean; program?: ProgramLike | string | null; channel?: string | null; allowWebSearch?: boolean; isPing?: boolean; skipCache?: boolean }
+type SourceLike = Partial<ProgramSource> & {
+  siteUrl?: string;
+  hidden?: boolean;
+  dynamic?: boolean;
+  content?: unknown;
+  paths?: string[];
+  minutesPerApprovedHour?: number;
+};
+interface AnswerResult {
+  source?: string | null;
+  answer?: string;
+  direct?: boolean;
+  groundingVerdict?: unknown;
+  evidence?: unknown[];
+  fixtureClaims?: unknown[];
+}
+interface AnswerOptions {
+  onText?: ((text: string) => void) | null;
+  inHelpChannel?: boolean;
+  program?: ProgramLike | string | null;
+  channel?: string | null;
+  allowWebSearch?: boolean;
+  isPing?: boolean;
+  skipCache?: boolean;
+}
 interface WebResult { title?: string; url?: string; markdown?: string }
 
-const DOCS_ONLY = "docs-only";
+type AnswerMode = "docs-only" | "help-only" | "always";
+const DOCS_ONLY: AnswerMode = "docs-only";
 
 function idOf(program: ProgramLike | string | null | undefined) {
   if (!program) return null;
@@ -35,12 +58,14 @@ function cacheScope(program: ProgramLike | string | null | undefined) {
 }
 
 function programSources(record: ProgramLike | string | null | undefined): SourceLike[] {
+  // Resolve program references before selecting sources so cross-program knowledge cannot leak.
   const resolved: ProgramLike | null = (typeof record === "string" ? programs.get(record) as ProgramLike : record) || null;
   const shared = resolved && resolved.sharedSources === false ? [] : (programs.shared().sources || []);
   return [...(resolved?.sources || []), ...shared];
 }
 
 function cacheHit(question: string, contextPrompt: string, programId: string | null = null, skipCache = false) {
+  // Cache hits require an empty context prompt; thread-specific context must never reuse a generic answer.
   if (contextPrompt || skipCache) return null;
   const hit = cache.get(question, programId);
   if (!hit) return null;
@@ -50,6 +75,7 @@ function cacheHit(question: string, contextPrompt: string, programId: string | n
 }
 
 function dateFallback(question: string, contextPrompt: string, prog: ProgramLike | string | null = null) {
+  // Deterministic dates can answer without a model, but thread context still disables caching.
   const record = typeof prog === "string" ? programs.get(prog) : prog;
   const programId = idOf(record || prog);
   const milestones = record
@@ -147,6 +173,7 @@ async function repoValidatorAnswer(question: string) {
 }
 
 async function runCodeStages(question: string, prog: ProgramLike | string | null, history = "") {
+  // Code and shop stages run before retrieval because their answers are deterministic and authoritative.
   const arithmeticResult = arithmeticAnswer(question);
   if (arithmeticResult) return arithmeticResult;
 
@@ -251,6 +278,7 @@ function exactClaimAllowed(result: AnswerResult | null, prog: ProgramLike | stri
 }
 
 function applyGroundingBoundary(result: AnswerResult | null, prog: ProgramLike | string | null, question = "", corpus = "") {
+  // Reject unsupported numeric and source claims before they become cacheable answers.
   if (!result) return result;
   const allowed = exactClaimAllowed(result, prog, question, corpus);
   if (!allowed) {
@@ -352,7 +380,15 @@ async function webFallback({ question, contextPrompt, corpus, prog, channel, isP
     .catch(() => null);
 }
 
-function knownAnswer({ question, contextPrompt, mode, program: prog = null, skipCache = false }: { question: string; contextPrompt: string; mode: string; program?: ProgramLike | string | null; skipCache?: boolean }) {
+interface KnownAnswerOptions {
+  question: string;
+  contextPrompt: string;
+  mode: AnswerMode;
+  program?: ProgramLike | string | null;
+  skipCache?: boolean;
+}
+
+function knownAnswer({ question, contextPrompt, mode, program: prog = null, skipCache = false }: KnownAnswerOptions) {
   if (contextPrompt) return null;
   if (link.extractUrl(question)) return null;
   if (mode === DOCS_ONLY) return null;

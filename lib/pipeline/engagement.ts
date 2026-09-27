@@ -1,11 +1,31 @@
 const jevDecision = require("../jevDecision");
 const intent = require("../intent");
 const log = require("../log");
-interface RecentMessage { text?: string; speaker?: string; userId?: string | null }
-interface EngagementContext { message: string; program: unknown; userId?: string | null; channel?: string | null; addressed?: boolean; threadMessages?: unknown[]; recentMessages?: RecentMessage[] }
-interface JEVResult { action?: string; errorKind?: string; intent?: string; decision?: { intent?: string } }
+import type { ChannelRole } from "../types";
+
+interface RecentMessage {
+  text?: string;
+  speaker?: string;
+  userId?: string | null;
+}
+interface EngagementContext {
+  message: string;
+  program: unknown;
+  userId?: string | null;
+  channel?: string | null;
+  addressed?: boolean;
+  threadMessages?: unknown[];
+  recentMessages?: RecentMessage[];
+}
+interface JEVResult {
+  action?: string;
+  errorKind?: string;
+  intent?: string;
+  decision?: { intent?: string };
+}
 
 function isIdentityOrSmalltalk(text: string) {
+  // Identity and short small-talk messages are safe to classify without documentation.
   const t = String(text || "")
     .replace(/^<@[^>]+>\s*/, "")
     .trim()
@@ -22,7 +42,7 @@ function isIdentityOrSmalltalk(text: string) {
   return false;
 }
 
-function postureFor(role: string) {
+function postureFor(role: ChannelRole) {
   if (role === "help") return "help";
   if (role === "dm") return "dm";
   return "main";
@@ -38,6 +58,7 @@ function fromJev(res: JEVResult | null) {
 }
 
 async function fromLegacyIntent({ message, program, userId, channel, addressed, threadMessages, recentMessages }: EngagementContext) {
+  // The legacy classifier remains the fallback when structured engagement is unavailable.
   const result = await intent
     .classifyIntentContext(message, program, { userId, channel, addressed, threadMessages, recentMessages })
     .catch(() => null);
@@ -67,7 +88,13 @@ function conversationContextFor({ threadContext, recentMessages, userId }: { thr
     .join("\n\n");
 }
 
-async function classify({ message, threadContext = "", program, role, addressed = false, userId = null, channel = null, threadMessages = [], recentMessages = [] }: EngagementContext & { threadContext?: string; role: string }) {
+interface ClassifyOptions extends EngagementContext {
+  threadContext?: string;
+  role: ChannelRole;
+}
+
+async function classify({ message, threadContext = "", program, role, addressed = false, userId = null, channel = null, threadMessages = [], recentMessages = [] }: ClassifyOptions) {
+  // Use the structured classifier when enabled and fall back on unavailable decisions.
   if (addressed && isIdentityOrSmalltalk(message)) {
     return { engage: true, intent: "addressed_smalltalk", error: null, source: "heuristic" };
   }

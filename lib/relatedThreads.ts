@@ -1,9 +1,21 @@
 const db = require("./db");
 const log = require("./log");
 interface ThreadCandidate { question: string; channel: string; threadTs: string }
-interface RelatedThread { threadTs: string; channel: string; matchedQuestion: string; score: number; permalink: string | null }
-interface RelatedOptions { currentThreadTs?: string | null; channel?: string | null; result?: { direct?: boolean } | null; threshold?: number }
+interface RelatedThread {
+  threadTs: string;
+  channel: string;
+  matchedQuestion: string;
+  score: number;
+  permalink: string | null;
+}
+interface RelatedOptions {
+  currentThreadTs?: string | null;
+  channel?: string | null;
+  result?: { direct?: boolean } | null;
+  threshold?: number;
+}
 
+// Finds related Slack threads using lightweight token overlap and preserves stable permalinks.
 const STOP_WORDS = new Set([
   "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "aren't",
   "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", "by",
@@ -36,6 +48,7 @@ const CANDIDATE_LIMIT = 200;
 const SLACK_ARCHIVE_HOST = "https://hackclub.slack.com/archives";
 
 function isSimpleLookupQuestion(question: string, answerResult: { direct?: boolean } | null = null) {
+  // Direct lookups are not useful related-thread candidates because their wording repeats widely.
   const q = (question || "").trim().toLowerCase();
   if (!q) return true;
 

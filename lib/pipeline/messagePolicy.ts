@@ -1,11 +1,44 @@
 
+import type { ChannelRole } from "../types";
+
+// Policy decides whether to proceed before any answer or ticket I/O.
+// Final actions keep grounding, addressed status, and escalation precedence in one place.
 const PROGRAM_INTENTS = new Set(["support_question", "direct_program_question", "ambiguous_followup"]);
 const GENERAL_INTENTS = new Set(["addressed_general_request", "addressed_smalltalk"]);
 const CHAT_INTENTS = new Set([...GENERAL_INTENTS, "human_conversation", "unrelated_chatter"]);
-interface EngagementSettings { enabled?: boolean; mentionReplies?: boolean; generalMentionChat?: boolean; ambientProgramReplies?: boolean; escalateUnknown?: boolean; helperEscalationEnabled?: boolean }
-interface EngagementResult { intent?: string | null; engage?: boolean; error?: string | null }
-interface PlanOptions { role: string; settings?: EngagementSettings | null; addressed?: boolean; addressedHow?: string; engagement?: EngagementResult | null }
-interface FinalActionOptions { role: string; settings?: EngagementSettings | null; addressed?: boolean; kind?: string; grounded?: boolean; hasAnswer?: boolean; unclear?: boolean; noEscalate?: boolean; requireGrounded?: boolean }
+interface EngagementSettings {
+  enabled?: boolean;
+  mentionReplies?: boolean;
+  generalMentionChat?: boolean;
+  ambientProgramReplies?: boolean;
+  escalateUnknown?: boolean;
+  helperEscalationEnabled?: boolean;
+}
+interface EngagementResult {
+  intent?: string | null;
+  engage?: boolean;
+  error?: string | null;
+}
+interface PlanOptions {
+  role: ChannelRole;
+  settings?: EngagementSettings | null;
+  addressed?: boolean;
+  addressedHow?: string;
+  engagement?: EngagementResult | null;
+}
+type MessageKind = "program" | "general";
+type FinalAction = "reply" | "reply_chat" | "uncertain" | "escalate" | "escalate_and_uncertain" | "escalate_and_reply_chat" | "silence";
+interface FinalActionOptions {
+  role: ChannelRole;
+  settings?: EngagementSettings | null;
+  addressed?: boolean;
+  kind?: MessageKind;
+  grounded?: boolean;
+  hasAnswer?: boolean;
+  unclear?: boolean;
+  noEscalate?: boolean;
+  requireGrounded?: boolean;
+}
 
 function planEngagement({ role, settings, addressed = false, addressedHow = "mention", engagement }: PlanOptions) {
   const e = engagement || {};
@@ -52,7 +85,8 @@ function planEngagement({ role, settings, addressed = false, addressedHow = "men
   return { proceed: false, reason: "help_chatter" };
 }
 
-function finalAction({ role, settings, addressed = false, kind = "program", grounded = false, hasAnswer = false, unclear = false, noEscalate = false, requireGrounded = false }: FinalActionOptions) {
+function finalAction({ role, settings, addressed = false, kind = "program", grounded = false, hasAnswer = false, unclear = false, noEscalate = false, requireGrounded = false }: FinalActionOptions): FinalAction {
+  // Grounded answers take precedence over escalation because they already have publishable evidence.
   if (grounded) return "reply";
   if (noEscalate && !addressed && role !== "help") return "silence";
 

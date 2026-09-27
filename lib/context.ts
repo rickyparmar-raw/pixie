@@ -1,3 +1,5 @@
+// Stores thread transcripts and per-user topic history in SQLite-backed memory.
+// Slack seeding fills missing thread context before intent and answer selection.
 const db = require("./db");
 const log = require("./log");
 import type { SlackClient } from "./types";
@@ -44,6 +46,7 @@ function overlap(left: Set<string>, right: Set<string>) {
 }
 
 function selectContextMessages(messages: ThreadMessage[], currentQuestion: string | null = null): ThreadMessage[] {
+  // Select related recent turns instead of blindly filling the prompt with a long transcript.
   const lastMessage = messages.at(-1);
   const questionAlreadyStored = currentQuestion && lastMessage?.role === "user"
     && lastMessage.content === currentQuestion;
@@ -103,6 +106,7 @@ function selectContextMessages(messages: ThreadMessage[], currentQuestion: strin
 }
 
 function getThreadContext(threadTs: string, currentQuestion: string | null = null) {
+  // An empty context is meaningful: callers may then safely use a generic answer cache hit.
   const messages = threadRows(threadTs);
   if (messages.length === 0) return null;
   return selectContextMessages(messages, currentQuestion)
@@ -137,6 +141,7 @@ async function seedFromSlack(client: SlackClient, channel: string, threadTs: str
   try {
     const res = await client.conversations.replies({ channel, ts: threadTs, limit: SEED_LIMIT });
     const messages = res.messages || [];
+    // Skip the live message during seeding so a fresh question does not become prior context.
     for (const m of messages) {
       if (currentTs && m.ts === currentTs) continue;
       const text = (m.text || "").trim();
@@ -150,6 +155,7 @@ async function seedFromSlack(client: SlackClient, channel: string, threadTs: str
 }
 
 function threadCrowd(messages: SlackMessage[], userId: string, botUserId: string) {
+  // Pixie follows a thread alone only while it contains Pixie and the current sender.
   let pixieIn = false;
   let othersPresent = false;
   for (const m of messages) {
@@ -162,6 +168,7 @@ function threadCrowd(messages: SlackMessage[], userId: string, botUserId: string
 const CROWD_CHECK_LIMIT = 200;
 
 async function fetchThreadCrowd(client: SlackClient, { channel, threadTs, messageTs, userId, botUserId, parentUserId = null }: { channel: string; threadTs: string; messageTs: string; userId: string; botUserId: string; parentUserId?: string | null }) {
+  // Crowd checks include the parent so a reply to a busy thread does not look like an isolated ask.
   const fallback = {
     pixieIn: false,
     othersPresent: Boolean(parentUserId && parentUserId !== userId && parentUserId !== botUserId),
@@ -223,6 +230,7 @@ function deriveTopic(question: string) {
 }
 
 function updateUserHistory(userId: string, question: string, wasHelpful = true) {
+  // Keep only compact topic history so personalization cannot crowd out current evidence.
   const topic = deriveTopic(question);
   if (topic) db.recordTopic(userId, topic, wasHelpful);
 }

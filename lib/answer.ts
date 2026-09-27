@@ -1,3 +1,5 @@
+// Builds the grounded answer prompt and parses the model's strict response.
+// It emits refusal markers so ungrounded text stays out of public replies.
 const { config } = require("./config");
 const programs = require("./programs");
 const llm = require("./llm");
@@ -99,6 +101,7 @@ function isExplicitIdeasRequest(text: string) {
 }
 
 function resolveProgram(program: ProgramRef): ProgramLike | null {
+  // Resolve program references once so prompts describe the channel's actual program.
   if (!program) return null;
   if (typeof program === "object") return program;
   try {
@@ -169,6 +172,7 @@ function whereYouAre(program: ProgramRef = null, channel: string | null = null) 
 }
 
 function programGuardrail(program: ProgramRef = null, inHelpChannel = false) {
+  // Program guardrails are kept in the prompt because the model must see them before corpus text.
   const p = resolveProgram(program);
   const name = programName(program);
   const helpChan = helpChannelRef(program);
@@ -221,6 +225,7 @@ const VOICE = [
 ];
 
 function systemPrompt(corpus: string, additionalContext = "", program: ProgramRef = null, channel: string | null = null) {
+  // Keep retrieved evidence after the behavioral rules so instructions remain visible during truncation.
   const p = resolveProgram(program);
   const requireGrounded = process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || p?.requireGroundedAnswer;
   const helpChan = helpChannelRef(program);
@@ -285,6 +290,7 @@ function stripLeadingSafety(text: string) {
 }
 
 function sanitizeAnswer(text: string) {
+  // Treat echoed format instructions as invalid public output.
   if (!text) return "";
   let clean = stripLeadingSafety(text);
 
@@ -351,6 +357,7 @@ const INSTRUCTION_ECHO_WEAK = [
 ];
 
 function looksLikeInstructionEcho(text: string) {
+  // Reject model output that repeats the answer contract instead of answering the question.
   const lowered = String(text || "").toLowerCase();
   if (!lowered) return false;
   if (INSTRUCTION_ECHO_STRONG.some((f: string) => lowered.includes(f))) return true;
@@ -362,6 +369,7 @@ function looksLikeInstructionEcho(text: string) {
 }
 
 function parseReply(raw: unknown, program: ProgramRef = null): ParsedAnswer | null {
+  // A grounded answer needs a real source citation; chat-shaped output is not publishable here.
   const text = stripLeadingSafety(typeof raw === "string" ? raw : String(raw || "")).trim();
   if (!text || text === NONE_MARKER) return null;
 
@@ -661,6 +669,7 @@ async function getAnswerOrChatStream(question: string, corpus: string, additiona
 }
 
 async function retryIfTruncated(parsed: ParsedAnswerOrChat | null, req: AnswerRequest, program: ProgramRef, { onText = null }: Pick<AnswerOptions, "onText"> = {}) {
+  // Retry a truncated response before exposing its incomplete claim to Slack.
   if (!parsed?.answer || !looksTruncated(parsed.answer)) return parsed;
   const fallbackTier = req.fallback || answerFallbackWithHeadroom;
   if (fallbackTier) {

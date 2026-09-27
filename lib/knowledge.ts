@@ -1,3 +1,4 @@
+// Builds and caches the corpus from configured sources.
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -29,13 +30,33 @@ interface SourceRecord extends Partial<ProgramSource> {
   paths?: string[];
   minutesPerApprovedHour?: number;
 }
-type ProgramLike = Omit<Partial<Program>, "status" | "sources"> & { id?: string; status?: string; privateSandboxOnly?: boolean; faqContent?: string; sources?: SourceRecord[]; sourceTexts?: Record<string, string> };
+type ProgramLike = Omit<Partial<Program>, "status" | "sources"> & {
+  id?: string;
+  status?: string;
+  privateSandboxOnly?: boolean;
+  faqContent?: string;
+  sources?: SourceRecord[];
+  sourceTexts?: Record<string, string>;
+};
 type Section = [string, string];
 interface GithubListingEntry { type?: string; name?: string; download_url?: string; html_url?: string }
-interface GithubFile { name: string; title: string; downloadUrl: string; pageUrl: string; contentUrl: string; isHtml: boolean }
+interface GithubFile {
+  name: string;
+  title: string;
+  downloadUrl: string;
+  pageUrl: string;
+  contentUrl: string;
+  isHtml: boolean;
+}
 interface GithubSection { title: string; pageUrl: string; body: string }
 interface CrawlPage { content: string; raw: string }
-interface SourceHealthRow { name: string; fail_count?: number; fetched_at?: number | null; last_success_at?: number | null; last_error?: string | null }
+interface SourceHealthRow {
+  name: string;
+  fail_count?: number;
+  fetched_at?: number | null;
+  last_success_at?: number | null;
+  last_error?: string | null;
+}
 interface RetrievalIndex { docs: Array<{ chunk: { source: string } }> }
 
 const SOURCES_PATH = path.join(__dirname, "..", "sources.json");
@@ -44,12 +65,14 @@ const JAME_GAM_DOCS_PATH = path.join(APP_ROOT, "data", "jame-gam-complete-docs.m
 const LIVE_YSWS_DOCS_PATH = path.join(APP_ROOT, "LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md");
 const LIVE_YSWS_SOURCE = { name: "Live YSWS Pixie Knowledge Base", type: "text", url: "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md" };
 
+// Small batches avoid throttling both repository listings and rendered documentation pages.
 const FETCH_BATCH_SIZE = 5;
 const INITIAL_FETCH_TIMEOUT_MS = 10000;
 const SUBPAGE_FETCH_TIMEOUT_MS = 15000;
 const SHARED_CHROME_THRESHOLD = 0.6;
 const UNRENDERED_PLACEHOLDER_RE = /\{\{[a-z0-9_]+\}\}/i;
 
+// Bound fetched content before caching or inserting it into a prompt.
 const MAX_SOURCE_TEXT_CHARS = 200000;
 
 const inflightSources = new Set<string>();
@@ -76,6 +99,7 @@ function invalidate() {
 }
 
 function registerDraftKnowledge(draftProgram: ProgramLike, sourceTexts: Record<string, string>) {
+  // Draft corpora stay isolated from published program indexes until promotion.
   if (!draftProgram?.id || draftProgram.status !== "suspended" || draftProgram.privateSandboxOnly !== true) throw new Error("invalid draft knowledge registration");
   const canonicalJameDocs: Section[] | null = draftProgram.id === "jame-gam" && fs.existsSync(JAME_GAM_DOCS_PATH)
     ? [["Jame Gam Complete Docs", fs.readFileSync(JAME_GAM_DOCS_PATH, "utf8")]]
@@ -95,6 +119,7 @@ function registerDraftKnowledge(draftProgram: ProgramLike, sourceTexts: Record<s
 }
 
 async function ingestDraftSources(draftProgram: ProgramLike) {
+  // Learn draft sources lazily so the normal answer path does not fetch suspended programs.
   if (!draftProgram?.id || draftProgram.status !== "suspended" || draftProgram.privateSandboxOnly !== true) throw new Error("only private suspended drafts may be ingested");
   const sourceTexts: Record<string, string> = {};
   const skipped: { name: string; reason: string }[] = [];
@@ -207,6 +232,7 @@ function loadSources(): SourceRecord[] {
 }
 
 function resolveLocalPath(url: string) {
+  // Resolve file sources beneath the application root; configuration must not escape to arbitrary paths.
   const raw = String(url || "").replace(/^file:\/\//, "");
   const resolved = path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(APP_ROOT, raw);
   if (resolved !== APP_ROOT && !resolved.startsWith(APP_ROOT + path.sep)) {
@@ -369,6 +395,7 @@ function markdownFilesFromListing(data: unknown, siteBase = ""): GithubFile[] {
 }
 
 function sourceCacheKey(source: SourceRecord | null | undefined) {
+  // Namespaced keys keep same-named sources in different programs isolated.
   if (!source || !source.name) return null;
   if (source.url) return `${source.name}::${source.url}`;
   const inlineIdentity = JSON.stringify({ type: source.type, content: source.content });
@@ -377,6 +404,7 @@ function sourceCacheKey(source: SourceRecord | null | undefined) {
 }
 
 function memKey(source: SourceRecord) {
+  // The memory key is stable across refreshes so persisted source health remains useful.
   return sourceCacheKey(source) || source.name;
 }
 
@@ -385,6 +413,7 @@ function isDynamicSource(source: SourceRecord) {
 }
 
 function sourceFreshness(source: SourceRecord) {
+  // Dynamic sources refresh on their configured cadence; static sources keep their last good snapshot.
   const key = sourceCacheKey(source);
   if (!key) return {
     key: null,
@@ -603,6 +632,7 @@ function nextHops(hrefs: string[], base: string, origin: string, prefixes: strin
 }
 
 async function fetchUrlSource(source: SourceRecord, force: boolean) {
+  // Crawl rendered pages within the configured path scope and canonicalize links before following them.
   const url = source.url || "";
   recordLink(source.name, source.siteUrl || url);
   const rootUrl = canonicalUrl(url, url);
@@ -644,6 +674,7 @@ async function fetchUrlSource(source: SourceRecord, force: boolean) {
 }
 
 async function fetchSourceText(source: SourceRecord, force = false) {
+  // Keep source dispatch in one place so every source type shares caching and size limits.
   if (source.content !== undefined && source.content !== null) return inlineText(source);
   if (!source.url) throw new Error(`source "${source.name}" has neither a url nor inline content`);
   if (source.url.startsWith("file://")) return localFileText(source);
@@ -703,6 +734,7 @@ function persistSourceText(source: SourceRecord, text: string) {
 }
 
 async function refreshSource(source: SourceRecord, force = false) {
+  // Preserve the last good source text when a refresh fails.
   try {
     const text = await fetchSourceText(source, force);
     if (!text) return;
@@ -797,6 +829,7 @@ function memText(source: SourceRecord) {
 }
 
 function sourceSections(programId: string | null = null): Section[] {
+  // Hide sources marked private before they reach retrieval or citation formatting.
   const prog = programs.get(programId);
   const progSources = prog ? prog.sources || [] : [];
   const sharedSources = prog && prog.sharedSources === false ? [] : programs.shared().sources || [];
@@ -835,12 +868,14 @@ function sourceContainsCitation(source: SourceRecord, citation: string) {
 }
 
 function buildCorpus(programId: string | null = null) {
+  // Build corpus text from generated knowledge and fetched sources in deterministic order.
   return [...generatedSections(programId), ...sourceSections(programId)]
     .map(([name, text]) => `### ${name}\n${text}`)
     .join("\n\n");
 }
 
 function getCorpus(programId: string | null = null): string {
+  // Cache the assembled corpus separately per program to prevent cross-program leakage.
   const key = programId || "shared";
   const day = today();
   if (!corpusCacheMap.has(key) || corpusBuiltOnMap.get(key) !== day) {

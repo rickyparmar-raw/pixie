@@ -1,10 +1,23 @@
 
+// Grounding accepts model claims, but only retrieved records or explicit fixtures can support them.
 const VERDICTS = new Set(["supported", "unsupported", "needs_review"]);
 type JsonRecord = Record<string, unknown>;
 interface GroundingClaim { claim: string; supported: boolean; evidenceIds: string[] }
 interface ParsedVerdict { ok: boolean; verdict: string; claims: GroundingClaim[]; errors: string[] }
-interface EvidenceRecord extends JsonRecord { id?: unknown; programId?: unknown; program_id?: unknown; supportsClaims?: unknown; supportedClaims?: unknown }
-interface ValidateOptions { verdict?: unknown; evidence?: EvidenceRecord[]; programId?: string; fixtureClaims?: unknown[]; parse?: (raw: unknown) => ParsedVerdict }
+interface EvidenceRecord extends JsonRecord {
+  id?: unknown;
+  programId?: unknown;
+  program_id?: unknown;
+  supportsClaims?: unknown;
+  supportedClaims?: unknown;
+}
+interface ValidateOptions {
+  verdict?: unknown;
+  evidence?: EvidenceRecord[];
+  programId?: string;
+  fixtureClaims?: unknown[];
+  parse?: (raw: unknown) => ParsedVerdict;
+}
 
 function fail(errors: string[]): ParsedVerdict {
   return { ok: false, verdict: "unsupported", claims: [], errors };
@@ -15,6 +28,7 @@ function asString(value: unknown) {
 }
 
 function decodeJson(text: unknown): JsonRecord | null {
+  // Parse fenced and balanced JSON candidates fail-closed; malformed model output is not an application error.
   const input = asString(text);
   if (!input) return null;
 
@@ -95,6 +109,7 @@ function evidenceProgramId(evidence: EvidenceRecord | undefined) {
 }
 
 function validateClaimSupport({ verdict, evidence = [], programId, fixtureClaims = [], parse = parseGroundingVerdict }: ValidateOptions = {}) {
+  // Callers inject the parser so validation stays independent of model transport.
   if (typeof parse !== "function") return { ok: false, supported: false, claims: [], errors: ["parse must be a function"] };
   const parsed: ParsedVerdict = verdict && typeof verdict === "object" && "ok" in verdict && verdict.ok === true
     ? verdict as ParsedVerdict
@@ -121,6 +136,7 @@ function validateClaimSupport({ verdict, evidence = [], programId, fixtureClaims
 }
 
 function createGroundingValidator({ parse = parseGroundingVerdict }: { parse?: (raw: unknown) => ParsedVerdict } = {}) {
+  // Keep the parser boundary replaceable for deterministic tests and provider-specific formats.
   if (typeof parse !== "function") throw new TypeError("parse must be a function");
   return {
     parse,
