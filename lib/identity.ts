@@ -15,6 +15,15 @@ function makerLine(programName: string) {
   return `A: This bot is configured to help with ${programName}.`;
 }
 
+const REPO_URL = process.env.PIXIE_REPO_URL || "https://github.com/rickyparmar-raw/pixie";
+
+function repoPair() {
+  return [
+    "Q: Where's your code? / Are you open source? / What's your GitHub repo? / Where can I see your source?",
+    `A: I'm open source: ${REPO_URL}`,
+  ];
+}
+
 function memoryPair() {
   return [
     "Q: Do you remember me? / What did I ask you before?",
@@ -40,6 +49,8 @@ function defaultIdentity() {
     "",
     "Q: What can you do? / How do I use you?",
     `A: Ping me in a configured channel, DM me, or use ${brand.cmd()} <question> for a private answer. I can answer from the loaded docs and help debug error messages. ${brand.cmd("sources")} shows what docs I've got loaded.`,
+    "",
+    ...repoPair(),
     "",
     ...memoryPair(),
   ].join("\n");
@@ -89,6 +100,8 @@ function corpusSection(program: IdentityProgram | null = null) {
     `A: Ping me or say my name in a configured channel, DM me, or use ${brand.cmd()} <question> for a private answer. I answer from the loaded docs and can help debug error messages. ${brand.cmd("sources")} shows what docs I've got loaded.`,
     "",
 
+    ...repoPair(),
+    "",
     ...memoryPair(),
     "",
     "Q: What channel is this? / What is this channel for? / Where am I? / What program is this about?",
