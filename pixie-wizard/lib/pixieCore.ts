@@ -442,6 +442,39 @@ export async function coreHelpers(programId: string): Promise<unknown[]> {
   return request(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers`, "helpers lookup failed");
 }
 
+export interface CoreHistoryImportProgress {
+  programId: string;
+  status: "pending" | "running" | "done" | "error";
+  channels: Array<{
+    channel: string;
+    status: string;
+    cursor: string | null;
+    newestTsDone: string | null;
+    messagesScanned: number;
+    ticketsCreated: number;
+    enriched: number;
+    resolved: number;
+    closed: number;
+    queuedForJudge: number;
+    lastError: string | null;
+  }>;
+  messagesScanned: number;
+  ticketsCreated: number;
+  enriched: number;
+  resolved: number;
+  closed: number;
+  queuedForJudge: number;
+  lastError: string | null;
+}
+
+export async function coreHistoryImportProgress(programId: string): Promise<CoreHistoryImportProgress> {
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/history-import`, "history import progress failed");
+}
+
+export async function coreHistoryImportStart(programId: string): Promise<CoreHistoryImportProgress & { ok: boolean; started: boolean }> {
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/history-import`, "history import failed", send("POST", {}));
+}
+
 // Dashboard ops clients (Core lib/web/dashboardApi.js). Every route is
 // program-scoped in the path itself: a ticket id from program A requested
 // under program B 404s in Core, so a cross-program slip fails closed here

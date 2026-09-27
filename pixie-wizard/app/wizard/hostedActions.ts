@@ -34,6 +34,7 @@ const coreRadarAction = pixieCore.coreRadarAction;
 const coreRetentionPolicy = pixieCore.coreRetentionPolicy;
 const coreRetentionSweep = pixieCore.coreRetentionSweep;
 const coreTestQuestion = pixieCore.coreTestQuestion ?? (async () => ({}));
+const coreHistoryImportStart = pixieCore.coreHistoryImportStart ?? (async () => { throw new Error("History import is unavailable."); });
 import { HELPER_TAGS } from "@/lib/onboardingDraft";
 import { validateActivationGuards, isValidSlackChannelId } from "@/lib/activationGuards";
 import { BEHAVIOR_FIELDS, behaviorFlag, effectiveBehavior } from "@/lib/types";
@@ -467,6 +468,19 @@ export async function saveHostedSettings(_prev: ActionState, formData: FormData)
   revalidatePath(`/programs/${programId}/settings`);
   revalidatePath(`/programs/${programId}`);
   return { error: null };
+}
+
+export async function runHistoryImportAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const programId = String(formData.get("programId") ?? "").trim();
+  if (!programId) return { error: "Program is required." };
+  try {
+    await requireProgramOwnerOrAdmin(programId);
+    const progress = await coreHistoryImportStart(programId);
+    revalidatePath(`/programs/${programId}/settings`);
+    return { error: null, ok: true, data: progress };
+  } catch (err) {
+    return { error: err instanceof Error ? err.message : "History import failed." };
+  }
 }
 
 export async function saveHostedSources(_prev: ActionState, formData: FormData): Promise<ActionState> {

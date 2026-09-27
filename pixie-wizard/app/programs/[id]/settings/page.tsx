@@ -4,10 +4,19 @@ import { PageHeader, Section } from "@/app/_components/DashboardShell";
 import { ProgramSettingsForms } from "../ProgramSettingsForms";
 import { ChannelsSection } from "../ChannelsSection";
 import { LaunchSection } from "./LaunchSection";
+import { HistoryImportCard } from "./HistoryImportCard";
+import { coreHistoryImportProgress, type CoreHistoryImportProgress } from "@/lib/pixieCore";
 
 export default async function SettingsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const { program, relationship } = await requireProgramMembership(id);
+  let historyProgress: CoreHistoryImportProgress | null = null;
+  let historyError: string | null = null;
+  try {
+    historyProgress = await coreHistoryImportProgress(id);
+  } catch (err) {
+    historyError = err instanceof Error ? err.message : "Could not load history import progress.";
+  }
 
   return (
     <>
@@ -29,6 +38,12 @@ export default async function SettingsPage({ params }: { params: Promise<{ id: s
         {(relationship === "owner" || relationship === "admin") && (
           <LaunchSection programId={id} runtimeStatus={program.runtime_status} />
         )}
+        <HistoryImportCard
+          programId={id}
+          progress={historyProgress}
+          loadError={historyError}
+          canRun={relationship === "owner" || relationship === "admin"}
+        />
       </div>
     </>
   );
