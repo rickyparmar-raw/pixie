@@ -1,4 +1,3 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 const { test, expect, beforeAll, afterAll, beforeEach } = require("bun:test");
 
@@ -8,14 +7,16 @@ const handlers = require("../handlers");
 const respond = require("../respond");
 const sumThread = require("../sumThread");
 
-let savedEnv;
-let savedRespond;
-let savedSum;
-let ephemerals;
-let responds;
-let sums;
+// Each test restores these module seams so command-gate behavior remains isolated.
+// The saved seams are the production collaborators that would otherwise send duplicate replies.
+let savedEnv: any;
+let savedRespond: any;
+let savedSum: any;
+let ephemerals: any;
+let responds: any;
+let sums: any;
 
-function configure(behavior) {
+function configure(behavior: any) {
   process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([
     { id: "pixl", name: "Pixl", helpChannel: "C_HELP", channels: ["C_HELP", "C_MAIN"], behavior },
   ]);
@@ -24,7 +25,7 @@ function configure(behavior) {
 
 const client = {
   chat: {
-    postEphemeral: async (m) => ephemerals.push(m),
+    postEphemeral: async (m: any) => ephemerals.push(m),
     postMessage: async () => ({ ok: true, ts: "1" }),
     update: async () => ({ ok: true }),
     delete: async () => ({ ok: true }),
@@ -52,7 +53,7 @@ beforeEach(() => {
   ephemerals = [];
   responds = [];
   sums = [];
-  respond.respond = async (args) => {
+  respond.respond = async (args: any) => {
     responds.push(args);
     return false;
   };
@@ -63,7 +64,7 @@ beforeEach(() => {
 });
 
 let n = 0;
-const event = (channel, text) => {
+const event = (channel: any, text: any) => {
   n += 1;
   return { type: "message", channel, user: "U_RANDOM", text, ts: `${5000 + n}.1`, thread_ts: "4000.1" };
 };

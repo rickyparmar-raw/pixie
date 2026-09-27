@@ -1,3 +1,4 @@
+// Pure reply-eligibility gate: decide whether Pixie may speak before any model or ticket I/O.
 import type { Program } from "./types";
 
 type BotNameOptions = { botUserId?: string | null; botNames?: string[] };
@@ -64,6 +65,7 @@ function nameMentionAt(text: string, names: string[]): { token: string; index: n
 }
 
 function invocationAnalysis(text: string, { botUserId = null, botNames = [] }: BotNameOptions = {}): { addressed: boolean; invocation: boolean; referential: boolean } {
+  // A name mentioned in a sentence is referential; sentence-initial names and direct questions are invocations.
   const body = String(text || "");
   const mentioned = directMention(body, botUserId);
   const named = nameMentionAt(body, botNames);
@@ -99,6 +101,7 @@ const DEFERRAL_RES = [
 ];
 
 function humanDirected(text: string, { botUserId = null }: { botUserId?: string | null } = {}): boolean {
+  // Human-directed requests are deterministic overrides, even when the surrounding text looks answerable.
   const body = String(text || "");
   const stripped = body.replace(/^[\s,.;:!?-]+/, "");
   if (/^(?:asking|waiting for|deferring to)\b/i.test(stripped)) return true;
@@ -204,6 +207,7 @@ function humanReviewRequest(text: string): boolean {
 }
 
 function sensitiveHit(text: string, program: Program | null = null): boolean {
+  // Policy-sensitive and account-intervention language is escalated before any generated answer is attempted.
   const cats = program && Array.isArray(program.sensitiveCategories) ? program.sensitiveCategories : [];
   const body = String(text || "");
   const liveEligibilityFact = program?.id === "live-ysws" &&
@@ -227,6 +231,7 @@ const COMMAND_RE = /^(?:!(?:teach|sum|summary|summari[sz]e|mute|stfu)\b|\/(?:[a-
 const MENTION_COMMAND_RE = /^(?:teach|learn|remember|memorize|sum|summary|summari[sz]e)\b/i;
 
 function botCommand(body: string, { botUserId = null, botNames = [] }: BotNameOptions): boolean {
+  // Command forms bypass eligibility because their handlers enforce the relevant permission and channel rules.
   const text = String(body || "").trim();
   if (COMMAND_RE.test(text)) return true;
   if (!invocationAnalysis(text, { botUserId, botNames }).invocation) return false;
@@ -238,6 +243,7 @@ function botCommand(body: string, { botUserId = null, botNames = [] }: BotNameOp
 }
 
 function shouldPixieRespond({
+  // The returned reason is part of the routing contract because handlers persist it as a metric.
   text,
   userId = null,
   botUserId = null,
@@ -257,6 +263,7 @@ function shouldPixieRespond({
     return { decision: REPLY, reason: "command_bypass" };
   }
 
+  // Muted and taken-over threads stay quiet unless the member directly reactivates Pixie.
   if (t.muted) {
     const inv = invocationAnalysis(body, { botUserId, botNames });
     const bare = body.replace(/^<@[^>]+>\s*|^\s*(?:hey|hi|hello|yo|please|pls)[\s,]+/i, "").replace(new RegExp(`^(?:${botNamePattern(botNames)})\\w*\\s*`, "i"), "").trim();
@@ -295,6 +302,7 @@ function shouldPixieRespond({
     return { decision: HUMAN_DEFER, reason: "human_review_request" };
   }
 
+  // Sensitive requests bypass generation and go straight to human handling.
   if (sensitiveHit(body, program)) {
     return { decision: ESCALATE, reason: "sensitive_escalation", fileTicket: true };
   }
@@ -322,6 +330,7 @@ function shouldPixieRespond({
     return { decision: SILENT, reason: "acknowledged" };
   }
 
+  // An open ticket suppresses room-directed chatter while still allowing a direct invocation.
   if (!isTopLevel && t.ticketOpen && !inv.invocation
     && (!substantiveQuestion(body) || /\b(anyone|everyone|somebody|someone|anybody|you guys|y[’']all)\b/i.test(body) || humanDirected(body, { botUserId }))) {
     return { decision: SILENT, reason: "already_escalated", touchTicket: true };

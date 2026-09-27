@@ -1,13 +1,14 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const jev = require("./jevDecision");
 
+// These cases exercise the flat gate contract consumed by the response orchestrator.
+// Inputs deliberately omit documentation and evidence because the gate only judges engagement intent.
 const CFG = { enabled: true, experientialApiKeyPresent: true, model: "jev-latest:free", baseUrl: "https://api.experientiallabs.ai/v1/systemone", timeoutMs: 8000, engageThreshold: 0.7 };
 const GATE_INPUT = { message: "what is restoration energy?", conversationContext: "", program: { id: "pixl", name: "Pixl" }, channelPosture: "main", addressed: false };
-const verdict = (intent, p) => ({ answers: { intent: { type: "choice", choice: intent, probabilities: { [intent]: p } }, shouldEngage: { type: "boolean", probability: p } } });
+const verdict = (intent: any, p: any) => ({ answers: { intent: { type: "choice", choice: intent, probabilities: { [intent]: p } }, shouldEngage: { type: "boolean", probability: p } } });
 
 beforeEach(() => jev.clearDecisionCache());
 
@@ -19,10 +20,10 @@ test("gate returns the flat classifier contract", async () => {
 });
 
 test("gate input carries intent context only: no documentation, no evidence payload", async () => {
-  let received;
+  let received: any;
   await jev.evaluateSupportDecision(
     { ...GATE_INPUT, channelPosture: "dm", addressed: true },
-    { config: CFG, evaluateFn: async (args) => { received = args; return verdict("support_question", 0.95); } },
+    { config: CFG, evaluateFn: async (args: any) => { received = args; return verdict("support_question", 0.95); } },
   );
   assert.deepEqual(Object.keys(received.state).sort(), ["addressed", "channelPosture", "conversationContext", "message", "program"]);
   assert.equal(received.state.channelPosture, "dm");

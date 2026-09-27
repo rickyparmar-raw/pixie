@@ -1,4 +1,3 @@
-// @ts-nocheck
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const sumThread = require("./sumThread");
@@ -6,6 +5,7 @@ const handlers = require("./handlers");
 const { config } = require("./config");
 const { readSource } = require("./test-source");
 
+// Summary tests keep speaker labels because helpers rely on bot-versus-human attribution.
 test("buildTranscript formats messages with proper sender tags", () => {
   const messages = [
     { user: "U123", text: "how do I flash the firmware?" },
@@ -77,7 +77,7 @@ test("char: sumThread output is a helper string or null — never a write", asyn
   llm.complete = async () => ({ text: "  • *Asker:* <@U1>\n• *Goal:* x  " });
   try {
     const out = await sumThread.summarizeThreadForHelper({
-      client: { conversations: { replies: async (args) => { assert.equal(args.limit, 50); return { messages: [{ user: "U1", text: "my build fails" }] }; } } },
+      client: { conversations: { replies: async (args: any) => { assert.equal(args.limit, 50); return { messages: [{ user: "U1", text: "my build fails" }] }; } } },
       channel: "C1",
       threadTs: "char-sum-1",
     });
@@ -134,10 +134,10 @@ test("char: sumThread scope is one thread per call — no cross-thread bleed", a
   const llm = require("./llm");
   const real = llm.complete;
   let seenPrompt = "";
-  llm.complete = async (args) => { seenPrompt = args.messages.map((m) => m.content).join("\n"); return { text: "summary" }; };
+  llm.complete = async (args: any) => { seenPrompt = args.messages.map((m: any) => m.content).join("\n"); return { text: "summary" }; };
   try {
-    const seen = [];
-    const client = { conversations: { replies: async (args) => { seen.push(args); return { messages: [{ user: "U9", text: "only this thread" }] }; } } };
+    const seen: any[] = [];
+    const client = { conversations: { replies: async (args: any) => { seen.push(args); return { messages: [{ user: "U9", text: "only this thread" }] }; } } };
     await sumThread.summarizeThreadForHelper({ client, channel: "C9", threadTs: "char-sum-scope" });
     assert.equal(seen.length, 1);
     assert.equal(seen[0].channel, "C9");

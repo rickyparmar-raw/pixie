@@ -1,6 +1,6 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
+// The model is stubbed so guide state transitions are tested without network variance.
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -10,7 +10,7 @@ const guides = require("./guides");
 db.open(":memory:");
 
 let modelChoice = "NONE";
-let realComplete;
+let realComplete: any;
 before(() => {
   realComplete = llm.complete;
   llm.complete = async () => ({ text: modelChoice, finishReason: "stop" });
@@ -19,6 +19,7 @@ after(() => {
   llm.complete = realComplete;
 });
 
+// Model labels are controlled per test so guide ownership and step transitions remain reproducible.
 test("detectGuideIntent matches each guide's trigger phrasing", async () => {
   modelChoice = "submit-ysws-guidelines";
   assert.equal(await guides.detectGuideIntent("how do i submit my ysws guidelines"), "submit-ysws-guidelines");
@@ -106,7 +107,7 @@ test("create-hackpad's no-kicad alternate step gives real Linux install commands
 
 test("availableFor returns only the guides configured for a program", () => {
   const available = guides.availableFor({ guides: ["start-live"] });
-  assert.deepEqual(available.map(([id]) => id), ["start-live"]);
+  assert.deepEqual(available.map(([id]: any) => id), ["start-live"]);
 });
 
 test("create-hackpad covers DRC errors, Fusion360 account activation, and plate/PCB size mismatches", () => {
@@ -164,7 +165,7 @@ test("answerStuckQuestion falls back to the canned reply if the model call fails
 
 test("continueGuide answers a STUCK reply dynamically instead of the same canned text every time", async () => {
   const original = llm.complete;
-  llm.complete = async (options) => {
+  llm.complete = async (options: any) => {
     const sysPrompt = options.messages[0].content;
     if (sysPrompt.includes("Classify their reply")) return { text: "STUCK_2", finishReason: "stop" };
     if (sysPrompt.includes("Pixie's own fallback line for this")) {
@@ -206,8 +207,8 @@ test("startGuide's create-devboard walkthrough opens by crediting OnBoard, with 
   assert.ok(result.checkNext);
 
   const steps = guides.GUIDES["create-devboard"].steps;
-  assert.ok(!steps.some((s) => /\bfork\b|pull request/i.test(s.message)));
-  assert.ok(!steps.some((s) => s.screenshot === "create-devboard/19.webp"));
+  assert.ok(!steps.some((s: any) => /\bfork\b|pull request/i.test(s.message)));
+  assert.ok(!steps.some((s: any) => s.screenshot === "create-devboard/19.webp"));
 });
 
 test("every create-devboard screenshot path resolves to a real file", () => {
@@ -359,9 +360,9 @@ test("mentionsGuideSubject survives a typo and ignores unrelated messages", () =
 test("buildGuideBlocks always returns sections, even with no screenshot", () => {
   const blocks = guides.buildGuideBlocks({ message: "do the thing", checkNext: "done? (yes/no)" }, "https://x");
 
-  assert.ok(!blocks.some((b) => b.type === "image"));
-  assert.ok(blocks.some((b) => b.type === "section" && b.text.text === "do the thing"));
-  assert.ok(blocks.some((b) => b.type === "section" && b.text.text === "*done? (yes/no)*"));
+  assert.ok(!blocks.some((b: any) => b.type === "image"));
+  assert.ok(blocks.some((b: any) => b.type === "section" && b.text.text === "do the thing"));
+  assert.ok(blocks.some((b: any) => b.type === "section" && b.text.text === "*done? (yes/no)*"));
 });
 
 test("buildGuideBlocks puts the screenshot first when one is present", () => {
@@ -378,10 +379,10 @@ test("buildGuideBlocks only includes the reaction-hint context block when explic
   const result = { message: "do the thing", checkNext: "done? (yes/no)" };
 
   const first = guides.buildGuideBlocks(result, "https://x", { showReactionHint: true });
-  assert.ok(first.some((b) => b.type === "context"));
+  assert.ok(first.some((b: any) => b.type === "context"));
 
   const later = guides.buildGuideBlocks(result, "https://x");
-  assert.ok(!later.some((b) => b.type === "context"));
+  assert.ok(!later.some((b: any) => b.type === "context"));
 });
 
 test("buildGuideBlocks never shows the reaction hint on a step with no checkNext to react to", () => {
@@ -389,7 +390,7 @@ test("buildGuideBlocks never shows the reaction hint on a step with no checkNext
     showReactionHint: true,
   });
 
-  assert.ok(!blocks.some((b) => b.type === "context"));
+  assert.ok(!blocks.some((b: any) => b.type === "context"));
 });
 
 

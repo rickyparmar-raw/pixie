@@ -1,4 +1,3 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after } = require("node:test");
@@ -10,6 +9,8 @@ const { worthClassifying, looksLikeHelpRequest, buildUserPrompt, HISTORY_LIMIT }
 
 try { db.open(":memory:"); } catch (_) {}
 
+// Classifier calls are stubbed; these tests pin the fail-soft and context-shaping contract.
+// No test depends on provider wording: only the normalized labels and prompt boundaries matter.
 
 test("worthClassifying sends anything with words in it to the model", () => {
   assert.equal(worthClassifying("how do i submit my project?"), true);
@@ -153,8 +154,8 @@ test("char: duplicate-text history pins current context", async () => {
   db.recordUserMessage({ userId: user, channel: "C1", threadTs: "1.1", text: "still nothing" });
   db.recordUserMessage({ userId: user, channel: "C1", threadTs: "1.1", text: "still nothing" });
   const recent = db.recentUserMessages(user, { channel: "C1", limit: 3 });
-  assert.deepEqual(recent.map((r) => r.text), ["my build broke", "still nothing", "still nothing"]);
-  const rows = recent.map((r) => (r.text || "").trim()).filter(Boolean);
+  assert.deepEqual(recent.map((r: any) => r.text), ["my build broke", "still nothing", "still nothing"]);
+  const rows = recent.map((r: any) => (r.text || "").trim()).filter(Boolean);
   const current = "still nothing";
   if (rows.length > 0 && rows[rows.length - 1] === current.trim()) rows.pop();
   assert.deepEqual(rows.slice(-intent.HISTORY_LIMIT), ["my build broke", "still nothing"]);
@@ -247,7 +248,7 @@ test("short-input: length<5 fail-softs to null", async () => {
 });
 
 {
-  let realComplete;
+  let realComplete: any;
   before(() => { realComplete = llm.complete; });
   after(() => { llm.complete = realComplete; });
 

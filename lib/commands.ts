@@ -1,3 +1,4 @@
+// Slash commands are private by default; this module owns their Bolt adapters.
 import knowledge = require("./knowledge");
 import answer = require("./answer");
 import respond = require("./respond");
@@ -42,6 +43,7 @@ function adminOnly(handler: (args: Legacy) => Promise<unknown>) {
 }
 
 function plainSpoken(handler: (args: Legacy) => Promise<unknown>) {
+  // Bolt's respond helper bypasses the normal reply formatter, so normalize both text and blocks here.
   return async (args: Legacy): Promise<unknown> => {
     const original = args.respond;
     const respond = typeof original === "function"
@@ -86,6 +88,7 @@ async function reportCommand({ command, ack, respond: sendEphemeral }: Legacy): 
 
 
 async function askCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
+  // Private slash answers resolve documentation from the command channel's program binding.
   await ack();
 
   const question = (command.text || "").trim();
@@ -102,6 +105,7 @@ async function askCommand({ command, ack, respond: sendEphemeral }: Legacy): Pro
     return;
   }
 
+  // Resolve knowledge from the channel's program; unclaimed channels must not see another program's docs.
   const askPolicy = require("./channelPolicy").resolve(command.channel_id, command.team_id || null);
   const askProgram = askPolicy.role === "none" ? null : askPolicy.program;
   try {
@@ -212,6 +216,7 @@ async function sourcesCommand({ command, ack, respond: sendEphemeral }: Legacy):
 async function reloadCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
   await ack();
   try {
+    // An explicit reload bypasses the cached corpus.
     await knowledge.refreshCorpus(true);
   (db as Legacy).clearCache();
     await sendEphemeral({
@@ -248,6 +253,7 @@ async function statsCommand({ ack, respond: sendEphemeral }: Legacy): Promise<vo
 
 
 async function teachCommand({ command, ack, respond: sendEphemeral, client }: Legacy): Promise<void> {
+  // Learned facts are scoped to the channel's program; an unclaimed channel cannot choose one implicitly.
   await ack();
 
   const text = (command.text || "").trim();
@@ -310,6 +316,7 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Le
 }
 
 async function teachThreadShortcut({ shortcut, ack, client }: Legacy): Promise<void> {
+  // The message shortcut carries thread context directly, unlike the slash command's channel fallback.
   await ack();
 
   const channel = shortcut.channel.id;
@@ -486,6 +493,7 @@ async function onMemberJoined(): Promise<void> {
 const programs = require("./programs");
 
 async function programCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
+  // Ticket toggles are helper-level; program creation and maintenance remain organizer-only.
   await ack();
   const raw = (command.text || "").trim();
   const parts = raw.split(/\s+/);
@@ -679,6 +687,7 @@ async function guideCommand({ command, ack, respond: sendEphemeral, client }: Le
 const tickets = require("./tickets");
 
 function register(app: Legacy): void {
+  // Keep the registered surface derived from the active brand, with the legacy guide alias only by default.
   const cmd = brand.cmd;
 
   app.command(cmd(), plainSpoken(askCommand));

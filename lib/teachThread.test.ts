@@ -1,6 +1,6 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
+// Thread extraction is driven by a stubbed completion result and a small Slack history fake.
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const llm = require("./llm");
@@ -8,7 +8,7 @@ const teachThread = require("./teachThread");
 const { readSource } = require("./test-source");
 
 let completeReply = "how do i join :: post in #pixl-help and a helper will add you";
-let realComplete;
+let realComplete: any;
 before(() => {
   realComplete = llm.complete;
   llm.complete = async () => ({ text: completeReply, finishReason: "stop" });
@@ -17,7 +17,8 @@ after(() => {
   llm.complete = realComplete;
 });
 
-function stubClient(messages) {
+// History fakes preserve the model-facing transcript while avoiding a real Slack client.
+function stubClient(messages: any[]) {
   return { conversations: { replies: async () => ({ messages }) } };
 }
 
@@ -71,9 +72,9 @@ test("summarizeThread declines when the model's reply doesn't parse", async () =
 });
 
 test("summarizeThread skips the model call on a thread with no text", async () => {
-  const calls = [];
+  const calls: any[] = [];
   const stub = llm.complete;
-  llm.complete = async (...args) => {
+  llm.complete = async (...args: any[]) => {
     calls.push(args);
     return stub(...args);
   };
@@ -143,8 +144,8 @@ test("char: teachThread is read-only — fetch-only client, no db writes", async
   assert.equal(/INSERT\s+INTO/i.test(src), false);
   assert.equal(/DELETE\s+FROM/i.test(src), false);
   assert.equal(teachThread.THREAD_FETCH_LIMIT, 50);
-  const seen = [];
-  const client = { conversations: { replies: async (args) => { seen.push(args); return { messages: [{ text: "how do i join pixl", user: "U1" }] }; } } };
+  const seen: any[] = [];
+  const client = { conversations: { replies: async (args: any) => { seen.push(args); return { messages: [{ text: "how do i join pixl", user: "U1" }] }; } } };
   const parsed = await teachThread.summarizeThread({ client, channel: "C1", threadTs: "char-tt-1" });
   assert.equal(seen.length, 1);
   assert.equal(seen[0].limit, 50);

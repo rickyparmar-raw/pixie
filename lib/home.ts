@@ -1,3 +1,4 @@
+// Builds Pixie's App Home view, including admin-only learning review actions.
 import knowledge = require("./knowledge");
 import reply = require("./reply");
 import guides = require("./guides");
@@ -24,6 +25,7 @@ const DROP_ACTION = "learn_drop";
 
 const HEALTHY_COVERAGE = 50;
 
+// Keep review rows below Slack's block limit: each candidate uses multiple blocks.
 function divider(): Legacy {
   return { type: "divider" };
 }
@@ -33,6 +35,7 @@ function section(text: string): Legacy {
 }
 
 function coverageBlocks(): Legacy[] {
+  // Coverage is hidden until there is a question sample; an empty denominator should not look like zero percent.
   const { docs, asked, rate } = coverageStats();
   if (asked === 0) return [];
 
@@ -48,6 +51,7 @@ function coverageBlocks(): Legacy[] {
 }
 
 function learnedBlocks(): Legacy[] {
+  // Only repeated cache hits are useful on Home; one-off facts would crowd out actionable review data.
   const { known, cacheHits, instant } = coverageStats();
   if (known === 0) return [];
 
@@ -73,6 +77,7 @@ function reviewBlocks(userId: string): Legacy[] {
   const blocks: Legacy[] = [divider(), section(`*waiting for review* — ${rows.length} candidate answer(s)`)];
 
   for (const row of rows) {
+    // Pending rows without an author come from aggregated gaps, not a Slack member.
     const attribution = row.author_id ? `from <@${row.author_id}>` : "drafted from repeated help-channel questions";
     blocks.push(
       {
@@ -136,6 +141,7 @@ function safeSources(): Legacy[] {
 }
 
 function homeBlocks(userId: string): Legacy[] {
+  // Home is assembled from safe fallbacks so a broken source or program lookup cannot prevent publishing.
   const sources = safeSources();
 
   const gaps = db.topGaps(5);
@@ -202,10 +208,12 @@ function homeBlocks(userId: string): Legacy[] {
 }
 
 function reviewAction(apply: (id: number) => unknown, verb: string) {
+  // Button actions re-check the actor because a Home view can outlive the authorization that rendered it.
   return async ({ ack, body, action, client }: Legacy): Promise<void> => {
     await ack();
 
     const userId = body?.user?.id;
+    // Re-check authorization because stale Home views can outlive the rendered buttons.
     if (!isAdmin(userId)) return;
 
     const id = Number(action?.value);

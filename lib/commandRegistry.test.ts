@@ -1,6 +1,6 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
+// Registry tests pin parity between command definitions, matching, and authorization.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const registry = require("./commandRegistry");
@@ -11,6 +11,7 @@ const ADMIN = "U0ADMIN";
 const HELPER = "U0HELPER";
 const NORMAL = "U0NORMAL";
 
+// Registry tests also protect the matching surface used by event handlers, not just the exported list.
 
 test("every definition carries the full contract shape with valid enums", () => {
   assert.ok(COMMANDS.length >= 10, "registry must cover the whole inventory");
@@ -28,17 +29,17 @@ test("every definition carries the full contract shape with valid enums", () => 
 });
 
 test("teach is split by surface because text and slash have different gates", () => {
-  const teachDefs = COMMANDS.filter((c) => c.name === "teach");
+  const teachDefs = COMMANDS.filter((c: any) => c.name === "teach");
   assert.equal(teachDefs.length, 2);
   assert.deepEqual(
-    teachDefs.map((c) => [c.surface, c.permission]).sort(),
+    teachDefs.map((c: any) => [c.surface, c.permission]).sort(),
     [["slash", "organizer"], ["text", "helper"]],
   );
-  assert.ok(teachDefs.every((c) => c.handlerKey === "teach"));
+  assert.ok(teachDefs.every((c: any) => c.handlerKey === "teach"));
 });
 
 test("organizer commands are never executable by normal users", () => {
-  for (const c of COMMANDS.filter((c) => c.permission === "organizer")) {
+  for (const c of COMMANDS.filter((c: any) => c.permission === "organizer")) {
     const verdict = authorize(c, { userId: NORMAL, role: "help" });
     assert.equal(verdict.ok, false, `${c.name}/${c.surface} must deny a normal user`);
     assert.equal(verdict.reason, "not_organizer");

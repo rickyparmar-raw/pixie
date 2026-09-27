@@ -1,9 +1,17 @@
-// @ts-nocheck
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { sendProgramMessage, brandingFor } = require("./slackMessages");
 const { readSource } = require("./test-source");
 
+// Slack error fields are optional runtime properties, so the fake preserves those wire shapes.
+interface SlackTestError extends Error {
+  code?: string;
+  retryAfter?: number | string | null;
+  data?: { error?: string };
+  headers?: Record<string, string>;
+}
+
+// The retry tests use native Error objects with only the Slack fields each case needs.
 test("branding uses the program support identity, never a human", () => {
   const brand = brandingFor({ name: "Highway", supportName: "Highway Help", iconUrl: "https://example.com/i.png" });
   assert.equal(brand.username, "Highway Help");
@@ -12,13 +20,13 @@ test("branding uses the program support identity, never a human", () => {
 });
 
 test("message sends with branding, falls back when customization is rejected", async () => {
-  const sent = [];
+  const sent: any[] = [];
   const picky = {
     chat: {
-      postMessage: async (payload) => {
+      postMessage: async (payload: any) => {
         sent.push(payload);
         if (payload.username) {
-          const err = new Error("missing_scope");
+          const err = new Error("missing_scope") as SlackTestError;
           err.code = "missing_scope";
           throw err;
         }
@@ -45,7 +53,7 @@ test("permanent Slack errors are not retried forever", async () => {
     chat: {
       postMessage: async () => {
         calls += 1;
-        const err = new Error("not_in_channel");
+        const err = new Error("not_in_channel") as SlackTestError;
         err.code = "not_in_channel";
         throw err;
       },
@@ -56,10 +64,10 @@ test("permanent Slack errors are not retried forever", async () => {
 });
 
 test("Pixl's branding can never appear on a message sent for a different program", async () => {
-  const sentPayloads = [];
+  const sentPayloads: any[] = [];
   const client = {
     chat: {
-      postMessage: async (payload) => {
+      postMessage: async (payload: any) => {
         sentPayloads.push(payload);
         return { ts: "9.0" };
       },
@@ -84,10 +92,10 @@ test("429 with Retry-After is honored once, then the send succeeds", async () =>
   let calls = 0;
   const flaky = {
     chat: {
-      postMessage: async (payload) => {
+      postMessage: async (payload: any) => {
         calls += 1;
         if (calls === 1) {
-          const err = new Error("ratelimited");
+          const err = new Error("ratelimited") as SlackTestError;
           err.code = "slack_error";
           err.retryAfter = 0;
           err.data = { error: "ratelimited" };
@@ -102,14 +110,14 @@ test("429 with Retry-After is honored once, then the send succeeds", async () =>
   assert.equal(calls, 2);
 });
 
-async function withCapturedSleeps(fn) {
-  const delays = [];
+async function withCapturedSleeps(fn: any) {
+  const delays: number[] = [];
   const orig = global.setTimeout;
-  global.setTimeout = (cb, ms, ...rest) => {
+  global.setTimeout = ((cb: (...args: any[]) => void, ms: number, ...rest: any[]) => {
     delays.push(ms);
     cb();
     return 0;
-  };
+  }) as unknown as typeof setTimeout;
   try {
     const out = await fn();
     return { out, delays };
@@ -159,7 +167,7 @@ test("characterization: Retry-After 31s is capped at 30s", async () => {
       postMessage: async () => {
         calls += 1;
         if (calls === 1) {
-          const err = new Error("ratelimited");
+        const err = new Error("ratelimited") as SlackTestError;
           err.retryAfter = 31;
           throw err;
         }
@@ -179,19 +187,19 @@ test("characterization: unknown transient backs off then gives up", async () => 
     chat: {
       postMessage: async () => {
         calls += 1;
-        const err = new Error("boom");
+        const err = new Error("boom") as SlackTestError;
         err.retryAfter = "not-a-number";
         throw err;
       },
     },
   };
   const orig = global.setTimeout;
-  const delays = [];
-  global.setTimeout = (cb, ms) => {
+  const delays: number[] = [];
+  global.setTimeout = ((cb: (...args: any[]) => void, ms: number) => {
     delays.push(ms);
     cb();
     return 0;
-  };
+  }) as unknown as typeof setTimeout;
   try {
     await assert.rejects(() => sendProgramMessage({ client: broken, channel: "C1", text: "hi" }), /boom/);
   } finally {
@@ -202,15 +210,15 @@ test("characterization: unknown transient backs off then gives up", async () => 
 });
 
 test("characterization: branded ratelimit retry preserves brand", async () => {
-  const sent = [];
+  const sent: any[] = [];
   let calls = 0;
   const flaky = {
     chat: {
-      postMessage: async (payload) => {
+      postMessage: async (payload: any) => {
         sent.push(payload);
         calls += 1;
         if (calls === 1) {
-          const err = new Error("ratelimited");
+          const err = new Error("ratelimited") as SlackTestError;
           err.retryAfter = 0;
           throw err;
         }
@@ -248,16 +256,16 @@ test("characterization: ticket action failures stay silent, only public_resolve 
 test("regression: missing or empty Retry-After falls to transient backoff", async () => {
   const makers = [
     () => {
-      const e = new Error("t");
+      const e = new Error("t") as SlackTestError;
       return e;
     },
     () => {
-      const e = new Error("t");
+      const e = new Error("t") as SlackTestError;
       e.retryAfter = "";
       return e;
     },
     () => {
-      const e = new Error("t");
+      const e = new Error("t") as SlackTestError;
       e.retryAfter = null;
       return e;
     },
@@ -280,7 +288,7 @@ test("regression: Retry-After header lookup ignores case", async () => {
         postMessage: async () => {
           calls += 1;
           if (calls === 1) {
-            const err = new Error("ratelimited");
+            const err = new Error("ratelimited") as SlackTestError;
             err.headers = { [key]: "1" };
             throw err;
           }
@@ -295,21 +303,21 @@ test("regression: Retry-After header lookup ignores case", async () => {
 });
 
 test("regression: brand survives ratelimit and drops only on branding rejection", async () => {
-  const sent = [];
+  const sent: any[] = [];
   let calls = 0;
   const prog = { name: "Highway", supportName: "Highway Help", iconUrl: "https://example.com/i.png" };
   const client = {
     chat: {
-      postMessage: async (payload) => {
+      postMessage: async (payload: any) => {
         sent.push(payload);
         calls += 1;
         if (calls === 1) {
-          const err = new Error("ratelimited");
+          const err = new Error("ratelimited") as SlackTestError;
           err.retryAfter = 0;
           throw err;
         }
         if (calls === 2) {
-          const err = new Error("missing_scope");
+          const err = new Error("missing_scope") as SlackTestError;
           err.code = "missing_scope";
           throw err;
         }
@@ -363,7 +371,7 @@ test("a permanently failing send records slack_send_failure", async () => {
   const dead = {
     chat: {
       postMessage: async () => {
-        const e = new Error("channel_not_found");
+        const e = new Error("channel_not_found") as SlackTestError;
         e.data = { error: "channel_not_found" };
         throw e;
       },

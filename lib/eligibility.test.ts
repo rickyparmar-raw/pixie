@@ -1,4 +1,3 @@
-// @ts-nocheck
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const elig = require("./eligibility");
@@ -8,7 +7,9 @@ const NAMES = ["pixie"];
 const U1 = "<@U111>";
 const U2 = "<@U222>";
 
-function run(f) {
+// Fixtures describe routing roles rather than real member identities.
+// The table keeps reason strings visible because callers record them as routing metrics.
+function run(f: any) {
   return elig.shouldPixieRespond({
     text: f.text,
     userId: "U-asker",
@@ -199,7 +200,7 @@ const FIXTURES = [
 
 test("behavior fixtures: 150+ decisions with reasons", () => {
   assert.ok(FIXTURES.length >= 150, `need 150+ fixtures, have ${FIXTURES.length}`);
-  let failed = [];
+  let failed: any[] = [];
   for (const [name, fixture, decision, reason] of FIXTURES) {
     const got = run(fixture);
     if (got.decision !== decision || got.reason !== reason) {
@@ -211,11 +212,11 @@ test("behavior fixtures: 150+ decisions with reasons", () => {
 
 test("release gates: zero misfires on protected classes", () => {
   const classes = {
-    human_directed: FIXTURES.filter((f) => f[2] === "human_defer"),
-    referential: FIXTURES.filter((f) => f[3] === "referential_mention"),
-    takeover: FIXTURES.filter((f) => f[3] === "takeover" || f[2] === "human_defer" && f[3] === "human_takeover"),
-    muted: FIXTURES.filter((f) => f[3] === "muted"),
-    sensitive: FIXTURES.filter((f) => f[2] === "escalate"),
+    human_directed: FIXTURES.filter((f: any) => f[2] === "human_defer"),
+    referential: FIXTURES.filter((f: any) => f[3] === "referential_mention"),
+    takeover: FIXTURES.filter((f: any) => f[3] === "takeover" || f[2] === "human_defer" && f[3] === "human_takeover"),
+    muted: FIXTURES.filter((f: any) => f[3] === "muted"),
+    sensitive: FIXTURES.filter((f: any) => f[2] === "escalate"),
   };
   assert.ok(classes.human_directed.length > 0);
   assert.ok(classes.referential.length > 0);
@@ -243,15 +244,15 @@ test("char: general-channel bare reference is currently addressed", () => {
 
 test("char: short HELP_ONLY inputs pin current verdict", () => {
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: "how", thread: { pixieSpoke: true }, help: true })),
+    ((r: any) => [r.decision, r.reason])(run({ text: "how", thread: { pixieSpoke: true }, help: true })),
     ["reply", "help_thread_followup"],
   );
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: "what", thread: { pixieSpoke: true }, help: true })),
+    ((r: any) => [r.decision, r.reason])(run({ text: "what", thread: { pixieSpoke: true }, help: true })),
     ["reply", "help_thread_followup"],
   );
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: "ok", thread: { pixieSpoke: true }, help: true })),
+    ((r: any) => [r.decision, r.reason])(run({ text: "ok", thread: { pixieSpoke: true }, help: true })),
     ["silent", "acknowledged"],
   );
 });
@@ -260,11 +261,11 @@ test("char: continue/resume in muted thread pin current reactivation", () => {
   assert.equal(elig.reactivationPhrase("continue"), true);
   assert.equal(elig.reactivationPhrase("resume"), true);
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: "continue", thread: { muted: true } })),
+    ((r: any) => [r.decision, r.reason])(run({ text: "continue", thread: { muted: true } })),
     ["silent", "muted"],
   );
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: "resume", thread: { muted: true } })),
+    ((r: any) => [r.decision, r.reason])(run({ text: "resume", thread: { muted: true } })),
     ["silent", "muted"],
   );
   const pinged = run({ text: `<@${BOT}> continue`, thread: { muted: true } });
@@ -280,14 +281,14 @@ test("char: let-me-see takeover claim pins current", () => {
   assert.equal(elig.takeoverCue("let me see…", NAMES), true);
   assert.equal(elig.takeoverCue("let me see the logs", NAMES), true);
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: "let me see…", thread: {} })),
+    ((r: any) => [r.decision, r.reason])(run({ text: "let me see…", thread: {} })),
     ["human_defer", "human_takeover"],
   );
 });
 
 test("char: mention in already-escalated thread pins ALWAYS-reply", () => {
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: `<@${BOT}> still stuck`, thread: { ticketOpen: true } })),
+    ((r: any) => [r.decision, r.reason])(run({ text: `<@${BOT}> still stuck`, thread: { ticketOpen: true } })),
     ["reply", "addressed"],
   );
   const mentionPath = elig.shouldPixieRespond({
@@ -309,26 +310,26 @@ test("char: long social counts as substantiveQuestion", () => {
   assert.equal(elig.substantiveQuestion(social), true);
   assert.equal(elig.greetingOrNoise(social), false);
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: social, help: true })),
+    ((r: any) => [r.decision, r.reason])(run({ text: social, help: true })),
     ["reply", "help_channel_ask"],
   );
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: "working on my game tonight, sprites are hard" })),
+    ((r: any) => [r.decision, r.reason])(run({ text: "working on my game tonight, sprites are hard" })),
     ["reply", "ambient_candidate"],
   );
 });
 
 test("char: complimentOnly boundary pins current", () => {
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: "pixie is goated", help: true })),
+    ((r: any) => [r.decision, r.reason])(run({ text: "pixie is goated", help: true })),
     ["silent", "greeting"],
   );
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: "pixie is goated love you", help: true })),
+    ((r: any) => [r.decision, r.reason])(run({ text: "pixie is goated love you", help: true })),
     ["silent", "greeting"],
   );
   assert.deepEqual(
-    ((r) => [r.decision, r.reason])(run({ text: "pixie is goated, but when is the deadline", help: true })),
+    ((r: any) => [r.decision, r.reason])(run({ text: "pixie is goated, but when is the deadline", help: true })),
     ["reply", "help_channel_ask"],
   );
 });
@@ -361,11 +362,11 @@ test("char: ping handoff pins current double-processing counts", async () => {
   const origMetric = db.recordMetric;
   const origGap = db.recordGap;
   const origClaim = db.claimMessage;
-  let metrics, gaps, claims, responds;
-  db.recordMetric = (...a) => { metrics.push(a); return origMetric(...a); };
-  db.recordGap = (...a) => { gaps.push(a); return origGap(...a); };
-  db.claimMessage = (...a) => { claims.push(a); return origClaim(...a); };
-  respond.respond = async (a) => { responds.push(a); return true; };
+  let metrics: any[] = [], gaps: any[] = [], claims: any[] = [], responds: any[] = [];
+  db.recordMetric = (...a: any[]) => { metrics.push(a); return origMetric(...a); };
+  db.recordGap = (...a: any[]) => { gaps.push(a); return origGap(...a); };
+  db.claimMessage = (...a: any[]) => { claims.push(a); return origClaim(...a); };
+  respond.respond = async (a: any) => { responds.push(a); return true; };
   try {
     metrics = []; gaps = []; claims = []; responds = [];
     const ts1 = `char-ping-${Date.now()}-1`;
@@ -427,11 +428,11 @@ test("char: onAppMention in escalated thread answers ALWAYS", async () => {
   const savedRespond = respond.respond;
   const savedFor = programs.forChannel;
   const savedIsHelp = programs.isHelpChannel;
-  const calls = [];
-  respond.respond = async (a) => { calls.push(a); return true; };
+  const calls: any[] = [];
+  respond.respond = async (a: any) => { calls.push(a); return true; };
   const prog = { id: "char-esc", name: "Char", posture: "active", ticketsEnabled: true, autoEscalate: true, helpChannel: "C0HELP", organizerChannel: "C0ORG" };
   programs.forChannel = () => prog;
-  programs.isHelpChannel = (ch) => ch === "C0HELP";
+  programs.isHelpChannel = (ch: any) => ch === "C0HELP";
   try {
     const client = { chat: { postMessage: async () => ({ ts: "card-1" }) } };
     await tickets.escalateTicket({ program: prog, channel: "C0HELP", threadTs: "char-esc-1", requesterId: "U1", question: "help", client, workspaceId: "T1" });
@@ -485,19 +486,19 @@ test("B4: ping escalate runs gap/escalate exactly once", async () => {
   const savedIsHelp = programs.isHelpChannel;
   const prog = { id: "b4-sens", name: "B4", posture: "active", ticketsEnabled: true, autoEscalate: true, helpChannel: "C0HELP", organizerChannel: "C0ORG", sensitiveCategories: ["refund"] };
   programs.forChannel = () => prog;
-  programs.isHelpChannel = (ch) => ch === "C0HELP";
+  programs.isHelpChannel = (ch: any) => ch === "C0HELP";
   const origMetric = db.recordMetric;
   const origGap = db.recordGap;
-  let metrics, gaps;
-  db.recordMetric = (...a) => { metrics.push(a); return origMetric(...a); };
-  db.recordGap = (...a) => { gaps.push(a); return origGap(...a); };
+  let metrics: any[] = [], gaps: any[] = [];
+  db.recordMetric = (...a: any[]) => { metrics.push(a); return origMetric(...a); };
+  db.recordGap = (...a: any[]) => { gaps.push(a); return origGap(...a); };
   try {
     metrics = []; gaps = [];
     const ts = `b4-ping-${Date.now()}`;
     const client = { chat: { postMessage: async () => ({ ts: "card-1" }) } };
     await handlers.onMessage({ event: { ts, channel: "C0HELP", user: "U0ASKER", team: "T1", text: `<@${BOT}> can I get a refund on my grant` }, client });
     assert.equal(gaps.length, 1, "sensitive ping gaps once");
-    assert.equal(metrics.filter((m) => m[2] === "eligibility:sensitive_escalation").length, 1);
+    assert.equal(metrics.filter((m: any) => m[2] === "eligibility:sensitive_escalation").length, 1);
     metrics = []; gaps = [];
     await handlers.onAppMention({ event: { ts, channel: "C0HELP", user: "U0ASKER", team: "T1", text: `<@${BOT}> can I get a refund on my grant` }, client });
     assert.equal(gaps.length, 0, "second pass gaps nothing");

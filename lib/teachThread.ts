@@ -1,3 +1,4 @@
+// Extracts a reusable Q :: A fact from a Slack thread without writing it directly to knowledge.
 import configModule = require("./config");
 import llm = require("./llm");
 import learn = require("./learn");
@@ -35,6 +36,8 @@ const SYSTEM_PROMPT = [
 ].join("\n");
 
 function buildTranscript(messages: ThreadMessage[]): string {
+  // Empty Slack messages are omitted so the model sees speaker turns, not blank noise.
+  // Empty messages are omitted so the model sees only meaningful conversation turns.
   return messages
     .filter((m) => m.text)
     .map((m) => `${m.bot_id ? "assistant" : "user"}: ${m.text}`)

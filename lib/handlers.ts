@@ -1,3 +1,4 @@
+// Slack event routing decides whether Pixie should speak; response generation lives elsewhere.
 import configModule = require("./config");
 import visionModule = require("./vision");
 import intent = require("./intent");
@@ -52,6 +53,8 @@ const DELETE_REACTIONS = new Set(["pixl-delete", "x", "heavy_multiplication_x"])
 const UP_REACTIONS = new Set(["yay", "thumbs-up", "+1", "yesyes", "white_check_mark", "heavy_check_mark", "upvote", "sparkling_heart", "heart", "heart_eyes"]);
 const DOWN_REACTIONS = new Set(["nono", "-1", "thumbsdown", "sad-pf"]);
 const GUIDE_ADVANCE_REACTION = "upvote";
+
+// Reaction events carry their target channel on event.item, unlike message events.
 
 function escapeRegex(value: string): string {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -125,8 +128,10 @@ async function checkDmRateLimit({ event, client, program = null, threadTs = null
   return false;
 }
 
+// Image and command entry points do not pass through respond(), so they reserve DM budget here.
 
 function findImage(event: Legacy): Legacy | null {
+  // Slack's private image URL is the only file shape the vision client can fetch safely.
   if (!event.files?.length) return null;
   return event.files.find((f: Legacy) => f.mimetype?.startsWith("image/") && f.url_private) || null;
 }
@@ -162,6 +167,7 @@ async function handleImage({ event, client, imageFile, program = null }: Legacy)
 
 
 async function untaggedThreadTurn({ event, client }: Legacy): Promise<string> {
+  // A thread stays addressed while only Pixie and the asker are present; human chatter makes it ambient.
   const crowd = await context.fetchThreadCrowd(client, {
     channel: event.channel,
     threadTs: event.thread_ts,
@@ -184,6 +190,7 @@ const HUMAN_ONLY_REPLY = "That one needs a person to decide, so I won't guess. A
 const HUMAN_ONLY_PINGED_REPLY = "That one needs a person to decide, so I won't guess. I've asked a helper to take a look :hii:";
 
 async function escalateSensitive({ event, client, prog, workspaceId, threadTs, question, addressed }: Legacy): Promise<void> {
+  // Sensitive requests record the gap first, then try a ticket and helper handoff before replying.
   const tickets = require("./tickets");
   db.recordGap(question, event.user, event.channel, threadTs, prog.id);
   let ticket = null;
@@ -217,6 +224,7 @@ function threadRequiresMention(prog: Legacy | null): boolean {
 }
 
 function shouldConsiderThreadReply(event: Legacy, prog: Legacy | null = null): boolean {
+  // Muted threads still wake only for a direct invocation; otherwise mention, guide, and prior-speech rules apply.
   if (!event.thread_ts || event.thread_ts === event.ts) return true;
   if (db.isThreadMuted(event.thread_ts)) {
     return mentionsPixieDirectly(event.text);
@@ -228,6 +236,7 @@ function shouldConsiderThreadReply(event: Legacy, prog: Legacy | null = null): b
 }
 
 function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }: Legacy): string {
+  // An open ticket suppresses ambient room replies, while direct mentions still reach the eligibility gate.
   const elig = require("./eligibility");
   const isTopLevel = !event.thread_ts || event.thread_ts === event.ts;
   let ticketOpen = false;
@@ -283,6 +292,7 @@ function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }
 }
 
 async function refuseUnauthorizedCommand({ event, client, question, prog, policy }: Legacy): Promise<boolean> {
+  // Command identity and permission are decided before conversational routing can answer the same text.
   const commandRegistry = require("./commandRegistry");
   const hit = commandRegistry.match(question, { botUserId: config.slack.botUserId, botNames: [brand.name(), brand.slug()] });
   if (!hit) return false;
@@ -305,6 +315,7 @@ async function refuseUnauthorizedCommand({ event, client, question, prog, policy
 }
 
 async function handleTeachRequest({ event, client, question, prog, mentionOnly, claimFirst }: Legacy): Promise<boolean> {
+  // Teaching is a helper action and claims the message before writing shared memory when requested.
   if (!event.thread_ts || !teachPattern(mentionOnly).test(question)) return false;
   if (!actorRunsCommands(event.user, prog)) {
     await client.chat.postEphemeral({ channel: event.channel, user: event.user, text: "that one's helpers-only :nono:" });
@@ -356,6 +367,7 @@ async function handleTeachRequest({ event, client, question, prog, mentionOnly, 
 }
 
 async function handleSumRequest({ event, client, question, prog, mentionOnly, claimFirst }: Legacy): Promise<boolean> {
+  // Summaries follow the same helper-only and single-claim boundary as direct teaching.
   if (!sumPattern(mentionOnly).test(question)) return false;
   if (!actorRunsCommands(event.user, prog)) {
     await client.chat.postEphemeral({ channel: event.channel, user: event.user, text: "that one's helpers-only :nono:" });
@@ -442,6 +454,7 @@ async function handleSumRequest({ event, client, question, prog, mentionOnly, cl
   }
 }
 
+// Staging allowlists fail closed only when explicitly configured.
 function stagingBlocked(channel: string): boolean {
   const allow = config.slack.stagingOnlyChannels;
   if (!allow || allow.length === 0) return false;
@@ -495,6 +508,7 @@ function macroTargetFor(event: Legacy, workspaceId: string | null): Legacy {
 }
 
 async function handleMacroTrigger({ event, client, workspaceId }: Legacy): Promise<boolean> {
+  // Macros are thread-only and resolve against the ticket or channel's program before permission checks.
   if (!event.thread_ts || event.thread_ts === event.ts || !event.user) return false;
   if (teachPattern(false).test(event.text) || sumPattern(false).test(event.text)) return false;
   const parsed = parseMacroTrigger(event.text);
@@ -531,6 +545,7 @@ async function handleMacroTrigger({ event, client, workspaceId }: Legacy): Promi
   return true;
 }
 
+// A channel must explicitly belong to Pixie before any reply, escalation, or learning path runs.
 async function onMessage({ event, client }: Legacy): Promise<void> {
   if (event.bot_id || event.subtype === "bot_message") return;
   if (stagingBlocked(event.channel)) return;
@@ -823,6 +838,7 @@ async function onMessage({ event, client }: Legacy): Promise<void> {
   });
 }
 
+// app_mention is a second delivery of the same message; wasAnswered/claim state prevents duplicate work.
 async function onAppMention({ event, client }: Legacy): Promise<void> {
   if (event.bot_id || event.subtype === "bot_message" || event.user === config.slack.botUserId) return;
   if (stagingBlocked(event.channel)) return;
@@ -910,6 +926,7 @@ async function onAppMention({ event, client }: Legacy): Promise<void> {
 }
 
 async function messageAuthor(client: Legacy, channel: string, ts: string): Promise<string | null> {
+  // Reaction payloads may omit item_user, so inspect replies and then history before giving up.
   try {
     const replies = await client.conversations?.replies?.({ channel, ts, limit: 1, inclusive: true });
     if (replies?.messages?.[0]) return replies.messages[0].user || null;
@@ -926,6 +943,7 @@ async function messageAuthor(client: Legacy, channel: string, ts: string): Promi
 }
 
 async function onReactionAdded({ event, client }: Legacy): Promise<void> {
+  // Reaction targets carry their channel on item, so never fall back to the event channel when it is present.
   if (event.item && stagingBlocked(event.item.channel)) return;
   const channel = event.item?.channel || event.channel;
   const normReaction = (event.reaction || "").toLowerCase();

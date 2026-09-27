@@ -1,3 +1,4 @@
+// Provider decision layer: classify engagement, never generate the support answer itself.
 import configModule = require("./config");
 import log = require("./log");
 
@@ -67,6 +68,7 @@ const INTENT_CHOICES = {
 };
 
 function buildJevQuestions() {
+  // Keep one bounded provider request with stable keys so parsing and metrics share the same contract.
   return {
     intent: {
       type: "choice",
@@ -162,6 +164,7 @@ function decideAction(decision: Legacy, cfg: Legacy = effectiveConfig(), state: 
 const ERROR_KINDS = new Set(["auth", "quota", "rate_limit", "timeout", "bad_response", "unavailable", "network", "config", "unknown"]);
 
 function classifyError(err: Legacy): string {
+  // Provider failures collapse into stable metric labels instead of leaking transport-specific details.
   if (!err) return "unknown";
   if (err.jevErrorKind && ERROR_KINDS.has(err.jevErrorKind)) return err.jevErrorKind;
   if (err.jevErrorKind === "provider") return "unavailable";
@@ -196,6 +199,7 @@ function experientialApiKey() {
 }
 
 function cacheKeyFor({ model, state }: Legacy): string {
+  // Only context that can change the gate decision belongs in the cache fingerprint.
   const fingerprint = JSON.stringify({
     model,
     message: state.message,
@@ -243,6 +247,7 @@ async function evaluateSupportDecision(
     };
   }
   const model = deps.model || cfg.model || JEV_MODEL_DEFAULT;
+  // Billing is fail-closed: paid models are never reached through this adapter.
   if (!isFreeModel(model)) {
     const latencyMs = Date.now() - startedAt;
     logDecision({ intent: null, shouldEngageP: null, action: "error", reason: "jev_error_config", latencyMs, errorKind: "config", enabled: true, model });
@@ -274,6 +279,7 @@ async function evaluateSupportDecision(
   const keyHash = key ? key.slice(0, 12) : null;
   if (key) {
     const hit = decisionCache.get(key);
+    // Cache hits must avoid both the provider call and context-dependent side effects.
     if (hit && hit.expiresAt > Date.now()) {
       jevStats.cacheHits += 1;
       try {
@@ -282,6 +288,7 @@ async function evaluateSupportDecision(
       log.info("jev", `[jev] cached=true action=${hit.result.action} reason=${hit.result.reason}${keyHash ? ` key=${keyHash}` : ""}`);
       return { ...hit.result, latencyMs: 0, cached: true };
     }
+    // Identical concurrent evaluations share one provider promise and one cached side-effect path.
     if (inflightEvaluations.has(key)) return inflightEvaluations.get(key);
   }
   const run = (async () => {

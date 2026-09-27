@@ -1,6 +1,6 @@
-// @ts-nocheck
 process.env.PIXIE_DB_PATH = ":memory:";
 
+// Home tests exercise rendered Slack blocks and the authorization check on button actions.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -14,8 +14,9 @@ const ADMIN = "U-admin";
 const OUTSIDER = "U-nobody";
 config.slack.adminUserIds = [ADMIN];
 
+// Home fixtures focus on block shape and stale-action authorization, not Slack rendering internals.
 
-function seedPending(question, answer) {
+function seedPending(question: string, answer: string) {
   return db.addLearnedFact({ question, answer, authorId: "U2", status: learn.PENDING });
 }
 
@@ -23,10 +24,10 @@ test("reviewBlocks renders a button pair per candidate for admins", () => {
   seedPending("how do i export a sprite", "export as PNG at native size, no upscaling");
 
   const blocks = reviewBlocks(ADMIN);
-  const actions = blocks.filter((b) => b.type === "actions");
+  const actions = blocks.filter((b: any) => b.type === "actions");
   assert.ok(actions.length >= 1);
   assert.deepEqual(
-    actions[0].elements.map((e) => e.text.text),
+    actions[0].elements.map((e: any) => e.text.text),
     ["Approve", "Drop"],
   );
 });
@@ -39,7 +40,7 @@ test("reviewBlocks attributes an author-less row to drafting, not a broken menti
   db.addLearnedFact({ question: "how do i unlock the next region", answer: "ship your current region's project", status: learn.PENDING });
 
   const blocks = reviewBlocks(ADMIN);
-  const section = blocks.find((b) => b.text?.text?.includes("unlock the next region"));
+  const section = blocks.find((b: any) => b.text?.text?.includes("unlock the next region"));
   assert.match(section.text.text, /drafted from repeated help-channel questions/);
   assert.doesNotMatch(section.text.text, /<@null>/);
 });
@@ -50,7 +51,7 @@ test("approve action promotes the fact and republishes the view", async () => {
   let publishedFor = null;
   const client = {
     views: {
-      publish: async ({ user_id }) => {
+      publish: async ({ user_id }: any) => {
         publishedFor = user_id;
       },
     },
@@ -82,7 +83,7 @@ test("drop action deletes the candidate", async () => {
   });
 
   assert.equal(
-    learn.pending(200).some((r) => r.id === id),
+    learn.pending(200).some((r: any) => r.id === id),
     false,
   );
 });
@@ -101,9 +102,9 @@ test("review action ignores a click from a non-admin", async () => {
 });
 
 
-function withCounts(counts, fn) {
+function withCounts(counts: any, fn: any) {
   const original = db.metricCounts;
-  db.metricCounts = () => Object.entries(counts).map(([kind, count]) => ({ kind, count }));
+  db.metricCounts = () => Object.entries(counts).map(([kind, count]: any) => ({ kind, count }));
   try {
     return fn();
   } finally {
@@ -149,7 +150,7 @@ test("char: reviewBlocks empty-queue copy renders for admins, nothing for outsid
   const learn = require("./learn");
   db.handle().query("DELETE FROM learned_facts").run();
   const adminBlocks = reviewBlocks(ADMIN);
-  assert.ok(adminBlocks.some((b) => b.text?.text?.includes("nothing queued")));
+  assert.ok(adminBlocks.some((b: any) => b.text?.text?.includes("nothing queued")));
   assert.deepEqual(reviewBlocks(OUTSIDER), []);
 });
 export {};
