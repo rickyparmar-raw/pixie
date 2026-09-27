@@ -78,13 +78,6 @@ interface ForgetId {
   id: number;
 }
 type ForgetInput = ForgetAll | ForgetPending | ForgetRange | ForgetId;
-interface GuideResult {
-  message: string;
-  checkNext?: string | null;
-  screenshot?: string | null;
-  guideName?: string | null;
-  [key: string]: unknown;
-}
 const formatHelp = (args: { actorId?: string | null; program?: Program | null }): string =>
   (capabilities.formatHelp as (input: { actorId?: string | null; program?: Program | null }) => string)(args);
 const lookupAnswer = (
@@ -289,35 +282,6 @@ async function checkCommand({ command, ack, respond: sendEphemeral }: CommandArg
   } catch (e: unknown) {
     log.error("commands", `${brand.cmd("check")} failed:`, errorMessage(e));
     await sendEphemeral({ response_type: "ephemeral", text: `Could not inspect repository: ${errorMessage(e)}` });
-  }
-}
-
-async function calcCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
-  await ack();
-  const input = (command.text || "").trim();
-  if (!input) {
-    await sendEphemeral({
-      response_type: "ephemeral",
-      text: `Calculate program rewards, e.g.:\n• \`${brand.cmd("calc")} 20 approved hours\`\n• \`${brand.cmd("calc")} how many hours for GoPro\`\n• \`${brand.cmd("calc")} what unlocks with 15 hours\``,
-    });
-    return;
-  }
-
-  try {
-    const prog = programs.forChannel(command.channel_id as string);
-    const lookupResult = await lookupAnswer(input, "", prog, command.channel_id as string);
-    if (lookupResult) {
-      await sendEphemeral({ response_type: "ephemeral", text: lookupResult.answer });
-      db.recordMetric("command_calc");
-      return;
-    }
-    await sendEphemeral({
-      response_type: "ephemeral",
-      text: `Couldn't calculate a program reward for "${input}". Try approved hours (e.g. \`15 hours\`) or a reward name.`,
-    });
-  } catch (e: unknown) {
-    log.error("commands", `${brand.cmd("calc")} failed:`, errorMessage(e));
-    await sendEphemeral({ response_type: "ephemeral", text: respond.ERROR_FALLBACK });
   }
 }
 
@@ -620,9 +584,9 @@ function welcomeText() {
   const links = prog?.links || {};
   const help = prog?.helpChannel ? `<#${prog.helpChannel}>` : "the help channel";
   return [
-    `hey! welcome to ${prog?.name || "this YSWS"} :yay:`,
+    `hey! welcome to ${prog?.name || "this program"} :yay:`,
     "",
-    `i'm ${brand.name()} — a helper bot for Hack Club YSWSs and build guides. you can:`,
+    `i'm ${brand.name()} — a helper bot for configured programs. you can:`,
     "• ping me in any channel",
     "• DM me right here",
     `• use \`${brand.cmd()} <question>\` for a private answer`,
@@ -641,6 +605,7 @@ const programs = require("./programs") as {
   forChannel: (channelId: string | null | undefined, workspaceId?: string | null) => Program;
   all: () => Program[];
   get: (id: string) => Program | null;
+  shared: () => Program;
   saveProgram: (program: Partial<Program> & { id: string; name: string }) => unknown;
   removeProgram: (id: string) => unknown;
 };
@@ -653,7 +618,7 @@ async function programCommand({ command, ack, respond: sendEphemeral }: CommandA
 
   if (sub === "tickets") {
     const prog = programs.forChannel(command.channel_id, command.team_id);
-    if (!prog || prog.id === "ysws-global") {
+    if (!prog || prog.id === programs.shared().id) {
       await sendEphemeral({
         response_type: "ephemeral",
         text: "run this in a program's help channel — no program is claimed here.",
@@ -783,90 +748,6 @@ async function programCommand({ command, ack, respond: sendEphemeral }: CommandA
   });
 }
 
-const guides = require("./guides");
-
-async function postGuideFirstStep({
-  client,
-  channel,
-  threadTs,
-  guideId,
-  userId,
-}: {
-  client: SlackClient;
-  channel: string;
-  threadTs: string;
-  guideId: string;
-  userId: string;
-}): Promise<GuideResult | null> {
-  const result = guides.startGuide(guideId, threadTs, userId);
-  if (!result) return null;
-  const text = respond.formatGuideText(result);
-  const blocks = guides.buildGuideBlocks(result, config.web.baseUrl, { showReactionHint: true });
-  const posted = await client.chat.postMessage({
-    channel,
-    thread_ts: threadTs,
-    text: reply.plainDashes(text),
-    blocks: reply.plainDashesInBlocks(blocks),
-  });
-  db.setGuideMessageTs(threadTs, posted.ts);
-  addToThread(threadTs, "assistant", text, null, channel);
-  return result;
-}
-
-async function guideCommand({ command, ack, respond: sendEphemeral, client }: CommandArgs): Promise<void> {
-  await ack();
-  const text = (command.text || "").trim();
-  const channel = command.channel_id as string;
-  const user = command.user_id as string;
-  const prog = programs.forChannel(channel);
-
-  if (text) {
-    const guideId = guides.detectGuideByKeyword(text) || (guides.GUIDES[text] ? text : null);
-    if (guideId && guides.isAvailable(prog, guideId)) {
-      const guideName = guides.GUIDES[guideId]?.name || guideId;
-      if (client && client.chat && client.chat.postMessage) {
-        const root = await client.chat.postMessage({
-          channel,
-          text: reply.plainDashes(
-            `📖 <@${user}> started the *${guideName}* walkthrough! Follow along in the thread below 👇`,
-          ),
-        });
-        const threadTs = root.ts as string;
-        if (await postGuideFirstStep({ client, channel, threadTs, guideId, userId: user })) return;
-      } else {
-        const result = guides.startGuide(guideId, command.trigger_id || Date.now().toString(), user);
-        if (result) {
-          const guideText = respond.formatGuideText(result);
-          const blocks = guides.buildGuideBlocks(result, config.web.baseUrl, { showReactionHint: true });
-          await sendEphemeral({ response_type: "in_channel", text: guideText, blocks });
-          return;
-        }
-      }
-    }
-  }
-
-  const allGuides = guides.availableFor(prog);
-
-  const blocks = guides.guideMenuBlocks({
-    heading: `📖 *Interactive Walkthrough Guides* (${prog ? prog.name : "YSWS"})\n<@${user}>, pick a guide below to start the step-by-step walkthrough in a thread:`,
-    entries: allGuides,
-  });
-
-  if (client && client.chat && client.chat.postMessage) {
-    await client.chat.postMessage({
-      channel,
-      text: `📖 *Interactive Walkthrough Guides* (${prog ? prog.name : "YSWS"})`,
-      blocks: reply.plainDashesInBlocks(blocks),
-    });
-  } else {
-    await sendEphemeral({
-      response_type: "in_channel",
-      blocks,
-      text: "Interactive Walkthrough Guides",
-    });
-  }
-}
-
 const tickets = require("./tickets");
 
 function register(app: AppLike): void {
@@ -875,9 +756,7 @@ function register(app: AppLike): void {
   app.command(cmd(), plainSpoken(askCommand));
   app.command(cmd("sources"), plainSpoken(sourcesCommand));
   app.command(cmd("stats"), plainSpoken(statsCommand));
-  app.command(cmd("guide"), plainSpoken(guideCommand));
   app.command(cmd("check"), plainSpoken(checkCommand));
-  app.command(cmd("calc"), plainSpoken(calcCommand));
 
   app.command(cmd("report"), plainSpoken(adminOnly(reportCommand)));
   app.command(cmd("reload"), plainSpoken(adminOnly(reloadCommand)));
@@ -888,48 +767,7 @@ function register(app: AppLike): void {
   app.command(cmd("forget"), plainSpoken(adminOnly(forgetCommand)));
   app.command(cmd("program"), plainSpoken(programCommand));
 
-  if (brand.slug() === brand.DEFAULT_SLUG) {
-    app.command("/guide", plainSpoken(guideCommand));
-  }
-
   tickets.registerActions(app);
-
-  app.action(/^start_guide_.+$/, async ({ action, body, ack, client }: ActionArgs) => {
-    await ack();
-    const guideId = action.value;
-    const channelId = body.channel?.id;
-    const rootTs = body.message?.ts;
-    const threadTs = body.message?.thread_ts || rootTs;
-    const userId = body.user?.id;
-
-    if (!guideId || !channelId || !userId || !threadTs) return;
-    const prog = programs.forChannel(channelId);
-    if (!guides.isAvailable(prog, guideId)) return;
-
-    const guideName = guides.GUIDES[guideId]?.name || guideId;
-
-    if (rootTs && client && client.chat && client.chat.update) {
-      await client.chat
-        .update({
-          channel: channelId,
-          ts: rootTs,
-          text: `📖 <@${userId}> selected *${guideName}*! Follow along in the thread below 👇`,
-          blocks: [
-            {
-              type: "section",
-              text: {
-                type: "mrkdwn",
-                text: `📖 <@${userId}> selected *${guideName}*! Follow along in the thread below 👇`,
-              },
-            },
-          ],
-        })
-        .catch((e: unknown) => log.debug("commands", `could not update guide menu message: ${errorMessage(e)}`));
-    }
-
-    const result = await postGuideFirstStep({ client, channel: channelId, threadTs, guideId, userId });
-    if (!result) return;
-  });
 
   app.action("sum_post_to_thread", async ({ action, body, ack, client }: ActionArgs) => {
     await ack();
@@ -958,7 +796,6 @@ export = {
   adminOnly,
   adminOnlyShortcut,
   plainSpoken,
-  postGuideFirstStep,
   askCommand,
   sourcesCommand,
   reloadCommand,
@@ -970,9 +807,7 @@ export = {
   approveCommand,
   forgetCommand,
   programCommand,
-  guideCommand,
   checkCommand,
-  calcCommand,
   helpCommand: askCommand,
   parseId,
   parseForgetInput,

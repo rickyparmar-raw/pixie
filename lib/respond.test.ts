@@ -192,7 +192,7 @@ async function withStreamedAnswer(chunks: string[], fn: () => Promise<unknown>) 
       seen += chunk;
       if (onText) onText(seen);
     }
-    return { source: "Pixl FAQ", answer: seen };
+    return { source: "Acme FAQ", answer: seen };
   };
   try {
     return await fn();
@@ -279,7 +279,7 @@ test("a fresh question is cacheable, and the repeat costs no model call", async 
   let modelCalls = 0;
   const restoreAnswers = stubAnswers(async () => {
     modelCalls += 1;
-    return { source: "Pixl FAQ", answer: "export it as a PNG at native size" };
+    return { source: "Acme FAQ", answer: "export it as a PNG at native size" };
   });
 
   try {
@@ -319,7 +319,7 @@ test("respond tells the model when the channel it's replying in is the help chan
   intent.classifyIntent = async () => intent.HELP_NEEDED;
   const restoreAnswers = stubAnswers(async (_q: unknown, _c: unknown, _ctx: unknown, opts: AnswerOptions = {}) => {
     seen.push(opts.inHelpChannel === true);
-    return { source: "Pixl Docs", answer: "here is the launch status" };
+    return { source: "Acme Docs", answer: "here is the launch status" };
   });
 
   try {
@@ -353,7 +353,7 @@ test("a follow-up in a live thread still bypasses the cache", async () => {
   let modelCalls = 0;
   const restoreAnswers = stubAnswers(async () => {
     modelCalls += 1;
-    return { source: "Pixl FAQ", answer: "check your canvas size" };
+    return { source: "Acme FAQ", answer: "check your canvas size" };
   });
 
   try {
@@ -384,7 +384,7 @@ test("a message the gate rejects never reaches Slack, even mid-stream", async ()
 
   try {
     context.addToThread("t-followup-structured", "user", "where do I submit?", "U-followup", "C-followup");
-    context.addToThread("t-followup-structured", "assistant", "Submit it through the Pixl portal.", null, "C-followup");
+    context.addToThread("t-followup-structured", "assistant", "Submit it through the Acme portal.", null, "C-followup");
     const replied = await respond.respond({
       client,
       channel: "C1",
@@ -437,7 +437,7 @@ test("a message the gate accepts is answered normally", async () => {
   const restoreAnswers = stubAnswers(
     async (_q: unknown, _c: unknown, _ctx: unknown, { onText }: StreamOptions = {}) => {
       if (onText) onText("check your canvas size");
-      return { source: "Pixl Docs", answer: "check your canvas size" };
+      return { source: "Acme Docs", answer: "check your canvas size" };
     },
   );
   intent.classifyIntent = async () => intent.HELP_NEEDED;
@@ -469,7 +469,7 @@ test("a gate that errors stays quiet rather than guessing", async () => {
 
   answer.getAnswerOrChatStream = async (_q: string, _c: string, _ctx: string, { onText }: StreamOptions = {}) => {
     if (onText) onText("check your canvas size");
-    return { source: "Pixl Docs", answer: "check your canvas size" };
+    return { source: "Acme Docs", answer: "check your canvas size" };
   };
   intent.classifyIntent = async () => null;
 
@@ -495,7 +495,7 @@ test("a gate outage cannot silence someone who addressed pixie directly", async 
   const client = fakeClient();
   const originalIntent = intent.classifyIntent;
 
-  const restoreAnswers = stubAnswers(async () => ({ source: "Pixl Docs", answer: "check your canvas size" }));
+  const restoreAnswers = stubAnswers(async () => ({ source: "Acme Docs", answer: "check your canvas size" }));
   intent.classifyIntent = async () => {
     throw new Error("every provider is rate limited");
   };
@@ -526,7 +526,7 @@ test("the gate is handed the asker and channel so it can read their recent messa
   let seen: { userId?: string; channel?: string } | null = null;
   answer.getAnswerOrChatStream = async (_q: string, _c: string, _ctx: string, { onText }: StreamOptions = {}) => {
     if (onText) onText("check the log");
-    return { source: "Pixl Docs", answer: "check the log" };
+    return { source: "Acme Docs", answer: "check the log" };
   };
   intent.classifyIntent = async (_msg: string, _prog: unknown, opts: { userId?: string; channel?: string }) => {
     seen = opts;
@@ -556,7 +556,7 @@ test("respond passes the latest question into context selection", async () => {
   let seen = "";
   const restoreAnswers = stubAnswers(async (_q: unknown, _c: unknown, contextPrompt: string) => {
     seen = contextPrompt;
-    return { source: "Pixl Docs", answer: "got it" };
+    return { source: "Acme Docs", answer: "got it" };
   });
   context.addToThread("t-latest-question", "user", "old unrelated question", "U-latest", "C-latest");
   context.addToThread("t-latest-question", "assistant", "old answer", null, "C-latest");
@@ -581,7 +581,7 @@ test("HELP_ONLY consumes structured intent and preserves Pixie follow-up context
   let seen = "";
   const restoreAnswers = stubAnswers(async (_q: unknown, _c: unknown, contextPrompt: string) => {
     seen = contextPrompt;
-    return { source: "Pixl Docs", answer: "yes, it should be public" };
+    return { source: "Acme Docs", answer: "yes, it should be public" };
   });
   intent.classifyIntentContext = async (
     _message: string,
@@ -655,7 +655,7 @@ test("addressed is passed to the gate so a direct ask escapes the scope", async 
   let seen: Record<string, unknown> | null = null;
   answer.getAnswerOrChatStream = async (_q: string, _c: string, _ctx: string, { onText }: StreamOptions = {}) => {
     if (onText) onText("use flexbox");
-    return { source: "Pixl Docs", answer: "use flexbox" };
+    return { source: "Acme Docs", answer: "use flexbox" };
   };
   intent.classifyIntent = async (_msg: string, _prog: unknown, opts: Record<string, unknown>) => {
     seen = opts;
@@ -694,7 +694,7 @@ test("the answer call is handed the program record and the channel it is in", as
       opts: AnswerOptions & { channel?: string; program?: { name?: string } } = {},
     ) => {
       seen = opts;
-      return { source: "Pixl Docs", answer: "check the docs" };
+      return { source: "Acme Docs", answer: "check the docs" };
     },
   );
   intent.classifyIntent = async () => intent.HELP_NEEDED;
@@ -724,18 +724,18 @@ test("a known answer is one Slack call, with no placeholder", async () => {
   let modelCalls = 0;
   const restoreAnswers = stubAnswers(async () => {
     modelCalls += 1;
-    return { source: "Pixl FAQ", answer: "anyone can join, no team needed" };
+    return { source: "Acme FAQ", answer: "anyone can join, no team needed" };
   });
 
   try {
     const ask = (threadTs: string, question: string) =>
       respond.respond({ client, channel: "C1", threadTs, userId: `U-${threadTs}`, question, mode: respond.ALWAYS });
 
-    await ask("t-instant-a", "who can join pixl");
+    await ask("t-instant-a", "who can join acme");
     assert.equal(modelCalls, 1);
     const afterFirst = { posts: client.calls.posts.length, updates: client.calls.updates.length };
 
-    await ask("t-instant-b", "who can join pixl?");
+    await ask("t-instant-b", "who can join acme?");
     assert.equal(modelCalls, 1, "the second ask must not reach the model");
     assert.equal(client.calls.posts.length, afterFirst.posts + 1, "exactly one new message");
     assert.equal(client.calls.updates.length, afterFirst.updates, "and no edit of it afterwards");
@@ -752,7 +752,7 @@ test("the instant path still respects the gate", async () => {
 
   try {
     const progId = require("./programs").forChannel("C1").id;
-    cache.put("how do i export a tileset", { source: "Pixl Docs", answer: "export at native size" }, progId);
+    cache.put("how do i export a tileset", { source: "Acme Docs", answer: "export at native size" }, progId);
 
     const replied = await respond.respond({
       client,
@@ -775,20 +775,20 @@ test("a message with a link never takes the instant path", async () => {
   let modelCalls = 0;
   const restoreAnswers = stubAnswers(async () => {
     modelCalls += 1;
-    return { source: "Pixl Docs", answer: "looks fine" };
+    return { source: "Acme Docs", answer: "looks fine" };
   });
 
   const originalFetch = link.fetchUrlContent;
   link.fetchUrlContent = async () => ({ text: "a page", blocked: false });
 
   try {
-    cache.put("how does this look", { source: "Pixl Docs", answer: "cached opinion" });
+    cache.put("how does this look", { source: "Acme Docs", answer: "cached opinion" });
     await respond.respond({
       client,
       channel: "C1",
       threadTs: "t-link",
       userId: "U-link",
-      question: "how does this look https://pixl.rsvp",
+      question: "how does this look https://acme.rsvp",
       mode: respond.ALWAYS,
     });
     assert.equal(modelCalls, 1, "the link must be read, not answered from cache");
@@ -798,91 +798,10 @@ test("a message with a link never takes the instant path", async () => {
   }
 });
 
-test("formatGuideText leaves a step with no checkNext untouched", () => {
-  assert.equal(respond.formatGuideText({ message: "all done!" }), "all done!");
-});
-
-test("formatGuideText strips the old yes/no suffix and never mentions the reaction hint", () => {
-  const text = respond.formatGuideText({ message: "open the shop tab", checkNext: "see it? (yes/no)" });
-
-  assert.ok(!text.includes("(yes/no)"));
-  assert.ok(text.includes("see it?"));
-  assert.ok(!text.includes(":upvote:"));
-});
-
-test("formatGuideText keeps an open-ended checkNext question intact", () => {
-  const text = respond.formatGuideText({
-    message: "check your RE",
-    checkNext: "how much RE do you have rn?",
-  });
-
-  assert.ok(text.includes("how much RE do you have rn?"));
-});
-
-test("postGuideStep records the posted message's ts so a reaction can find it later", async () => {
-  const guides = require("./guides");
-  guides.startGuide("submit-ysws-guidelines", "thread-post-step", "U1");
-
-  const client = fakeClient();
-  const ts = await respond.postGuideStep({
-    client,
-    channel: "C1",
-    threadTs: "thread-post-step",
-    result: { message: "step one", checkNext: "done? (yes/no)" },
-  });
-
-  assert.equal(ts, "msg-1");
-  assert.equal(db.getGuideByMessageTs("msg-1").thread_ts, "thread-post-step");
-});
-
-test("postGuideStep shows the reaction hint only on a guide's first step", async () => {
-  let lastBlocks: SlackBlock[] = [];
-  const client = {
-    chat: {
-      postMessage: async ({ blocks }: { blocks?: SlackBlock[] }) => {
-        lastBlocks = blocks || [];
-        return { ts: "msg-hint-1" };
-      },
-    },
-  };
-
-  await respond.postGuideStep({
-    client,
-    channel: "C1",
-    threadTs: "thread-hint-first",
-    result: { message: "step one", checkNext: "ready? (yes/no)" },
-    isFirstStep: true,
-  });
-  assert.ok(lastBlocks.some((b: SlackBlock) => b.type === "context"));
-
-  await respond.postGuideStep({
-    client,
-    channel: "C1",
-    threadTs: "thread-hint-later",
-    result: { message: "step two", checkNext: "ready? (yes/no)" },
-  });
-  assert.ok(!lastBlocks.some((b: SlackBlock) => b.type === "context"));
-});
-
-test("postGuideStep does not record a message_ts for a completed or cancelled guide", async () => {
-  const guides = require("./guides");
-  guides.startGuide("submit-ysws-guidelines", "thread-post-done", "U1");
-
-  const client = { chat: { postMessage: async () => ({ ts: "msg-completed-1" }) } };
-  await respond.postGuideStep({
-    client,
-    channel: "C1",
-    threadTs: "thread-post-done",
-    result: { message: "all set!", completed: true },
-  });
-
-  assert.equal(db.getGuideByMessageTs("msg-completed-1"), null);
-});
-
 test("isClarifyingQuestion catches a hand-back that carries on past the question", () => {
   assert.equal(
     respond.isClarifyingQuestion(
-      "do what? if you're asking about something pixl-specific like submitting, setting up hackatime," +
+      "do what? if you're asking about something acme-specific like submitting, setting up hackatime," +
         " git, or starting a project, just tell me what part you're stuck on and i can walk you through it :hii:",
     ),
     true,
@@ -920,7 +839,7 @@ test("an unaddressed hand-back is deleted and not recorded as a docs gap", async
   const originalIntent = intent.classifyIntent;
 
   const handBack =
-    "do what? if you're asking about something pixl-specific like submitting, setting up hackatime," +
+    "do what? if you're asking about something acme-specific like submitting, setting up hackatime," +
     " git, or starting a project, just tell me what part you're stuck on and i can walk you through it :hii:";
 
   const restoreAnswers = stubAnswers(async () => ({ source: null, answer: handBack }));
@@ -1003,40 +922,9 @@ test("an unclear verdict still answers someone who addressed pixie directly", as
   }
 });
 
-test("typing pixie-guide or !guide returns the interactive guide menu in thread", async () => {
-  const client = fakeClient();
-
-  const replied1 = await respond.respond({
-    client,
-    channel: "C1",
-    threadTs: "t-guide-menu-1",
-    userId: "U-guide-menu-1",
-    question: "pixie-guide",
-    mode: respond.ALWAYS,
-  });
-
-  assert.equal(replied1, true);
-  assert.match(client.calls.posts[0], /Interactive Walkthrough Guides/);
-
-  const replied2 = await respond.respond({
-    client,
-    channel: "C1",
-    threadTs: "t-guide-menu-2",
-    userId: "U-guide-menu-2",
-    question: "!guide",
-    mode: respond.ALWAYS,
-  });
-
-  assert.equal(replied2, true);
-  assert.match(client.calls.posts[1], /Interactive Walkthrough Guides/);
-});
-
 test("stfu pixie mutes the thread and leaves", async () => {
   const client = fakeClient();
   const threadTs = "t-stfu-test";
-
-  db.saveGuide(threadTs, "midi-controller", 0, "U1");
-  assert.ok(db.getGuide(threadTs));
 
   const replied = await respond.respond({
     client,
@@ -1048,7 +936,6 @@ test("stfu pixie mutes the thread and leaves", async () => {
   });
 
   assert.equal(replied, true);
-  assert.equal(db.getGuide(threadTs), null, "active guide was cancelled");
   assert.equal(db.isThreadMuted(threadTs), true, "thread is marked as muted");
   assert.match(client.calls.posts.join(" "), /leaving the thread/);
 });
@@ -1059,7 +946,7 @@ test("an unaddressed deterministic answer still requires support intent", async 
   const originalIntent = intent.classifyIntent;
 
   lookup.answerOrChat = async () => ({
-    source: "Pixl Shop",
+    source: "Docs",
     direct: true,
     answer: "PS5 Digital, 825gb +wireless controller is 11,400 px.",
   });
@@ -1124,16 +1011,6 @@ function withBrand(vars: Record<string, string | undefined>, fn: () => unknown) 
   }
 }
 
-test("the guide menu answers to the bot's own name", () => {
-  withBrand({ PIXIE_BOT_NAME: "Sol", PIXIE_BOT_SLUG: "sol" }, () => {
-    assert.equal(respond.isGuideMenuRequest("sol guides"), true);
-    assert.equal(respond.isGuideMenuRequest("sol-guide"), true);
-    assert.equal(respond.isGuideMenuRequest("/sol-guide"), true);
-    assert.equal(respond.isGuideMenuRequest("!guides"), true);
-    assert.equal(respond.isGuideMenuRequest("/guide"), true);
-  });
-});
-
 test("a mute request works by the bot's own name", () => {
   withBrand({ PIXIE_BOT_NAME: "Sol", PIXIE_BOT_SLUG: "sol" }, () => {
     assert.equal(respond.isMuteRequest("stfu sol"), true);
@@ -1148,14 +1025,11 @@ test("an unrelated message is still not a mute request", () => {
   withBrand({ PIXIE_BOT_NAME: "Sol", PIXIE_BOT_SLUG: "sol" }, () => {
     assert.equal(respond.isMuteRequest("how do i submit my project"), false);
     assert.equal(respond.isMuteRequest("sol how do i start"), false);
-    assert.equal(respond.isGuideMenuRequest("sol what guides are there"), false);
   });
 });
 
 test("with no brand set, the pixie forms still match", () => {
   withBrand({ PIXIE_BOT_NAME: undefined, PIXIE_BOT_SLUG: undefined }, () => {
-    assert.equal(respond.isGuideMenuRequest("pixie guides"), true);
-    assert.equal(respond.isGuideMenuRequest("/pixie-guide"), true);
     assert.equal(respond.isMuteRequest("stfu pixie"), true);
     assert.equal(respond.isMuteRequest("pixie stfu"), true);
   });
@@ -1164,7 +1038,7 @@ test("with no brand set, the pixie forms still match", () => {
 test("a slug containing regex metacharacters is escaped, not executed", () => {
   withBrand({ PIXIE_BOT_NAME: "c++ bot", PIXIE_BOT_SLUG: undefined }, () => {
     assert.doesNotThrow(() => respond.isMuteRequest("stfu c++ bot"));
-    assert.equal(respond.isGuideMenuRequest("nonsense"), false);
+    assert.equal(respond.isMuteRequest("nonsense"), false);
   });
 });
 
@@ -1330,10 +1204,10 @@ test("isGroundedAnswer correctly identifies grounded vs ungrounded answers", () 
     }),
     false,
   );
-  assert.equal(isGroundedAnswer({ source: "Bot behavior rule", answer: "ask in #live-ysws" }), false);
-  assert.equal(isGroundedAnswer({ source: "Live YSWS FAQ", answer: "i'm not sure about that item" }), false);
-  assert.equal(isGroundedAnswer({ source: "Live Shop", answer: "you should check the shop listings" }), false);
-  assert.equal(isGroundedAnswer({ source: "Live FAQ", answer: "suggest asking in <#C0BU006CTS6|live-ysws>" }), false);
+  assert.equal(isGroundedAnswer({ source: "Bot behavior rule", answer: "ask in the help channel" }), false);
+  assert.equal(isGroundedAnswer({ source: "Program FAQ", answer: "i'm not sure about that item" }), false);
+  assert.equal(isGroundedAnswer({ source: "Program catalog", answer: "you should check the listings" }), false);
+  assert.equal(isGroundedAnswer({ source: "Program FAQ", answer: "suggest asking in the help channel" }), false);
   assert.equal(
     isGroundedAnswer({
       source: "Live FAQ",
@@ -1350,7 +1224,7 @@ test("isGroundedAnswer correctly identifies grounded vs ungrounded answers", () 
 test("stripChannelMentions removes Slack channel tags and links", () => {
   const { stripChannelMentions } = respond;
   assert.equal(stripChannelMentions("ask in <#C0BK4F6STFZ|pixie>"), "ask in");
-  assert.equal(stripChannelMentions("check #live-ysws for updates"), "check for updates");
+  assert.equal(stripChannelMentions("check #help-channel for updates"), "check for updates");
   assert.equal(stripChannelMentions("regular text without channels"), "regular text without channels");
 });
 
@@ -1361,7 +1235,7 @@ test("a meta source or channel redirect stays unposted in a DM, with uncertainty
 
   const restoreAnswers = stubAnswers(async () => ({
     source: "Questions the bot should NOT invent answers for",
-    answer: "there is no confirmed answer, ask in #live-ysws",
+    answer: "there is no confirmed answer, ask in #help-channel",
   }));
   const restoreCache = stubNoCache();
   intent.classifyIntent = async () => intent.HELP_NEEDED;
@@ -1379,7 +1253,7 @@ test("a meta source or channel redirect stays unposted in a DM, with uncertainty
 
     assert.equal(replied, true);
     const said = [...client.calls.posts, ...client.calls.updates].join(" ");
-    assert.doesNotMatch(said, /live-ysws/);
+    assert.doesNotMatch(said, /help-channel/);
     assert.match(said, /couldn't verify/);
   } finally {
     restoreAnswers();
@@ -1681,7 +1555,7 @@ function withHelpProgram(
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   const id = overrides.id || "ticket-prog";
   process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([
-    { id, name: id, helpChannel: `C-${id}`, channels: [`C-${id}`], guides: [], ...overrides },
+    { id, name: id, helpChannel: `C-${id}`, channels: [`C-${id}`], ...overrides },
   ]);
   programs.invalidate();
   return Promise.resolve()
@@ -2017,7 +1891,7 @@ function answerText(client: { posts: SlackPost[] }) {
 }
 
 test("a program's reply signature ends its genuine answers (grounded and conversational)", async () => {
-  const SIG = "stay wired :hardwire:";
+  const SIG = "stay wired :signal:";
 
   await withHelpProgram({ id: "hw-sig-grounded", replySignature: SIG }, async (programId: string, channel: string) => {
     const client = richClient();
@@ -2072,7 +1946,7 @@ test("a program's reply signature ends its genuine answers (grounded and convers
 });
 
 test("the reply signature is never stapled to a fallback or an escalation acknowledgement", async () => {
-  const SIG = "stay wired :hardwire:";
+  const SIG = "stay wired :signal:";
 
   await withHelpProgram({ id: "hw-sig-fb", replySignature: SIG }, async (programId: string, channel: string) => {
     const client = richClient();
@@ -2135,7 +2009,7 @@ test("the reply signature is never stapled to a fallback or an escalation acknow
 });
 
 test("reply signature stays scoped to its program — an unsigned program never inherits it", async () => {
-  await withHelpProgram({ id: "pixl-unsigned" }, async (programId: string, channel: string) => {
+  await withHelpProgram({ id: "acme-unsigned" }, async (programId: string, channel: string) => {
     const client = richClient();
     const oi = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: "Docs", answer: "export as PNG at native size" }));
@@ -2144,14 +2018,14 @@ test("reply signature stays scoped to its program — an unsigned program never 
       await respond.respond({
         client,
         channel,
-        threadTs: "t-pixl-u1",
+        threadTs: "t-acme-u1",
         userId: "U5",
         question: "how do I export my sprite?",
         mode: respond.HELP_ONLY,
       });
       const body = answerText(client);
       assert.ok(
-        !body.includes("stay wired") && !body.includes(":hardwire:"),
+        !body.includes("stay wired") && !body.includes(":signal:"),
         `unsigned program must not inherit another program's catchphrase: ${body}`,
       );
     } finally {
@@ -2409,12 +2283,12 @@ test("HELP_ONLY classifier failure still tickets, and answers when grounded", as
   });
 });
 
-test("Jame Gam help still attempts its owned answer when intent classification fails", async () => {
+test("a program help channel still attempts its owned answer when intent classification fails", async () => {
   await withHelpProgram(
     {
-      id: "jame-gam",
-      name: "Jame Gam",
-      sources: [{ name: "Jame Gam Complete Docs", type: "text", content: "Jame Gam answer" }],
+      id: "owned-program",
+      name: "Owned Program",
+      sources: [{ name: "Owned Program Docs", type: "text", content: "Owned program answer" }],
     },
     async (_programId: string, channel: string) => {
       const originalAnswer = answer.getAnswerOrChat;
@@ -2422,7 +2296,7 @@ test("Jame Gam help still attempts its owned answer when intent classification f
       let answerCalled = false;
       answer.getAnswerOrChat = async () => {
         answerCalled = true;
-        return { source: "Jame Gam Complete Docs", answer: "Jame Gam answer" };
+        return { source: "Owned Program Docs", answer: "Owned program answer" };
       };
       intent.classifyIntent = async () => null;
       try {
@@ -2430,9 +2304,9 @@ test("Jame Gam help still attempts its owned answer when intent classification f
         const handled = await respond.respond({
           client,
           channel,
-          threadTs: "t-jame-null-1",
-          userId: "U-jame-null",
-          question: "what is jame gam",
+          threadTs: "t-owned-null-1",
+          userId: "U-owned-null",
+          question: "what is this program",
           mode: respond.HELP_ONLY,
         });
         assert.equal(handled, true);
@@ -2634,9 +2508,7 @@ test("HELP_ONLY suppresses hand-back clarification questions outside help", asyn
   const originalIntent = intent.classifyIntent;
   const programs = require("./programs");
   const saved = process.env.PIXIE_PROGRAMS_JSON;
-  process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([
-    { id: "charhand", name: "charhand", channels: ["C-charhand"], guides: [] },
-  ]);
+  process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([{ id: "charhand", name: "charhand", channels: ["C-charhand"] }]);
   programs.invalidate();
   const restoreAnswers = stubAnswers(async () => ({ source: null, answer: "sorry, what do you mean?" }));
   const restoreCache = stubNoCache();
@@ -2724,9 +2596,9 @@ test("active incidents bypass cache and model work, stay tenant-scoped, and stop
     await withHelpProgram({ id: "incident-respond" }, async (programId: string, channel: string) => {
       const created = incidents.createIncident({
         programId,
-        title: "Pixl site is currently down",
+        title: "Acme site is currently down",
         description: "People cannot access the website",
-        publicMessage: "Heads up — the Pixl site is currently down; the team is on it.",
+        publicMessage: "Heads up — the Acme site is currently down; the team is on it.",
         actorId: "U-organizer",
       });
       const client = richClient();
@@ -2736,7 +2608,7 @@ test("active incidents bypass cache and model work, stay tenant-scoped, and stop
           channel,
           threadTs: "t-incident-1",
           userId: "U-1",
-          question: "pixl won't load",
+          question: "acme won't load",
           mode: respond.HELP_ONLY,
         }),
         true,
@@ -2756,7 +2628,7 @@ test("active incidents bypass cache and model work, stay tenant-scoped, and stop
       assert.equal(modelCalls, 0);
       assert.equal(incidents.affectedReports(created.incident.id).length, 2);
       assert.equal(
-        client.posts.filter((post: SlackPost) => /Pixl site is currently down/.test(post.text || "")).length,
+        client.posts.filter((post: SlackPost) => /Acme site is currently down/.test(post.text || "")).length,
         2,
       );
 

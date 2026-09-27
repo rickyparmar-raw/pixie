@@ -6,7 +6,7 @@ const llm = require("./llm");
 const teachThread = require("./teachThread");
 const { readSource } = require("./test-source");
 
-let completeReply = "how do i join :: post in #pixl-help and a helper will add you";
+let completeReply = "how do i join :: post in #acme-help and a helper will add you";
 let realComplete: any;
 before(() => {
   realComplete = llm.complete;
@@ -24,16 +24,16 @@ test("buildTranscript labels bot messages as assistant and drops empty text", ()
   const transcript = teachThread.buildTranscript([
     { text: "how do i join", user: "U1" },
     { text: "" },
-    { bot_id: "B1", text: "post in #pixl-help" },
+    { bot_id: "B1", text: "post in #acme-help" },
   ]);
-  assert.equal(transcript, "user: how do i join\nassistant: post in #pixl-help");
+  assert.equal(transcript, "user: how do i join\nassistant: post in #acme-help");
 });
 
 test("summarizeThread parses the model's question :: answer reply", async () => {
   const parsed = await teachThread.summarizeThread({
     client: stubClient([
-      { text: "how do i join pixl", user: "U1" },
-      { bot_id: "B1", text: "post in #pixl-help and a helper will add you" },
+      { text: "how do i join acme", user: "U1" },
+      { bot_id: "B1", text: "post in #acme-help and a helper will add you" },
     ]),
     channel: "C1",
     threadTs: "1.1",
@@ -41,7 +41,7 @@ test("summarizeThread parses the model's question :: answer reply", async () => 
 
   assert.deepEqual(parsed, {
     question: "how do i join",
-    answer: "post in #pixl-help and a helper will add you",
+    answer: "post in #acme-help and a helper will add you",
   });
 });
 
@@ -52,7 +52,7 @@ test("summarizeThread declines when the model finds nothing worth teaching", asy
     channel: "C1",
     threadTs: "2.1",
   });
-  completeReply = "how do i join :: post in #pixl-help and a helper will add you";
+  completeReply = "how do i join :: post in #acme-help and a helper will add you";
 
   assert.equal(parsed, null);
 });
@@ -64,7 +64,7 @@ test("summarizeThread declines when the model's reply doesn't parse", async () =
     channel: "C1",
     threadTs: "3.1",
   });
-  completeReply = "how do i join :: post in #pixl-help and a helper will add you";
+  completeReply = "how do i join :: post in #acme-help and a helper will add you";
 
   assert.equal(parsed, null);
 });
@@ -105,7 +105,7 @@ Format: "question :: answer"
     channel: "C1",
     threadTs: "5.1",
   });
-  completeReply = "how do i join :: post in #pixl-help and a helper will add you";
+  completeReply = "how do i join :: post in #acme-help and a helper will add you";
 
   assert.equal(parsed, null);
 });
@@ -126,7 +126,7 @@ What is show and tell? :: Participants showcase their projects in a huddle, and 
     channel: "C1",
     threadTs: "6.1",
   });
-  completeReply = "how do i join :: post in #pixl-help and a helper will add you";
+  completeReply = "how do i join :: post in #acme-help and a helper will add you";
 
   assert.deepEqual(parsed, {
     question: "What is show and tell?",
@@ -149,7 +149,7 @@ test("teachThread is read-only — fetch-only client, no db writes", async () =>
     conversations: {
       replies: async (args: any) => {
         seen.push(args);
-        return { messages: [{ text: "how do i join pixl", user: "U1" }] };
+        return { messages: [{ text: "how do i join acme", user: "U1" }] };
       },
     },
   };
@@ -167,7 +167,7 @@ test("teachThread output feeds program-scoped capture without cross-writing", as
   const parsed = await teachThread.summarizeThread({
     client: stubClient([
       { text: "char how do i join", user: "U1" },
-      { bot_id: "B1", text: "char post in #pixl-help" },
+      { bot_id: "B1", text: "char post in #acme-help" },
     ]),
     channel: "C1",
     threadTs: "char-tt-scope",
@@ -213,7 +213,7 @@ test("registry: teach output lands as a program-scoped auditable fact", async ()
   const parsed = await teachThread.summarizeThread({
     client: stubClient([
       { text: "registry how do i join", user: "U1" },
-      { bot_id: "B1", text: "registry post in #pixl-help" },
+      { bot_id: "B1", text: "registry post in #acme-help" },
     ]),
     channel: "C-REG",
     threadTs: "reg-teach-1",

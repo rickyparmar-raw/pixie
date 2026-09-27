@@ -296,7 +296,7 @@ function buildTicketCardBlocks(
   candidates: TicketCandidate[] | null = null,
 ): SlackBlock[] {
   const statusEmoji = STATUS_EMOJI[ticket.status] || ":sos:";
-  const progName = program ? program.name : ticket.program_id || "YSWS";
+  const progName = program ? program.name : ticket.program_id || "program";
   const assigneeStr = ticket.assignee_id ? ` • Claimed by <@${ticket.assignee_id}>` : "";
   const statusStr = `*Status*: ${statusEmoji} \`${ticket.status}\`${assigneeStr}`;
   const blocks: SlackBlock[] = [
@@ -1285,7 +1285,7 @@ function resolveProg({
   workspaceId: string | null;
 }): { prog: Program | null; programId: string; resolvedWorkspaceId: string | null } {
   const prog = program || (channel ? programs.forChannel(channel, workspaceId) : null);
-  const programId = prog ? prog.id : "pixl";
+  const programId = prog ? prog.id : "";
   const resolvedWorkspaceId = workspaceId || (prog ? prog.workspaceId || prog.workspace_id || null : null);
   return { prog, programId, resolvedWorkspaceId };
 }

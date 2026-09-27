@@ -31,7 +31,7 @@ test("detectLicense detects standard open source licenses", () => {
 
 test("analyzeReadme extracts instructions and demo indicators", () => {
   const text = `# My Cool Game
-This is a game built for Pixl.
+This is a game built for Acme.
 
 ## How to Run
 \`\`\`bash
@@ -40,7 +40,7 @@ npm run dev
 \`\`\`
 
 ## Demo
-Check out the playable demo at https://play.pixl.hackclub.com/
+Check out the playable demo at https://play.acme.hackclub.com/
 ![Screenshot](screenshot.png)
 `;
   const res = validator.analyzeReadme(text);

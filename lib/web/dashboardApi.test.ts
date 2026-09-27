@@ -228,7 +228,7 @@ test("knowledge status degrades gracefully and never leaks secrets", () => {
 });
 
 test("real knowledge status values render as dashboard labels", () => {
-  seedProgram("dash-know-real", [{ name: "Inline", type: "text", content: "Pixl FAQ text" }]);
+  seedProgram("dash-know-real", [{ name: "Inline", type: "text", content: "Acme FAQ text" }]);
   const res = dash.knowledgeStatus("dash-know-real");
   assert.equal(res.sources.length, 1);
   assert.ok(["Pending", "Ready", "Stale", "Error", "Fetching"].includes(res.sources[0].status));

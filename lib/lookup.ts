@@ -7,10 +7,6 @@ const link = require("./link");
 const db = require("./db");
 const log = require("./log");
 const firecrawl = require("./firecrawl");
-const shop = require("./shop");
-const liveShop = require("./liveShop");
-
-const calculator = require("./calculator");
 const validator = require("./validator");
 const arithmetic = require("./arithmetic");
 const grounding = require("./grounding");
@@ -23,7 +19,6 @@ type SourceLike = Partial<ProgramSource> & {
   dynamic?: boolean;
   content?: unknown;
   paths?: string[];
-  minutesPerApprovedHour?: number;
 };
 interface AnswerResult {
   source?: string | null;
@@ -91,61 +86,6 @@ function dateFallback(question: string, contextPrompt: string, prog: ProgramLike
   return direct;
 }
 
-function shopAnswer(question: string, prog: ProgramLike | string | null, history = "") {
-  const record = typeof prog === "string" ? programs.get(prog) : prog;
-  const sources = programSources(record);
-  if (!sources.some((s) => s && s.type === "pixl-shop")) return null;
-
-  const data = shop.current();
-  if (!data.items.length) return null;
-
-  const result = shop.directAnswer(question, data, { history });
-  if (result) db.recordMetric("answer_shop");
-  return result;
-}
-
-function liveShopAnswer(question: string, prog: ProgramLike | string | null) {
-  const record = typeof prog === "string" ? programs.get(prog) : prog;
-  const sources = programSources(record);
-  const source = sources.find((candidate) => candidate && candidate.type === "live-shop");
-  if (!source) return null;
-
-  const result = liveShop.directAnswer(question, liveShop.current(), source.minutesPerApprovedHour || 20);
-  if (result) db.recordMetric("answer_live_shop");
-  return result;
-}
-
-function liveKnowledgeAnswer(question: string, prog: ProgramLike | string | null) {
-  const record = typeof prog === "string" ? programs.get(prog) : prog;
-  if (record?.id !== "live-ysws") return null;
-  const text = String(question || "");
-  const source = "Live YSWS Pixie Knowledge Base";
-  if (/approved hour/i.test(text) && /(?:add|adds|give|gives|multiplier|stream|time)/i.test(text)) {
-    return { source, answer: "Each approved hour adds 10 minutes to the Live YSWS stream." };
-  }
-  if (/multiple.*lapse|lapse.*multiple/i.test(text)) {
-    return { source, answer: "Yes, you can include multiple Lapse links in one submission, separated by commas." };
-  }
-  if (/fully.*cad|cad.*hardware/i.test(text) && /allowed|submit|project/i.test(text)) {
-    return {
-      source,
-      answer: "Yes, fully CAD hardware projects are allowed in Live YSWS when they meet the submission requirements.",
-    };
-  }
-  return null;
-}
-
-function calculatorAnswer(question: string, prog: ProgramLike | string | null) {
-  const record = typeof prog === "string" ? programs.get(prog) : prog;
-  const sources = programSources(record);
-  if (!sources.some((s) => s && s.type === "pixl-shop")) return null;
-
-  const data = shop.current();
-  const result = calculator.directAnswer(question, data);
-  if (result) db.recordMetric("answer_calculator");
-  return result;
-}
-
 function arithmeticAnswer(question: string) {
   const text = String(question || "").trim();
   const expressions: string[] = [
@@ -180,21 +120,9 @@ async function repoValidatorAnswer(question: string) {
   return null;
 }
 
-async function runCodeStages(question: string, prog: ProgramLike | string | null, history = "") {
+async function runCodeStages(question: string) {
   const arithmeticResult = arithmeticAnswer(question);
   if (arithmeticResult) return arithmeticResult;
-
-  const shopped = shopAnswer(question, prog, history);
-  if (shopped) return shopped;
-
-  const liveShopped = liveShopAnswer(question, prog);
-  if (liveShopped) return liveShopped;
-
-  const liveKnowledge = liveKnowledgeAnswer(question, prog);
-  if (liveKnowledge) return liveKnowledge;
-
-  const calculated = calculatorAnswer(question, prog);
-  if (calculated) return calculated;
 
   const validated = await repoValidatorAnswer(question);
   if (validated) return validated;
@@ -276,12 +204,6 @@ function exactClaimAllowed(result: AnswerResult | null, prog: ProgramLike | stri
   const source = sources.find((candidate) => {
     if (!candidate?.name || !reportedSource) return false;
     if (candidate.name.toLowerCase() === reportedSource) return true;
-    if (
-      idOf(prog) === "jame-gam" &&
-      reportedSource === "jame gam — support & program docs" &&
-      candidate.name.toLowerCase() === "jame gam complete docs"
-    )
-      return true;
     return knowledge.sourceContainsCitation(candidate, reportedSource);
   });
   if (!source) return !isAuthoritativeOnlyTopic(question, result);
@@ -313,7 +235,7 @@ function retrievalQuery(question: string, contextPrompt = "", prog: ProgramLike 
   if (!contextPrompt || !contextPrompt.trim()) return q;
 
   const resolved = typeof prog === "string" ? (programs.get(prog) as ProgramLike) : prog;
-  const rawProgName = resolved?.name || (resolved?.id && resolved.id !== "ysws-global" ? resolved.id : "");
+  const rawProgName = resolved?.name || resolved?.id || "";
   const progName = /sandbox|test|staging/i.test(rawProgName) ? "" : rawProgName;
 
   const isFollowUp =
@@ -347,7 +269,7 @@ async function lookupAnswer(
   const hit = cacheHit(question, contextPrompt, cacheScope(prog), skipCache);
   if (hit) return hit;
 
-  const staged = await runCodeStages(question, prog, contextPrompt);
+  const staged = await runCodeStages(question);
   if (staged) return staged;
 
   const query = retrievalQuery(question, contextPrompt, prog);
@@ -380,7 +302,7 @@ async function answerOrChat(
   const hit = cacheHit(question, contextPrompt, cacheScope(prog), skipCache);
   if (hit) return hit;
 
-  const staged = await runCodeStages(question, prog, contextPrompt);
+  const staged = await runCodeStages(question);
   if (staged) return staged;
 
   const query = retrievalQuery(question, contextPrompt, prog);
@@ -456,8 +378,6 @@ function knownAnswer({ question, contextPrompt, mode, program: prog = null, skip
 export = {
   idOf,
   cacheHit,
-  shopAnswer,
-  liveShopAnswer,
   dateFallback,
   retrievalQuery,
   lookupAnswer,

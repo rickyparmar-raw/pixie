@@ -46,7 +46,7 @@ test("organizer commands are never executable by normal users", () => {
 test("match: text-form teach parity with handlers.teachPattern(false)", () => {
   const handlers = require("./handlers");
   const cases = [
-    "!teach how do i join :: post in #pixl-help",
+    "!teach how do i join :: post in #acme-help",
     "!TEACH x :: y",
     "  !teach",
     "pixie-teach x :: y",
@@ -96,9 +96,9 @@ test("match: mention-form teach fires only after an explicit mention", () => {
 });
 
 test("match: teach args preserve the text after the trigger", () => {
-  const got = match("!teach how do i join :: post in #pixl-help", { botUserId: BOT });
+  const got = match("!teach how do i join :: post in #acme-help", { botUserId: BOT });
   assert.equal(got.command.handlerKey, "teach");
-  assert.equal(got.args, "how do i join :: post in #pixl-help");
+  assert.equal(got.args, "how do i join :: post in #acme-help");
   const mentioned = match(`<@${BOT}> learn this thread`, { botUserId: BOT });
   assert.equal(mentioned.command.handlerKey, "teach");
   assert.equal(mentioned.args, "this thread");
@@ -159,24 +159,6 @@ test("match: only the explicit !mute/!stfu command spellings route to mute", () 
   assert.equal(match("stfu pixie", { botUserId: BOT }), null);
   assert.equal(match("mute", { botUserId: BOT }), null);
   assert.equal(match("please be quiet pixie", { botUserId: BOT }), null);
-});
-
-test("match: guide text triggers mirror respond.isGuideMenuRequest", () => {
-  const respond = require("./respond");
-  const menuForms = ["!guide", "!guides", "/guide", "pixie guides", "pixie guide", "pixie-guide", "/pixie-guide"];
-  for (const text of menuForms) {
-    assert.equal(respond.isGuideMenuRequest(text), true, `setup: ${text}`);
-    const got = match(text, { botUserId: BOT });
-    assert.ok(got && got.command.handlerKey === "guide", `match: ${text}`);
-    assert.equal(got.args, "");
-  }
-  const topic = match("pixie guide submitting my project", { botUserId: BOT });
-  assert.ok(topic && topic.command.handlerKey === "guide");
-  assert.equal(topic.args, "submitting my project");
-  assert.equal(match(`<@${BOT}> !guide`, { botUserId: BOT }).command.handlerKey, "guide");
-  assert.equal(match("guide", { botUserId: BOT }), null);
-  assert.equal(match("nonsense", { botUserId: BOT }), null);
-  assert.equal(match(`<@${BOT}> guide`, { botUserId: BOT }), null);
 });
 
 test("match: every own-slug command_bypass form reaches a registry command", () => {
@@ -259,7 +241,7 @@ test("byHandlerKey resolves the architect's dispatch map", () => {
   assert.equal(byHandlerKey("teach", "text").length, 1);
   assert.equal(byHandlerKey("teach", "slash").length, 1);
   assert.equal(byHandlerKey("sum")[0].name, "sum");
-  assert.equal(byHandlerKey("guide").length, 1);
+  assert.equal(byHandlerKey("guide").length, 0);
 });
 
 test("list() renders a usage listing with the bot's own slash names", () => {
@@ -269,6 +251,6 @@ test("list() renders a usage listing with the bot's own slash names", () => {
   assert.match(text, /\/pixie-forget/);
   assert.match(text, /!sum/);
   assert.match(text, /!mute/);
-  assert.match(text, /guide/);
+  assert.doesNotMatch(text, /guide|calc|shop/);
 });
 export {};

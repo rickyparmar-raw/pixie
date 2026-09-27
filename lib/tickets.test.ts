@@ -74,14 +74,14 @@ test("escalateTicket returns existing ticket if thread already escalated", async
 });
 
 test("escalateTicket skips passive programs for unprompted tickets", async () => {
-  const passiveProg = { id: "pixl", name: "Pixl", posture: "passive", helpChannel: "C-pixl" };
+  const passiveProg = { id: "acme", name: "Acme", posture: "passive", helpChannel: "C-acme" };
 
   const result = await tickets.escalateTicket({
     program: passiveProg,
-    channel: "C-pixl",
+    channel: "C-acme",
     threadTs: "thread-passive-1",
     requesterId: "U-requester",
-    question: "whats pixl",
+    question: "whats acme",
   });
 
   assert.equal(result, null);
@@ -113,7 +113,7 @@ test("buildTicketCardBlocks reflects status changes, unclaiming, and reopening",
 });
 
 test("escalation acknowledgement never names the program support identity", async () => {
-  for (const supportName of ["Sandbox Pixie", "Pixl Help"]) {
+  for (const supportName of ["Sandbox Pixie", "Acme Help"]) {
     const posted = [];
     const client = {
       chat: {

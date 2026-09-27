@@ -782,8 +782,9 @@ function channelsList() {
 function channelToggle(body: ChannelToggleBody = {}): ApiResponse {
   const { channelId, programId, field, value } = body;
   if (!channelId) return { error: "channelId required" };
+  if (!programId) return { error: "programId required" };
 
-  const prog = programs.get(programId) || programs.all()[0] || null;
+  const prog = programs.get(programId) || null;
   if (!prog) return { error: "program not found" };
 
   if (field === "posture") {
@@ -802,15 +803,15 @@ function channelToggle(body: ChannelToggleBody = {}): ApiResponse {
 function channelAdd(body: ChannelAddBody = {}): ApiResponse {
   const { programId, channelId, isHelp } = body;
   if (!channelId) return { error: "channelId required" };
-  const targetProgId = programId || "pixl";
-  const ok = programs.addChannelToProgram(targetProgId, channelId.trim(), !!isHelp);
+  if (!programId) return { error: "programId required" };
+  const ok = programs.addChannelToProgram(programId, channelId.trim(), !!isHelp);
   return { ok, channels: channelsList() };
 }
 
 function channelRemove(programId: string, channelId: string): ApiResponse {
   if (!channelId) return { error: "channelId required" };
-  const targetProgId = programId || "pixl";
-  const ok = programs.removeChannelFromProgram(targetProgId, channelId);
+  if (!programId) return { error: "programId required" };
+  const ok = programs.removeChannelFromProgram(programId, channelId);
   return { ok, channels: channelsList() };
 }
 
@@ -898,7 +899,7 @@ function internalProgramSync(id: string, body: ProgramSyncBody = {}): ApiRespons
 
   const existing = programs.get(id);
   const merged = {
-    ...(existing || { id, guides: ["submit-ysws-guidelines"], links: {} }),
+    ...(existing || { id, links: {} }),
     ...fields,
     id,
     deploymentMode: "hosted_shared",
@@ -1012,7 +1013,7 @@ function validateSyncChannelRoles(
     organizerChannel,
     channels: [...mainChannels],
   };
-  const rest = programs.all().filter((p: Program) => p && p.id !== id && p.id !== "ysws-global");
+  const rest = programs.all().filter((p: Program) => p && p.id !== id && p.id !== programs.shared().id);
   let claims: ChannelClaimRow[] = [];
   try {
     claims = (db.listChannelClaims?.() || []).filter((c: ChannelClaimRow) => c.program_id !== id);

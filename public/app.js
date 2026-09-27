@@ -609,8 +609,7 @@ async function loadChannels() {
 function populateProgramSelect() {
   const sel = document.getElementById("chan-prog-select");
   if (!sel) return;
-  const progs = Array.from(new Set(allChannelsData.map((c) => c.programId || "pixl")));
-  if (!progs.includes("pixl")) progs.unshift("pixl");
+  const progs = Array.from(new Set(allChannelsData.map((c) => c.programId).filter(Boolean)));
   sel.innerHTML = progs
     .map((p) => `<option value="${esc(p)}">${esc(p)}</option>`)
     .join("");

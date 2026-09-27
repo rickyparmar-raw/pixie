@@ -92,7 +92,8 @@ function parseDetail(detail: string | null): ShadowDetail {
   }
 }
 
-function list(programId = "pixl", limit = 20) {
+function list(programId: string | null = null, limit = 20) {
+  if (!programId) return [];
   const rows = db
     .handle()
     .query(

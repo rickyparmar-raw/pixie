@@ -56,34 +56,14 @@ const COMMANDS: readonly CommandDefinition[] = Object.freeze([
     handlerKey: "stats",
   },
   {
-    name: "guide",
-    aliases: ["guides"],
-    surface: "both",
-    permission: "anyone",
-    channelRoles: ["main", "help", "dm"],
-    usage: "[guide-name]",
-    description: "Interactive step-by-step walkthrough guides",
-    handlerKey: "guide",
-  },
-  {
     name: "check",
     aliases: [],
     surface: "slash",
     permission: "anyone",
     channelRoles: ["main", "help", "dm"],
     usage: "<github_repo_url>",
-    description: "Check GitHub repository readiness for YSWS submission",
+    description: "Check GitHub repository readiness for program submission",
     handlerKey: "check",
-  },
-  {
-    name: "calc",
-    aliases: [],
-    surface: "slash",
-    permission: "anyone",
-    channelRoles: ["main", "help", "dm"],
-    usage: "<hours/reward>",
-    description: "Calculate build hours, RE progression, and shop item goals",
-    handlerKey: "calc",
   },
   {
     name: "report",
@@ -208,13 +188,6 @@ function byName(name: string, surface: Surface | null = null): CommandDefinition
   return COMMANDS.find((c) => c.name === want && (surface === null || c.surface === surface)) || null;
 }
 
-function knownNames(botNames: string[] = []): string[] {
-  const names = [...(botNames || []), brand.slug(), brand.name(), brand.DEFAULT_SLUG]
-    .map((n) => String(n || "").toLowerCase())
-    .filter(Boolean);
-  return [...new Set(names)];
-}
-
 function teachTextSource() {
   const slug = escapeRegex(brand.slug());
   return `!teach|${slug}-teach|/${slug}-teach|teach\\s+this|teach\\s+thread`;
@@ -235,24 +208,8 @@ function sumMentionSource() {
   return `sum|summary|summarize|summarise|!sum|!summary|!summarize|!summarise|/${slug}-sum`;
 }
 
-function guidePrefixSource(names: string[]): string {
-  const escaped = names.map(escapeRegex).join("|");
-  return `(?:${escaped})[-_\\s]?guides?|!guides?|/(?:${escaped})[-_\\s]?guides?|/guides?`;
-}
-
 function tryMatch(source: string, text: string): string | null {
   const m = String(text || "").match(new RegExp(`^\\s*(?:${source})\\b\\s*([\\s\\S]*)$`, "i"));
-  if (!m) return null;
-  return (m[1] || "").trim();
-}
-
-function tryGuideMatch(text: string, names: string[]): string | null {
-  const prefix = guidePrefixSource(names);
-  const exact = String(text || "")
-    .trim()
-    .match(new RegExp(`^(?:${prefix})$`, "i"));
-  if (exact) return "";
-  const m = String(text || "").match(new RegExp(`^(?:${prefix})\\s+([\\s\\S]+)$`, "i"));
   if (!m) return null;
   return (m[1] || "").trim();
 }
@@ -270,7 +227,7 @@ function match(
 ): CommandMatch | null {
   const raw = String(text || "");
   if (!raw.trim()) return null;
-  const names = knownNames(botNames);
+  void botNames;
 
   const teachArgs = tryMatch(teachTextSource(), raw);
   if (teachArgs !== null) return { command: byName("teach", "text"), args: teachArgs };
@@ -280,9 +237,6 @@ function match(
 
   const muteArgs = tryMatch("!mute|!stfu", raw);
   if (muteArgs !== null) return { command: byName("mute"), args: muteArgs };
-
-  const guideArgs = tryGuideMatch(raw, names);
-  if (guideArgs !== null) return { command: byName("guide"), args: guideArgs };
 
   // bare forms first
   const stripped = stripMention(raw, botUserId);
@@ -297,9 +251,6 @@ function match(
 
   const muteMentionArgs = tryMatch("!mute|!stfu", stripped);
   if (muteMentionArgs !== null) return { command: byName("mute"), args: muteMentionArgs };
-
-  const guideMentionArgs = tryGuideMatch(stripped, names);
-  if (guideMentionArgs !== null) return { command: byName("guide"), args: guideMentionArgs };
 
   return null;
 }

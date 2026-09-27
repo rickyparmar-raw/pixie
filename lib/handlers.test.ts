@@ -26,7 +26,7 @@ test("mentionsPixieByName matches the name and its suffixes", () => {
 });
 
 test("mentionsPixieByName ignores unrelated text", () => {
-  assert.equal(handlers.mentionsPixieByName("pixl is great"), false);
+  assert.equal(handlers.mentionsPixieByName("acme is great"), false);
   assert.equal(handlers.mentionsPixieByName(""), false);
   assert.equal(handlers.mentionsPixieByName(undefined), false);
 });
@@ -258,7 +258,7 @@ test("explicit human review requests escalate once without calling the provider"
     channel: HELP_CHANNEL,
     user: "U0ASKER",
     team: "T-ESCALATION",
-    text: "human please — i can't access my pixl account and need an organizer to look at it",
+    text: "human please — i can't access my acme account and need an organizer to look at it",
   };
   try {
     await handlers.onMessage({ event, client });
@@ -540,62 +540,7 @@ test("onMessage records what people say even when it stays quiet", async () => {
   );
 });
 
-test("onReactionAdded advances a guide when :upvote: lands on its own tracked message", async () => {
-  const guides = require("./guides");
-  guides.startGuide("submit-ysws-guidelines", "thread-reaction-advance", "U-owner");
-  db.setGuideMessageTs("thread-reaction-advance", "700.1");
-
-  const posted: any[] = [];
-  await handlers.onReactionAdded({
-    event: {
-      reaction: "upvote",
-      user: "U-owner",
-      item: { type: "message", channel: "C0GUIDE", ts: "700.1" },
-      item_user: "U0PIXIE",
-    },
-    client: {
-      chat: {
-        postMessage: async (args: any) => {
-          posted.push(args);
-          return { ts: "700.2" };
-        },
-      },
-    },
-  });
-
-  assert.equal(posted.length, 1, "the next step should have been posted");
-  assert.equal(db.getGuide("thread-reaction-advance").current_step, 1);
-  assert.equal(db.getGuideByMessageTs("700.2").thread_ts, "thread-reaction-advance");
-});
-
-test("onReactionAdded ignores :upvote: from someone other than the guide's owner", async () => {
-  const guides = require("./guides");
-  guides.startGuide("submit-ysws-guidelines", "thread-reaction-other", "U-owner");
-  db.setGuideMessageTs("thread-reaction-other", "701.1");
-
-  const posted: any[] = [];
-  await handlers.onReactionAdded({
-    event: {
-      reaction: "upvote",
-      user: "U-bystander",
-      item: { type: "message", channel: "C0GUIDE", ts: "701.1" },
-      item_user: "U0PIXIE",
-    },
-    client: {
-      chat: {
-        postMessage: async (args: any) => {
-          posted.push(args);
-          return { ts: "701.2" };
-        },
-      },
-    },
-  });
-
-  assert.equal(posted.length, 0, "a bystander's reaction must not advance someone else's guide");
-  assert.equal(db.getGuide("thread-reaction-other").current_step, 0);
-});
-
-test("onReactionAdded still records ordinary feedback when :upvote: lands on a non-guide message", async () => {
+test("onReactionAdded still records ordinary feedback on a normal message", async () => {
   const savedRecordFeedback = db.recordFeedback;
   const calls: any[] = [];
   db.recordFeedback = (...args: any[]) => calls.push(args);
@@ -615,35 +560,6 @@ test("onReactionAdded still records ordinary feedback when :upvote: lands on a n
   }
 
   assert.deepEqual(calls, [["702.1", "U-fan", 1]]);
-});
-
-test("onReactionAdded deletes pixie's own message on :pixl-delete:", async () => {
-  const deleted: any[] = [];
-  await handlers.onReactionAdded({
-    event: {
-      reaction: "pixl-delete",
-      user: "U-someone",
-      item: { type: "message", channel: "C0DEL", ts: "800.1" },
-    },
-    client: {
-      conversations: {
-        history: async (args: any) => {
-          assert.equal(args.channel, "C0DEL", "history must read the item's channel");
-          return { messages: [{ user: "U0PIXIE", ts: "800.1" }] };
-        },
-      },
-      chat: {
-        delete: async (args: any) => {
-          deleted.push(args);
-          return { ok: true };
-        },
-      },
-    },
-  });
-
-  assert.equal(deleted.length, 1, "pixie's own message should have been deleted");
-  assert.equal(deleted[0].channel, "C0DEL");
-  assert.equal(deleted[0].ts, "800.1");
 });
 
 test("onReactionAdded deletes pixie's own message on :x:", async () => {
@@ -675,60 +591,11 @@ test("onReactionAdded deletes pixie's own message on :x:", async () => {
   assert.equal(deleted[0].ts, "800.2");
 });
 
-test("onReactionAdded does not delete a message pixie did not write", async () => {
-  const deleted: any[] = [];
-  await handlers.onReactionAdded({
-    event: {
-      reaction: "pixl-delete",
-      user: "U-someone",
-      item: { type: "message", channel: "C0DEL", ts: "801.1" },
-    },
-    client: {
-      conversations: { history: async () => ({ messages: [{ user: "U-human", ts: "801.1" }] }) },
-      chat: {
-        delete: async (args: any) => {
-          deleted.push(args);
-          return { ok: true };
-        },
-      },
-    },
-  });
-
-  assert.equal(deleted.length, 0, "only pixie's own messages may be deleted this way");
-});
-
-test("onReactionAdded posts the next guide step to the item's channel", async () => {
-  const guides = require("./guides");
-  guides.startGuide("submit-ysws-guidelines", "thread-reaction-channel", "U-owner");
-  db.setGuideMessageTs("thread-reaction-channel", "802.1");
-
-  const posted: any[] = [];
-  await handlers.onReactionAdded({
-    event: {
-      reaction: "upvote",
-      user: "U-owner",
-      item: { type: "message", channel: "C0GUIDE", ts: "802.1" },
-      item_user: "U0PIXIE",
-    },
-    client: {
-      chat: {
-        postMessage: async (args: any) => {
-          posted.push(args);
-          return { ts: "802.2" };
-        },
-      },
-    },
-  });
-
-  assert.equal(posted.length, 1);
-  assert.equal(posted[0].channel, "C0GUIDE", "the step must go to the channel the reaction was in");
-});
-
 test("onReactionAdded deletes a threaded reply using item_user, with no history call", async () => {
   const deleted: any[] = [];
   await handlers.onReactionAdded({
     event: {
-      reaction: "pixl-delete",
+      reaction: "x",
       user: "U-someone",
       item: { type: "message", channel: "C0DEL", ts: "900.1" },
       item_user: "U0PIXIE",
@@ -751,33 +618,6 @@ test("onReactionAdded deletes a threaded reply using item_user, with no history 
   assert.equal(deleted.length, 1, "a threaded reply by pixie should still be deletable");
   assert.equal(deleted[0].channel, "C0DEL");
   assert.equal(deleted[0].ts, "900.1");
-});
-
-test("onReactionAdded ignores :pixl-delete: on a message item_user says is not pixie's", async () => {
-  const deleted: any[] = [];
-  await handlers.onReactionAdded({
-    event: {
-      reaction: "pixl-delete",
-      user: "U-someone",
-      item: { type: "message", channel: "C0DEL", ts: "901.1" },
-      item_user: "U-human",
-    },
-    client: {
-      conversations: {
-        history: async () => {
-          throw new Error("history must not be called");
-        },
-      },
-      chat: {
-        delete: async (args: any) => {
-          deleted.push(args);
-          return { ok: true };
-        },
-      },
-    },
-  });
-
-  assert.equal(deleted.length, 0);
 });
 
 test("a broadcast thread reply routes once like a normal thread reply", async () => {
@@ -1180,7 +1020,7 @@ test("onAppMention routes to respond ALWAYS addressed (mention path parity)", as
   const programs = require("./programs");
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([
-    { id: "charmen", name: "CharMen", helpChannel: "C-CHARMEN", channels: ["C-CHARMEN"], guides: [] },
+    { id: "charmen", name: "CharMen", helpChannel: "C-CHARMEN", channels: ["C-CHARMEN"] },
   ]);
   programs.invalidate();
   try {
@@ -1380,7 +1220,7 @@ test("a helper trigger sends one interpolated macro and dedupes Slack redelivery
   const requesterId = "U-HANDLER-REQUESTER";
   const channel = "C-HANDLER-MACRO";
   const threadTs = "handler-macro-thread";
-  db.saveProgram({ id: programId, name: "Macro Pixl", helpChannel: channel, channels: [channel] });
+  db.saveProgram({ id: programId, name: "Macro Acme", helpChannel: channel, channels: [channel] });
   programs.invalidate();
   db.syncHelper({ programId, userId: helperId, source: "manual", role: "helper" });
   const macro = macros.create({
@@ -1451,7 +1291,7 @@ test("typing !need-info sends a macro that was saved as ?need-info", async () =>
   const helperId = "U-HANDLER-SIGIL";
   const channel = "C-HANDLER-SIGIL";
   const threadTs = "handler-sigil-thread";
-  db.saveProgram({ id: programId, name: "Sigil Pixl", helpChannel: channel, channels: [channel] });
+  db.saveProgram({ id: programId, name: "Sigil Acme", helpChannel: channel, channels: [channel] });
   programs.invalidate();
   db.syncHelper({ programId, userId: helperId, source: "manual", role: "helper" });
   macros.create({ programId, trigger: "?need-info", name: "Need info", content: "please share more" });
@@ -1506,7 +1346,7 @@ test("unknown macro triggers stay private and list only enabled macros", async (
   const helperId = "U-HANDLER-UNKNOWN";
   const channel = "C-HANDLER-UNKNOWN";
   const threadTs = "handler-unknown-thread";
-  db.saveProgram({ id: programId, name: "Unknown Pixl", helpChannel: channel, channels: [channel] });
+  db.saveProgram({ id: programId, name: "Unknown Acme", helpChannel: channel, channels: [channel] });
   programs.invalidate();
   db.syncHelper({ programId, userId: helperId, source: "manual" });
   macros.create({ programId, trigger: "?need-info", name: "Need info", content: "info" });
@@ -1553,7 +1393,7 @@ test("unknown macro triggers stay private and list only enabled macros", async (
   assert.deepEqual(posts, []);
   assert.equal(ephemerals.length, 1);
   assert.equal(ephemerals[0].user, helperId);
-  assert.match(ephemerals[0].text, /No macro `\?need-inf` for Unknown Pixl/);
+  assert.match(ephemerals[0].text, /No macro `\?need-inf` for Unknown Acme/);
   assert.match(ephemerals[0].text, /\?need-info/);
   assert.doesNotMatch(ephemerals[0].text, /\?disabled/);
   assert.deepEqual(reactions, [{ channel, timestamp: "handler-unknown-message", name: "question" }]);
@@ -1562,7 +1402,7 @@ test("unknown macro triggers stay private and list only enabled macros", async (
 test("macros work in any program thread for helpers, like !sum", async () => {
   const programId = "handler-macro-gates";
   const channel = "C-HANDLER-GATES";
-  db.saveProgram({ id: programId, name: "Gate Pixl", helpChannel: channel, channels: [channel] });
+  db.saveProgram({ id: programId, name: "Gate Acme", helpChannel: channel, channels: [channel] });
   programs.invalidate();
   const helperId = "U-HANDLER-GATE-HELPER";
   db.syncHelper({ programId, userId: helperId, source: "manual" });
@@ -1696,7 +1536,7 @@ test("a resolved macro trigger uses the canonical resolve transition", async () 
   const helperId = "U-HANDLER-RESOLVE";
   const channel = "C-HANDLER-RESOLVE";
   const threadTs = "handler-resolve-thread";
-  db.saveProgram({ id: programId, name: "Resolve Pixl", helpChannel: channel, channels: [channel] });
+  db.saveProgram({ id: programId, name: "Resolve Acme", helpChannel: channel, channels: [channel] });
   programs.invalidate();
   db.syncHelper({ programId, userId: helperId, source: "manual" });
   macros.create({

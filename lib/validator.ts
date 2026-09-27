@@ -96,7 +96,7 @@ function analyzeReadme(readmeText: string | null): ReadmeAnalysis {
       readmeText,
     );
   const hasDemo =
-    /\b(?:demo|live|video|youtube\.com|youtu\.be|loom\.com|playable|deployed|website|play\.pixl|vercel\.app|netlify\.app|github\.io)\b/i.test(
+    /\b(?:demo|live|video|youtube\.com|youtu\.be|loom\.com|playable|deployed|website|vercel\.app|netlify\.app|github\.io)\b/i.test(
       readmeText,
     );
   const hasScreenshots = /\.(?:png|jpe?g|gif|webp|svg)\b|!\[.*?\]\(.*?\)|<img\s+[^>]*src=/i.test(readmeText);
@@ -183,7 +183,7 @@ function assessReadiness({
   if (licenseName) {
     passes.push(`License found: *${licenseName}* (${matchedLicenseFile})`);
   } else {
-    issues.push(`*Missing open-source LICENSE!* YSWS requires an open-source license (like MIT or Apache 2.0).`);
+    issues.push(`*Missing open-source LICENSE!* The program requires an open-source license (like MIT or Apache 2.0).`);
   }
 
   if (readmeAnalysis.hasReadme) {
@@ -219,7 +219,7 @@ function formatValidationReport(result: ValidationResult | null) {
   }
 
   const lines = [
-    `*YSWS Submission Check for <${result.url}|${result.fullName}>:*`,
+    `*Program Submission Check for <${result.url}|${result.fullName}>:*`,
     "",
     result.isReady
       ? `🎉 *Ready for submission!* Everything looks solid for reviewer review.`
