@@ -189,9 +189,9 @@ const reconcilingTicketUI = new WeakMap();
 const SUPPORT_RESOLVE_ACTION = "st_resolve";
 const SUPPORT_REOPEN_ACTION = "st_reopen";
 const STATUS_EMOJI: Record<string, string> = {
-  claimed: ":eyes:",
-  resolved: ":white_check_mark:",
-  closed: ":x:",
+  claimed: ":hmmcat:",
+  resolved: ":yesyes:",
+  closed: ":ban:",
 };
 
 function isActorAllowed(programId: string, actorId: string | null, allowEmpty = true): boolean {
@@ -295,7 +295,7 @@ function buildTicketCardBlocks(
   program: Program | null,
   candidates: TicketCandidate[] | null = null,
 ): SlackBlock[] {
-  const statusEmoji = STATUS_EMOJI[ticket.status] || ":sos:";
+  const statusEmoji = STATUS_EMOJI[ticket.status] || ":siren1:";
   const progName = program ? program.name : ticket.program_id || "program";
   const assigneeStr = ticket.assignee_id ? ` • Claimed by <@${ticket.assignee_id}>` : "";
   const statusStr = `*Status*: ${statusEmoji} \`${ticket.status}\`${assigneeStr}`;

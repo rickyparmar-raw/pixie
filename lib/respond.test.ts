@@ -802,13 +802,13 @@ test("isClarifyingQuestion catches a hand-back that carries on past the question
   assert.equal(
     respond.isClarifyingQuestion(
       "do what? if you're asking about something acme-specific like submitting, setting up hackatime," +
-        " git, or starting a project, just tell me what part you're stuck on and i can walk you through it :wave:",
+        " git, or starting a project, just tell me what part you're stuck on and i can walk you through it :oke:",
     ),
     true,
   );
   assert.equal(
     respond.isClarifyingQuestion(
-      "not sure what you're referring to there — drop a bit more context and i can help :wave:",
+      "not sure what you're referring to there — drop a bit more context and i can help :oke:",
     ),
     true,
   );
@@ -840,7 +840,7 @@ test("an unaddressed hand-back is deleted and not recorded as a docs gap", async
 
   const handBack =
     "do what? if you're asking about something acme-specific like submitting, setting up hackatime," +
-    " git, or starting a project, just tell me what part you're stuck on and i can walk you through it :wave:";
+    " git, or starting a project, just tell me what part you're stuck on and i can walk you through it :oke:";
 
   const restoreAnswers = stubAnswers(async () => ({ source: null, answer: handBack }));
   const restoreCache = stubNoCache();

@@ -111,7 +111,7 @@ test("captureFromThread does not queue the same thread twice", () => {
 test("isCaptureWorthy rejects short or noise-only replies", () => {
   assert.equal(learn.isCaptureWorthy("lol"), false);
   assert.equal(learn.isCaptureWorthy("same"), false);
-  assert.equal(learn.isCaptureWorthy(":tada: :tada: :tada: :tada: :tada: :tada:"), false);
+  assert.equal(learn.isCaptureWorthy(":yay: :yay: :yay: :yay: :yay: :yay:"), false);
   assert.equal(learn.isCaptureWorthy("<@U123> <@U456> <#C123>"), false);
   assert.equal(learn.isCaptureWorthy("https://example.com/a/very/long/url/that/is/long"), false);
 });

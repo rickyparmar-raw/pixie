@@ -152,7 +152,7 @@ const FIXTURES = [
   ["noise: hello", { text: "hello everyone", help: true }, "silent", "greeting"],
   ["noise: test", { text: "test", help: true }, "silent", "greeting"],
   ["noise: testing", { text: "testing 123", help: true }, "silent", "greeting"],
-  ["noise: emoji", { text: ":wave: :sparkles:", help: true }, "silent", "greeting"],
+  ["noise: emoji", { text: ":oke: :yay:", help: true }, "silent", "greeting"],
   ["noise: emoji only", { text: "🎉🎉", help: true }, "silent", "greeting"],
   ["noise: lol", { text: "lol", help: true }, "silent", "greeting"],
   ["noise: gg", { text: "gg everyone", help: true }, "silent", "greeting"],

@@ -496,7 +496,7 @@ test("faqChannels still drops a bare reaction without calling the model", async 
         thread_ts: "faq-thread-2",
         channel: FAQ_CHANNEL,
         user: "U0ASKER2",
-        text: "lmaooo :tada:",
+        text: "lmaooo :yay:",
       },
       client: {},
     });

@@ -267,7 +267,7 @@ function isDirectMessage(event: HandlerEvent): boolean {
   return event.channel_type === "im";
 }
 
-const DM_RATE_LIMIT_NOTICE = "woah slow down a sec — gimme a minute to catch up :melting_face:";
+const DM_RATE_LIMIT_NOTICE = "woah slow down a sec — gimme a minute to catch up :pls:";
 
 async function checkDmRateLimit({
   event,
@@ -373,9 +373,9 @@ function stayOutOfHumanThread({
 }
 
 const HUMAN_ONLY_REPLY =
-  "That one needs a person to decide, so I won't guess. A helper or organizer can sort it out :wave:";
+  "That one needs a person to decide, so I won't guess. A helper or organizer can sort it out :oke:";
 const HUMAN_ONLY_PINGED_REPLY =
-  "That one needs a person to decide, so I won't guess. I've asked a helper to take a look :wave:";
+  "That one needs a person to decide, so I won't guess. I've asked a helper to take a look :oke:";
 
 async function escalateSensitive({
   event,
@@ -566,10 +566,10 @@ async function refuseUnauthorizedCommand({
   db.claimMessage(event.ts, event.channel);
   const text =
     verdict.reason === "commands_disabled"
-      ? "commands are switched off in this channel :no_entry_sign:"
+      ? "commands are switched off in this channel :ban:"
       : verdict.reason === "wrong_channel"
-        ? "that command doesn't work in this channel :no_entry_sign:"
-        : "that one's helpers-only :no_entry_sign:";
+        ? "that command doesn't work in this channel :ban:"
+        : "that one's helpers-only :ban:";
   await client.chat.postEphemeral({ channel: event.channel, user: event.user, text });
   return true;
 }
@@ -594,7 +594,7 @@ async function handleTeachRequest({
     await client.chat.postEphemeral({
       channel: event.channel,
       user: event.user,
-      text: "that one's helpers-only :no_entry_sign:",
+      text: "that one's helpers-only :ban:",
     });
     return true;
   }
@@ -616,7 +616,7 @@ async function handleTeachRequest({
       user: event.user,
       thread_ts: event.thread_ts,
       text: id
-        ? `🧚 Memorized for future questions! :white_check_mark:\n>*Q:* ${parsedDirect.question}\n>*A:* ${parsedDirect.answer}\n\n_#${id} — remove with \`${brand.cmd("forget")} ${id}\`_`
+        ? `🧚 Memorized for future questions! :yesyes:\n>*Q:* ${parsedDirect.question}\n>*A:* ${parsedDirect.answer}\n\n_#${id} — remove with \`${brand.cmd("forget")} ${id}\`_`
         : "already memorized or couldn't save it",
     });
     return true;
@@ -645,7 +645,7 @@ async function handleTeachRequest({
       user: event.user,
       thread_ts: event.thread_ts,
       text: id
-        ? `🧚 Memorized this thread for future questions! :white_check_mark:\n>*Q:* ${parsed.question}\n>*A:* ${parsed.answer}\n\n_#${id} — remove with \`${brand.cmd("forget")} ${id}\`_`
+        ? `🧚 Memorized this thread for future questions! :yesyes:\n>*Q:* ${parsed.question}\n>*A:* ${parsed.answer}\n\n_#${id} — remove with \`${brand.cmd("forget")} ${id}\`_`
         : "already memorized this thread!",
     });
     return true;
@@ -678,7 +678,7 @@ async function handleSumRequest({
     await client.chat.postEphemeral({
       channel: event.channel,
       user: event.user,
-      text: "that one's helpers-only :no_entry_sign:",
+      text: "that one's helpers-only :ban:",
     });
     return true;
   }
@@ -687,7 +687,7 @@ async function handleSumRequest({
     await client.chat.postEphemeral({
       channel: event.channel,
       user: event.user,
-      text: "!sum can only be used inside a thread :no_entry_sign:",
+      text: "!sum can only be used inside a thread :ban:",
     });
     return true;
   }
@@ -838,7 +838,7 @@ async function handleMacroTrigger({
   if (!actorRunsCommands(event.user, program)) {
     if (!macro || !macro.enabled) return false;
     if (!db.claimMessage(event.ts, event.channel)) return true;
-    await postMacroEphemeral(client, event, "that one's helpers-only :no_entry_sign:");
+    await postMacroEphemeral(client, event, "that one's helpers-only :ban:");
     return true;
   }
 

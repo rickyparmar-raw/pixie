@@ -25,9 +25,9 @@ test("parseReply rejects empty and instruction-like output", () => {
 });
 
 test("parseAnswerOrChat keeps ordinary conversational replies ungrounded", () => {
-  assert.deepEqual(answer.parseAnswerOrChat("not much, just vibing :sparkles:"), {
+  assert.deepEqual(answer.parseAnswerOrChat("not much, just vibing :yay:"), {
     source: null,
-    answer: "not much, just vibing :sparkles:",
+    answer: "not much, just vibing :yay:",
   });
 });
 
@@ -66,7 +66,7 @@ test("whereYouAre distinguishes owned and unowned channels", () => {
 test("stream parsing emits only answer text", async () => {
   const original = llm.completeStream;
   llm.completeStream = async (_options: unknown, onDelta: (delta: string, text: string) => void) => {
-    const text = "SOURCE: Example docs\nANSWER: use the configured docs :sparkles:";
+    const text = "SOURCE: Example docs\nANSWER: use the configured docs :yay:";
     onDelta(text, text);
     return { text, stopped: false };
   };
@@ -75,8 +75,8 @@ test("stream parsing emits only answer text", async () => {
     const result = await answer.getAnswerOrChatStream("how do I start", "### Example docs\nsetup", "", {
       onText: (text: string) => seen.push(text),
     });
-    assert.deepEqual(result, { source: "Example docs", answer: "use the configured docs :sparkles:" });
-    assert.deepEqual(seen, ["use the configured docs :sparkles:"]);
+    assert.deepEqual(result, { source: "Example docs", answer: "use the configured docs :yay:" });
+    assert.deepEqual(seen, ["use the configured docs :yay:"]);
   } finally {
     llm.completeStream = original;
   }

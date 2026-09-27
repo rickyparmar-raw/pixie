@@ -88,7 +88,7 @@ function reviewBlocks(userId: string): KnownBlock[] {
 
   const rows = learn.pending(HOME_REVIEW_LIMIT) as LearnedRow[];
   if (rows.length === 0) {
-    return [divider(), section("*waiting for review*\n_nothing queued_ :tada:")];
+    return [divider(), section("*waiting for review*\n_nothing queued_ :yay:")];
   }
 
   const blocks: KnownBlock[] = [divider(), section(`*waiting for review* — ${rows.length} candidate answer(s)`)];

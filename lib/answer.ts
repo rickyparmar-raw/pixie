@@ -53,34 +53,11 @@ const answerFallbackWithHeadroom = config.answer.fallback
   ? { ...config.answer.fallback, maxTokens: FALLBACK_MAX_TOKENS }
   : null;
 
-const CASUAL_EMOJI = [
-  ":sparkles:",
-  ":tada:",
-  ":partying_face:",
-  ":eyes:",
-  ":rocket:",
-  ":fire:",
-  ":zap:",
-  ":raised_hands:",
-  ":wave:",
-  ":saluting_face:",
-  ":melting_face:",
-  ":pleading_face:",
-  ":face_with_peeking_eye:",
-  ":sweat_smile:",
-  ":grin:",
-  ":sunglasses:",
-  ":star-struck:",
-  ":brain:",
-  ":bulb:",
-  ":hammer_and_wrench:",
-  ":muscle:",
-  ":heart_hands:",
-  ":handshake:",
-  ":100:",
-  ":white_check_mark:",
-  ":thinking_face:",
-].join(" ");
+const DEFAULT_EMOJI =
+  ":cryin: :sob: :sobson: :son-: :pf: :yuh: :yay: :wiltedrose: :noooo: :fear: :pls: :hehepepe: :lmaocry: :angy: " +
+  ":3d-sad-emoji: :prayge: :hmmcat: :heartbreak: :sonbaby: :hm: :loll: :sb: :cry-cursed: :siren1: :bulb: :yesyes: " +
+  ":vro: :meffmoney: :woooo: :oke: :pweas: :thonk: :ban: :sho: :shocked:";
+const CASUAL_EMOJI = (process.env.PIXIE_EMOJI || DEFAULT_EMOJI).trim();
 const MD_BOLD = /\*\*([^*\n]+)\*\*/g;
 const MD_UNDERSCORE_BOLD = /__([^_\n]+)__/g;
 
@@ -227,7 +204,7 @@ function timelineAuthorityRule(marker: string, alwaysLabel = "covered", program:
 const VOICE = [
   "Voice: you talk like a chill teenager texting in Slack, not like customer support copy. Casual, short, contractions, lowercase is fine. Never just reformat the FAQ answer into a stiff formal sentence — say it like a real person quickly typing a reply.",
   "Punctuation: never use dashes. No em dashes, no en dashes, no ' -- '. Where you'd reach for one, use a comma, a full stop, or start a new sentence. Ordinary hyphens inside words and inside commands are fine and must be left alone.",
-  `Sprinkle in these Slack emoji where they genuinely fit: 0-2 per reply, vary them, never force one in: ${CASUAL_EMOJI}`,
+  `Only use these Slack emoji, never any others. 0-2 per reply where they fit the mood, vary them, never force one in: ${CASUAL_EMOJI}`,
 ];
 
 function systemPrompt(

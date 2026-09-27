@@ -195,7 +195,7 @@ function startSlaLoop(
                 program: prog,
                 channel,
                 text: reply.plainDashes(
-                  `:alarm_clock: ${due.length} stale ticket${due.length === 1 ? "" : "s"} need attention\n${lines.join("\n")}${more}`,
+                  `:siren1: ${due.length} stale ticket${due.length === 1 ? "" : "s"} need attention\n${lines.join("\n")}${more}`,
                 ),
               });
               for (const v of due) markNotified({ programId: prog.id, ticketId: v.ticketId, rule: v.rule });
