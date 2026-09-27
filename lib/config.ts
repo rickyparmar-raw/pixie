@@ -3,7 +3,16 @@
 import dotenv = require("dotenv");
 import type { WebClient } from "@slack/web-api";
 
-type UntypedInput = any;
+interface KeyPoolState { index: number; now: number }
+type RateLimitHandler = (key: string | undefined, ms?: number) => void;
+interface ProviderTier {
+  apiKey: () => string | undefined;
+  baseUrl: string;
+  model: string;
+  fallback?: ProviderTier | null;
+  onRateLimited?: RateLimitHandler;
+}
+
 dotenv.config();
 
 const ZEN_BASE_URL = "https://opencode.ai/zen/v1";
@@ -29,12 +38,12 @@ const DEFAULT_GROQ_INTENT_MODEL = "qwen/qwen3.8-27b";
 const SLACK_VARS = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_HELP_CHANNEL", "SLACK_FAQ_CHANNELS"];
 const MODEL_VARS = ["OPENCODE_API_KEY"];
 
-function stripTrailingSlash(url: UntypedInput) {
+function stripTrailingSlash(url: string) {
   return url.replace(/\/+$/, "");
 }
 
 
-function normalizeBaseUrl(url: UntypedInput, fallback: UntypedInput) {
+function normalizeBaseUrl(url: string | undefined, fallback: string) {
   // Accept the documented chat/completions form while storing one base URL shape.
   if (!url) return fallback;
   return stripTrailingSlash(url).replace(/\/chat\/completions$/, "");
@@ -44,7 +53,7 @@ function normalizeBaseUrl(url: UntypedInput, fallback: UntypedInput) {
 const KEY_COOLDOWN_MS = 60 * 1000;
 const coolingUntil = new Map();
 
-function penalizeZenKey(key: UntypedInput, ms = KEY_COOLDOWN_MS) {
+function penalizeZenKey(key: string | undefined, ms = KEY_COOLDOWN_MS) {
   // Cooldown state is process-local and never exposes key material in the config object.
   if (!key) return;
   if (ms <= 0) {
@@ -55,13 +64,14 @@ function penalizeZenKey(key: UntypedInput, ms = KEY_COOLDOWN_MS) {
 }
 
 
-function scanPool(keys: UntypedInput, coolingUntil: UntypedInput, state: UntypedInput) {
+function scanPool(keys: string[], coolingUntil: Map<string, number>, state: KeyPoolState) {
   // Scan at most one full lap; an exhausted pool cannot spin in the event loop.
   for (let i = 0; i < keys.length; i++) {
     const idx = state.index % keys.length;
     state.index += 1;
     const key = keys[idx];
-    if (!(coolingUntil.get(key) > state.now)) return key;
+    if (!key) continue;
+    if (!((coolingUntil.get(key) || 0) > state.now)) return key;
   }
   return null;
 }
@@ -87,7 +97,7 @@ function nextZenApiKey() {
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_OPENROUTER_MODEL = "google/gemini-2.5-flash";
 
-function zenStandby(baseUrl: UntypedInput, model = DEFAULT_MODEL) {
+function zenStandby(baseUrl: string, model = DEFAULT_MODEL): ProviderTier | null {
   // Never return the same endpoint as its caller's fallback: that would self-reference.
   if (baseUrl === ZEN_BASE_URL) return null;
   return {
@@ -98,7 +108,7 @@ function zenStandby(baseUrl: UntypedInput, model = DEFAULT_MODEL) {
 }
 
 
-function standbyFallback(baseUrl: UntypedInput, defaultZenModel = DEFAULT_MODEL) {
+function standbyFallback(baseUrl: string, defaultZenModel = DEFAULT_MODEL): ProviderTier | null {
   // Prefer a different provider, then Zen's rotating pool, so fallback remains real.
   if (baseUrl === OPENROUTER_BASE_URL) return zenStandby(baseUrl, defaultZenModel);
   if (baseUrl === ZEN_BASE_URL && !process.env.OPENROUTER_API_KEY) return null;
@@ -108,33 +118,33 @@ function standbyFallback(baseUrl: UntypedInput, defaultZenModel = DEFAULT_MODEL)
       baseUrl: normalizeBaseUrl(process.env.OPENROUTER_BASE_URL, OPENROUTER_BASE_URL),
       apiKey: () => process.env.OPENROUTER_API_KEY,
       model: process.env.OPENROUTER_MODEL || DEFAULT_OPENROUTER_MODEL,
-      fallback: zenStandby(process.env.OPENROUTER_BASE_URL, defaultZenModel),
+      fallback: zenStandby(process.env.OPENROUTER_BASE_URL || OPENROUTER_BASE_URL, defaultZenModel),
     };
   }
 
   return zenStandby(baseUrl, defaultZenModel);
 }
 
-function parseChannels(raw: UntypedInput) {
+function parseChannels(raw: string | undefined) {
   // Comma-separated settings are normalized once so every caller sees the same channel list.
   return (raw || "")
     .split(",")
-    .map((c: UntypedInput) => c.trim())
+    .map((c) => c.trim())
     .filter(Boolean);
 }
 
-function positiveNumber(raw: UntypedInput, fallback: UntypedInput) {
+function positiveNumber(raw: string | undefined, fallback: number) {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-function envFlag(raw: UntypedInput, fallback = false) {
+function envFlag(raw: string | undefined, fallback = false) {
   // Only explicit true values enable a flag; missing and arbitrary text stay at the fallback.
   if (raw === undefined || raw === null || raw === "") return fallback;
   return raw === "1" || String(raw).toLowerCase() === "true";
 }
 
-function probability(raw: UntypedInput, fallback: UntypedInput) {
+function probability(raw: string | undefined, fallback: number) {
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 && n <= 1 ? n : fallback;
 }
@@ -179,19 +189,19 @@ const visionBaseUrl = normalizeBaseUrl(
 );
 
 
-function zenKeyOrder(name: UntypedInput) {
+function zenKeyOrder(name: string) {
   const m = name.match(/_(\d+)$/);
   return m ? Number(m[1]) : 1;
 }
 
 
-function collectNumberedKeys(env: UntypedInput, prefix: UntypedInput) {
+function collectNumberedKeys(env: NodeJS.ProcessEnv, prefix: string) {
   // Gaps are allowed so removing KEY_3 does not silently renumber another account.
   const pattern = new RegExp(`^${prefix}(_\\d+)?$`);
   return Object.keys(env)
-    .filter((k: UntypedInput) => pattern.test(k))
+    .filter((k) => pattern.test(k))
     .sort((a, b) => zenKeyOrder(a) - zenKeyOrder(b))
-    .map((k: UntypedInput) => (env[k] || "").trim())
+    .map((k) => (env[k] || "").trim())
     .filter(Boolean);
 }
 
@@ -204,7 +214,7 @@ const zenApiKeys = collectZenKeys();
 const hcaiCoolingUntil = new Map();
 let hcaiKeyIndex = 0;
 
-function penalizeHcaiKey(key: UntypedInput, ms = KEY_COOLDOWN_MS) {
+function penalizeHcaiKey(key: string | undefined, ms = KEY_COOLDOWN_MS) {
   if (!key) return;
   if (ms <= 0) {
     hcaiCoolingUntil.delete(key);
@@ -230,7 +240,7 @@ function collectHcaiKeys(env = process.env) {
 
 const hcaiApiKeys = collectHcaiKeys();
 
-function hcaiTier(model: UntypedInput) {
+function hcaiTier(model: string): ProviderTier {
   return {
     apiKey: () => process.env.HCAI_API_KEY,
     baseUrl: HCAI_BASE_URL,
@@ -248,7 +258,7 @@ const groqApiKeys = collectGroqKeys();
 const groqCoolingUntil = new Map();
 let groqKeyIndex = 0;
 
-function penalizeGroqKey(key: UntypedInput, ms = KEY_COOLDOWN_MS) {
+function penalizeGroqKey(key: string | undefined, ms = KEY_COOLDOWN_MS) {
   if (!key) return;
   if (ms <= 0) {
     groqCoolingUntil.delete(key);
@@ -324,7 +334,7 @@ const config = {
     faqChannels,
     stagingOnlyChannels,
     autoReplyChannel: faqChannels[0] || null,
-    botUserId: null,
+    botUserId: null as string | null,
     adminUserIds,
   },
 
@@ -381,19 +391,19 @@ const config = {
 
   feedbackReactions: (process.env.PIXIE_FEEDBACK_REACTIONS ?? "")
     .split(",")
-    .map((r: UntypedInput) => r.replace(/:/g, "").trim())
+    .map((r) => r.replace(/:/g, "").trim())
     .filter(Boolean),
 
   jev: jevConfig(),
 };
 
 
-function missingVars({ needsSlack }: Record<string, UntypedInput>) {
+function missingVars({ needsSlack }: { needsSlack: boolean }) {
   const required = needsSlack ? [...MODEL_VARS, ...SLACK_VARS] : MODEL_VARS;
-  return required.filter((name: UntypedInput) => !process.env[name]);
+  return required.filter((name) => !process.env[name]);
 }
 
-function validate({ needsSlack = true }: Record<string, UntypedInput> = {}) {
+function validate({ needsSlack = true }: { needsSlack?: boolean } = {}) {
   const missing = missingVars({ needsSlack });
   if (missing.length > 0) {
     throw new Error(
@@ -404,13 +414,13 @@ function validate({ needsSlack = true }: Record<string, UntypedInput> = {}) {
   return config;
 }
 
-async function resolveBotUserId(client: UntypedInput) {
+async function resolveBotUserId(client: WebClient) {
   const auth = await client.auth.test();
-  config.slack.botUserId = auth.user_id;
+  config.slack.botUserId = auth.user_id || null;
   return auth.user_id;
 }
 
-function isAdmin(userId: UntypedInput) {
+function isAdmin(userId: string | null | undefined) {
   // An empty admin allowlist fails closed so an unconfigured deployment cannot mutate knowledge.
   return !!userId && config.slack.adminUserIds.includes(userId);
 }

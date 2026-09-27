@@ -1,10 +1,10 @@
 // Retention deletes only terminal ticket data and keeps approved knowledge.
 // Audit retention cannot fall below the platform floor, even when a program asks for less.
 import db = require("./db");
+import type { SQLQueryBindings } from "bun:sqlite";
 import audit = require("./audit");
 
 
-type UntypedInput = any;
 const AUDIT_MIN_DAYS = 365;
 const DEFAULTS = {
   contextDays: 30,
@@ -27,14 +27,26 @@ interface RetentionRow {
   retention_audit_days: number | null;
 }
 
+interface RetentionPatch {
+  contextDays?: number | string;
+  ticketsDays?: number | string;
+  tracesDays?: number | string;
+  analyticsDays?: number | string;
+  auditDays?: number | string;
+  knowledge?: string;
+}
 
-function toPositiveDays(value: UntypedInput, fallback: UntypedInput) {
+interface CountRow { n: number }
+type DatabaseHandle = ReturnType<typeof db.handle>;
+
+
+function toPositiveDays(value: number | string | null | undefined, fallback: number) {
   const n = Number(value);
   if (!Number.isFinite(n) || n <= 0) return fallback;
   return n;
 }
 
-function policyFor(programId: UntypedInput) {
+function policyFor(programId: string) {
   // Invalid or missing per-program values use safe defaults rather than disabling cleanup.
   const row = db.handle().query<RetentionRow, [string]>(
     `SELECT retention_context_days, retention_tickets_days,
@@ -52,7 +64,7 @@ function policyFor(programId: UntypedInput) {
   };
 }
 
-function validatePolicy(patch: Record<string, UntypedInput> = {}) {
+function validatePolicy(patch: RetentionPatch = {}) {
   for (const [key, value] of Object.entries(patch)) {
     if (key === "knowledge") {
       if (value !== "keep") return "only 'keep' is supported for approved knowledge";
@@ -66,19 +78,20 @@ function validatePolicy(patch: Record<string, UntypedInput> = {}) {
   return null;
 }
 
-function eligibleTicketIds(h: UntypedInput, programId: UntypedInput, ticketCutoff: UntypedInput) {
+function eligibleTicketIds(h: DatabaseHandle, programId: string, ticketCutoff: number) {
   // Open and active tickets are never eligible for a retention sweep.
   const placeholders = SWEEPABLE_STATUSES.map(() => "?").join(",");
-  return h.query(
+  const rows = h.query(
     `SELECT id FROM tickets WHERE program_id = ? AND created_at < ? AND status IN (${placeholders})`,
-  ).all(programId, ticketCutoff, ...SWEEPABLE_STATUSES).map((t: UntypedInput) => t.id);
+  ).all(programId, ticketCutoff, ...SWEEPABLE_STATUSES as SQLQueryBindings[]) as Array<{ id: number }>;
+  return rows.map((t) => t.id);
 }
 
-function countFor(h: UntypedInput, sql: UntypedInput, ...params: UntypedInput) {
-  return h.query(sql).get(...params);
+function countFor(h: DatabaseHandle, sql: string, ...params: SQLQueryBindings[]) {
+  return h.query(sql).get(...params) as CountRow;
 }
 
-function preview(programId: UntypedInput, now = Date.now()) {
+function preview(programId: string, now = Date.now()) {
   const p = policyFor(programId);
   const h = db.handle();
   const ticketCutoff = now - p.ticketsDays * DAY_MS;
@@ -102,7 +115,7 @@ function preview(programId: UntypedInput, now = Date.now()) {
   };
 }
 
-function deleteTicketScope(h: UntypedInput, ids: UntypedInput) {
+function deleteTicketScope(h: DatabaseHandle, ids: number[]) {
   if (ids.length === 0) return;
   const placeholders = ids.map(() => "?").join(",");
   h.query(`DELETE FROM ticket_events WHERE ticket_id IN (${placeholders})`).run(...ids);
@@ -110,7 +123,7 @@ function deleteTicketScope(h: UntypedInput, ids: UntypedInput) {
   h.query(`DELETE FROM tickets WHERE id IN (${placeholders})`).run(...ids);
 }
 
-function sweepProgram(programId: UntypedInput, { dryRun = true, now = Date.now() }: Record<string, UntypedInput> = {}) {
+function sweepProgram(programId: string, { dryRun = true, now = Date.now() }: { dryRun?: boolean; now?: number } = {}) {
   const result = preview(programId, now);
   if (dryRun) return { ...result, deleted: false };
   const p = result.policy;

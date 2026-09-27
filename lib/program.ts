@@ -4,7 +4,22 @@ import fs = require("node:fs");
 import path = require("node:path");
 import log = require("./log");
 
-type UntypedInput = any;
+interface Milestone {
+  name: string;
+  date: string | number | Date;
+  note?: string;
+  questions?: string[];
+}
+
+interface ProgramData {
+  milestones?: Milestone[];
+  timezone?: string;
+}
+
+interface ProgramMetadata {
+  name?: string | null;
+  aliases?: unknown[];
+}
 const PROGRAM_PATH = path.join(__dirname, "..", "program.json");
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -18,21 +33,22 @@ const NON_PROGRAM_DURATION_RE = /how long (?:does|do|is|will) (?:review|quest|si
 
 const IGNORED_MILESTONE_WORDS = new Set(["pixl", "ysws", "official", "program", "the", "hack", "club"]);
 
-function load(filePath = PROGRAM_PATH) {
+function load(filePath = PROGRAM_PATH): ProgramData | null {
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch (e: UntypedInput) {
-    if (e.code !== "ENOENT") log.warn("program", `could not read program.json: ${e.message}`);
+    return JSON.parse(fs.readFileSync(filePath, "utf8")) as ProgramData;
+  } catch (e: unknown) {
+    const error = e as NodeJS.ErrnoException;
+    if (error.code !== "ENOENT") log.warn("program", `could not read program.json: ${error.message}`);
     return null;
   }
 }
 
-function formatDate(date: UntypedInput) {
+function formatDate(date: Date) {
   return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
-function describeWhen(target: UntypedInput, now: UntypedInput) {
-  const startOfDay = (d: UntypedInput) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+function describeWhen(target: Date, now: Date) {
+  const startOfDay = (d: Date) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
   const days = Math.round((startOfDay(target) - startOfDay(now)) / MS_PER_DAY);
 
   if (days === 0) return "today";
@@ -42,7 +58,7 @@ function describeWhen(target: UntypedInput, now: UntypedInput) {
   return `${Math.abs(days)} days ago`;
 }
 
-function describeEntry(entry: UntypedInput, now: UntypedInput) {
+function describeEntry(entry: Milestone, now: Date) {
   const date = parseDate(entry.date);
   if (!date) return null;
 
@@ -55,7 +71,7 @@ function describeEntry(entry: UntypedInput, now: UntypedInput) {
   return parts.join("\n");
 }
 
-function questionPairs(entry: UntypedInput, now: UntypedInput) {
+function questionPairs(entry: Milestone, now: Date) {
   const date = parseDate(entry.date);
   if (!date) return [];
 
@@ -78,20 +94,21 @@ function questionPairs(entry: UntypedInput, now: UntypedInput) {
       : `Not yet — ${entry.name} is ${pretty}, ${when}.`,
   ]);
 
-  return pairs.map(([q, a]: UntypedInput) => `Q: ${q}\nA: ${a}`);
+  return pairs.map(([q, a]) => `Q: ${q}\nA: ${a}`);
 }
 
-function escapeRegex(str: UntypedInput) {
+function escapeRegex(str: string) {
   return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function parseDate(value: UntypedInput) {
+function parseDate(value: string | number | Date | null | undefined) {
   // Invalid dates fall through to the normal docs path instead of producing fiction.
+  if (value === null || value === undefined) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function buildNamesRegexPattern(metadata: UntypedInput) {
+function buildNamesRegexPattern(metadata: ProgramMetadata | null) {
   // Escape configured names before placing them in the timing matcher.
   if (metadata === null || metadata === undefined) {
     return "pixl";
@@ -115,7 +132,7 @@ function buildNamesRegexPattern(metadata: UntypedInput) {
   return names.map(escapeRegex).join("|");
 }
 
-function buildTimingPattern(metadata: UntypedInput) {
+function buildTimingPattern(metadata: ProgramMetadata | null) {
   const namesPattern = buildNamesRegexPattern(metadata);
   if (namesPattern === null) return null;
   return new RegExp(
@@ -126,7 +143,7 @@ function buildTimingPattern(metadata: UntypedInput) {
   );
 }
 
-function isTimingQuestion(text: UntypedInput, metadata = null) {
+function isTimingQuestion(text: string, metadata: ProgramMetadata | null = null) {
   const t = String(text || "");
   if (NON_TIMING_RE.test(t) && !TIMING_DATE_WORDS_RE.test(t)) return false;
   const pattern = buildTimingPattern(metadata);
@@ -134,23 +151,23 @@ function isTimingQuestion(text: UntypedInput, metadata = null) {
   return pattern.test(t);
 }
 
-function extractMilestones(dataOrMilestones: UntypedInput) {
+function extractMilestones(dataOrMilestones: ProgramData | Milestone[] | null | undefined): Milestone[] {
   if (!dataOrMilestones) return [];
   if (Array.isArray(dataOrMilestones)) return dataOrMilestones;
   if (Array.isArray(dataOrMilestones.milestones)) return dataOrMilestones.milestones;
   return [];
 }
 
-function corpusSection(now = new Date(), dataOrMilestones = load(), metadata = null) {
+function corpusSection(now = new Date(), dataOrMilestones: ProgramData | Milestone[] | null = load(), metadata: ProgramMetadata | null = null) {
   const entries = extractMilestones(dataOrMilestones);
   if (entries.length === 0) return "";
 
-  const sorted = entries.slice().sort((a: UntypedInput, b: UntypedInput) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sorted = entries.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const lines = sorted.map((entry: UntypedInput) => describeEntry(entry, now)).filter(Boolean);
+  const lines = sorted.map((entry) => describeEntry(entry, now)).filter((line): line is string => Boolean(line));
   if (lines.length === 0) return "";
 
-  const pairs = sorted.flatMap((entry: UntypedInput) => questionPairs(entry, now));
+  const pairs = sorted.flatMap((entry) => questionPairs(entry, now));
 
   const header = [
     `Today's date is ${formatDate(now)}.`,
@@ -165,23 +182,23 @@ function corpusSection(now = new Date(), dataOrMilestones = load(), metadata = n
   return [...header, ...lines, "", ...pairs, "", ...footer].join("\n");
 }
 
-function directAnswer(question: UntypedInput, now = new Date(), dataOrMilestones = load(), metadata = null) {
+function directAnswer(question: string, now = new Date(), dataOrMilestones: ProgramData | Milestone[] | null = load(), metadata: ProgramMetadata | null = null) {
   // Only a uniquely named or clearly program-level question gets a deterministic date answer.
   if (!isTimingQuestion(question, metadata)) return null;
 
   const milestones = extractMilestones(dataOrMilestones);
-  const entries = milestones.filter((e: UntypedInput) => e && e.date && parseDate(e.date));
+  const entries = milestones.filter((e) => e && e.date && parseDate(e.date));
   if (entries.length === 0) return null;
 
   const asked = (question || "").toLowerCase();
 
   if (NON_PROGRAM_DURATION_RE.test(asked)) return null;
 
-  const named = entries.filter((e: UntypedInput) =>
+  const named = entries.filter((e) =>
     e.name
       .toLowerCase()
       .split(/\s+/)
-      .some((word: UntypedInput) => word.length > 3 && !IGNORED_MILESTONE_WORDS.has(word) && asked.includes(word)),
+      .some((word) => word.length > 3 && !IGNORED_MILESTONE_WORDS.has(word) && asked.includes(word)),
   );
 
   const namesPattern = buildNamesRegexPattern(metadata);

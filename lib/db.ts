@@ -20,7 +20,86 @@ const { Database } = sqlite;
 const { SCHEMA, MIGRATIONS, POST_MIGRATION_SCHEMA } = schema;
 
 type DbValue = string | number | boolean | null | Uint8Array;
-type SqlRow = Record<string, any>;
+interface SqlRow { [key: string]: unknown }
+
+interface UsageRow extends SqlRow {
+  requests?: number;
+  prompt_tokens?: number;
+  completion_tokens?: number;
+  cached_prompt_tokens?: number;
+  cost_usd?: number | null;
+  latency_ms?: number | null;
+  errors?: number;
+  rate_limited?: number;
+  grounded_answers?: number;
+  fallbacks?: number;
+  suppressed?: number;
+  bucket?: string;
+  value?: string | null;
+  provider?: string | null;
+  created_at: number;
+  operation?: string | null;
+  model?: string | null;
+  channel?: string | null;
+  request_id?: string | null;
+  event_id?: string | null;
+  status?: string | null;
+  result?: string | null;
+  http_status?: number | null;
+  attempt?: number | null;
+  retry_count?: number | null;
+}
+
+interface ProgramDbRow extends SqlRow {
+  id: string;
+  name: string;
+  posture: string;
+  scope: string | null;
+  workspace_id: string | null;
+  deployment_mode: string | null;
+  support_name: string | null;
+  icon_url: string | null;
+  reply_signature: string | null;
+  ai_answers: number | null;
+  tickets_enabled: number | null;
+  auto_escalate: number | null;
+  sensitive_categories: string | null;
+  support_active: number | null;
+  auto_assign: number | null;
+  helper_ping_enabled: number | null;
+  shadow_mode: number | null;
+  incident_mode: string | null;
+  public_tickets_enabled: number | null;
+  sla_unassigned_ms: number | null;
+  sla_assigned_ms: number | null;
+  sla_waiting_ms: number | null;
+  sla_target_ms: number | null;
+  sla_notify_channel: string | null;
+  retention_context_days: number | null;
+  retention_tickets_days: number | null;
+  retention_notes_days: number | null;
+  retention_traces_days: number | null;
+  retention_analytics_days: number | null;
+  retention_audit_days: number | null;
+  help_channel: string | null;
+  organizer_channel: string | null;
+  channels: string | null;
+  helper_group: string | null;
+  sources: string | null;
+  milestones: string | null;
+  guides: string | null;
+  links: string | null;
+  pinned_rules: string | null;
+  categories: string | null;
+  ticket_visibility: string | null;
+  behavior: string | null;
+  status: string | null;
+  learning: string | null;
+  updated_at: number;
+}
+
+interface MetricCountRow { kind: string; count: number }
+interface LatencyRow { latency_ms: number }
 
 interface ThreadMessage {
   role: string;
@@ -449,7 +528,7 @@ function assignUnownedLearnedFacts(ownerOfChannel: (channel: string | null) => s
   let assigned = 0;
   const update = query("UPDATE learned_facts SET program_id = ? WHERE id = ? AND program_id IS NULL");
   for (const r of rows) {
-    const owner = ownerOfChannel(r.channel || null);
+    const owner = ownerOfChannel((r as { channel?: string | null }).channel || null);
     if (!owner) continue;
     assigned += update.run(owner, r.id).changes;
   }
@@ -712,7 +791,7 @@ function llmUsageReport({ programId, from, until, bucket = "day", operation = nu
   const where = clauses.join(" AND ");
   const d = bucket === "hour" ? "%Y-%m-%dT%H:00:00Z" : "%Y-%m-%dT00:00:00Z";
   const base = `FROM llm_usage WHERE ${where}`;
-  const totals = query(`SELECT COUNT(DISTINCT COALESCE(request_id, 'event:' || id)) requests,
+  const totals = query<UsageRow>(`SELECT COUNT(DISTINCT COALESCE(request_id, 'event:' || id)) requests,
     COALESCE(SUM(total_tokens),0) total_tokens, COALESCE(SUM(prompt_tokens),0) prompt_tokens,
     COALESCE(SUM(cached_prompt_tokens),0) cached_prompt_tokens, COALESCE(SUM(completion_tokens),0) completion_tokens,
     SUM(cost_usd) cost_usd, AVG(latency_ms) latency_ms,
@@ -720,25 +799,25 @@ function llmUsageReport({ programId, from, until, bucket = "day", operation = nu
     SUM(rate_limited) rate_limited, SUM(CASE WHEN result='grounded' THEN 1 ELSE 0 END) grounded_answers,
     SUM(CASE WHEN result='fallback' THEN 1 ELSE 0 END) fallbacks, SUM(CASE WHEN result='suppressed' THEN 1 ELSE 0 END) suppressed
     FROM llm_usage WHERE ${where}`).get(...params);
-  const timeseries = query(`SELECT strftime('${d}', created_at / 1000, 'unixepoch') bucket,
+  const timeseries = query<UsageRow>(`SELECT strftime('${d}', created_at / 1000, 'unixepoch') bucket,
     COUNT(DISTINCT COALESCE(request_id, 'event:' || id)) requests, COALESCE(SUM(total_tokens),0) total_tokens,
     SUM(cost_usd) cost_usd FROM llm_usage WHERE ${where} GROUP BY bucket ORDER BY bucket`).all(...params);
-  const grouped = (column: "operation" | "provider" | "model" | "channel") => query(`SELECT ${column} value, MAX(provider) provider, COUNT(DISTINCT COALESCE(request_id, 'event:' || id)) requests,
+  const grouped = (column: "operation" | "provider" | "model" | "channel") => query<UsageRow>(`SELECT ${column} value, MAX(provider) provider, COUNT(DISTINCT COALESCE(request_id, 'event:' || id)) requests,
      COALESCE(SUM(prompt_tokens),0) prompt_tokens, COALESCE(SUM(cached_prompt_tokens),0) cached_prompt_tokens,
      COALESCE(SUM(completion_tokens),0) completion_tokens, COALESCE(SUM(total_tokens),0) total_tokens,
      SUM(cost_usd) cost_usd, AVG(latency_ms) latency_ms FROM llm_usage WHERE ${where} GROUP BY ${column} ORDER BY requests DESC LIMIT 100`).all(...params);
-  const totalActivity = query(`SELECT COUNT(*) n ${base}`).get(...params).n;
-  const recent = query(`SELECT created_at, operation, provider, model, channel, request_id, event_id, status, result, http_status, attempt, retry_count, latency_ms, rate_limited
-    ${base} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, safeLimit, safeOffset) as SqlRow[];
-  const metric = (row: SqlRow) => ({ requests: Number(row.requests || 0), inputTokens: Number(row.prompt_tokens || 0), outputTokens: Number(row.completion_tokens || 0), cachedInputTokens: Number(row.cached_prompt_tokens || 0), costCents: row.cost_usd == null ? null : Number((row.cost_usd * 100).toFixed(2)) });
-  const rowsFor = (column: "operation" | "provider" | "model" | "channel") => grouped(column).map((row: SqlRow) => ({ ...metric(row), name: row.value || "unknown", ...(column === "model" ? { provider: row.provider || "unknown" } : {}) }));
+  const totalActivity = Number((query<{ n: number }>(`SELECT COUNT(*) n ${base}`).get(...params)).n);
+  const recent = query<UsageRow>(`SELECT created_at, operation, provider, model, channel, request_id, event_id, status, result, http_status, attempt, retry_count, latency_ms, rate_limited
+    ${base} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, safeLimit, safeOffset);
+  const metric = (row: UsageRow) => ({ requests: Number(row.requests || 0), inputTokens: Number(row.prompt_tokens || 0), outputTokens: Number(row.completion_tokens || 0), cachedInputTokens: Number(row.cached_prompt_tokens || 0), costCents: row.cost_usd == null ? null : Number((row.cost_usd * 100).toFixed(2)) });
+  const rowsFor = (column: "operation" | "provider" | "model" | "channel") => grouped(column).map((row) => ({ ...metric(row), name: row.value || "unknown", ...(column === "model" ? { provider: row.provider || "unknown" } : {}) }));
   const summary = metric(totals);
   return { programId, from: new Date(start).toISOString(), to: new Date(end).toISOString(), bucket,
     precision: totals.cost_usd == null ? "unavailable" : "exact", requests: summary.requests, inputTokens: summary.inputTokens,
     outputTokens: summary.outputTokens, cachedInputTokens: summary.cachedInputTokens, costCents: summary.costCents,
     summary: { ...summary, latencyMs: totals.latency_ms == null ? null : Number(totals.latency_ms), errors: Number(totals.errors || 0), rateLimited: Number(totals.rate_limited || 0), groundedAnswers: Number(totals.grounded_answers || 0), fallbacks: Number(totals.fallbacks || 0), suppressed: Number(totals.suppressed || 0), rate_limited: Number(totals.rate_limited || 0), cost_usd: totals.cost_usd },
-    timeseries: timeseries.map((row: SqlRow) => ({ ...metric(row), at: `${row.bucket}` })), operation: rowsFor("operation"), provider: rowsFor("provider"), model: rowsFor("model"),
-    topConsumers: rowsFor("channel").map((row: SqlRow) => ({ ...row, consumerId: row.name })),
+    timeseries: timeseries.map((row) => ({ ...metric(row), at: `${row.bucket}` })), operation: rowsFor("operation"), provider: rowsFor("provider"), model: rowsFor("model"),
+    topConsumers: rowsFor("channel").map((row) => ({ ...row, consumerId: row.name })),
     recent: recent.map(({ created_at, operation: op, provider, model, channel, request_id, status, latency_ms, rate_limited, retry_count }) => ({
       at: new Date(created_at).toISOString(),
       operation: op,
@@ -755,8 +834,8 @@ function llmUsageReport({ programId, from, until, bucket = "day", operation = nu
     pagination: { limit: safeLimit, offset: safeOffset, total: totalActivity, hasMore: safeOffset + recent.length < totalActivity } };
 }
 
-function metricCounts(sinceMs = 7 * 24 * 60 * 60 * 1000, untilMs = null) {
-  return query("SELECT kind, COUNT(*) AS count FROM metrics WHERE created_at > ? AND created_at <= ? GROUP BY kind")
+function metricCounts(sinceMs = 7 * 24 * 60 * 60 * 1000, untilMs = null): MetricCountRow[] {
+  return query<MetricCountRow>("SELECT kind, COUNT(*) AS count FROM metrics WHERE created_at > ? AND created_at <= ? GROUP BY kind")
     .all(now() - sinceMs, untilMs === null ? now() : untilMs);
 }
 
@@ -769,8 +848,8 @@ function metricDetails(kind: string, sinceMs = 7 * 24 * 60 * 60 * 1000) {
     .all(kind, now() - sinceMs);
 }
 
-function medianLatency(kind: string, sinceMs = 7 * 24 * 60 * 60 * 1000) {
-  const rows = query("SELECT latency_ms FROM metrics WHERE kind = ? AND latency_ms IS NOT NULL AND created_at > ? ORDER BY latency_ms")
+function medianLatency(kind: string, sinceMs = 7 * 24 * 60 * 60 * 1000): number | null {
+  const rows = query<LatencyRow>("SELECT latency_ms FROM metrics WHERE kind = ? AND latency_ms IS NOT NULL AND created_at > ? ORDER BY latency_ms")
     .all(kind, now() - sinceMs);
   if (rows.length === 0) return null;
   return rows[Math.floor(rows.length / 2)].latency_ms;
@@ -868,8 +947,8 @@ function safeJson(text: string) {
 }
 
 function getDbPrograms() {
-  const rows = query("SELECT * FROM programs ORDER BY id ASC").all();
-  return rows.map((r: SqlRow) => ({
+  const rows = query<ProgramDbRow>("SELECT * FROM programs ORDER BY id ASC").all();
+  return rows.map((r) => ({
     id: r.id,
     name: r.name,
     posture: r.posture,
@@ -1009,7 +1088,7 @@ function saveProgram(p: PersistedProgram) {
   }
 }
 
-function deleteProgram(id: number) {
+function deleteProgram(id: string | number) {
   return query("DELETE FROM programs WHERE id = ?").run(id).changes > 0;
 }
 
@@ -1233,8 +1312,8 @@ function releaseProgramChannel({ workspaceId = null, channelId, programId = null
   return query("DELETE FROM program_channels WHERE workspace_id = ? AND channel_id = ?").run(ws, channelId).changes > 0;
 }
 
-function getChannelOwner(workspaceId: string | null = null, channelId: string) {
-  return query("SELECT * FROM program_channels WHERE workspace_id = ? AND channel_id = ?").get(workspaceId || "default", channelId) || null;
+function getChannelOwner(workspaceId: string | null = null, channelId: string): ChannelClaimRow | null {
+  return query<ChannelClaimRow>("SELECT * FROM program_channels WHERE workspace_id = ? AND channel_id = ?").get(workspaceId || "default", channelId) || null;
 }
 
 function listChannelClaims() {

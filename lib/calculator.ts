@@ -2,29 +2,42 @@
 // improvise payout, Restoration Energy, or shop-hour totals.
 import shop = require("./shop");
 
-type UntypedInput = any;
+interface ShopEconomy {
+  pixelValueUsd: number;
+  basePayoutUsd: number;
+  maxPayoutUsd: number;
+  reForMaxPayout: number;
+  payoutSteps: Array<{ re: number; usd: number }>;
+  tierRePerHour: number[];
+}
+
+interface ShopItem { name: string; price?: number }
+interface CalculatorData { economy?: ShopEconomy; items?: ShopItem[] }
+interface TargetArgs { question: string; targetItem: ShopItem | null; hours: number | null; currentRe: number; tier: number; economy: ShopEconomy }
+interface AffordableArgs { question: string; items: ShopItem[]; hours: number | null; currentRe: number; tier: number; economy: ShopEconomy }
+interface PayoutArgs { hours: number | null; currentRe: number; tier: number; economy: ShopEconomy }
 const HOURS_REGEX = /\b(\d+(?:\.\d+)?)\s*(?:hrs?|hours?)\b/i;
 const RE_REGEX = /\b(\d+(?:\.\d+)?)\s*(?:re|restoration energy)\b/i;
 const CALCULATOR_INTENT_REGEX = /\b(?:calculate|how much (?:will|do) i (?:earn|make|get)|how many more hours|how much more hours|can i afford|what can i (?:get|buy|afford)|hours? (?:left|needed|remaining)|payout for)\b/i;
 
-function parseHours(text: UntypedInput) {
+function parseHours(text: string) {
   const m = String(text || "").match(HOURS_REGEX);
   return m ? parseFloat(m[1]) : null;
 }
 
-function parseRe(text: UntypedInput) {
+function parseRe(text: string) {
   const m = String(text || "").match(RE_REGEX);
   return m ? parseFloat(m[1]) : null;
 }
 
-function isCalculatorQuery(text: UntypedInput) {
+function isCalculatorQuery(text: string) {
   const t = String(text || "");
   const hasHours = HOURS_REGEX.test(t);
   const hasIntent = CALCULATOR_INTENT_REGEX.test(t);
   return (hasHours && hasIntent) || (/\b(?:calculate|calculator|calc)\b/i.test(t) && (hasHours || RE_REGEX.test(t)));
 }
 
-function directAnswer(question: UntypedInput, data = null) {
+function directAnswer(question: string, data: CalculatorData | null = null) {
   // A calculator response is eligible only after both numeric shape and intent match.
   if (!isCalculatorQuery(question)) return null;
 
@@ -48,7 +61,7 @@ function directAnswer(question: UntypedInput, data = null) {
 }
 
 
-function answerForTargetItem({ question, targetItem, hours, currentRe, tier, economy }: Record<string, UntypedInput>) {
+function answerForTargetItem({ question, targetItem, hours, currentRe, tier, economy }: TargetArgs) {
   if (!targetItem || shop.isTrophy(targetItem) || shop.isUnpriced(targetItem)) return null;
   const tierName = shop.TIER_NAMES[tier - 1] || "Spark";
   const rateRe = shop.rePerHour(tier, economy);
@@ -87,15 +100,15 @@ function answerForTargetItem({ question, targetItem, hours, currentRe, tier, eco
   };
 }
 
-function answerForAffordable({ question, items, hours, currentRe, tier, economy }: Record<string, UntypedInput>) {
+function answerForAffordable({ question, items, hours, currentRe, tier, economy }: AffordableArgs) {
   if (!(/\b(?:what can i (?:get|buy|afford)|affordable)\b/i.test(question) && items.length > 0 && hours !== null)) return null;
   const tierName = shop.TIER_NAMES[tier - 1] || "Spark";
   const rateRe = shop.rePerHour(tier, economy);
   const earnedRe = currentRe + (hours * rateRe);
   const estimatedPx = Math.round(hours * shop.pxPerHour(0, economy));
   const affordable = items
-    .filter((i: UntypedInput) => !shop.isTrophy(i) && !shop.isUnpriced(i) && shop.priceOf(i) <= estimatedPx)
-    .sort((a: UntypedInput, b: UntypedInput) => shop.priceOf(b) - shop.priceOf(a))
+    .filter((i) => !shop.isTrophy(i) && !shop.isUnpriced(i) && shop.priceOf(i) <= estimatedPx)
+    .sort((a, b) => shop.priceOf(b) - shop.priceOf(a))
     .slice(0, 5);
 
   const lines = [
@@ -119,7 +132,7 @@ function answerForAffordable({ question, items, hours, currentRe, tier, economy 
   };
 }
 
-function answerForPayout({ hours, currentRe, tier, economy }: Record<string, UntypedInput>) {
+function answerForPayout({ hours, currentRe, tier, economy }: PayoutArgs) {
   if (hours === null) return null;
   const tierName = shop.TIER_NAMES[tier - 1] || "Spark";
   const rateRe = shop.rePerHour(tier, economy);
