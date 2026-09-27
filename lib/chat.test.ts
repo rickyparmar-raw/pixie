@@ -23,9 +23,6 @@ test("looksLikeQuestion catches question marks and question words", () => {
   assert.equal(looksLikeQuestion("anyone know about hackatime"), true);
 });
 
-// "whats"/"hows" without the apostrophe is how people actually type in Slack,
-// and \bwhat\b does not match it — this sent "pixie whats up" to the dead-end
-// fallback.
 test("looksLikeQuestion handles apostrophe-less contractions", () => {
   assert.equal(looksLikeQuestion("pixie whats up"), true);
   assert.equal(looksLikeQuestion("hows the deadline looking"), true);
@@ -48,14 +45,11 @@ test("looksLikeQuestion treats pasted code as something to respond to", () => {
   assert.equal(looksLikeQuestion("```\nSyntaxError: bad\n```"), true);
 });
 
-/* ------------------------------ ANSWER PIPELINE characterization (audit) -- */
 
 test("CHAR: chat prompts stay ungrounded-helpful but hard-block Pixl specifics", () => {
   const chat = require("./chat");
   const sys = chat.chatSystemPrompt("", false);
   const dbg = chat.debugSystemPrompt("", false);
-  // Guardrail present in both prompts: the conversational path must never
-  // invent program specifics — that is the grounded path's job.
   assert.match(sys, /you do NOT know the answer/i);
   assert.match(dbg, /you do NOT know the answer/i);
   assert.match(sys, /1-3 sentences/);

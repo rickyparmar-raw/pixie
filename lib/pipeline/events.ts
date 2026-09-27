@@ -1,6 +1,3 @@
-// One sanitized structured event per answer lifecycle. Carries decisions and
-// timings only: never message text, retrieved documents, tokens, or raw user
-// ids. Program id and channel role are configuration, not personal data.
 const log = require("../log");
 
 const FIELDS = [
@@ -21,24 +18,27 @@ const FIELDS = [
 ];
 
 const SAFE_VALUE = /^[A-Za-z0-9_.:-]{0,64}$/;
+type EventValue = string | number | boolean | null | undefined;
+interface EventFields { [key: string]: EventValue }
+interface EventOptions { programId?: string | null; role?: string | null; addressed?: boolean }
 
-function clean(value: any) {
+function clean(value: unknown) {
   if (value === null || value === undefined) return null;
   if (typeof value === "boolean" || typeof value === "number") return value;
   const s = String(value);
   return SAFE_VALUE.test(s) ? s : "invalid";
 }
 
-function format(event: any) {
-  return FIELDS.map((k: any) => `${k}=${clean(event[k])}`).join(" ");
+function format(event: EventFields) {
+  return FIELDS.map((k) => `${k}=${clean(event[k])}`).join(" ");
 }
 
-function start({ programId = null, role = null, addressed = false }: any = {}) {
+function start({ programId = null, role = null, addressed = false }: EventOptions = {}) {
   const startedAt = Date.now();
-  const event: Record<string, any> = { program_id: programId, channel_role: role, addressed: Boolean(addressed) };
+  const event: EventFields = { program_id: programId, channel_role: role, addressed: Boolean(addressed) };
   let done = false;
   return {
-    set(fields: any = {}) {
+    set(fields: EventFields = {}) {
       if ("classifier" in fields) event.classifier = fields.classifier;
       if ("intent" in fields) event.intent = fields.intent;
       if ("shouldEngage" in fields) event.should_engage = fields.shouldEngage;
@@ -48,7 +48,7 @@ function start({ programId = null, role = null, addressed = false }: any = {}) {
       if ("ticketRequested" in fields) event.ticket_requested = fields.ticketRequested;
       if ("helperEscalated" in fields) event.helper_escalated = fields.helperEscalated;
     },
-    finish(fields: any = {}) {
+    finish(fields: EventFields = {}) {
       if (done) return event;
       done = true;
       this.set(fields);

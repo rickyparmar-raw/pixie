@@ -1,72 +1,36 @@
-// Picks the parts of the corpus a question actually needs.
-//
-// Every answer used to ship the whole corpus — ~30k characters, of which one
-// paragraph was relevant. That is mostly an accuracy problem rather than a speed
-// one: the model reads 8k tokens looking for the bit that matters, and the
-// measured result was 26 doc-grounded answers against 71 where it gave up on the
-// docs and freestyled instead.
-//
-// Ranking is BM25 over chunks. Deliberately no embeddings yet — this adds no
-// dependency and no latency, and the numbers it produces are what should decide
-// whether a model is worth introducing.
 const log = require("./log");
 
-// Chunks below MIN read as fragments with no context; above MAX they stop being
-// selective, which is the problem being solved. Prose paragraphs in the Pixl
-// docs sit comfortably inside this band.
+type Domain = "hardware" | "software" | "general";
+type Section = [string, string];
+interface Chunk { source: string; heading: string | null; domain: Domain; text: string }
+interface IndexedDoc { chunk: Chunk; freq: Map<string, number>; length: number }
+interface SearchIndex { docs: IndexedDoc[]; docFreq: Map<string, number>; avgLength: number }
+interface ScoreFlags { isAiQuery: boolean; isFirmwareQuery: boolean; isSoftwareQuery: boolean; isHardwareQuery: boolean; isCadOrPcbQuery: boolean; isReadmeQuery: boolean; isReturnedQuery: boolean; isReferralQuery: boolean; isDisclosureQuery: boolean; isConsequenceQuery: boolean; queryMentionsHours: boolean }
+interface AiSignals { has30Percent: boolean; isHardwareAiProhibition: boolean; isFirmwareAiRule: boolean; isReadmeAiRule: boolean; isDisclosureChunk: boolean; isConsequenceChunk: boolean; isGenericAiAllowance: boolean; isVagueHonestyHeading: boolean; isVagueAllowance: boolean }
+interface DomainSignals { isHardwareChunk: boolean; isSoftwareChunk: boolean }
+interface ScoredChunk { chunk: Chunk; value: number }
+interface SelectContextOptions { generated: Section[]; learned?: Section[]; index: SearchIndex; sources: Section[]; question: string; budget?: number; exclude?: Set<string> | string[] | null; generatedLast?: boolean }
+
 const MIN_CHUNK = 100;
 const MAX_CHUNK = 900;
 
-// Roughly 500-600 tokens of retrieved docs. Generated sections are budgeted
-// separately below — they used to ride on top of this unbilled, which is how a
-// 14k-char "Learned answers" section once filled the whole prompt in prod.
 const DEFAULT_BUDGET = 2500;
 
-// Per-section budgets for everything getContext() may return. Evidence keeps
-// DEFAULT_BUDGET; identity, timeline and learned answers each get their own
-// named cap so one unbounded section can never starve the others again. The
-// hard cap is the contract: selectContext() output never exceeds it.
 const IDENTITY_BUDGET = 2500;
 const TIMELINE_BUDGET = 1200;
 const LEARNED_BUDGET = 1500;
-// Even a perfect question matches at most a handful of taught facts; past that
-// the section is filler, not evidence.
 const LEARNED_MAX_FACTS = 5;
-// 2500 + 1200 + 2500 + 1500 = 7700, plus slack for the "### name" headings.
 const TOTAL_CONTEXT_BUDGET = 8000;
 
-// Standard BM25 constants. k1 damps how much a repeated term keeps helping, b
-// controls how hard a long chunk gets penalised for its length.
 const K1 = 1.2;
 const B = 0.75;
 
-// A deciding rule (hardware 0% AI, README ban, referral expiry) must outrank any
-// number of generic BM25 matches, or the generic allowance wins by word count.
 const BOOST_DECIDING_RULE = 6.0;
-// The specific 30% cap must beat vague AI mentions, but stays below a deciding
-// prohibition so hardware/README rules still win outright.
 const BOOST_SPECIFIC_CAP = 5.0;
-// Returned-submission feedback must beat deflation chatter for the same words.
 const BOOST_RETURNED_RULE = 5.0;
-// Domain isolation (+software/-hardware) only nudges: it breaks ties between
-// equally matching chunks, never overrules a deciding rule.
 const BOOST_DOMAIN_MATCH = 3.0;
-// A contradictory generic allowance scores zero — it must not reach the model
-// alongside the prohibition it contradicts.
 const DEMOTE_CONTRADICTION = 0.1;
 
-// Words carried by nearly every question, so they say nothing about which chunk
-// is the right one and just add noise to the scores.
-// Contractions are listed alongside the words they contract. Punctuation is
-// stripped before this runs, so "what's" arrives as "whats" — which meant the
-// apostrophe form dropped "what" as filler while the contracted form kept
-// "whats" as if it were meaningful, and the two hashed to different cache keys.
-// Measured: "whats restoration energy" missed a cached "What's Restoration
-// Energy?" for exactly this reason.
-//
-// Negation contractions are deliberately NOT here. "cant"/"wont" would collapse
-// into the words they negate, and "can i submit" is not the same question as
-// "cant i submit".
 const STOPWORDS = new Set([
   "the", "a", "an", "and", "or", "but", "if", "of", "to", "in", "on", "at", "for", "with", "is", "are", "was",
   "were", "be", "been", "it", "its", "this", "that", "these", "those", "i", "im", "my", "me", "you", "your",
@@ -99,7 +63,7 @@ const DISCLOSURE_TERMS = ["disclose", "disclosure"];
 const CONSEQUENCE_TERMS = ["exceed", "hide", "hiding", "consequence", "fraud", "ban", "penalty"];
 const HOURS_TERMS = ["hour", "hours", "deflate", "deflation", "reduce", "payout"];
 
-function detectDomain(text: any) {
+function detectDomain(text: string): Domain {
   const lowered = String(text || "").toLowerCase();
   const hasHardware =
     /\b(?:hardware|pcb|wiring\s+diagram|gerber|breadboard|soldering|schematic|cad\b|3d\s+model|\.step\b|\.stl\b|kicad|easyeda|devboard|macropad|circuit|resistor)\b/i.test(lowered);
@@ -111,11 +75,7 @@ function detectDomain(text: any) {
   return "general";
 }
 
-// Matching was exact, so a question about "rates" scored zero against docs
-// that say "rate" and the retriever handed back unrelated chunks. Deliberately
-// blunter than a real stemmer: only regular plurals, and never on words short
-// enough or -ss enough that folding would collide two different words.
-function foldPlural(token: any) {
+function foldPlural(token: string) {
   if (token.length > 4 && token.endsWith("ies")) return `${token.slice(0, -3)}y`;
   if (token.length > 4 && /(ss|sh|ch|x|z)es$/.test(token)) return token.slice(0, -2);
   if (token.length > 3 && token.endsWith("s") && !token.endsWith("ss") && !token.endsWith("us")) {
@@ -124,14 +84,14 @@ function foldPlural(token: any) {
   return token;
 }
 
-function tokenize(text: any) {
+function tokenize(text: string): string[] {
   const rawWords = (text || "")
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, " ")
     .split(/\s+/)
     .filter(Boolean);
 
-  const tokens: any[] = [];
+  const tokens: string[] = [];
   for (const word of rawWords) {
     if (word.includes("-")) {
       for (const part of word.split("-")) {
@@ -176,18 +136,15 @@ function tokenize(text: any) {
   return tokens;
 }
 
-// Splits on blank lines first, then merges neighbours that are too small to
-// stand alone. Markdown headings start a new chunk and are repeated into it, so
-// a chunk retrieved on its own still says what it is about.
-function chunkSection(name: any, rawText: any) {
+function chunkSection(name: string, rawText: string): Chunk[] {
   const normalized = String(rawText || "")
     .replace(/([^\n])\n(#{1,6}\s+)/g, "$1\n\n$2")
     .replace(/([.?!])\n([A-Z0-9*-])/g, "$1\n\n$2")
     .trim();
   if (!normalized) return [];
-  const paragraphs = normalized.split(/\n\s*\n/).map((p: any) => p.trim()).filter(Boolean);
-  const chunks: any[] = [];
-  let heading: any = null;
+  const paragraphs = normalized.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const chunks: Chunk[] = [];
+  let heading: string | null = null;
   let buffer = "";
 
   const flush = () => {
@@ -206,14 +163,11 @@ function chunkSection(name: any, rawText: any) {
 
   for (const paragraph of paragraphs) {
     const headingMatch = paragraph.match(/^#{1,6}\s+(.+)$/m);
-    // A heading starts a new chunk when it opens the paragraph.
     if (headingMatch && paragraph.startsWith("#")) {
       flush();
       heading = headingMatch[1].trim();
     }
 
-    // Something far past the cap on its own can't be merged into anything; split
-    // it on sentence ends or line breaks so no chunk is cut mid-thought.
     if (paragraph.length > MAX_CHUNK) {
       flush();
       let piece = "";
@@ -230,10 +184,6 @@ function chunkSection(name: any, rawText: any) {
       continue;
     }
 
-    // Avoid clumping distinct paragraphs:
-    // If buffer already holds a complete thought (not an introductory lead-in ending with a colon),
-    // or if merging would cross domain boundaries (software vs hardware),
-    // flush the buffer first so each distinct paragraph stands on its own.
     if (buffer && shouldFlushBeforeMerge(buffer, paragraph)) {
       flush();
     }
@@ -255,7 +205,7 @@ function chunkSection(name: any, rawText: any) {
   return chunks;
 }
 
-function shouldFlushBeforeMerge(buffer: any, paragraph: any) {
+function shouldFlushBeforeMerge(buffer: string, paragraph: string) {
   const bufDomain = detectDomain(buffer);
   const paraDomain = detectDomain(paragraph);
   const domainConflict =
@@ -267,32 +217,30 @@ function shouldFlushBeforeMerge(buffer: any, paragraph: any) {
   return buffer.length + paragraph.length > MAX_CHUNK;
 }
 
-function chunkSections(sections: any) {
-  return sections.flatMap(([name, text]: any) => chunkSection(name, text));
+function chunkSections(sections: Section[]) {
+  return sections.flatMap(([name, text]) => chunkSection(name, text));
 }
 
-// Precomputes term frequencies once per corpus build so scoring a question is
-// just a walk over the postings rather than a re-tokenisation of every chunk.
-function buildIndex(chunks: any) {
-  const docs = chunks.map((chunk: any) => {
+function buildIndex(chunks: Chunk[]): SearchIndex {
+  const docs: IndexedDoc[] = chunks.map((chunk) => {
     const terms = tokenize(`${chunk.heading || ""} ${chunk.text}`);
-    const freq = new Map();
+    const freq = new Map<string, number>();
     for (const term of terms) freq.set(term, (freq.get(term) || 0) + 1);
     return { chunk, freq, length: terms.length };
   });
 
-  const docFreq = new Map();
+  const docFreq = new Map<string, number>();
   for (const doc of docs) {
     for (const term of doc.freq.keys()) docFreq.set(term, (docFreq.get(term) || 0) + 1);
   }
 
-  const totalLength = docs.reduce((sum: any, d: any) => sum + d.length, 0);
+  const totalLength = docs.reduce((sum, d) => sum + d.length, 0);
   return { docs, docFreq, avgLength: docs.length > 0 ? totalLength / docs.length : 0 };
 }
 
-function classifyQuery(queryTerms: any) {
-  const has = (list: any) => queryTerms.some((term: any) => list.includes(term));
-  const hasSet = (set: any) => queryTerms.some((term: any) => set.has(term));
+function classifyQuery(queryTerms: string[]): ScoreFlags {
+  const has = (list: string[]) => queryTerms.some((term) => list.includes(term));
+  const hasSet = (set: Set<string>) => queryTerms.some((term) => set.has(term));
   const isFirmwareQuery = has(FIRMWARE_TERMS);
   return {
     isAiQuery: has(AI_TERMS),
@@ -300,7 +248,7 @@ function classifyQuery(queryTerms: any) {
     isSoftwareQuery: hasSet(SOFTWARE_TERMS),
     isHardwareQuery: !isFirmwareQuery && hasSet(HARDWARE_TERMS),
     isCadOrPcbQuery: has(CAD_TERMS),
-    isReadmeQuery: queryTerms.some((term: any) => term === "readme"),
+    isReadmeQuery: queryTerms.some((term) => term === "readme"),
     isReturnedQuery: has(RETURNED_TERMS),
     isReferralQuery: has(REFERRAL_TERMS),
     isDisclosureQuery: has(DISCLOSURE_TERMS),
@@ -309,26 +257,25 @@ function classifyQuery(queryTerms: any) {
   };
 }
 
-function bm25TermScore(tf: any, docLength: any, avgLength: any, idf: any) {
+function bm25TermScore(tf: number, docLength: number, avgLength: number, idf: number) {
   const norm = tf * (K1 + 1);
   const denom = tf + K1 * (1 - B + (B * docLength) / (avgLength || 1));
   return idf * (norm / denom);
 }
 
-function baseScore(doc: any, queryTerms: any, total: any, docFreq: any, avgLength: any) {
+function baseScore(doc: IndexedDoc, queryTerms: string[], total: number, docFreq: Map<string, number>, avgLength: number) {
   let value = 0;
   for (const term of queryTerms) {
     const tf = doc.freq.get(term);
     if (!tf) continue;
-    // +1 inside the log keeps the weight positive for a term that appears in
-    // every chunk, rather than letting it push a score negative.
-    const idf = Math.log(1 + (total - docFreq.get(term) + 0.5) / (docFreq.get(term) + 0.5));
+    const frequency = docFreq.get(term) ?? 0;
+    const idf = Math.log(1 + (total - frequency + 0.5) / (frequency + 0.5));
     value += bm25TermScore(tf, doc.length, avgLength, idf);
   }
   return value;
 }
 
-function aiChunkSignals(text: any, heading: any, combined: any) {
+function aiChunkSignals(text: string, heading: string, combined: string): AiSignals {
   return {
     has30Percent: /30\s*%|30\s*percent|hard ceiling/i.test(combined),
     isHardwareAiProhibition:
@@ -345,7 +292,7 @@ function aiChunkSignals(text: any, heading: any, combined: any) {
   };
 }
 
-function applyAiBoost(value: any, flags: any, signals: any) {
+function applyAiBoost(value: number, flags: ScoreFlags, signals: AiSignals) {
   if (!flags.isAiQuery) return value;
   if (flags.isFirmwareQuery) {
     if (signals.isFirmwareAiRule) return value + BOOST_DECIDING_RULE;
@@ -353,7 +300,6 @@ function applyAiBoost(value: any, flags: any, signals: any) {
     return value;
   }
   if (flags.isHardwareQuery || flags.isCadOrPcbQuery) {
-    // Specific rule: Hardware CAD/PCB 0% AI strictly beats generic software AI allowance
     if (signals.isHardwareAiProhibition) return value + BOOST_DECIDING_RULE;
     const generic = signals.isGenericAiAllowance && !signals.isHardwareAiProhibition && !signals.isReadmeAiRule;
     if (generic) return 0;
@@ -373,7 +319,6 @@ function applyAiBoost(value: any, flags: any, signals: any) {
     if (signals.isConsequenceChunk) return value + BOOST_DECIDING_RULE;
     return value;
   }
-  // General AI query: prioritize specific 30% cap over vague mentions
   if (signals.has30Percent || signals.isHardwareAiProhibition) return value + BOOST_SPECIFIC_CAP;
   if (signals.isVagueHonestyHeading || (signals.isVagueAllowance && !signals.has30Percent)) {
     return value * DEMOTE_CONTRADICTION;
@@ -381,7 +326,7 @@ function applyAiBoost(value: any, flags: any, signals: any) {
   return value;
 }
 
-function chunkDomainSignals(domain: any, combined: any) {
+function chunkDomainSignals(domain: Domain, combined: string): DomainSignals {
   return {
     isHardwareChunk: domain === "hardware" ||
       /hardware-requirements|hardware\s+requirements|\bpcb\b|wiring\s+diagram|gerber|breadboard|soldering|\bcad\b|3d\s+model|\.step\b|\.stl\b/i.test(combined),
@@ -390,22 +335,20 @@ function chunkDomainSignals(domain: any, combined: any) {
   };
 }
 
-function applyDomainBoost(value: any, flags: any, domainSignals: any) {
+function applyDomainBoost(value: number, flags: ScoreFlags, domainSignals: DomainSignals) {
   if (flags.isSoftwareQuery && !flags.isHardwareQuery) {
-    // Software-specific query: NEVER return pure hardware chunks (wiring diagrams, PCBs, CAD, etc.)
     if (domainSignals.isHardwareChunk && !domainSignals.isSoftwareChunk) return 0;
     if (domainSignals.isSoftwareChunk) return value + BOOST_DOMAIN_MATCH;
     return value;
   }
   if (flags.isHardwareQuery && !flags.isSoftwareQuery) {
-    // Hardware-specific query: NEVER return pure software chunks
     if (domainSignals.isSoftwareChunk && !domainSignals.isHardwareChunk) return 0;
     if (domainSignals.isHardwareChunk) return value + BOOST_DOMAIN_MATCH;
   }
   return value;
 }
 
-function applyReturnedBoost(value: any, flags: any, combined: any) {
+function applyReturnedBoost(value: number, flags: ScoreFlags, combined: string) {
   if (!flags.isReturnedQuery) return value;
   const isReturnedChunk =
     /(?:returned|needs changes|resubmitted|resubmit)/i.test(combined) &&
@@ -418,7 +361,7 @@ function applyReturnedBoost(value: any, flags: any, combined: any) {
   return value;
 }
 
-function applyReferralBoost(value: any, flags: any, combined: any) {
+function applyReferralBoost(value: number, flags: ScoreFlags, combined: string) {
   if (!flags.isReferralQuery) return value;
   const isReferralChunk = /referral/i.test(combined);
   const hasExpiration = /(?:48\s*hours?|2\s*days?|expire|expiration)/i.test(combined);
@@ -426,15 +369,13 @@ function applyReferralBoost(value: any, flags: any, combined: any) {
   return value;
 }
 
-function boostedValue(base: any, doc: any, flags: any) {
+function boostedValue(base: number, doc: IndexedDoc, flags: ScoreFlags) {
   const text = doc.chunk.text || "";
   const heading = doc.chunk.heading || "";
   const source = doc.chunk.source || "";
   const domain = doc.chunk.domain || detectDomain(text);
   const combined = `${heading} ${text} ${source}`;
   const rawSignals = aiChunkSignals(text, heading, combined);
-  // The generic-allowance exclusion needs the prohibition context resolved
-  // first: a chunk that IS the prohibition is never "generic".
   const signals = {
     ...rawSignals,
     isGenericAiAllowance:
@@ -450,32 +391,25 @@ function boostedValue(base: any, doc: any, flags: any) {
   return value;
 }
 
-function score(index: any, queryTerms: any) {
+function score(index: SearchIndex, queryTerms: string[]): ScoredChunk[] {
   const { docs, docFreq, avgLength } = index;
   const total = docs.length;
   const flags = classifyQuery(queryTerms);
   return docs
-    .map((doc: any) => {
+    .map((doc) => {
       const base = baseScore(doc, queryTerms, total, docFreq, avgLength);
       if (base <= 0) return { chunk: doc.chunk, value: 0 };
       return { chunk: doc.chunk, value: boostedValue(base, doc, flags) };
     })
-    .filter((r: any) => r.value > 0)
-    .sort((a: any, b: any) => b.value - a.value);
+    .filter((r) => r.value > 0)
+    .sort((a, b) => b.value - a.value);
 }
 
-// Returns the chunks worth sending, best first, stopping at the character
-// budget. Empty when nothing matched — callers decide what that means.
-function selectChunks(index: any, question: any, budget: any = DEFAULT_BUDGET) {
+function selectChunks(index: SearchIndex, question: string, budget = DEFAULT_BUDGET): Chunk[] {
   const queryTerms = tokenize(question);
   if (queryTerms.length === 0) return [];
 
-  // Stop, don't skip ahead: once the next-best chunk doesn't fit, scanning
-  // past it for a smaller, lower-ranked one that does used to mean a highly
-  // relevant chunk could get bumped for filler nobody asked about, just
-  // because it happened to be shorter — worse context from a corpus that had
-  // the real answer sitting right there.
-  const selected: any[] = [];
+  const selected: Chunk[] = [];
   let used = 0;
   for (const { chunk } of score(index, queryTerms)) {
     if (used + chunk.text.length > budget) break;
@@ -485,53 +419,30 @@ function selectChunks(index: any, question: any, budget: any = DEFAULT_BUDGET) {
   return selected;
 }
 
-// Assembles the string the answer prompt actually receives.
-//
-// `generated` is identity and timeline boilerplate, capped per section (never
-// ranked — ranking them against a question would eventually drop one, which is
-// exactly the failure knowledge.buildCorpus warns about). `learned` is the
-// "Learned answers" section, already relevance-filtered by lib/learn.js — only
-// the taught facts matching this question arrive here, capped at LEARNED_BUDGET.
-//
-// Falls back to the full corpus when retrieval finds nothing, because answering
-// from too much context beats answering from none.
-// `exclude` names sources that must not reach the model for this particular
-// question, whatever retrieval thinks of them. The shop catalogue is the case
-// it exists for: it scores well on any message naming something on the shelf,
-// and answering "my ps5 controller is drifting" with a price is the bot talking
-// over a conversation nobody invited it into.
-//
-// Whatever path is taken, the return value never exceeds TOTAL_CONTEXT_BUDGET.
-function selectContext({ generated, learned = [], index, sources, question, budget = DEFAULT_BUDGET, exclude = null, generatedLast = false }: any) {
+function selectContext({ generated, learned = [], index, sources, question, budget = DEFAULT_BUDGET, exclude = null, generatedLast = false }: SelectContextOptions) {
   const dropped = exclude instanceof Set ? exclude : new Set(exclude || []);
-  const kept = ([name]: any) => !dropped.has(name);
+  const kept = ([name]: Section) => !dropped.has(name);
 
-  // Which budget a boilerplate section bills against. Keyed by section name,
-  // not position, so old callers that still pass "Learned answers" inside
-  // `generated` get the learned cap rather than an unbounded pass-through.
-  const budgetFor = (name: any) => {
+  const budgetFor = (name: string) => {
     if (name === "About pixie") return IDENTITY_BUDGET;
     if (name === "Program timeline") return TIMELINE_BUDGET;
     if (name === "Learned answers") return LEARNED_BUDGET;
     return TIMELINE_BUDGET;
   };
-  const render = ([name, text]: any) => `### ${name}\n${String(text || "").slice(0, budgetFor(name))}`;
-  const renderLearned = ([name, text]: any) => `### ${name}\n${String(text || "").slice(0, LEARNED_BUDGET)}`;
+  const render = ([name, text]: Section) => `### ${name}\n${String(text || "").slice(0, budgetFor(name))}`;
+  const renderLearned = ([name, text]: Section) => `### ${name}\n${String(text || "").slice(0, LEARNED_BUDGET)}`;
 
-  const head = generated.filter(kept).filter(([, text]: any) => text).map(render);
-  const learnedSections = learned.filter(kept).filter(([, text]: any) => text).map(renderLearned);
+  const head = generated.filter(kept).filter(([, text]) => text).map(render);
+  const learnedSections = learned.filter(kept).filter(([, text]) => text).map(renderLearned);
   const first = [...head, ...learnedSections];
-  // generatedLast is the evidence-first order: retrieved passages first so a
-  // downstream truncation window keeps the evidence, not the boilerplate. The
-  // generation path keeps the default (identity/timeline first).
-  const order = (retrieved: any) => (generatedLast ? [...retrieved, ...first] : [...first, ...retrieved]).join("\n\n");
-  const enforceTotal = (text: any) => (text.length > TOTAL_CONTEXT_BUDGET ? text.slice(0, TOTAL_CONTEXT_BUDGET) : text);
+  const order = (retrieved: string[]) => (generatedLast ? [...retrieved, ...first] : [...first, ...retrieved]).join("\n\n");
+  const enforceTotal = (text: string) => (text.length > TOTAL_CONTEXT_BUDGET ? text.slice(0, TOTAL_CONTEXT_BUDGET) : text);
 
-  const chunks = selectChunks(index, question, budget).filter((c: any) => !dropped.has(c.source));
+  const chunks = selectChunks(index, question, budget).filter((c) => !dropped.has(c.source));
   if (chunks.length === 0) {
     log.debug("retrieve", `no chunk matched "${(question || "").slice(0, 60)}" — sending capped corpus`);
     let used = 0;
-    const capped: any[] = [];
+    const capped: string[] = [];
     for (const [name, text] of sources.filter(kept)) {
       if (used >= budget) break;
       const slice = text.slice(0, Math.max(200, budget - used));
@@ -541,15 +452,14 @@ function selectContext({ generated, learned = [], index, sources, question, budg
     return enforceTotal(order(capped));
   }
 
-  // Grouped by source so the model still sees which document a passage came
-  // from — citations depend on that name matching a real source.
-  const bySource = new Map();
+  const bySource = new Map<string, string[]>();
   for (const chunk of chunks) {
-    if (!bySource.has(chunk.source)) bySource.set(chunk.source, []);
-    bySource.get(chunk.source).push(chunk.text);
+    const texts = bySource.get(chunk.source) || [];
+    texts.push(chunk.text);
+    bySource.set(chunk.source, texts);
   }
 
-  const body = [...bySource].map(([name, texts]: any) => `### ${name}\n${texts.join("\n\n")}`);
+  const body = [...bySource].map(([name, texts]) => `### ${name}\n${texts.join("\n\n")}`);
   return enforceTotal(order(body));
 }
 

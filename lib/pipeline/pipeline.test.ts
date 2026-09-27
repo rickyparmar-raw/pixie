@@ -1,6 +1,3 @@
-// End-to-end message pipeline regressions (spec §34/§35): real respond()
-// orchestration, real channel policy and settings, stubbed classifier, answer
-// model, tickets and Slack. Hermetic — no network, no Slack.
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, expect, beforeEach, beforeAll, afterAll } = require("bun:test");
@@ -32,15 +29,22 @@ const context = require("../context");
 const guides = require("../guides");
 const respond = require("../respond");
 
-let savedEnv: any;
-const saved: Record<string, any> = {};
-function stub(obj: any, key: any, value: any) {
-  if (!(key in saved)) saved[key] = [obj, obj[key]];
-  obj[key] = value;
+type TestRecord = Record<string, unknown>;
+type TestMessage = TestRecord & { text?: string; ts?: string };
+type DecisionArgs = TestRecord & { message: string; conversationContext: string };
+type ProgramOverride = { pixl?: TestRecord; b2b?: TestRecord };
+type SendArgs = { channel: string; text: string; addressed?: boolean; threadTs?: string | null; messageTs?: string | null; seedClient?: unknown };
+type MatrixWant = { spoke?: boolean; ticket?: number; handoff?: number; answer?: number; jev?: number; text?: RegExp };
+
+let savedEnv: string | undefined;
+const saved: Record<string, [Record<string, unknown>, unknown]> = {};
+function stub(obj: object, key: string, value: unknown) {
+  const target = obj as Record<string, unknown>;
+  if (!(key in saved)) saved[key] = [target, target[key]];
+  target[key] = value;
 }
 
-// Jev script: message text → classification.
-const JEV: Record<string, any> = {
+const JEV: Record<string, { action: string; intent: string }> = {
   "what is restoration energy?": { action: "engage", intent: "direct_program_question" },
   "what is pixl?": { action: "engage", intent: "direct_program_question" },
   "lmao gg": { action: "silence", intent: "unrelated_chatter" },
@@ -55,8 +59,7 @@ const JEV: Record<string, any> = {
   "@ricky if you had to save @pixie or @pixorpheus who would you save?": { action: "silence", intent: "human_conversation" },
 };
 
-// Answer model script: grounded only where the program's docs support it.
-function fakeAnswer(question: any, program: any) {
+function fakeAnswer(question: string, program: { id?: string } | null | undefined) {
   const q = question.toLowerCase();
   if (q.includes("restoration energy") && program?.id === "pixl") {
     return { answer: "Restoration Energy is what you earn by restoring pixels.", source: "Pixl Docs" };
@@ -65,25 +68,24 @@ function fakeAnswer(question: any, program: any) {
   if (q.includes("resubmit") && program?.id === "pixl") return { answer: "Fix the notes and resubmit from your dashboard.", source: "Pixl Docs" };
   if (q.includes("pixorpheus")) return { answer: "Me, obviously. Pixorpheus can swim.", source: "NONE" };
   if (q.includes("cookie")) return { answer: "Cream butter and sugar, add chips, bake at 180C.", source: "NONE" };
-  // Everything else: the grounding boundary rejected any exact claim.
   return { answer: null, source: null, unclear: true };
 }
 
-let posts: any;
-let ticketCalls: any;
-let handOffs: any;
-let jevCalls: any;
-let answerCalls: any;
-let jevMode: any;
+let posts: TestMessage[];
+let ticketCalls: TestRecord[];
+let handOffs: TestRecord[];
+let jevCalls: DecisionArgs[];
+let answerCalls: TestRecord[];
+let jevMode: string;
 
 function client() {
   return {
     chat: {
-      postMessage: async (msg: any) => {
+      postMessage: async (msg: TestMessage) => {
         posts.push(msg);
         return { ok: true, ts: `p${posts.length}` };
       },
-      update: async (msg: any) => {
+      update: async (msg: TestMessage) => {
         posts.push({ ...msg, updated: true });
         return { ok: true, ts: msg.ts };
       },
@@ -91,7 +93,7 @@ function client() {
       postEphemeral: async () => ({ ok: true }),
     },
     reactions: { add: async () => ({ ok: true }) },
-    conversations: { replies: async () => ({ messages: [] }), history: async () => ({ messages: [] }) },
+    conversations: { replies: async (_args?: TestRecord) => ({ messages: [] as TestMessage[] }), history: async (_args?: TestRecord) => ({ messages: [] as TestMessage[] }) },
   };
 }
 
@@ -107,7 +109,7 @@ afterAll(() => {
   programs.invalidate();
 });
 
-function configure(overrides: any = {}) {
+function configure(overrides: ProgramOverride = {}) {
   const pixl = { ...PIXL, ...(overrides.pixl || {}) };
   const b2b = { ...B2B, ...(overrides.b2b || {}) };
   process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([pixl, b2b]);
@@ -123,25 +125,25 @@ beforeEach(() => {
   answerCalls = [];
   jevMode = "script";
   stub(jevDecision, "isEnabled", () => true);
-  stub(jevDecision, "evaluateSupportDecision", async (args: any) => {
+  stub(jevDecision, "evaluateSupportDecision", async (args: DecisionArgs) => {
     jevCalls.push(args);
     if (jevMode === "error") return { action: "error", errorKind: "timeout" };
     const hit = JEV[String(args.message).toLowerCase()];
     return hit ? { ...hit } : { action: "silence", intent: "unrelated_chatter" };
   });
   stub(lookup, "knownAnswer", () => null);
-  stub(lookup, "answerOrChat", async (question: any, _ctx: any, opts: any) => {
+  stub(lookup, "answerOrChat", async (question: string, _ctx: string, opts: { program?: { id?: string }; allowWebSearch?: boolean }) => {
     answerCalls.push({ question, program: opts.program?.id, allowWebSearch: opts.allowWebSearch });
     return fakeAnswer(question, opts.program);
   });
-  stub(tickets, "ensureSupportTicket", async (args: any) => {
+  stub(tickets, "ensureSupportTicket", async (args: TestRecord) => {
     ticketCalls.push(args);
     return { id: ticketCalls.length, status: "open" };
   });
-  stub(tickets, "handOffToHelper", async (args: any) => {
+  stub(tickets, "handOffToHelper", async (args: TestRecord) => {
     handOffs.push(args);
   });
-  stub(tickets, "escalateTicket", async (args: any) => {
+  stub(tickets, "escalateTicket", async (args: TestRecord) => {
     handOffs.push({ ...args, sensitive: true });
   });
   stub(context, "seedFromSlack", async () => {});
@@ -149,7 +151,7 @@ beforeEach(() => {
 });
 
 let seq = 0;
-async function send({ channel, text, addressed = false, threadTs = null, messageTs = null, seedClient = null }: any) {
+async function send({ channel, text, addressed = false, threadTs = null, messageTs = null, seedClient = null }: SendArgs) {
   seq += 1;
   const ts = messageTs || `${1000 + seq}.000`;
   return respond.respond({
@@ -165,9 +167,8 @@ async function send({ channel, text, addressed = false, threadTs = null, message
   });
 }
 
-const postedText = () => posts.map((p: any) => p.text || "").join("\n");
+const postedText = () => posts.map((p: TestMessage) => p.text || "").join("\n");
 
-/* ------------------------------------------------ main channel, ambient -- */
 
 test("main ambient: a Pixl program question is classified, retrieved and answered", async () => {
   const spoke = await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?" });
@@ -224,14 +225,13 @@ test("main ambient: 'how do i do this' with no referent stays silent", async () 
 });
 
 test("main ambient: 'how do i do this' with a clear thread referent retrieves and answers", async () => {
-  // The classifier sees the bounded thread context and engages.
-  stub(jevDecision, "evaluateSupportDecision", async (args: any) => {
+  stub(jevDecision, "evaluateSupportDecision", async (args: DecisionArgs) => {
     jevCalls.push(args);
     return /restoration energy/i.test(args.conversationContext)
       ? { action: "engage", intent: "ambiguous_followup" }
       : { action: "silence", intent: "ambiguous_followup" };
   });
-  stub(lookup, "answerOrChat", async (question: any, ctx: any, opts: any) => {
+  stub(lookup, "answerOrChat", async (question: string, ctx: string, opts: { program?: { id?: string } }) => {
     answerCalls.push({ question, program: opts.program?.id });
     return /restoration energy/i.test(ctx) ? { answer: "Restore pixels in the editor to earn it.", source: "Pixl Docs" } : { unclear: true };
   });
@@ -243,12 +243,10 @@ test("main ambient: 'how do i do this' with a clear thread referent retrieves an
 });
 
 test("main ambient: a top-level fragment is classified with the channel's last messages", async () => {
-  // "it expires tomorrow" alone looks like a question about expiry; next to the
-  // chat it answers, it is one member replying to another.
-  const historyCalls: any[] = [];
-  const slack: any = client();
-  slack.conversations.history = async (args: any) => {
-    historyCalls.push(args);
+  const historyCalls: TestRecord[] = [];
+  const slack = client();
+  slack.conversations.history = async (args?: TestRecord) => {
+    historyCalls.push(args || {});
     return {
       messages: [
         { user: "U_OTHER", text: "yo is your hackatime streak still going?", ts: "1.3" },
@@ -257,7 +255,7 @@ test("main ambient: a top-level fragment is classified with the channel's last m
       ],
     };
   };
-  stub(jevDecision, "evaluateSupportDecision", async (args: any) => {
+  stub(jevDecision, "evaluateSupportDecision", async (args: DecisionArgs) => {
     jevCalls.push(args);
     return /streak/i.test(args.conversationContext)
       ? { action: "silence", intent: "human_conversation" }
@@ -272,7 +270,7 @@ test("main ambient: a top-level fragment is classified with the channel's last m
 });
 
 test("a threaded reply uses its thread, not the channel history", async () => {
-  const slack: any = client();
+  const slack = client();
   let historyCalled = false;
   slack.conversations.history = async () => {
     historyCalled = true;
@@ -296,7 +294,6 @@ test("the classifier never receives documentation", async () => {
   expect(keys).toEqual(["addressed", "channelPosture", "conversationContext", "message", "program"]);
 });
 
-/* ------------------------------------------------------ directly addressed -- */
 
 test("addressed: program question gets the grounded answer", async () => {
   expect(await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?", addressed: true })).toBe(true);
@@ -345,7 +342,6 @@ test("addressed: 'who are you' needs no classifier call", async () => {
   expect(jevCalls).toHaveLength(0);
 });
 
-/* ------------------------------------------------------------ help channel -- */
 
 test("help: a known question opens a ticket and gets the grounded reply; ticket stays open", async () => {
   expect(await send({ channel: "C_PIXL_HELP", text: "my submission got rejected, how do i resubmit?" })).toBe(true);
@@ -391,11 +387,8 @@ test("help: a thread reply does not open a second ticket", async () => {
   expect(ticketCalls).toHaveLength(0);
 });
 
-/* ------------------------------------------------------ settings matrix -- */
-// Decision-table coverage of every toggle that changes behavior (§35).
 
-const MATRIX: any[][] = [
-  // [name, overrides, channel, text, addressed, expect {spoke, ticket, handoff, answerCalls}]
+const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> = [
   ["main disabled: silent even when addressed", { main: { enabled: false } }, "C_PIXL_MAIN", "what is restoration energy?", true, { spoke: false, answer: 0 }],
   ["ambient off: ambient question silent, no classifier", { main: { ambientProgramReplies: false } }, "C_PIXL_MAIN", "what is restoration energy?", false, { spoke: false, answer: 0, jev: 0 }],
   ["ambient off: addressed still answered", { main: { ambientProgramReplies: false } }, "C_PIXL_MAIN", "what is restoration energy?", true, { spoke: true }],

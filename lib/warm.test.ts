@@ -10,16 +10,13 @@ const warm = require("./warm");
 
 db.open(":memory:");
 
-// The warmer's whole job is model calls, so every test here stubs the answering
-// path — otherwise the suite would spend a real call per warmed question.
-async function withAnswers(impl: any, fn: any) {
+interface WarmAnswer { source: string | null; answer: string }
+async function withAnswers(impl: (question: string, contextPrompt: string) => Promise<WarmAnswer>, fn: (asked: string[]) => Promise<void>) {
   const original = lookup.answerOrChat;
-  const asked: any[] = [];
-  lookup.answerOrChat = async (question: any, contextPrompt: any) => {
+  const asked: string[] = [];
+  lookup.answerOrChat = async (question: string, contextPrompt: string) => {
     asked.push(question);
     const result = await impl(question, contextPrompt);
-    // The real answerOrChat writes the cache itself; mirror that here so the
-    // warmer's own bookkeeping is what's under test, not the stub's.
     if (result?.source) cache.put(question, result);
     return result;
   };
@@ -30,7 +27,7 @@ async function withAnswers(impl: any, fn: any) {
   }
 }
 
-const docsAnswer = async (question: any) => ({ source: "Pixl FAQ", answer: `answer to ${question}` });
+const docsAnswer = async (question: string) => ({ source: "Pixl FAQ", answer: `answer to ${question}` });
 
 test("warmOne caches a doc-grounded answer", async () => {
   cache.clearCache();
@@ -40,8 +37,6 @@ test("warmOne caches a doc-grounded answer", async () => {
   });
 });
 
-// A conversational reply is shaped by whoever asked. Caching one would hand the
-// next person an answer addressed to somebody else.
 test("warmOne refuses to cache an answer the docs did not cover", async () => {
   cache.clearCache();
   await withAnswers(async () => ({ source: null, answer: "no clue, ask a helper" }), async () => {
@@ -58,7 +53,7 @@ test("warmFaq answers the FAQ questions and skips the ones already known", async
   try {
     cache.put("is this free?", { source: "Pixl FAQ", answer: "yep, free" });
 
-    await withAnswers(docsAnswer, async (asked: any) => {
+    await withAnswers(docsAnswer, async (asked) => {
       const warmed = await warm.warmFaq({ spacingMs: 0 });
       assert.equal(warmed, 2);
       assert.deepEqual(asked, ["who can join?", "do i need a team?"], "the known one is not re-asked");
@@ -75,7 +70,7 @@ test("warmFaq does nothing when everything is already warm", async () => {
 
   try {
     cache.put("who can join?", { source: "Pixl FAQ", answer: "anyone" });
-    await withAnswers(docsAnswer, async (asked: any) => {
+    await withAnswers(docsAnswer, async (asked) => {
       assert.equal(await warm.warmFaq({ spacingMs: 0 }), 0);
       assert.deepEqual(asked, []);
     });
@@ -84,15 +79,10 @@ test("warmFaq does nothing when everything is already warm", async () => {
   }
 });
 
-// The budget is small, so it goes to the questions the most people are waiting
-// on — and never to entries that are still fresh.
 test("refreshStale takes the most-asked stale entries, up to the cap", async () => {
   cache.clearCache();
   const old = Date.now() - 24 * 60 * 60 * 1000;
 
-  // Seeded through cache.put so the stored hash matches what re-answering the
-  // same question text will derive — that identity is what lets a refresh
-  // overwrite the row instead of adding a second one.
   for (const [question, asks] of [
     ["rarely asked", 1],
     ["asked a lot", 40],
@@ -105,15 +95,13 @@ test("refreshStale takes the most-asked stale entries, up to the cap", async () 
   }
   cache.put("just answered", { source: "Pixl FAQ", answer: "current" });
 
-  await withAnswers(docsAnswer, async (asked: any) => {
+  await withAnswers(docsAnswer, async (asked) => {
     const refreshed = await warm.refreshStale({ limit: 2, spacingMs: 0 });
     assert.equal(refreshed, 2);
     assert.deepEqual(asked, ["asked a lot", "asked sometimes"], "most-asked first, fresh entry left alone");
   });
 });
 
-// A refresh must not look like somebody asking, or the warmer would keep
-// promoting its own entries to the front of the queue.
 test("refreshStale does not inflate the ask count of what it refreshes", async () => {
   cache.clearCache();
   const old = Date.now() - 24 * 60 * 60 * 1000;
@@ -126,7 +114,7 @@ test("refreshStale does not inflate the ask count of what it refreshes", async (
     await warm.refreshStale({ limit: 5, spacingMs: 0 });
   });
 
-  const row = cache.topCached(10).find((r: any) => r.question === "popular question");
+  const row = cache.topCached(10).find((r: { question: string }) => r.question === "popular question");
   assert.equal(row.ask_count, 12);
   assert.equal(cache.staleCacheEntries(db.CACHE_FRESH_MS, 10).length, 0, "it is no longer stale");
 });
@@ -135,20 +123,19 @@ test("refreshStale is a no-op when nothing is stale", async () => {
   cache.clearCache();
   cache.put("fresh question", { source: "Pixl FAQ", answer: "current" });
 
-  await withAnswers(docsAnswer, async (asked: any) => {
+  await withAnswers(docsAnswer, async (asked) => {
     assert.equal(await warm.refreshStale({ limit: 5, spacingMs: 0 }), 0);
     assert.deepEqual(asked, []);
   });
 });
 
-// One bad question must not stop the pass — the warmer runs unattended.
 test("a failing answer does not abort the rest of the pass", async () => {
   cache.clearCache();
   const original = knowledge.faqQuestions;
   knowledge.faqQuestions = () => ["explodes", "fine"];
 
   try {
-    await withAnswers(async (question: any) => {
+    await withAnswers(async (question: string) => {
       if (question === "explodes") throw new Error("model on fire");
       return { source: "Pixl FAQ", answer: "ok" };
     }, async () => {
@@ -160,16 +147,13 @@ test("a failing answer does not abort the rest of the pass", async () => {
   }
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
-// Warmer behavior: never asks against an empty corpus, honors limits,
-// surfaces counts.
 
 test("char: warmFaq asks nothing when the corpus has no questions", async () => {
   cache.clearCache();
   const original = knowledge.faqQuestions;
   knowledge.faqQuestions = () => [];
   try {
-    await withAnswers(docsAnswer, async (asked: any) => {
+    await withAnswers(docsAnswer, async (asked) => {
       assert.equal(await warm.warmFaq({ spacingMs: 0 }), 0);
       assert.deepEqual(asked, []);
     });
@@ -183,7 +167,7 @@ test("char: warmFaq honors an explicit limit", async () => {
   const original = knowledge.faqQuestions;
   knowledge.faqQuestions = () => ["q1?", "q2?", "q3?"];
   try {
-    await withAnswers(docsAnswer, async (asked: any) => {
+    await withAnswers(docsAnswer, async (asked) => {
       assert.equal(await warm.warmFaq({ limit: 1, spacingMs: 0 }), 1);
       assert.equal(asked.length, 1);
     });

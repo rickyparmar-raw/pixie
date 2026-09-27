@@ -1,8 +1,8 @@
-// Finds and formats relevant past discussion threads in Slack to provide extra context.
-// Trivial/simple lookups (e.g. "where is the shop", "link to pixl") are filtered out
-// so answers remain concise and uncluttered.
 const db = require("./db");
 const log = require("./log");
+interface ThreadCandidate { question: string; channel: string; threadTs: string }
+interface RelatedThread { threadTs: string; channel: string; matchedQuestion: string; score: number; permalink: string | null }
+interface RelatedOptions { currentThreadTs?: string | null; channel?: string | null; result?: { direct?: boolean } | null; threshold?: number }
 
 const STOP_WORDS = new Set([
   "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "aren't",
@@ -30,24 +30,17 @@ const SIMPLE_LOOKUP_PATTERNS = [
   /\b(?:when\s+(?:is|does)\s+(?:the\s+)?(?:deadline|due\s+date|pixl\s+end|pixl\s+end\s+date))\b/i,
 ];
 
-// One shared vocabulary overlap is usually coincidence ("pixl" plus one real
-// word); two means the threads are about the same thing.
 const MIN_SHARED_TOKENS = 2;
-// Below this the "related" line is noise appended to an unrelated answer.
 const DEFAULT_THRESHOLD = 0.35;
-// History depth per source: enough to find last week's thread, bounded so the
-// scoring loop stays trivial.
 const CANDIDATE_LIMIT = 200;
 const SLACK_ARCHIVE_HOST = "https://hackclub.slack.com/archives";
 
-function isSimpleLookupQuestion(question: any, answerResult: any = null) {
+function isSimpleLookupQuestion(question: string, answerResult: { direct?: boolean } | null = null) {
   const q = (question || "").trim().toLowerCase();
   if (!q) return true;
 
-  // Direct calculation or mathematical shop answer worked out in code
   if (answerResult?.direct === true) return true;
 
-  // Very short query (e.g. "hi", "shop?", "link?")
   if (q.split(/\s+/).length <= 2) return true;
 
   for (const pattern of SIMPLE_LOOKUP_PATTERNS) {
@@ -57,15 +50,15 @@ function isSimpleLookupQuestion(question: any, answerResult: any = null) {
   return false;
 }
 
-function tokenize(text: any) {
+function tokenize(text: string): string[] {
   return (text || "")
     .toLowerCase()
     .replace(/[^a-z0-9\s_-]/g, " ")
     .split(/\s+/)
-    .filter((w: any) => w.length > 2 && !STOP_WORDS.has(w));
+    .filter((w: string) => w.length > 2 && !STOP_WORDS.has(w));
 }
 
-function calculateTokenSimilarity(queryTokens: any, targetTokens: any) {
+function calculateTokenSimilarity(queryTokens: string[], targetTokens: string[]) {
   if (!queryTokens.length || !targetTokens.length) return 0;
 
   const querySet = new Set(queryTokens);
@@ -78,7 +71,6 @@ function calculateTokenSimilarity(queryTokens: any, targetTokens: any) {
     }
   }
 
-  // Require at least 2 distinct matching content tokens to prevent accidental single-word overlap
   if (matchCount < MIN_SHARED_TOKENS) return 0;
 
   const overlapRatio = (2 * matchCount) / (querySet.size + targetSet.size);
@@ -86,14 +78,14 @@ function calculateTokenSimilarity(queryTokens: any, targetTokens: any) {
   return Math.max(overlapRatio, queryCoverage * 0.85);
 }
 
-function buildSlackPermalink(channel: any, threadTs: any) {
+function buildSlackPermalink(channel: string, threadTs: string) {
   if (!channel || !threadTs) return null;
   if (!/^\d+(\.\d+)?$/.test(String(threadTs))) return null;
   const cleanTs = String(threadTs).replace(".", "");
   return `https://hackclub.slack.com/archives/${channel}/p${cleanTs}`;
 }
 
-async function findRelatedThread(question: any, { currentThreadTs = null, channel = null, result = null, threshold = 0.35 }: any = {}) {
+async function findRelatedThread(question: string, { currentThreadTs = null, channel = null, result = null, threshold = 0.35 }: RelatedOptions = {}): Promise<RelatedThread | null> {
   if (isSimpleLookupQuestion(question, result)) {
     return null;
   }
@@ -103,9 +95,8 @@ async function findRelatedThread(question: any, { currentThreadTs = null, channe
     return null;
   }
 
-  const candidates: any[] = [];
+  const candidates: ThreadCandidate[] = [];
 
-  // 1. Check recent answered threads
   try {
     const recent = db.getRecentAnsweredThreads(200);
     for (const r of recent) {
@@ -117,11 +108,10 @@ async function findRelatedThread(question: any, { currentThreadTs = null, channe
         });
       }
     }
-  } catch (err: any) {
-    log.debug("relatedThreads", `query answered_threads failed: ${err.message}`);
+  } catch (error: unknown) {
+    log.debug("relatedThreads", `query answered_threads failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  // 2. Check learned facts that originated from a real Slack thread
   try {
     const learned = db.getLearnedFactsWithThreads(200);
     for (const f of learned) {
@@ -133,16 +123,16 @@ async function findRelatedThread(question: any, { currentThreadTs = null, channe
         });
       }
     }
-  } catch (err: any) {
-    log.debug("relatedThreads", `query learned facts failed: ${err.message}`);
+  } catch (error: unknown) {
+    log.debug("relatedThreads", `query learned facts failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   if (!candidates.length) return null;
 
-  let bestMatch: any = null;
+  let bestMatch: RelatedThread | null = null;
   let highestScore = 0;
 
-  const seenThreads = new Set();
+  const seenThreads = new Set<string>();
   for (const cand of candidates) {
     const key = `${cand.channel}:${cand.threadTs}`;
     if (seenThreads.has(key)) continue;
@@ -171,7 +161,7 @@ async function findRelatedThread(question: any, { currentThreadTs = null, channe
   return null;
 }
 
-function formatRelatedThreadLine(related: any) {
+function formatRelatedThreadLine(related: RelatedThread | null) {
   if (!related?.permalink) return "";
   return `\n\n_🧵 Related discussion: <${related.permalink}|view previous thread>_`;
 }

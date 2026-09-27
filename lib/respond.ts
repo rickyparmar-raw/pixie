@@ -1,11 +1,4 @@
-// The answering pipeline, shared by every entry point (channel message,
-// mention, DM, slash command). Kept out of index.js so the bootstrap file
-// stays a bootstrap file.
-// What pixie already knows and how it works out what it doesn't — every read
-// and write of the answer cache lives there.
 const lookup = require("./lookup");
-// The Slack message lifecycle — placeholder, streamed edits, finished post,
-// reactions. Held as a module object for the same stubbing reason as `answer`.
 const reply = require("./reply");
 const context = require("./context");
 const guides = require("./guides");
@@ -16,55 +9,38 @@ const brand = require("./brand");
 const { config } = require("./config");
 const programs = require("./programs");
 const relatedThreads = require("./relatedThreads");
-// Module object so tests can stub the gate — same seam as intent/answer above.
 const jevDecision = require("./jevDecision");
 const channelPolicy = require("./channelPolicy");
 const engagement = require("./pipeline/engagement");
 const messagePolicy = require("./pipeline/messagePolicy");
 const pipelineEvents = require("./pipeline/events");
+import type { Program, SlackClient } from "./types";
+
+type ProgramLike = Partial<Program> & { id?: string };
+interface AnswerResult { source: string | null; answer: string; direct?: boolean; unclear?: boolean }
+interface UserContext { recentTopics?: string[]; helpfulAnswers?: string[] }
+interface GuideResult { message: string; checkNext?: string; completed?: boolean; cancelled?: boolean }
+interface CacheReplyArgs { client: SlackClient; channel: string; threadTs: string; userId: string; question: string; result: AnswerResult; startedAt: number; program?: ProgramLike | null }
+interface GuideArgs { client: SlackClient; channel: string; threadTs: string; question: string; userId: string; workspaceId?: string | null; program?: ProgramLike | null }
+interface TextPostArgs { client: SlackClient; channel: string; threadTs: string; program?: ProgramLike | null; workspaceId?: string | null }
+interface SensitiveArgs { trimmed: string; prog: ProgramLike | null; programId: string | null; channel: string; threadTs: string; userId: string; client: SlackClient; workspaceId?: string | null; startedAt: number }
+interface RespondOptions { client: SlackClient; channel: string; threadTs: string; userId: string; question: string; mode?: string; seedClient?: SlackClient | null; messageTs?: string | null; addressed?: boolean; addressedHow?: string; workspaceId?: string | null; isDm?: boolean; surface?: string | null; rateLimitReserved?: boolean }
+
+function errorMessage(error: unknown) { return error instanceof Error ? error.message : String(error); }
 
 const MENTION_FALLBACK = "hmm not totally sure about that one — ask a helper if it's something specific :hii:";
 const ERROR_FALLBACK = "having trouble thinking rn, try again in a sec :sob-pray:";
 const RATE_LIMITED = "woah slow down a sec — gimme a minute to catch up :sob-pray:";
 const UNCLEAR_MARKER = "UNCLEAR";
 
-// DOCS_ONLY:  reply only if the corpus covers it, otherwise stay silent.
-// HELP_ONLY:  reply if the corpus covers it, or if the message is genuinely
-//             asking the room for something. Never small talk — nobody
-//             addressed pixie, so a chatty reply is noise in the channel.
-// ALWAYS:     always reply — docs answer, conversational reply, or fallback.
-//             Only for people who addressed pixie: a ping, its name, or a DM.
 const DOCS_ONLY = "docs-only";
 const HELP_ONLY = "help-only";
 const ALWAYS = "always";
 
-// A reply that hands the work back to the person is fine when they addressed
-// pixie — they started it and are waiting on something. Unaddressed it is the
-// worst possible answer: it adds noise AND asks someone who never wanted pixie
-// involved to explain themselves. "ridit isn't" got back "sorry, what about
-// ridit? could you clarify what you mean?" — silence was the right reply.
-//
-// Bounded by length because a genuine answer can also end in a question ("...
-// does that help?"); a clarification request is short and is nothing but the
-// question.
 const MAX_CLARIFY_WORDS = 25;
 
-// WHY: the placeholder is a Slack round-trip worth ~400ms, so it is only
-// posted once the answer is actually slow. 250ms means fast cache/code answers
-// never flash a "_thinking..._" that is instantly deleted, while anything
-// model-shaped still shows progress before the first token lands (~1.5s).
 const PLACEHOLDER_DELAY_MS = 250;
 
-// The length rule alone missed the common shape: ask what they meant, then keep
-// talking. "eh how do i do tthis ?" got back "do what? if you're asking about
-// something pixl-specific like submitting, setting up hackatime, git, or
-// starting a project, just tell me what part you're stuck on…" — forty words,
-// not ending in a question mark, and still nothing but a request to start over.
-//
-// Kept to phrases that only appear when pixie is asking what the SUBJECT is.
-// Ones that merely ask for a detail ("what error do you get", "what you're
-// trying to do") are left out on purpose: those come attached to a real answer,
-// and the cost of a false positive here is deleting it.
 const ASKS_WHAT_THEY_MEAN = new RegExp(
   [
     "\\bdo what\\b",
@@ -81,23 +57,23 @@ const ASKS_WHAT_THEY_MEAN = new RegExp(
   "i",
 );
 
-function isClarifyingQuestion(text: any) {
+function isClarifyingQuestion(text: string) {
   const t = (text || "").trim();
   if (!t) return false;
   if (t.endsWith("?") && t.split(/\s+/).length <= MAX_CLARIFY_WORDS) return true;
   return ASKS_WHAT_THEY_MEAN.test(t);
 }
 
-function stripChannelMentions(text: any) {
+function stripChannelMentions(text: string) {
   if (!text) return "";
   return text
     .replace(/<#[A-Z0-9]+(?:\|[^>]+)?>/gi, "")
-    .replace(/#[-a-zA-Z0-9_]+/gi, (m: any) => (/^#+$/.test(m) ? m : ""))
+    .replace(/#[-a-zA-Z0-9_]+/gi, (m: string) => (/^#+$/.test(m) ? m : ""))
     .replace(/\s{2,}/g, " ")
     .trim();
 }
 
-function isGroundedAnswer(result: any) {
+function isGroundedAnswer(result: AnswerResult | null) {
   if (!result || !result.source || !result.answer) return false;
   const source = result.source.trim().toUpperCase();
   if (!source || source === "NONE") return false;
@@ -127,34 +103,18 @@ function isGroundedAnswer(result: any) {
   return true;
 }
 
-// Context for the doc lookup. Thread history only — a documented answer is the
-// same for everyone, so personalising it would only fragment the answer cache
-// (lookupAnswer caches exactly when this is empty).
-function buildContextPrompt(threadContext: any) {
+function buildContextPrompt(threadContext: string | null) {
   return threadContext ? `\n\nPrevious conversation:\n${threadContext}` : "";
 }
 
-// Questions that are actually about pixie's memory of this person. Only these
-// need the per-user topic list injected — see buildChatContext.
 const RECALL_PATTERN =
   /\b(?:remember|remembered|recall|forgot|forget|previously|earlier|last time)\b|\bwhat\b[^?.!]{0,20}\bi\b[^?.!]{0,20}\bask/i;
 
-function isRecallQuestion(text: any) {
+function isRecallQuestion(text: string) {
   return RECALL_PATTERN.test(text || "");
 }
 
-// Context for the merged answer/chat call.
-//
-// The per-user topic list is injected ONLY for questions that ask about it.
-// That's not just prompt economy: lookupAnswer caches exactly when this string
-// is empty, so injecting memory into every request would silently disable the
-// answer cache for the entire mention path. Thread history still disables it,
-// correctly — that answer really is specific to one conversation.
-//
-// Phrased as something the model may answer *from*, not as background colour —
-// the passive version ("User has recently asked about: …") got ignored when
-// someone asked pixie directly what they'd asked before.
-function buildChatContext(threadContext: any, userContext: any, question: any = "") {
+function buildChatContext(threadContext: string | null, userContext: UserContext | null, question = "") {
   const parts = [buildContextPrompt(threadContext)];
   if (!isRecallQuestion(question)) return parts.join("");
 
@@ -174,23 +134,17 @@ function buildChatContext(threadContext: any, userContext: any, question: any = 
   return parts.join("");
 }
 
-// Posts a cached answer as one message. Returns true when it spoke, false when
-async function replyFromCache({ client, channel, threadTs, userId, question, result, startedAt, program = null }: any) {
+async function replyFromCache({ client, channel, threadTs, userId, question, result, startedAt, program = null }: CacheReplyArgs) {
   const requireGrounded = process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || program?.requireGroundedAnswer;
   if (requireGrounded) {
     if (!isGroundedAnswer(result)) return false;
     result.answer = stripChannelMentions(result.answer);
   }
 
-  // Whether anyone was asking was settled by the engagement stage before the
-  // cache was consulted; a cached answer only changes how fast we reply.
   const cacheProgramId = program ? program.id : null;
 
-  // The thread's ticket, if any, was already opened by ensureSupportTicket
-  // before the cache was consulted. A cached answer is posted straight into
-  // that thread and never touches the ticket — it stays open until resolved.
   const text = reply.withReplySignature(`${result.answer}${reply.sourceLineFor(result.source, program)}`, program);
-  let postedTs: any = null;
+  let postedTs: string | null = null;
   try {
     const slackMessages = require("./slackMessages");
     const res = await slackMessages.sendProgramMessage({
@@ -202,9 +156,8 @@ async function replyFromCache({ client, channel, threadTs, userId, question, res
       blocks: reply.plainDashesInBlocks(reply.blocksFor(text)),
     });
     postedTs = res.ts;
-  } catch (e: any) {
-    // Fall back to the ordinary path rather than dropping the reply.
-    log.debug("respond", `cached post failed, falling through: ${e.message}`);
+  } catch (error: unknown) {
+    log.debug("respond", `cached post failed, falling through: ${errorMessage(error)}`);
     return null;
   }
 
@@ -215,34 +168,13 @@ async function replyFromCache({ client, channel, threadTs, userId, question, res
   return true;
 }
 
-// A typed "yes" isn't the only way to say "ready for the next step" anymore —
-// see onReactionAdded in lib/handlers.js, which matches a :upvote: on a guide
-// step's own message back to it via message_ts (db.getGuideByMessageTs) and
-// calls guides.advanceGuideByReaction directly, skipping the classifier call
-// entirely. Typed replies still work exactly as before (open-ended checks
-// like next-region's "how much RE do you have rn?" need the actual answer,
-// not just a reaction), so this is an additional path, not a replacement —
-// the old "(yes/no)" suffix just stops being the only option, so the text
-// fallback below drops it rather than hand-editing ~30 strings. The actual
-// "here's how to react" explanation lives in a Block Kit context element
-// (guides.buildGuideBlocks), shown once on a guide's first step only — it
-// used to repeat verbatim at the end of every single step's text, which read
-// as spam.
-function formatGuideText(result: any) {
+function formatGuideText(result: GuideResult) {
   if (!result.checkNext) return result.message;
   const question = result.checkNext.replace(/\s*\(yes\/no\)\s*$/i, "");
   return `${result.message}\n\n${question}`;
 }
 
-// Posts a guide step (or a completion/cancellation message) and records which
-// Slack message it landed on, so a later :upvote: reaction on that exact
-// message can be matched back to this guide. Shared by every guide entry
-// point — a brand-new guide's first step, an ordinary step reply, and a
-// reaction-triggered advance all render and persist identically.
-//
-// isFirstStep gates the one-time reaction-hint context block — only
-// handleNewGuide's call is guaranteed to be a guide's actual opening step.
-async function postGuideStep({ client, channel, threadTs, result, isFirstStep = false, program = null, workspaceId = null }: any) {
+async function postGuideStep({ client, channel, threadTs, result, isFirstStep = false, program = null, workspaceId = null }: TextPostArgs & { result: GuideResult; isFirstStep?: boolean }) {
   const text = formatGuideText(result);
   const blocks = guides.buildGuideBlocks(result, config.web.baseUrl, { showReactionHint: isFirstStep });
   const prog = program || programs.forChannel(channel, workspaceId);
@@ -257,30 +189,23 @@ async function postGuideStep({ client, channel, threadTs, result, isFirstStep = 
   });
   context.addToThread(threadTs, "assistant", text, null, channel);
 
-  // completed/cancelled already deleted the guide row — nothing left to react to.
   if (!result.completed && !result.cancelled) {
     db.setGuideMessageTs(threadTs, posted.ts);
   }
   return posted.ts;
 }
 
-// Runs an already-active guide. Returns true if the guide handled the message.
-async function handleActiveGuide({ client, channel, threadTs, question, userId, workspaceId = null }: any) {
+async function handleActiveGuide({ client, channel, threadTs, question, userId, workspaceId = null }: GuideArgs) {
   if (!guides.isInGuide(threadTs)) return false;
 
   const result = await guides.continueGuide(threadTs, question, userId, channel === config.slack.helpChannel);
-  // null = off-topic; the guide stays parked and the question gets answered
-  // normally instead of being swallowed as a step reply.
   if (!result) return false;
 
   await postGuideStep({ client, channel, threadTs, result, workspaceId });
   return true;
 }
 
-// Ways people ask for the guide menu in plain text, as opposed to the slash
-// command. The bot's own name is accepted alongside the fixed forms, so someone
-// on Solvable can type "sol guides" and pixie's own users keep "pixie guides".
-function isGuideMenuRequest(text: any) {
+function isGuideMenuRequest(text: string) {
   const clean = (text || "").trim().toLowerCase().replace(/^<@[^>]+>\s*/, "");
   const slug = brand.slug();
   const names = new Set([slug, brand.name().toLowerCase(), brand.DEFAULT_SLUG]);
@@ -295,10 +220,7 @@ function isGuideMenuRequest(text: any) {
   return clean === "!guide" || clean === "!guides" || clean === "/guide";
 }
 
-// Telling the bot to be quiet. Matches its own name as well as "pixie", since a
-// rebranded bot is told to shut up by its own name and the literal would never
-// fire.
-function isMuteRequest(text: any) {
+function isMuteRequest(text: string) {
   const clean = (text || "")
     .trim()
     .toLowerCase()
@@ -306,32 +228,21 @@ function isMuteRequest(text: any) {
     .replace(/[.,!?:;_-]+/g, " ")
     .trim();
 
-  // Escaped: a name could contain regex metacharacters.
   const names = [...new Set([brand.slug(), brand.name().toLowerCase(), brand.DEFAULT_SLUG])]
-    .map((n: any) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|");
-  // "stop" is anchored the same way every other shush word is (message-start
-  // before the name, or right after it) — never bare, so "please stop, pixie
-  // already helped" (not message-initial) and "stop the build" (no name
-  // anywhere) still don't fire.
   const shush = "stfu|shut\\s*up|quiet|shutup|silence|mute|stop";
 
   return (
     new RegExp(`^(?:${shush})\\b.*?\\b(?:${names})\\b`, "i").test(clean) ||
     new RegExp(`\\b(?:${names})\\b.*?\\b(?:${shush}|leave)\\b`, "i").test(clean) ||
     new RegExp(`^(?:stfu|shut\\s*up|shutup|leave\\s*thread|!mute|!stfu|(?:stfu|shutup|stop)\\s*(?:${names})|(?:${names})\\s*stfu)$`, "i").test(clean) ||
-    // No-separator concatenation ("pixiestop"/"stoppixie" — a common typo/
-    // shorthand — survived punctuation stripping above with no space at all).
     new RegExp(`^(?:${names})stop$|^stop(?:${names})$`, "i").test(clean) ||
-    // "stop pinging him/her/them" — directed at the ping behavior itself, said
-    // in a thread pixie is already active in, so no name mention is needed.
-    // \s+ (not \s*) is deliberate: "stopping" is literally "stop"+"ping" with
-    // zero separator and must never match this.
     /\bstop\s+ping(?:ing)?\b/i.test(clean)
   );
 }
 
-async function handleMute({ client, channel, threadTs, question, program = null, workspaceId = null }: any) {
+async function handleMute({ client, channel, threadTs, question, program = null, workspaceId = null }: TextPostArgs & { question: string }) {
   if (!isMuteRequest(question)) return false;
   if (threadTs) {
     db.muteThread(threadTs, channel);
@@ -341,10 +252,6 @@ async function handleMute({ client, channel, threadTs, question, program = null,
   const prog = program || programs.forChannel(channel, workspaceId);
   const text = "alright, leaving the thread, ping me if you need me back :zipper_mouth_face:";
   if (!programs.isShadow(prog)) {
-    // A program-scoped status message — branded the same as the answers it
-    // sits alongside, so the bot's identity doesn't jump to generic Pixie
-    // mid-conversation. Falls back to plain Pixie automatically if
-    // branding is rejected (lib/slackMessages.js).
     const slackMessages = require("./slackMessages");
     await slackMessages.sendProgramMessage({ client, program: prog, channel, threadTs, text });
   }
@@ -354,7 +261,7 @@ async function handleMute({ client, channel, threadTs, question, program = null,
   return true;
 }
 
-async function handleGuideMenu({ client, channel, threadTs, userId, question, workspaceId = null }: any) {
+async function handleGuideMenu({ client, channel, threadTs, userId, question, workspaceId = null }: GuideArgs) {
   if (!isGuideMenuRequest(question)) return false;
 
   const prog = programs.forChannel(channel, workspaceId);
@@ -379,12 +286,10 @@ async function handleGuideMenu({ client, channel, threadTs, userId, question, wo
   return true;
 }
 
-async function handleNewGuide({ client, channel, threadTs, userId, question, workspaceId = null }: any) {
+async function handleNewGuide({ client, channel, threadTs, userId, question, workspaceId = null }: GuideArgs) {
   const q = (question || "").trim().replace(/^<@[^>]+>\s*/, "");
-  // "<name> guides <topic>" / "/<name>-guide <topic>" / "!guide <topic>". Same
-  // name set as isGuideMenuRequest, escaped since a slug could hold metacharacters.
   const names = [...new Set([brand.slug(), brand.name().toLowerCase(), brand.DEFAULT_SLUG])]
-    .map((n: any) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|");
   const prefixMatch = q.match(new RegExp(`^(?:(?:${names})[-_\\s]?guides?|!guides?|/(?:${names})[-_\\s]?guides?|/guides?)\\s+(.+)$`, "i"));
   if (!prefixMatch) return false;
@@ -402,22 +307,8 @@ async function handleNewGuide({ client, channel, threadTs, userId, question, wor
 
 const link = require("./link");
 
-// ------------------------------------------------------------------ stages --
-// The main flow below used to inline every decision with its I/O. The stages
-// here keep the same outcomes, transitions, fallbacks and timings — each is a
-// pure classify step returning a decision object, followed by the smallest I/O
-// that carries it out. Nothing below may change WHAT is decided, only WHERE.
 
-// Gate stage, first of all: sensitive categories force human review no matter
-// the confidence — money, identity, safety and anything else the organizers
-// listed never gets an AI answer, only a ticket and an acknowledgement.
-// Single definition lives in lib/eligibility.js (also used pre-generation by
-// handlers). Runs before ANY model call (gate, lookup, guides) is even
-// started: zero model calls, bypassIncidentMatch. This is DEFENSE-IN-DEPTH —
-// onAppMention and direct callers bypass handlers, so this must NOT be
-// consolidated into the handlers-side check. Returns true when it handled the
-// message.
-async function handleSensitiveMatch({ trimmed, prog, programId, channel, threadTs, userId, client, workspaceId, startedAt }: any) {
+async function handleSensitiveMatch({ trimmed, prog, programId, channel, threadTs, userId, client, workspaceId, startedAt }: SensitiveArgs) {
   if (!require("./eligibility").sensitiveHit(trimmed, prog)) return false;
   log.debug("respond", `sensitive-category match, escalating without answering`);
   db.recordMetric("silent", Date.now() - startedAt, "sensitive", programId);
@@ -437,31 +328,19 @@ async function handleSensitiveMatch({ trimmed, prog, programId, channel, threadT
 }
 
 
-// Post stage: finalize over the placeholder, then reactions unless the stream
-// already seeded them on the same message. Returns the posted ts. Fallback
-// replies pass seed:false — they never carried reactions, and starting now
-// would invite votes on a "not sure" message.
-async function publishReply({ client, channel, threadTs, placeholder, text, blocks, program, seededTs, seed = true, silencedBefore = null }: any) {
+async function publishReply({ client, channel, threadTs, placeholder, text, blocks, program, seededTs, seed = true, silencedBefore = null }: { client: SlackClient; channel: string; threadTs: string; placeholder: Promise<string | null>; text: string; blocks?: unknown[] | null; program: ProgramLike | null; seededTs?: string | null; seed?: boolean; silencedBefore?: { muted: boolean; takeover: boolean } | null }) {
   const postedTs = await reply.finalize(client, channel, threadTs, placeholder, text, { program, blocks, silencedBefore });
   if (seed && postedTs !== seededTs) await reply.seedFeedbackReactions(client, channel, postedTs);
   return postedTs;
 }
 
-// Post stage for a finished answer: thread transcript, per-user history and
-// the latency metric travel together on every path that speaks.
-function recordSpokenReply({ threadTs, channel, userId, question, text, grounded, startedAt, programId, linkContext, metric }: any) {
+function recordSpokenReply({ threadTs, channel, userId, question, text, grounded, startedAt, programId, linkContext, metric }: { threadTs: string; channel: string; userId: string; question: string; text: string; grounded: boolean; startedAt: number; programId: string | null; linkContext?: boolean; metric?: string }) {
   context.addToThread(threadTs, "assistant", text, null, channel);
   context.updateUserHistory(userId, question, grounded);
   db.recordMetric(metric || (linkContext ? "answer_link" : grounded ? "answer_docs" : "answer_chat"), Date.now() - startedAt, null, programId);
 }
 
-// Failure stage: the model call threw. Exactly one terminal action, decided
-// the same way as the happy path — help channel escalates (the ticket path
-// needs no AI, so an outage must not swallow the support request), an
-// addressed caller gets the error fallback, otherwise silent.
-async function handleLookupFailure({ client, channel, threadTs, userId, question, prog, programId, inHelpChannel, mayChat, seedClient, workspaceId, placeholder, streamer, startedAt, silencedBefore = null }: any) {
-  // Model outage must not swallow the support request: the ticket path
-  // needs no AI, so a help-channel question still lands with humans.
+async function handleLookupFailure({ client, channel, threadTs, userId, question, prog, programId, inHelpChannel, mayChat, seedClient, workspaceId, placeholder, streamer, startedAt, silencedBefore = null }: { client: SlackClient; channel: string; threadTs: string; userId: string; question: string; prog: ProgramLike | null; programId: string | null; inHelpChannel: boolean; mayChat: boolean; seedClient: SlackClient | null; workspaceId: string | null; placeholder: () => Promise<string | null>; streamer: { settle(): Promise<void> } | null; startedAt: number; role: string; silencedBefore: { muted: boolean; takeover: boolean } | null }) {
   if (inHelpChannel) {
     db.recordGap(question, userId, channel, threadTs, programId);
     try {
@@ -477,64 +356,58 @@ async function handleLookupFailure({ client, channel, threadTs, userId, question
       });
       await tickets.handOffToHelper({ ticket, client: seedClient || client, program: prog, channel, threadTs, question, requesterId: userId });
       await reply.discardPlaceholder(client, channel, placeholder());
-    } catch (e: any) {
-      log.warn("respond", `support ticket during outage failed: ${e.message}`);
+    } catch (error: unknown) {
+      log.warn("respond", `support ticket during outage failed: ${errorMessage(error)}`);
       await reply.discardPlaceholder(client, channel, placeholder());
     }
     db.recordMetric("error", Date.now() - startedAt, "help_channel_escalated", programId);
-    return false; // Outage in help channel: ticket filed, no AI reply
+    return false;
   }
 
   if (mayChat) {
     await reply.finalize(client, channel, threadTs, placeholder(), ERROR_FALLBACK, { program: prog, silencedBefore });
     context.addToThread(threadTs, "assistant", ERROR_FALLBACK, null, channel);
     db.recordMetric("error", Date.now() - startedAt, "chat_error_fallback", programId);
-    return true; // Authoritative terminal action: REPLY
+    return true;
   }
 
   await reply.discardPlaceholder(client, channel, placeholder());
   db.recordMetric("error", Date.now() - startedAt, "silent_error", programId);
-  return false; // Authoritative terminal action: SILENT
+  return false;
 }
 
 
-// Transparent uncertainty for someone who addressed Pixie directly: say we
-// could not verify it rather than guess, and never invent a value.
-function uncertaintyText(prog: any, { escalated = false }: any = {}) {
+function uncertaintyText(prog: ProgramLike | null, { escalated = false }: { escalated?: boolean } = {}) {
   const name = prog?.name && prog.id !== "ysws-global" ? `the ${prog.name} docs` : "the program docs";
   return escalated
     ? `I couldn't verify that from ${name}, so I won't guess — I've flagged it for a helper :hii:`
     : `I couldn't verify that from ${name}, so I won't guess. A helper or organizer can confirm it :hii:`;
 }
 
-function isDeterministicAnswer(result: any) {
+function isDeterministicAnswer(result: AnswerResult | null) {
   return Boolean(result && result.direct === true && result.answer);
 }
 
-// The channel messages just before a top-level message, so the classifier
-// can tell a fresh question from a reply to someone else ("it expires
-// tomorrow" is only meaningful next to what it answers). A threaded message
-// already carries its thread transcript, so this is top-level only.
 const RECENT_CHANNEL_CONTEXT = 5;
 
-async function recentChannelContext({ seedClient, channel, messageTs, threadTs }: any) {
+async function recentChannelContext({ seedClient, channel, messageTs, threadTs }: { seedClient: SlackClient | null; channel: string; messageTs: string | null; threadTs: string }) {
   if (!seedClient || messageTs !== threadTs) return [];
   try {
     return await context.recentChannelMessages(seedClient, channel, messageTs || threadTs, config.slack.botUserId, RECENT_CHANNEL_CONTEXT);
-  } catch (_: any) {
+  } catch (_error: unknown) {
     return [];
   }
 }
 
-async function handleActiveIncident({ client, channel, threadTs, userId, question, program, programId }: any) {
+async function handleActiveIncident({ client, channel, threadTs, userId, question, program, programId }: { client: SlackClient; channel: string; threadTs: string; userId: string; question: string; program: ProgramLike | null; programId: string | null }) {
   const incidentMode = program?.incidentMode || "ANSWER_AND_TRACK";
   if (incidentMode === "NORMAL_TICKET" || !programId) return null;
 
-  let matched: any;
+  let matched: { id: string; title: string; public_message?: string; } | null = null;
   try {
     matched = require("./incidents").matchActiveIncident({ programId, question });
-  } catch (error: any) {
-    log.debug("respond", `incident match failed: ${error.message}`);
+  } catch (error: unknown) {
+    log.debug("respond", `incident match failed: ${errorMessage(error)}`);
     return null;
   }
   if (!matched) return null;
@@ -550,16 +423,12 @@ async function handleActiveIncident({ client, channel, threadTs, userId, questio
       context.addToThread(threadTs, "assistant", text, null, channel);
     }
     log.info("respond", `posted active incident #${matched.id} note to the thread (${programId})`);
-  } catch (error: any) {
-    log.warn("respond", `active incident reply failed: ${error.message}`);
+  } catch (error: unknown) {
+    log.warn("respond", `active incident reply failed: ${errorMessage(error)}`);
   }
   return { handled: true, incidentId: matched.id };
 }
 
-// The single entry point. The channel's role (main/help/dm) and the program's
-// settings for that role decide behavior — see lib/pipeline/messagePolicy.js.
-// `mode` is kept for existing callers: ALWAYS means the caller was addressed
-// (ping, name, DM, slash command); HELP_ONLY/DOCS_ONLY mean ambient.
 async function respond({
   client,
   channel,
@@ -575,19 +444,14 @@ async function respond({
   isDm,
   surface = null,
   rateLimitReserved = false,
-}: any) {
+}: RespondOptions) {
   const trimmed = (question || "").trim();
   if (!trimmed) return false;
 
-  // Do not infer DM policy from a channel id. Legacy callers intentionally keep
-  // the old global/non-DM behavior; only an explicit DM surface opts into the
-  // stricter identity and surface-scoped reservation.
   const explicitDm = isDm === true || surface === "dm";
   const policy = channelPolicy.resolve(channel, workspaceId, { isDm: explicitDm });
   const prog = policy.program;
   const programId = prog ? prog.id : null;
-  // Legacy callers (slash commands, older tests) pass a channel without
-  // claiming a role; an explicitly addressed call there behaves like a DM.
   const role = policy.role === "none" && mode === ALWAYS ? "dm" : policy.role;
   const settings = policy.settings;
   const inHelpChannel = role === "help";
@@ -602,7 +466,6 @@ async function respond({
     return activeIncident.handled;
   }
 
-  // Cheap settings exits before any Slack read or model call.
   const early = messagePolicy.planEngagement({ role, settings, addressed: isAddressed, addressedHow, engagement: { engage: true, intent: null } });
   if (!early.proceed && early.reason !== "ambient_chatter" && early.reason !== "help_chatter") {
     trace.finish({ finalAction: "silence", reason: early.reason });
@@ -625,22 +488,14 @@ async function respond({
     return false;
   }
 
-  // Pull the real Slack thread once, so questions that refer to what humans
-  // said above actually have a referent. The message being answered is skipped
-  // — on a top-level mention the thread ts IS that message.
   if (seedClient && threadTs) {
     await context.seedFromSlack(seedClient, channel, threadTs, config.slack.botUserId, messageTs || threadTs);
   }
 
-  // Read the transcript BEFORE this question joins it, so cacheHit() (which
-  // requires an empty context prompt) can still fire on a fresh top-level ask.
   const threadContext = context.getThreadContext(threadTs, trimmed);
 
   context.addToThread(threadTs, "user", trimmed, userId, channel);
 
-  // Eligibility already let this message through a muted or taken-over
-  // thread (someone called Pixie by name). Only silence that lands while the
-  // answer is being written may take the reply back down.
   const silencedBefore = isAddressed ? reply.silenceState(threadTs) : null;
 
   if (await handleMute({ client, channel, threadTs, question: trimmed, program: prog, workspaceId })) return true;
@@ -661,15 +516,11 @@ async function respond({
     }
   }
 
-  // Sensitive categories force human review no matter the confidence. Single
-  // definition lives in lib/eligibility.js (also used pre-generation by
-  // handlers); repeated here as defense in depth for direct callers.
   if (await handleSensitiveMatch({ trimmed, prog, programId, channel, threadTs, userId, client, workspaceId, startedAt })) {
     trace.finish({ finalAction: "escalate", reason: "sensitive" });
     return true;
   }
 
-  // Engagement: what kind of interaction is this? Never sees documentation.
   const engaged = await engagement.classify({
     message: effectiveQuestion,
     threadContext,
@@ -697,8 +548,8 @@ async function respond({
   const supportTicketReady = plan.support && isRootMessage && !programs.isShadow(prog)
     ? tickets
         .ensureSupportTicket({ program: prog, channel, threadTs, requesterId: userId, question: trimmed, client, workspaceId, role })
-        .catch((e: any) => {
-          log.warn("respond", `support ticket ensure failed: ${e.message}`);
+        .catch((error: unknown) => {
+          log.warn("respond", `support ticket ensure failed: ${errorMessage(error)}`);
           return null;
         })
     : Promise.resolve(null);
@@ -714,8 +565,6 @@ async function respond({
     trace.set({ helperEscalated: true });
   };
 
-  // AI answers switched off: support still reaches humans; nobody gets an AI
-  // answer. Direct callers still hear that a human will follow up.
   const aiOff = !programs.aiAnswersEnabled(programId) || (role === "help" && settings?.aiReplies === false);
   if (aiOff && kind === "program") {
     if (role === "help" && settings?.escalateUnknown !== false) await handOff();
@@ -733,8 +582,6 @@ async function respond({
       ? buildChatContext(threadContext, context.getUserContext(userId), effectiveQuestion)
       : buildContextPrompt(threadContext);
 
-  // Cached / code-worked answers. A program question may only be served from
-  // cache when the cached result is itself grounded or deterministic.
   const known = lookup.knownAnswer({ question: effectiveQuestion, contextPrompt, mode: isAddressed ? ALWAYS : HELP_ONLY, program: prog, skipCache: requireGrounded });
   if (known && (kind === "general" || isDeterministicAnswer(known) || isGroundedAnswer(known))) {
     const spoke = await replyFromCache({ client, channel, threadTs, userId, question: effectiveQuestion, result: known, startedAt, program: prog });
@@ -744,29 +591,27 @@ async function respond({
     }
   }
 
-  // Visible "thinking" only for someone who is waiting on Pixie. Ambient
-  // messages post nothing until an answer has passed every guard.
-  let placeholderPromise: any = null;
-  let placeholderTimer: any = null;
-  const ensurePlaceholder = () => {
+  let placeholderPromise: Promise<string | null> | null = null;
+  let placeholderTimer: ReturnType<typeof setTimeout> | null = null;
+  const ensurePlaceholder = (): Promise<string | null> => {
     if (!placeholderPromise) placeholderPromise = reply.postThinking(client, channel, threadTs, prog);
-    return placeholderPromise;
+    return placeholderPromise!;
   };
-  const placeholder = () => placeholderPromise || Promise.resolve(null);
+  const placeholder = (): Promise<string | null> => placeholderPromise || Promise.resolve(null);
 
-  let seededTs: any = null;
+  let seededTs: string | null = null;
   let seeded = false;
-  let seedTask: any = null;
-  const seedOnce = (promise: any) => {
+  let seedTask: Promise<void | null> | null = null;
+  const seedOnce = (promise: Promise<string | null>) => {
     if (seeded) return;
     seeded = true;
     seedTask = promise
-      .then((ts: any) => {
+      .then((ts) => {
         if (!ts) return null;
         seededTs = ts;
         return reply.seedFeedbackReactions(client, channel, ts);
       })
-      .catch((e: any) => log.debug("respond", `placeholder reaction setup failed: ${e.message}`));
+      .catch((error: unknown) => log.debug("respond", `placeholder reaction setup failed: ${errorMessage(error)}`));
   };
   const waitForSeed = async () => {
     if (seedTask) await seedTask;
@@ -800,15 +645,13 @@ async function respond({
     }
   }
 
-  // Streaming shows text before the grounding guards have run, so it is only
-  // allowed for an addressed general request — never for a program fact.
   const streamer = isAddressed && kind === "general" && !requireGrounded
     ? reply.makeStreamWriter({ client, channel, ensurePlaceholder, threadTs, silencedBefore })
     : null;
 
-  let firstTextMs: any = null;
+  let firstTextMs: number | null = null;
   const onText = streamer
-    ? (text: any) => {
+    ? (text: string) => {
         const clean = reply.stripReasoning ? reply.stripReasoning(text) : text;
         if (!clean.trim()) return;
         if (placeholderTimer) {
@@ -821,28 +664,27 @@ async function respond({
       }
     : null;
 
-  let result: any = null;
+  let result: AnswerResult | null = null;
   try {
     result = await lookup.answerOrChat(effectiveQuestion, contextPrompt, {
       onText,
       inHelpChannel,
       program: prog,
       channel,
-      // Web research is never evidence for a program fact.
       allowWebSearch: isAddressed && kind === "general",
       isPing: isAddressed,
       skipCache: requireGrounded,
     });
-  } catch (e: any) {
+  } catch (error: unknown) {
     if (placeholderTimer) {
       clearTimeout(placeholderTimer);
       placeholderTimer = null;
     }
-    log.error("respond", "answer lookup failed:", e.message);
+    log.error("respond", "answer lookup failed:", errorMessage(error));
     try {
       await streamer?.settle();
-    } catch (err: any) {
-      log.debug("respond", `stream settlement failed after lookup error: ${err.message}`);
+    } catch (settleError: unknown) {
+      log.debug("respond", `stream settlement failed after lookup error: ${errorMessage(settleError)}`);
     }
     await supportTicketReady;
     trace.finish({ finalAction: inHelpChannel ? "escalate" : isAddressed ? "error_reply" : "silence", reason: "lookup_error" });
@@ -861,6 +703,7 @@ async function respond({
     result.answer = reply.stripReasoning ? reply.stripReasoning(result.answer) : result.answer;
   }
 
+  result ??= { source: null, answer: "" };
   const cannotTell = result?.unclear === true || result?.answer?.trim()?.toUpperCase() === UNCLEAR_MARKER;
   const grounded = !cannotTell && (isDeterministicAnswer(result) || isGroundedAnswer(result));
   if (grounded && requireGrounded) result.answer = stripChannelMentions(result.answer);
@@ -878,13 +721,10 @@ async function respond({
     requireGrounded: Boolean(requireGrounded),
   });
 
-  // A model that handed the question back ("what do you mean?") found no
-  // subject, not a hole in the docs — not a gap.
-  if (!grounded && kind === "program" && !cannotTell && !isClarifyingQuestion(result?.answer)) {
+  if (!grounded && kind === "program" && !cannotTell && !isClarifyingQuestion(result.answer)) {
     db.recordGap(trimmed, userId, channel, threadTs, programId);
   }
 
-  // Shadow mode: evaluate everything, file tickets, send nothing publicly.
   if (prog?.shadowMode) {
     await reply.discardPlaceholder(client, channel, placeholder());
     if (action.startsWith("escalate")) await reply.flagForHumans(client, channel, threadTs, trimmed, userId, workspaceId);
@@ -893,8 +733,6 @@ async function respond({
     return true;
   }
 
-  // Ticket lands before any answer so the thread reads: question, ticket UI,
-  // answer. An answer never closes the ticket — it stays open until resolved.
   await supportTicketReady;
 
   if (action === "reply") {

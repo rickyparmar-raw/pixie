@@ -1,5 +1,3 @@
-// Fetches and caches pixie's knowledge base from the sources listed in
-// programs.json and sources.json.
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -17,9 +15,28 @@ const firecrawl = require("./firecrawl");
 const identity = require("./identity");
 const programModule = require("./program");
 const draftSandbox = require("./draftSandbox");
-// learn stays top-required for corpusSection: its knowledge dependency is lazy
-// inside invalidateCorpus, so hoisting here forms no load-time cycle.
 const learn = require("./learn");
+import type { Program, ProgramSource } from "./types";
+
+interface SourceRecord extends Partial<ProgramSource> {
+  name: string;
+  type?: string;
+  url?: string;
+  content?: unknown;
+  siteUrl?: string;
+  hidden?: boolean;
+  dynamic?: boolean;
+  paths?: string[];
+  minutesPerApprovedHour?: number;
+}
+type ProgramLike = Omit<Partial<Program>, "status" | "sources"> & { id?: string; status?: string; privateSandboxOnly?: boolean; faqContent?: string; sources?: SourceRecord[]; sourceTexts?: Record<string, string> };
+type Section = [string, string];
+interface GithubListingEntry { type?: string; name?: string; download_url?: string; html_url?: string }
+interface GithubFile { name: string; title: string; downloadUrl: string; pageUrl: string; contentUrl: string; isHtml: boolean }
+interface GithubSection { title: string; pageUrl: string; body: string }
+interface CrawlPage { content: string; raw: string }
+interface SourceHealthRow { name: string; fail_count?: number; fetched_at?: number | null; last_success_at?: number | null; last_error?: string | null }
+interface RetrievalIndex { docs: Array<{ chunk: { source: string } }> }
 
 const SOURCES_PATH = path.join(__dirname, "..", "sources.json");
 const APP_ROOT = path.join(__dirname, "..");
@@ -27,47 +44,24 @@ const JAME_GAM_DOCS_PATH = path.join(APP_ROOT, "data", "jame-gam-complete-docs.m
 const LIVE_YSWS_DOCS_PATH = path.join(APP_ROOT, "LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md");
 const LIVE_YSWS_SOURCE = { name: "Live YSWS Pixie Knowledge Base", type: "text", url: "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md" };
 
-// Five at a time: GitHub lists once against an unauthenticated rate limit and
-// bodies come from a CDN, but doc subsites throttle aggressively — five keeps a
-// 30-page refresh under a minute without tripping either.
 const FETCH_BATCH_SIZE = 5;
-// Ten seconds for the first fetch: docs CDNs answer fast or not at all.
 const INITIAL_FETCH_TIMEOUT_MS = 10000;
-// Fifteen seconds for subpages: rendered doc pages are heavier than the API
-// listing that discovered them.
 const SUBPAGE_FETCH_TIMEOUT_MS = 15000;
-// A line on 60%+ of pages is chrome (sidebar nav, footer), not documentation.
-// Needs at least three pages to tell the two apart.
 const SHARED_CHROME_THRESHOLD = 0.6;
-// Repo markdown carries unrendered {{rate}} templates; the rendered page is the
-// only place real numbers exist. A page that still shows one was not
-// interpolated — teaching it would invent numbers.
 const UNRENDERED_PLACEHOLDER_RE = /\{\{[a-z0-9_]+\}\}/i;
 
-// A fetched body is bounded before it reaches the cache: a compromised or
-// misconfigured endpoint must not be able to park megabytes in memory, on the
-// volume, or (via the corpus) in the prompt. Truncation keeps the head —
-// truncation, not a drop, so a legitimately long doc still answers from its
-// opening sections while anything past the cap never enters the corpus.
 const MAX_SOURCE_TEXT_CHARS = 200000;
 
-// Sources mid-refresh, by namespaced memKey. refreshProgramSources returns
-// without waiting, so a second call (or a scheduled refreshCorpus landing on
-// top of it) must not start the same fetch twice.
-const inflightSources = new Set();
-// last good text per namespaced source key — a source that fails to fetch keeps
-// serving its previous content instead of dropping out of the corpus.
-const cache = new Map();
-// lowercase label -> human-facing URL, for whichever section/source a reply
-// cites. Populated per-heading (deep link) and per-source (fallback link).
-const linkCache = new Map();
-let lastBuiltAt: any = null;
+const inflightSources = new Set<string>();
+const cache = new Map<string, string>();
+const linkCache = new Map<string, string>();
+let lastBuiltAt: Date | null = null;
 
-const corpusCacheMap = new Map();
-const corpusBuiltOnMap = new Map();
-const retrievalIndexMap = new Map();
-const draftCorpusMap = new Map();
-const draftIndexMap = new Map();
+const corpusCacheMap = new Map<string, string>();
+const corpusBuiltOnMap = new Map<string, string>();
+const retrievalIndexMap = new Map<string, RetrievalIndex>();
+const draftCorpusMap = new Map<string, string>();
+const draftIndexMap = new Map<string, { docs: unknown[] }>();
 
 function today() {
   return new Date().toDateString();
@@ -81,29 +75,29 @@ function invalidate() {
   draftIndexMap.clear();
 }
 
-function registerDraftKnowledge(draftProgram: any, sourceTexts: any) {
+function registerDraftKnowledge(draftProgram: ProgramLike, sourceTexts: Record<string, string>) {
   if (!draftProgram?.id || draftProgram.status !== "suspended" || draftProgram.privateSandboxOnly !== true) throw new Error("invalid draft knowledge registration");
-  const canonicalJameDocs = draftProgram.id === "jame-gam" && fs.existsSync(JAME_GAM_DOCS_PATH)
+  const canonicalJameDocs: Section[] | null = draftProgram.id === "jame-gam" && fs.existsSync(JAME_GAM_DOCS_PATH)
     ? [["Jame Gam Complete Docs", fs.readFileSync(JAME_GAM_DOCS_PATH, "utf8")]]
     : null;
-  const canonicalLiveDocs = draftProgram.id === "live-ysws" && fs.existsSync(LIVE_YSWS_DOCS_PATH)
+  const canonicalLiveDocs: Section[] = draftProgram.id === "live-ysws" && fs.existsSync(LIVE_YSWS_DOCS_PATH)
     ? [[LIVE_YSWS_SOURCE.name, fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")]]
     : [];
-  const sections = canonicalJameDocs || [...Object.entries(sourceTexts || {}).filter(([, text]: any) => text), ...canonicalLiveDocs];
-  const generated = canonicalJameDocs ? [] : (draftProgram.faqContent ? [["Draft FAQs", draftProgram.faqContent]] : []);
+  const sections: Section[] = canonicalJameDocs || [...Object.entries(sourceTexts || {}).filter(([, text]) => text), ...canonicalLiveDocs];
+  const generated: Section[] = canonicalJameDocs ? [] : (draftProgram.faqContent ? [["Draft FAQs", draftProgram.faqContent]] : []);
   const all = [...generated, ...sections];
-  draftCorpusMap.set(draftProgram.id, all.map(([name, text]: any) => `### ${name}\n${text}`).join("\n\n"));
+  draftCorpusMap.set(draftProgram.id, all.map(([name, text]) => `### ${name}\n${text}`).join("\n\n"));
   draftIndexMap.set(draftProgram.id, retrieve.buildIndex(retrieve.chunkSections(all)));
   const sources = [...(draftProgram.sources || [])];
-  if (draftProgram.id === "live-ysws" && !sources.some((source: any) => source?.name === LIVE_YSWS_SOURCE.name)) sources.push(LIVE_YSWS_SOURCE);
+  if (draftProgram.id === "live-ysws" && !sources.some((source: SourceRecord) => source?.name === LIVE_YSWS_SOURCE.name)) sources.push(LIVE_YSWS_SOURCE);
   draftSandbox.register({ ...draftProgram, sources, sourceTexts: Object.fromEntries(sections) });
-  return { sources: sections.length, chunks: draftIndexMap.get(draftProgram.id).docs.length, faq: generated.length };
+  return { sources: sections.length, chunks: draftIndexMap.get(draftProgram.id)?.docs.length || 0, faq: generated.length };
 }
 
-async function ingestDraftSources(draftProgram: any) {
+async function ingestDraftSources(draftProgram: ProgramLike) {
   if (!draftProgram?.id || draftProgram.status !== "suspended" || draftProgram.privateSandboxOnly !== true) throw new Error("only private suspended drafts may be ingested");
   const sourceTexts: Record<string, string> = {};
-  const skipped: any[] = [];
+  const skipped: { name: string; reason: string }[] = [];
   for (const source of draftProgram.sources || []) {
     if (!source?.name || source.type === "slack-reference" || source.type === "canvas-reference") {
       skipped.push({ name: source?.name || "unnamed", reason: "reference-only source" });
@@ -111,7 +105,7 @@ async function ingestDraftSources(draftProgram: any) {
     }
     try {
       sourceTexts[source.name] = await fetchSourceText(source, false);
-    } catch (error: any) {
+    } catch (error: unknown) {
       skipped.push({ name: source.name, reason: error instanceof Error ? error.message : "fetch failed" });
     }
   }
@@ -119,12 +113,12 @@ async function ingestDraftSources(draftProgram: any) {
   return { ...result, skipped };
 }
 
-function getDraftContext(draftProgramId: any, question: any) {
+function getDraftContext(draftProgramId: string, question: string) {
   let index = draftIndexMap.get(draftProgramId);
   if (!index) {
     try {
       loadDraftPersisted();
-    } catch (_: any) {}
+    } catch (_error: unknown) {}
     index = draftIndexMap.get(draftProgramId);
   }
   if (!index) return "";
@@ -135,68 +129,64 @@ function getDraftContext(draftProgramId: any, question: any) {
 }
 
 function loadDraftPersisted() {
-  let programs: any[] = [];
-  let sources: any[] = [];
+  let programs: { program_id: string; payload: string }[] = [];
+  let sources: { program_id: string; source_name: string; text: string }[] = [];
   try {
     programs = db.handle().query("SELECT program_id, payload FROM draft_sandbox_programs").all();
     sources = db.handle().query("SELECT program_id, source_name, text FROM draft_sandbox_sources").all();
-  } catch (_: any) {
+  } catch (_error: unknown) {
     return { programs: 0, sources: 0 };
   }
-  const byProgram = new Map();
+  const byProgram = new Map<string, Section[]>();
   for (const row of sources) {
     if (!byProgram.has(row.program_id)) byProgram.set(row.program_id, []);
-    byProgram.get(row.program_id).push([row.source_name, row.text]);
+    const sections = byProgram.get(row.program_id) || [];
+    sections.push([row.source_name, row.text]);
+    byProgram.set(row.program_id, sections);
   }
   let rebuilt = 0;
   for (const row of programs) {
-    let program: any = null;
+    let program: ProgramLike | null = null;
     try {
       program = JSON.parse(row.payload);
-    } catch (_: any) {
+    } catch (_error: unknown) {
       continue;
     }
-    const canonicalJameDocs = row.program_id === "jame-gam" && fs.existsSync(JAME_GAM_DOCS_PATH)
+    const canonicalJameDocs: Section[] | null = row.program_id === "jame-gam" && fs.existsSync(JAME_GAM_DOCS_PATH)
       ? [["Jame Gam Complete Docs", fs.readFileSync(JAME_GAM_DOCS_PATH, "utf8")]]
       : null;
-    const canonicalLiveDocs = row.program_id === "live-ysws" && fs.existsSync(LIVE_YSWS_DOCS_PATH)
+    const canonicalLiveDocs: Section[] = row.program_id === "live-ysws" && fs.existsSync(LIVE_YSWS_DOCS_PATH)
       ? [[LIVE_YSWS_SOURCE.name, fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")]]
       : [];
     const sections = canonicalJameDocs || [...(byProgram.get(row.program_id) || []), ...canonicalLiveDocs];
-    const generated = canonicalJameDocs ? [] : (program.faqContent ? [["Draft FAQs", program.faqContent]] : []);
+    if (!program) continue;
+    const generated: Section[] = canonicalJameDocs ? [] : (program.faqContent ? [["Draft FAQs", program.faqContent]] : []);
     const all = [...generated, ...sections];
     if (all.length === 0) continue;
-    draftCorpusMap.set(row.program_id, all.map(([name, text]: any) => `### ${name}\n${text}`).join("\n\n"));
+    draftCorpusMap.set(row.program_id, all.map(([name, text]) => `### ${name}\n${text}`).join("\n\n"));
     try {
       draftIndexMap.set(row.program_id, retrieve.buildIndex(retrieve.chunkSections(all)));
       const sourcesWithCanonical = [...(program.sources || [])];
-      if (row.program_id === "live-ysws" && !sourcesWithCanonical.some((source: any) => source?.name === LIVE_YSWS_SOURCE.name)) sourcesWithCanonical.push(LIVE_YSWS_SOURCE);
+      if (row.program_id === "live-ysws" && !sourcesWithCanonical.some((source: SourceRecord) => source?.name === LIVE_YSWS_SOURCE.name)) sourcesWithCanonical.push(LIVE_YSWS_SOURCE);
       draftSandbox.register({ ...program, sources: sourcesWithCanonical, sourceTexts: Object.fromEntries(sections) });
       rebuilt += 1;
-    } catch (_: any) {}
+    } catch (_error: unknown) {}
   }
   return { programs: programs.length, sources: sources.length, rebuilt };
 }
 
-/* ---------------------------------------------------------- pure helpers -- */
 
-function loadSources() {
-  const allSources: any[] = [];
+function loadSources(): SourceRecord[] {
+  const allSources: SourceRecord[] = [];
   const seenUrls = new Set();
 
   const progs = [...programs.all(), programs.shared()];
   for (const prog of progs) {
     if (!Array.isArray(prog.sources)) continue;
     for (const src of prog.sources) {
-      // A source needs a name and somewhere to get its text from. "Somewhere" is
-      // a url for anything fetched, or inline content for a FAQ typed into the
-      // wizard — which has no url at all, so requiring one here silently dropped
-      // every inline source before it reached fetchSourceText.
       if (!src || !src.name) continue;
       const hasContent = src.content !== undefined && src.content !== null;
       if (!src.url && !hasContent) continue;
-      // Inline sources key on the name alone: two of them are distinguishable
-      // only by name, and `undefined` in the key would collapse them into one.
       const key = sourceCacheKey(src);
       if (seenUrls.has(key)) continue;
       seenUrls.add(key);
@@ -208,7 +198,7 @@ function loadSources() {
     try {
       const raw = fs.readFileSync(SOURCES_PATH, "utf8");
       return JSON.parse(raw);
-    } catch (_: any) {
+    } catch (_error: unknown) {
       return [];
     }
   }
@@ -216,23 +206,19 @@ function loadSources() {
   return allSources;
 }
 
-function resolveLocalPath(url: any) {
+function resolveLocalPath(url: string) {
   const raw = String(url || "").replace(/^file:\/\//, "");
   const resolved = path.isAbsolute(raw) ? path.normalize(raw) : path.resolve(APP_ROOT, raw);
-  // file:// sources come from operator-owned repo files, but the value still
-  // flows from JSON config — a `..` or absolute path must not escape the app
-  // root into /etc/passwd. Relative repo paths (./quick-links.json) resolve
-  // inside and pass untouched.
   if (resolved !== APP_ROOT && !resolved.startsWith(APP_ROOT + path.sep)) {
     throw new Error(`refusing file source outside app root: ${String(url).slice(0, 80)}`);
   }
   return resolved;
 }
 
-function preserveLinks(html: any) {
+function preserveLinks(html: string) {
   return html.replace(
     /<a\b[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi,
-    (match: any, href: any, inner: any) => {
+    (match: string, href: string, inner: string) => {
       const label = inner.replace(/<[^>]+>/g, "").trim();
       const url = href.trim();
       if (!label) return match;
@@ -243,7 +229,7 @@ function preserveLinks(html: any) {
   );
 }
 
-function stripHtml(html: any) {
+function stripHtml(html: string) {
   const withoutCode = html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "");
@@ -265,15 +251,18 @@ function stripHtml(html: any) {
     .trim();
 }
 
-function textFromJsonFaq(data: any) {
-  const items = data?.faq?.items;
+function textFromJsonFaq(data: unknown) {
+  const items = (data && typeof data === "object" ? (data as { faq?: { items?: unknown } }).faq?.items : null);
   if (!Array.isArray(items)) return "";
   return items
-    .map((item: any) => `Q: ${item.question}\nA: ${item.answer}`)
+    .map((item) => {
+      const record = item && typeof item === "object" ? item as { question?: unknown; answer?: unknown } : {};
+      return `Q: ${String(record.question)}\nA: ${String(record.answer)}`;
+    })
     .join("\n\n");
 }
 
-function annotateHeadingAnchors(html: any, baseUrl: any, links: any) {
+function annotateHeadingAnchors(html: string, baseUrl: string, links: Map<string, string>) {
   let content = html;
   const articleMatch = content.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i) || content.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i);
   if (articleMatch) {
@@ -288,10 +277,9 @@ function annotateHeadingAnchors(html: any, baseUrl: any, links: any) {
 
   content = content.replace(/<div[^>]*\bclass="(?:eyebrow|doc-foot|doc-sign)"[^>]*>[\s\S]*?<\/div>/gi, "");
 
-  // 1. Direct headings with id: <h2 id="h-age">Age</h2>
   content = content.replace(
     /<h([1-6])[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/h\1>/gi,
-    (match: any, level: any, id: any, headingInner: any) => {
+    (match: string, level: string, id: string, headingInner: string) => {
       const headingText = headingInner.replace(/<[^>]+>/g, "").trim();
       if (!headingText) return match;
       if (links) links.set(headingText.toLowerCase(), `${baseUrl}#${id}`);
@@ -299,10 +287,9 @@ function annotateHeadingAnchors(html: any, baseUrl: any, links: any) {
     },
   );
 
-  // 2. Headings wrapped in section or div with id
   content = content.replace(
     /<(?:section|div)[^>]*\bid="([^"]+)"[^>]*>[\s\S]{0,80}?<h([1-6])[^>]*>([\s\S]*?)<\/h\2>/gi,
-    (match: any, id: any, level: any, headingInner: any) => {
+    (match: string, id: string, level: string, headingInner: string) => {
       const headingText = headingInner.replace(/<[^>]+>/g, "").trim();
       if (!headingText) return match;
       if (links) links.set(headingText.toLowerCase(), `${baseUrl}#${id}`);
@@ -310,10 +297,9 @@ function annotateHeadingAnchors(html: any, baseUrl: any, links: any) {
     },
   );
 
-  // 3. Plain headings without id
   content = content.replace(
     /<h([1-6])[^>]*>([\s\S]*?)<\/h\1>/gi,
-    (match: any, level: any, headingInner: any) => {
+    (match: string, level: string, headingInner: string) => {
       const headingText = headingInner.replace(/<[^>]+>/g, "").trim();
       if (!headingText) return match;
       return `\n\n## ${headingText}\n\n`;
@@ -323,21 +309,16 @@ function annotateHeadingAnchors(html: any, baseUrl: any, links: any) {
   return content;
 }
 
-// "010-welcome.md" -> "Welcome". The numeric prefix only exists to order the
-// files on disk; leaving it in the corpus heading would put a meaningless
-// number in front of every citation pixie prints.
-function docTitleFromFilename(name: any) {
+function docTitleFromFilename(name: string) {
   return String(name || "")
     .replace(/\.md$/i, "")
     .replace(/^\d+[-_]/, "")
     .replace(/[-_]+/g, " ")
     .trim()
-    .replace(/\b\w/g, (c: any) => c.toUpperCase());
+    .replace(/\b\w/g, (c: string) => c.toUpperCase());
 }
 
-// The rendered docs site slugs each page by its filename minus the ordering
-// prefix, so 270-pixel-art.md is served at /docs/pixel-art.
-function docSlugFromFilename(name: any) {
+function docSlugFromFilename(name: string) {
   return String(name || "")
     .replace(/\.md$/i, "")
     .replace(/^\d+[-_]/, "")
@@ -345,67 +326,49 @@ function docSlugFromFilename(name: any) {
     .toLowerCase();
 }
 
-// Rendered doc pages repeat the whole sidebar nav, the prev/next footer and
-// the site chrome on every single page. Left in, each page reads as though it
-// mentions every other page's topic, so keyword retrieval scores them all alike
-// and the page that actually answers the question stops standing out.
-//
-// Frequency is the giveaway: a line on most of the pages is chrome, a line of
-// real documentation is not. Needs at least three pages to tell them apart.
-function dropSharedLines(pages: any, threshold: any = SHARED_CHROME_THRESHOLD) {
+function dropSharedLines(pages: string[], threshold = SHARED_CHROME_THRESHOLD): string[] {
   if (!Array.isArray(pages) || pages.length < 3) return pages;
 
-  const counts = new Map();
+  const counts = new Map<string, number>();
   for (const page of pages) {
-    const distinct = new Set(String(page).split("\n").map((l: any) => l.trim()).filter(Boolean));
+    const distinct = new Set(String(page).split("\n").map((l) => l.trim()).filter(Boolean));
     for (const line of distinct) counts.set(line, (counts.get(line) || 0) + 1);
   }
 
   const minPages = Math.ceil(pages.length * threshold);
-  const chrome = new Set([...counts].filter(([, n]: any) => n >= minPages).map(([line]: any) => line));
+  const chrome = new Set([...counts].filter(([, n]) => n >= minPages).map(([line]) => line));
 
-  return pages.map((page: any) =>
+  return pages.map((page) =>
     String(page)
       .split("\n")
-      .map((l: any) => l.trim())
-      .filter((l: any) => !l || !chrome.has(l))
+      .map((l) => l.trim())
+      .filter((l) => !l || !chrome.has(l))
       .join("\n")
       .replace(/\n{3,}/g, "\n\n"),
   );
 }
 
-// Turns a GitHub contents-API directory listing into the markdown files worth
-// fetching. Sorted by filename so the corpus order matches the docs' own
-// reading order, which is what the numeric prefixes encode.
-function markdownFilesFromListing(data: any, siteBase: any = "") {
+function markdownFilesFromListing(data: unknown, siteBase = ""): GithubFile[] {
   if (!Array.isArray(data)) return [];
   return data
-    .filter((e: any) => e && e.type === "file" && /\.md$/i.test(e.name || "") && e.download_url)
-    .sort((a: any, b: any) => String(a.name).localeCompare(String(b.name)))
-    .map((e: any) => ({
-      name: e.name,
-      title: docTitleFromFilename(e.name),
-      downloadUrl: e.download_url,
+    .map((entry) => entry as GithubListingEntry)
+    .filter((e) => e && e.type === "file" && /\.md$/i.test(e.name || "") && e.download_url)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)))
+    .map((e) => ({
+      name: e.name || "",
+      title: docTitleFromFilename(e.name || ""),
+      downloadUrl: e.download_url!,
       pageUrl: siteBase
-        ? `${String(siteBase).replace(/\/$/, "")}/${docSlugFromFilename(e.name)}`
-        : e.html_url || e.download_url,
-      // The repo markdown carries unrendered {{placeholders}} for every rate
-      // and tier, so the rendered page is the only place the real numbers
-      // exist. Fall back to raw markdown only when no site is configured.
+        ? `${String(siteBase).replace(/\/$/, "")}/${docSlugFromFilename(e.name || "")}`
+        : e.html_url || e.download_url!,
       contentUrl: siteBase
-        ? `${String(siteBase).replace(/\/$/, "")}/${docSlugFromFilename(e.name)}`
-        : e.download_url,
+        ? `${String(siteBase).replace(/\/$/, "")}/${docSlugFromFilename(e.name || "")}`
+        : e.download_url!,
       isHtml: Boolean(siteBase),
     }));
 }
 
-// Storage key for one source's last-good text. Namespaced by location, not
-// just name: two hosted programs can each have a "Docs" source pointing at
-// different URLs, and a bare-name key would let one program's fetch overwrite
-// the other's fallback. Identical name+URL shares the row, which is safe
-// because the content is byte-identical by construction. Inline sources have
-// no URL, so their content is part of the location identity instead.
-function sourceCacheKey(source: any) {
+function sourceCacheKey(source: SourceRecord | null | undefined) {
   if (!source || !source.name) return null;
   if (source.url) return `${source.name}::${source.url}`;
   const inlineIdentity = JSON.stringify({ type: source.type, content: source.content });
@@ -413,22 +376,15 @@ function sourceCacheKey(source: any) {
   return `${source.name}::inline::${digest}`;
 }
 
-// In-memory twin of sourceCacheKey. The map used to be keyed by bare name, so
-// two programs sharing a source name but not a URL overwrote each other and
-// each program's corpus served the other's docs. Names are human labels and
-// never contain "::", so the display name is the prefix before it.
-function memKey(source: any) {
+function memKey(source: SourceRecord) {
   return sourceCacheKey(source) || source.name;
 }
 
-function isDynamicSource(source: any) {
+function isDynamicSource(source: SourceRecord) {
   return Boolean(source && (source.dynamic === true || source.type === "pixl-shop" || source.type === "live-shop"));
 }
 
-// Freshness is deliberately derived from source_cache health rather than from
-// the in-memory cache. This keeps the decision valid after a restart and keeps
-// same-named sources in different programs isolated by their cache key.
-function sourceFreshness(source: any) {
+function sourceFreshness(source: SourceRecord) {
   const key = sourceCacheKey(source);
   if (!key) return {
     key: null,
@@ -459,10 +415,7 @@ function sourceFreshness(source: any) {
   };
 }
 
-// Consumers that make exact claims can use this boundary without needing to
-// know how source_cache is persisted. A stale dynamic source remains usable as
-// last-good context, but is not eligible to authorize an exact current claim.
-function sourceEligibility(source: any) {
+function sourceEligibility(source: SourceRecord) {
   const metadata = sourceFreshness(source);
   const exactClaimsAllowed = metadata.freshness === "fresh" ||
     (metadata.authority !== "dynamic" && metadata.freshness === "stale");
@@ -473,28 +426,25 @@ function sourceEligibility(source: any) {
   };
 }
 
-function displayNameForMemKey(key: any) {
+function displayNameForMemKey(key: string) {
   const idx = String(key).indexOf("::");
   return idx === -1 ? String(key) : String(key).slice(0, idx);
 }
 
-function recordLink(label: any, url: any) {
+function recordLink(label: string, url: string) {
   if (!label || !url) return;
   linkCache.set(String(label).toLowerCase(), url);
 }
 
-function getSourceUrl(label: any) {
+function getSourceUrl(label: string) {
   if (!label) return null;
   return linkCache.get(label.trim().toLowerCase()) || null;
 }
 
-/* ------------------------------------------------------------- fetch I/O -- */
 
-function inlineText(source: any) {
+function inlineText(source: SourceRecord) {
   switch (source.type) {
     case "json-faq":
-      // Accepts the same { faq: { items } } envelope a json-faq file uses, or a
-      // bare items array, which is what a form posts.
       return textFromJsonFaq(Array.isArray(source.content) ? { faq: { items: source.content } } : source.content);
     case "gdoc":
     case "text":
@@ -505,8 +455,9 @@ function inlineText(source: any) {
   }
 }
 
-function localFileText(source: any) {
-  const raw = fs.readFileSync(resolveLocalPath(source.url), "utf8");
+function localFileText(source: SourceRecord) {
+  const url = source.url || "";
+  const raw = fs.readFileSync(resolveLocalPath(url), "utf8");
   if (source.type === "text" || source.type === "markdown") {
     if (source.siteUrl) recordLink(source.name, source.siteUrl);
     return raw.trim();
@@ -516,41 +467,40 @@ function localFileText(source: any) {
     case "json-faq":
       return textFromJsonFaq(data);
     case "gdoc":
-      recordLink(source.name, source.url);
+      recordLink(source.name, url);
       return typeof data === "string" ? data.trim() : String(data);
     default:
       throw new Error(`unsupported type for local file: ${source.type}`);
   }
 }
 
-async function fetchGithubDir(source: any) {
-  const res = await sourceGuard.fetchSourceUrl(source.url, { timeout: INITIAL_FETCH_TIMEOUT_MS });
+async function fetchGithubDir(source: SourceRecord) {
+  const url = source.url || "";
+  const res = await sourceGuard.fetchSourceUrl(url, { timeout: INITIAL_FETCH_TIMEOUT_MS });
   const files = markdownFilesFromListing(res.data, source.siteUrl);
   if (files.length === 0) throw new Error(`no markdown files listed at ${source.url}`);
 
-  recordLink(source.name, source.siteUrl || source.url);
+  recordLink(source.name, source.siteUrl || url);
   log.info("knowledge", `fetching ${files.length} markdown file(s) for source "${source.name}"`);
 
-  const sections: any[] = [];
+  const sections: GithubSection[] = [];
   for (let i = 0; i < files.length; i += FETCH_BATCH_SIZE) {
     const batch = files.slice(i, i + FETCH_BATCH_SIZE);
-    const batchResults = await Promise.all(batch.map((file: any) => fetchGithubFile(file, source.name)));
-    sections.push(...batchResults);
+    const batchResults = await Promise.all(batch.map((file) => fetchGithubFile(file, source.name)));
+    sections.push(...batchResults.filter((section): section is GithubSection => Boolean(section)));
   }
 
-  const kept = sections.filter((x: any) => x && x.body);
-  const bodies = dropSharedLines(kept.map((x: any) => x.body));
+  const kept = sections.filter((x) => x && x.body);
+  const bodies = dropSharedLines(kept.map((x) => x.body));
   const joined = kept
-    .map((x: any, i: any) => (bodies[i] ? `## ${x.title} (${x.pageUrl})\n\n${bodies[i]}` : ""))
+    .map((x, i) => (bodies[i] ? `## ${x.title} (${x.pageUrl})\n\n${bodies[i]}` : ""))
     .filter(Boolean)
     .join("\n\n");
-  // Throwing keeps the previous good text in cache rather than replacing a
-  // working corpus with an empty one when GitHub is having a bad day.
   if (!joined) throw new Error(`all markdown fetches failed for ${source.url}`);
   return joined;
 }
 
-async function fetchGithubFile(file: any, sourceName: any) {
+async function fetchGithubFile(file: GithubFile, sourceName: string): Promise<GithubSection | null> {
   try {
     const fileRes = await sourceGuard.fetchSourceUrl(file.contentUrl, { timeout: SUBPAGE_FETCH_TIMEOUT_MS });
     const raw = typeof fileRes.data === "string" ? fileRes.data : String(fileRes.data);
@@ -564,30 +514,22 @@ async function fetchGithubFile(file: any, sourceName: any) {
     }
     recordLink(file.title, file.pageUrl);
     return { title: file.title, pageUrl: file.pageUrl, body };
-  } catch (e: any) {
-    log.warn("knowledge", `failed to fetch ${file.name} for "${sourceName}": ${e.message}`);
+  } catch (error: unknown) {
+    log.warn("knowledge", `failed to fetch ${file.name} for "${sourceName}": ${error instanceof Error ? error.message : String(error)}`);
     return null;
   }
 }
 
-// A url-source is crawled, not fetched once: a rendered docs site links its
-// pages from a sidebar that repeats on every page, and following those links
-// recursively is the only way to get the whole tree. Bounded so a
-// misconfigured root can't walk a whole site.
 const CRAWL_MAX_PAGES = 80;
 const CRAWL_MAX_DEPTH = 4;
-// A rendered docs site serves HTML routes; a link to a raw .md or an asset is
-// a stray reference (often a stale export artifact), not another doc page.
 const ASSET_RE = /\.(?:css|js|mjs|json|md|txt|xml|rss|png|jpe?g|gif|svg|webp|ico|pdf|zip|gz|woff2?|ttf|mp4|webm)$/i;
 
-function normalizePath(p: any) {
+function normalizePath(p: string) {
   return String(p || "/").replace(/\/+$/, "") || "/";
 }
 
-// One canonical form per page: no fragment, no query, no trailing slash, so
-// /docs/ai, /docs/ai/ and /docs/ai#top are one crawl target, not three.
-function canonicalUrl(href: any, base: any) {
-  let u: any;
+function canonicalUrl(href: string, base: string) {
+  let u: URL;
   try {
     u = new URL(href, base);
   } catch {
@@ -599,51 +541,38 @@ function canonicalUrl(href: any, base: any) {
   return u.href;
 }
 
-// Which same-origin paths this source's crawl may follow. Default is the /docs
-// tree (a rendered docs site keeps its pages there) plus the root URL's own
-// path. Naming `paths` replaces the /docs default, so a landing-page source
-// (`url: "https://x/"`, `paths: ["/rubric"]`) stays on the root and /rubric
-// instead of dragging in an unrelated /docs tree.
-function crawlPrefixes(source: any) {
-  const rootPath = normalizePath(new URL(source.url).pathname);
+function crawlPrefixes(source: SourceRecord) {
+  const rootPath = normalizePath(new URL(source.url || "").pathname);
   const configured = Array.isArray(source.paths) && source.paths.length
     ? source.paths.map(normalizePath)
     : null;
-  const set = new Set([...(configured || ["/docs"]), rootPath].filter((p: any) => p && p !== "/"));
+  const set = new Set([...(configured || ["/docs"]), rootPath].filter((p) => p && p !== "/"));
   return [...set];
 }
 
-function inScope(href: any, base: any, origin: any, prefixes: any) {
+function inScope(href: string, base: string, origin: string, prefixes: string[]) {
   const canon = canonicalUrl(href, base);
   if (!canon) return null;
   const u = new URL(canon);
   if (u.origin !== origin || ASSET_RE.test(u.pathname)) return null;
-  const hit = prefixes.some((prefix: any) => u.pathname === prefix || u.pathname.startsWith(`${prefix}/`));
+  const hit = prefixes.some((prefix) => u.pathname === prefix || u.pathname.startsWith(`${prefix}/`));
   return hit ? canon : null;
 }
 
-// Same-origin links out of a page, from HTML hrefs and markdown link targets
-// alike — Firecrawl hands back markdown, the SSRF guard hands back HTML. The
-// capture stops at a fragment or query so /docs/x#frag and /docs/x?y=1 both
-// resolve to /docs/x.
-function linksFrom(text: any) {
-  const found = new Set();
+function linksFrom(text: string): string[] {
+  const found = new Set<string>();
   for (const m of String(text).matchAll(/href="([^"#?\s]+)/gi)) found.add(m[1]);
   for (const m of String(text).matchAll(/\]\(([^)#?\s]+)/g)) found.add(m[1]);
   return [...found].filter(Boolean);
 }
 
-function titleFromUrl(pageUrl: any) {
+function titleFromUrl(pageUrl: string) {
   const seg = normalizePath(new URL(pageUrl).pathname).split("/").filter(Boolean).pop();
   if (!seg) return "Overview";
-  return seg.replace(/[-_]+/g, " ").replace(/\b\w/g, (c: any) => c.toUpperCase());
+  return seg.replace(/[-_]+/g, " ").replace(/\b\w/g, (c: string) => c.toUpperCase());
 }
 
-// One page: JS-rendered markdown via Firecrawl when configured, SSRF-guarded
-// raw HTML otherwise. `raw` is whatever came back, kept so the crawler can mine
-// it for the next hop's links. Every request goes through the guard or
-// Firecrawl — never a bare axios.get.
-async function fetchCrawlPage(pageUrl: any, force: any) {
+async function fetchCrawlPage(pageUrl: string, force: boolean): Promise<CrawlPage> {
   const title = titleFromUrl(pageUrl);
   if (firecrawl.getApiKey()) {
     try {
@@ -652,8 +581,8 @@ async function fetchCrawlPage(pageUrl: any, force: any) {
         recordLink(title, pageUrl);
         return { content: `## ${title} (${pageUrl})\n\n${md}`, raw: md };
       }
-    } catch (e: any) {
-      log.warn("knowledge", `firecrawl scrape failed for ${pageUrl}, falling back to guard: ${e.message}`);
+    } catch (error: unknown) {
+      log.warn("knowledge", `firecrawl scrape failed for ${pageUrl}, falling back to guard: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   const res = await sourceGuard.fetchSourceUrl(pageUrl, { timeout: SUBPAGE_FETCH_TIMEOUT_MS });
@@ -661,8 +590,8 @@ async function fetchCrawlPage(pageUrl: any, force: any) {
   return { content: stripHtml(annotateHeadingAnchors(html, pageUrl, linkCache)), raw: html };
 }
 
-function nextHops(hrefs: any, base: any, origin: any, prefixes: any, seen: any) {
-  const hops: any[] = [];
+function nextHops(hrefs: string[], base: string, origin: string, prefixes: string[], seen: Set<string>): string[] {
+  const hops: string[] = [];
   for (const href of hrefs) {
     const canon = inScope(href, base, origin, prefixes);
     if (canon && !seen.has(canon)) {
@@ -673,29 +602,28 @@ function nextHops(hrefs: any, base: any, origin: any, prefixes: any, seen: any) 
   return hops;
 }
 
-async function fetchUrlSource(source: any, force: any) {
-  recordLink(source.name, source.siteUrl || source.url);
-  const rootUrl = canonicalUrl(source.url, source.url);
+async function fetchUrlSource(source: SourceRecord, force: boolean) {
+  const url = source.url || "";
+  recordLink(source.name, source.siteUrl || url);
+  const rootUrl = canonicalUrl(url, url);
+  if (!rootUrl) throw new Error(`invalid source URL: ${url}`);
   const origin = new URL(rootUrl).origin;
   const prefixes = crawlPrefixes(source);
 
-  // Root first, and unguarded by try/catch on purpose: a hard failure here
-  // (rate limit, DNS) must propagate so refreshSource keeps the last good copy
-  // instead of replacing the corpus with nothing.
-  const seen = new Set([rootUrl]);
+  const seen = new Set<string>([rootUrl]);
   const first = await fetchCrawlPage(rootUrl, force);
   const pages = [first.content];
   let frontier = nextHops(linksFrom(first.raw), rootUrl, origin, prefixes, seen);
 
   for (let depth = 1; depth <= CRAWL_MAX_DEPTH && frontier.length && pages.length < CRAWL_MAX_PAGES; depth++) {
-    const discovered: any[] = [];
+    const discovered: string[] = [];
     for (let i = 0; i < frontier.length && pages.length < CRAWL_MAX_PAGES; i += FETCH_BATCH_SIZE) {
       const batch = frontier.slice(i, i + FETCH_BATCH_SIZE);
-      const results = await Promise.all(batch.map(async (url: any) => {
+      const results = await Promise.all(batch.map(async (url) => {
         try {
           return { url, ...(await fetchCrawlPage(url, force)) };
-        } catch (e: any) {
-          log.warn("knowledge", `failed to crawl ${url} for "${source.name}": ${e.message}`);
+        } catch (error: unknown) {
+          log.warn("knowledge", `failed to crawl ${url} for "${source.name}": ${error instanceof Error ? error.message : String(error)}`);
           return null;
         }
       }));
@@ -708,31 +636,18 @@ async function fetchUrlSource(source: any, force: any) {
     frontier = discovered;
   }
 
-  const kept = pages.filter((p: any) => p && p.trim());
-  // Throwing keeps the previous good text in cache rather than replacing a
-  // working corpus with an empty one.
+  const kept = pages.filter((p) => p && p.trim());
   if (kept.length === 0) throw new Error(`no pages crawled for ${source.url}`);
   log.info("knowledge", `crawled ${kept.length} page(s) for source "${source.name}"`);
 
-  // Every rendered page repeats the sidebar nav and footer; frequency separates
-  // that chrome from real content, same as the github-dir path does.
   return dropSharedLines(kept).filter(Boolean).join("\n\n");
 }
 
-async function fetchSourceText(source: any, force: any = false) {
-  // Content carried in the config itself rather than fetched. A fleet bot's FAQ
-  // is typed into the wizard and arrives inside PIXIE_PROGRAMS_JSON — there is no
-  // file in the shared image to point a file:// URL at, and no URL to GET.
-  //
-  // Checked before `source.url` is touched at all, because an inline source
-  // legitimately has no url — reading .startsWith on it first would throw.
+async function fetchSourceText(source: SourceRecord, force = false) {
   if (source.content !== undefined && source.content !== null) return inlineText(source);
   if (!source.url) throw new Error(`source "${source.name}" has neither a url nor inline content`);
   if (source.url.startsWith("file://")) return localFileText(source);
 
-  // Not a document: the catalogue and the payout config come from two
-  // endpoints and get rendered by lib/shop.js, which also keeps the parsed
-  // copy the price maths answers from.
   if (source.type === "pixl-shop") {
     recordLink(source.name, source.siteUrl || "https://pixl.hackclub.com/shop");
     return shop.refreshText();
@@ -756,20 +671,9 @@ async function fetchSourceText(source: any, force: any = false) {
   throw new Error(`unknown source type: ${source.type}`);
 }
 
-/* ------------------------------------------------------------ persist I/O -- */
 
-// "Serving last good copy" used to mean the Map above, which is empty for the
-// first few seconds of every process. api.github.com rate-limits by IP and
-// Railway's egress IP is shared, so a deploy landing inside a rate-limited
-// window brought pixie up with no docs at all until the next half-hourly
-// refresh. The copy on the volume is what makes that sentence true.
-//
-// Reads the namespaced key first, then the legacy bare-name row written before
-// namespacing existed — pre-migration deployments keep their fallback.
-function restoreFromDisk(source: any) {
+function restoreFromDisk(source: SourceRecord) {
   const key = sourceCacheKey(source);
-  // A legacy bare-name row cannot be safely used for inline content: the row
-  // predates content-aware keys and may belong to another program's FAQ.
   const names = key && key !== source.name && source.url ? [key, source.name] : [key || source.name];
   for (const name of names) {
     try {
@@ -779,31 +683,26 @@ function restoreFromDisk(source: any) {
       const ageMin = Math.round((Date.now() - stored.fetchedAt) / 60000);
       log.info("knowledge", `restored "${source.name}" from disk (fetched ${ageMin} min ago)`);
       return true;
-    } catch (e: any) {
-      log.debug("knowledge", `no stored copy for "${name}": ${e.message}`);
+    } catch (error: unknown) {
+      log.debug("knowledge", `no stored copy for "${name}": ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   return false;
 }
 
-function persistSourceText(source: any, text: any) {
+function persistSourceText(source: SourceRecord, text: string) {
   try {
     const key = sourceCacheKey(source) || source.name;
     db.saveSourceText(key, text);
-    // A legacy bare-name row for a now-namespaced source is stale the moment
-    // the namespaced write lands — remove it so fallback reads can't serve
-    // another program's copy under the same name.
     if (key !== source.name) {
-      try { db.handle().query("DELETE FROM source_cache WHERE name = ?").run(source.name); } catch (_: any) {}
+      try { db.handle().query("DELETE FROM source_cache WHERE name = ?").run(source.name); } catch (_error: unknown) {}
     }
-  } catch (e: any) {
-    // A corpus that can't be persisted is still a corpus. Worth knowing
-    // about, not worth failing the refresh over.
-    log.warn("knowledge", `could not persist "${source.name}": ${e.message}`);
+  } catch (error: unknown) {
+    log.warn("knowledge", `could not persist "${source.name}": ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-async function refreshSource(source: any, force: any = false) {
+async function refreshSource(source: SourceRecord, force = false) {
   try {
     const text = await fetchSourceText(source, force);
     if (!text) return;
@@ -813,26 +712,26 @@ async function refreshSource(source: any, force: any = false) {
     }
     cache.set(memKey(source), capped);
     persistSourceText(source, capped);
-  } catch (e: any) {
+  } catch (error: unknown) {
     const restored = cache.has(memKey(source)) || restoreFromDisk(source);
     const tail = restored ? "serving last good copy" : "and there is no stored copy to fall back on";
-    log.warn("knowledge", `failed to fetch "${source.name}": ${e.message} — ${tail}`);
+    log.warn("knowledge", `failed to fetch "${source.name}": ${error instanceof Error ? error.message : String(error)} — ${tail}`);
     try {
-      db.recordSourceFailure(sourceCacheKey(source) || source.name, e.message);
-    } catch (_: any) {}
+      db.recordSourceFailure(sourceCacheKey(source) || source.name, error instanceof Error ? error.message : String(error));
+    } catch (_error: unknown) {}
     if (!force) {
       try {
         db.recordMetric("source_refresh_failure", null, source.name);
         if (restored && isDynamicSource(source)) {
           db.recordMetric("stale_dynamic_source_used", null, source.name);
         }
-      } catch (_: any) {}
+      } catch (_error: unknown) {}
     }
   }
 }
 
-function faqQuestions(programId: any = null) {
-  const questions: any[] = [];
+function faqQuestions(programId: string | null = null): string[] {
+  const questions: string[] = [];
   const prog = programId ? programs.get(programId) : null;
   const shared = prog && prog.sharedSources === false ? [] : programs.shared().sources;
   const sources = prog ? [...(prog.sources || []), ...shared] : loadSources();
@@ -851,42 +750,37 @@ function faqQuestions(programId: any = null) {
   return questions;
 }
 
-/* --------------------------------------------------------------- corpus -- */
 
-function generatedSections(programId: any = null, question: any = null) {
+function generatedSections(programId: string | null = null, question: string | null = null): Section[] {
   const prog = programs.get(programId);
-  const sections: any[] = [];
+  const sections: Section[] = [];
 
   try {
     const identityText = identity.corpusSection(prog);
     if (identityText) sections.push(["About pixie", identityText]);
-  } catch (e: any) {
-    log.warn("knowledge", `generated section "About pixie" failed: ${e.message}`);
+  } catch (error: unknown) {
+    log.warn("knowledge", `generated section "About pixie" failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   try {
     const milestones = prog ? prog.milestones : programs.shared().milestones;
     const timelineText = programModule.corpusSection(new Date(), milestones, prog);
     if (timelineText) sections.push(["Program timeline", timelineText]);
-  } catch (e: any) {
-    log.warn("knowledge", `generated section "Program timeline" failed: ${e.message}`);
+  } catch (error: unknown) {
+    log.warn("knowledge", `generated section "Program timeline" failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
-  // The context path (question given) sends only the taught facts relevant to
-  // that question — the full taught section is unbounded in production and
-  // must never ride outside the retrieval budget again. The corpus path (no
-  // question) keeps the whole section: getCorpus is storage, not prompt.
   try {
     const learnText = question ? learn.relevantCorpusSection(question, programId) : learn.corpusSection(programId);
     if (learnText) sections.push(["Learned answers", learnText]);
-  } catch (e: any) {
-    log.warn("knowledge", `generated section "Learned answers" failed: ${e.message}`);
+  } catch (error: unknown) {
+    log.warn("knowledge", `generated section "Learned answers" failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 
   return sections;
 }
 
-function memText(source: any) {
+function memText(source: SourceRecord) {
   let text = cache.get(memKey(source));
   if (!text && restoreFromDisk(source)) {
     text = cache.get(memKey(source));
@@ -895,24 +789,21 @@ function memText(source: any) {
     try {
       text = localFileText(source);
       if (text) cache.set(memKey(source), text);
-    } catch (e: any) {
-      log.warn("knowledge", `local source unavailable for ${source.name}: ${e.message}`);
+    } catch (error: unknown) {
+      log.warn("knowledge", `local source unavailable for ${source.name}: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
   return text || null;
 }
 
-function sourceSections(programId: any = null) {
+function sourceSections(programId: string | null = null): Section[] {
   const prog = programs.get(programId);
   const progSources = prog ? prog.sources || [] : [];
   const sharedSources = prog && prog.sharedSources === false ? [] : programs.shared().sources || [];
 
-  // Dedupe by display name so a program source shadows the shared source it
-  // replaces — both are still fetched (loadSources keeps both by name::url),
-  // but the model sees one "Docs" section, looked up by its own namespaced key.
   const combined = [...progSources, ...sharedSources];
-  const seen = new Set();
-  const result: any[] = [];
+  const seen = new Set<string>();
+  const result: Section[] = [];
 
   for (const src of combined) {
     if (!src || !src.name || seen.has(src.name)) continue;
@@ -924,7 +815,7 @@ function sourceSections(programId: any = null) {
   return result;
 }
 
-function sourceContainsCitation(source: any, citation: any) {
+function sourceContainsCitation(source: SourceRecord, citation: string) {
   if (!source?.name || !citation) return false;
   const expected = String(citation).trim().replace(/^#+\s*/, "").toLowerCase();
   if (!expected) return false;
@@ -933,7 +824,7 @@ function sourceContainsCitation(source: any, citation: any) {
     ? fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")
     : null);
   if (!text) return false;
-  return String(text).split(/\r?\n/).some((line: any) => {
+  return String(text).split(/\r?\n/).some((line) => {
     const match = line.match(/^\s*#{1,6}\s+(.+?)\s*#*\s*$/);
     if (!match) return false;
     const heading = match[1].trim().toLowerCase();
@@ -943,13 +834,13 @@ function sourceContainsCitation(source: any, citation: any) {
   });
 }
 
-function buildCorpus(programId: any = null) {
+function buildCorpus(programId: string | null = null) {
   return [...generatedSections(programId), ...sourceSections(programId)]
-    .map(([name, text]: any) => `### ${name}\n${text}`)
+    .map(([name, text]) => `### ${name}\n${text}`)
     .join("\n\n");
 }
 
-function getCorpus(programId: any = null) {
+function getCorpus(programId: string | null = null): string {
   const key = programId || "shared";
   const day = today();
   if (!corpusCacheMap.has(key) || corpusBuiltOnMap.get(key) !== day) {
@@ -957,43 +848,35 @@ function getCorpus(programId: any = null) {
     corpusCacheMap.set(key, text);
     corpusBuiltOnMap.set(key, day);
   }
-  return corpusCacheMap.get(key);
+  return corpusCacheMap.get(key) || "";
 }
 
-function getIndex(programId: any = null) {
+function getIndex(programId: string | null = null) {
   const key = programId || "shared";
   if (!retrievalIndexMap.has(key)) {
     const idx = retrieve.buildIndex(retrieve.chunkSections(sourceSections(programId)));
     retrievalIndexMap.set(key, idx);
     log.debug("knowledge", `retrieval index built for ${key} — ${idx.docs.length} chunks`);
   }
-  return retrievalIndexMap.get(key);
+  return retrievalIndexMap.get(key)!;
 }
 
-// Sources this question has no business seeing. The shop catalogue is live
-// price data, not documentation: it matches on the item name alone, so without
-// this it reaches the model for every message that mentions something on the
-// shelf and pixie volunteers a price nobody asked for. lib/shop.js answers the
-// questions that genuinely are about prices before the model is ever called.
-function excludedSources(programId: any, question: any) {
+function excludedSources(programId: string | null, question: string) {
   const prog = programs.get(programId);
   const shared = prog && prog.sharedSources === false ? [] : (programs.shared().sources || []);
   const all = [...(prog?.sources || []), ...shared];
-  const shopSources = all.filter((s: any) => s && (s.type === "pixl-shop" || s.type === "live-shop"));
+  const shopSources = all.filter((s: SourceRecord) => s && (s.type === "pixl-shop" || s.type === "live-shop"));
   if (shopSources.length === 0) return null;
   if (shop.isShopQuestion(question)) return null;
-  return new Set(shopSources.map((s: any) => s.name));
+  return new Set(shopSources.map((s) => s.name));
 }
 
-function selectContextFor(question: any, programId: any) {
+function selectContextFor(question: string, programId: string | null) {
   getCorpus(programId);
 
-  // "Learned answers" travels as relevance-filtered evidence with its own
-  // budget, not as unbounded boilerplate: generatedSections(question) above
-  // already narrowed it to this question's facts.
   const sections = generatedSections(programId, question);
-  const generated = sections.filter(([name]: any) => name !== "Learned answers");
-  const learned = sections.filter(([name]: any) => name === "Learned answers");
+  const generated = sections.filter(([name]) => name !== "Learned answers");
+  const learned = sections.filter(([name]) => name === "Learned answers");
 
   const context = retrieve.selectContext({
     generated,
@@ -1009,40 +892,33 @@ function selectContextFor(question: any, programId: any) {
   return context;
 }
 
-function getContext(question: any, programId: any = null) {
+function getContext(question: string, programId: string | null = null) {
   return selectContextFor(question, programId);
 }
 
-/* ------------------------------------------------------- sync status API -- */
 
-// Dashboard read model over one program's sources: per-source health for the
-// sources list, without exposing anything a browser must not see. URLs are
-// transport-only (no query, fragment or userinfo — organizer URLs sometimes
-// carry tokens); errors are one short sanitized line, never bodies or docs.
-function sanitizeStatusUrl(url: any) {
+function sanitizeStatusUrl(url: unknown) {
   if (!url || typeof url !== "string") return null;
   if (url.startsWith("file://")) return url;
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return `${parsed.protocol}//redacted`;
     return `${parsed.protocol}//${parsed.host}${parsed.pathname}`;
-  } catch (_: any) {
+  } catch (_error: unknown) {
     return "redacted";
   }
 }
 
-function sanitizeStatusError(error: any) {
+function sanitizeStatusError(error: unknown) {
   return String(error || "").replace(/\s+/g, " ").trim().slice(0, 200) || null;
 }
 
-function programSourcesForStatus(programId: any) {
+function programSourcesForStatus(programId: string | null) {
   const prog = programs.get(programId);
   if (!prog) return { prog: null, sources: [] };
   const shared = prog.sharedSources === false ? [] : (programs.shared().sources || []);
-  // Same shadow rule as sourceSections: a program source replaces the shared
-  // source it is named after, so the dashboard lists what the model sees.
-  const seen = new Set();
-  const sources: any[] = [];
+  const seen = new Set<string>();
+  const sources: SourceRecord[] = [];
   for (const src of [...(prog.sources || []), ...shared]) {
     if (!src || !src.name || seen.has(src.name)) continue;
     seen.add(src.name);
@@ -1051,28 +927,26 @@ function programSourcesForStatus(programId: any) {
   return { prog, sources };
 }
 
-function sourceStatus(programId: any) {
+function sourceStatus(programId: string | null) {
   const { prog, sources } = programSourcesForStatus(programId);
   if (!prog) return [];
-  const keys = sources.map((source: any) => sourceCacheKey(source) || source.name);
-  const healthByName = new Map<string, Record<string, any>>(db.getSourceHealth(keys).map((row: any): [string, Record<string, any>] => [row.name, row]));
+  const keys = sources.map((source) => sourceCacheKey(source) || source.name);
+  const healthByName = new Map<string, SourceHealthRow>(db.getSourceHealth(keys).map((row: SourceHealthRow): [string, SourceHealthRow] => [row.name, row]));
   let chunksBySource: Map<string, number> = new Map();
   try {
     chunksBySource = new Map();
     for (const doc of getIndex(programId).docs) {
       chunksBySource.set(doc.chunk.source, (chunksBySource.get(doc.chunk.source) || 0) + 1);
     }
-  } catch (_: any) {
+  } catch (_error: unknown) {
     chunksBySource = new Map();
   }
-  return sources.map((source: any) => {
+  return sources.map((source) => {
     const key = sourceCacheKey(source) || source.name;
     const row = healthByName.get(key) || null;
     const failCount = Number(row?.fail_count || 0);
     const lastSuccessAt = row?.last_success_at ?? null;
     const hasLastGood = lastSuccessAt !== null || cache.has(memKey(source));
-    // Freshness mirrors sourceFreshness: a failure row without a last good
-    // copy is an error, with one it is stale-but-serving.
     const status = inflightSources.has(memKey(source))
       ? "fetching"
       : !hasLastGood
@@ -1091,7 +965,7 @@ function sourceStatus(programId: any) {
   });
 }
 
-async function refreshSourceTracked(source: any, force: any) {
+async function refreshSourceTracked(source: SourceRecord, force: boolean) {
   const key = memKey(source);
   if (inflightSources.has(key)) return;
   inflightSources.add(key);
@@ -1103,15 +977,10 @@ async function refreshSourceTracked(source: any, force: any) {
   }
 }
 
-// Dashboard write path: re-fetch one program's sources (plus the shared layer
-// it inherits, same set sourceStatus reports) without blocking the caller —
-// returns as soon as the fetches are launched. Failures keep serving the
-// last-known-good text (see refreshSource); in-flight sources are not
-// re-fetched.
-function refreshProgramSources(programId: any, { force = false }: any = {}) {
+function refreshProgramSources(programId: string | null, { force = false }: { force?: boolean } = {}) {
   const { prog, sources } = programSourcesForStatus(programId);
   if (!prog) return { started: false, sources: 0 };
-  const seen = new Set();
+  const seen = new Set<string>();
   let launched = 0;
   for (const source of sources) {
     const key = memKey(source);
@@ -1122,32 +991,32 @@ function refreshProgramSources(programId: any, { force = false }: any = {}) {
   }
   try {
     answerCache.clearCache();
-  } catch (_: any) {}
+  } catch (_error: unknown) {}
   return { started: true, sources: launched };
 }
 
-async function refreshCorpus(force: any = false) {
+async function refreshCorpus(force = false) {
   const sources = loadSources();
-  const validKeys = new Set(sources.map((s: any) => memKey(s)));
+  const validKeys = new Set(sources.map((s) => memKey(s)));
   for (const key of cache.keys()) {
     if (!validKeys.has(key)) cache.delete(key);
   }
-  await Promise.all(sources.map((source: any) => refreshSource(source, force)));
+  await Promise.all(sources.map((source) => refreshSource(source, force)));
   invalidate();
   try {
     answerCache.clearCache();
     log.info("knowledge", "answer cache cleared after corpus refresh");
-  } catch (e: any) {
-    log.warn("knowledge", `failed to clear answer cache: ${e.message}`);
+  } catch (error: unknown) {
+    log.warn("knowledge", `failed to clear answer cache: ${error instanceof Error ? error.message : String(error)}`);
   }
   lastBuiltAt = new Date();
   log.info("knowledge", `corpus refreshed — ${cache.size}/${sources.length} sources loaded`);
 }
 
-function startAutoRefresh(intervalMin: any) {
+function startAutoRefresh(intervalMin: number) {
   const ms = intervalMin * 60 * 1000;
   return setInterval(() => {
-    refreshCorpus().catch((e: any) => log.error("knowledge", "refresh failed:", e.message));
+    refreshCorpus().catch((error: unknown) => log.error("knowledge", "refresh failed:", error instanceof Error ? error.message : String(error)));
   }, ms);
 }
 

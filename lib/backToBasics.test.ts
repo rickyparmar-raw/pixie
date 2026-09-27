@@ -1,11 +1,3 @@
-// Back to Basics (B2B) as an isolated Pixie program.
-//
-// B2B is a beginner-focused YSWS that shares a lot of vocabulary with Pixl
-// (coins, AI policy, demo link, GitHub repo, journals) but none of its rules.
-// These tests pin the isolation: a B2B question asked in a B2B channel is
-// answered from B2B sources under the B2B identity, and never inherits Pixl's
-// channels, docs, reward values, wording or the "go ask in the other program's
-// channel" redirect.
 
 process.env.PIXIE_DB_PATH = ":memory:";
 
@@ -18,14 +10,11 @@ const answer = require("./answer");
 const identity = require("./identity");
 const llm = require("./llm");
 
-// Channel IDs from the verified B2B Slack.
-const B2B_HELP = "C0BMHSDL597"; // #back-to-basics-help — the only channel Pixie runs in
-const B2B_ORG = "C0BNAHC0GSD"; // private organizer channel — ticket cards only
-const B2B_MAIN = "C0BBY3B43EJ"; // #back-to-basics — Pixie is NOT in this one
+const B2B_HELP = "C0BMHSDL597";
+const B2B_ORG = "C0BNAHC0GSD";
+const B2B_MAIN = "C0BBY3B43EJ";
 const PIXL_HELP = "C0B6STY9G5N";
 
-// A hermetic two-program fleet: inline text sources so nothing hits the
-// network, and deliberately conflicting facts so a leak is unambiguous.
 const FLEET = JSON.stringify([
   {
     id: "back-to-basics",
@@ -120,7 +109,7 @@ const FLEET = JSON.stringify([
   },
 ]);
 
-let savedBlob: any;
+let savedBlob: string | undefined;
 const realComplete = llm.complete;
 
 before(() => {
@@ -129,10 +118,6 @@ before(() => {
   savedBlob = process.env.PIXIE_PROGRAMS_JSON;
 });
 
-// The suite shares one process, so other test files toggle the fleet blob and
-// clear the knowledge cache between tests. Rebuild our hermetic fleet before
-// every test (inline text sources, so no network) rather than trusting a
-// once-only before().
 beforeEach(async () => {
   process.env.PIXIE_PROGRAMS_JSON = FLEET;
   programs.invalidate();
@@ -161,13 +146,11 @@ afterEach(() => {
   llm.complete = realComplete;
 });
 
-/* ---------------------------------------------------------------- routing -- */
 
 test("the B2B help channel routes to B2B; a channel Pixie isn't in does not", () => {
   assert.equal(programs.forChannel(B2B_HELP).id, "back-to-basics");
   assert.equal(programs.forChannel(PIXL_HELP).id, "pixl");
   assert.equal(programs.isHelpChannel(B2B_HELP), true);
-  // #back-to-basics is not in B2B's channel list — nobody claims it.
   assert.notEqual(programs.forChannel(B2B_MAIN).id, "back-to-basics");
 });
 
@@ -180,15 +163,12 @@ test("B2B is program-scoped, active, and tickets route to its private organizer 
   assert.equal(tickets.getOrganizerChannel(programs.get("back-to-basics")), B2B_ORG);
 });
 
-// Pixl stays passive: it answers from docs and leaves the rest to its humans,
-// no tickets. flagForHumans() returns early for a passive program.
 test("Pixl stays passive with no organizer channel — it does not open tickets", () => {
   assert.equal(programs.posture("pixl"), "passive");
   const tickets = require("./tickets");
   assert.equal(tickets.getOrganizerChannel(programs.get("pixl")), null);
 });
 
-/* --------------------------------------------------------------- identity -- */
 
 test("B2B identity uses its own support name and never says Pixl or offers a redirect", () => {
   const text = identity.corpusSection(programs.get("back-to-basics"));
@@ -200,7 +180,6 @@ test("B2B identity uses its own support name and never says Pixl or offers a red
   assert.match(text, /Here I only do Back to Basics/);
 });
 
-/* ----------------------------------------------------------------- prompt -- */
 
 test("B2B prompt names B2B, uses the B2B help channel, and carries none of Pixl's pinned policy", () => {
   const b2b = programs.get("back-to-basics");
@@ -224,7 +203,6 @@ test("in a B2B channel the prompt forbids naming or redirecting to another progr
   assert.match(prompt, /sounds like another program's name is still a Back to Basics question/);
 });
 
-/* -------------------------------------------------------- knowledge namespace */
 
 test("the B2B retrieval namespace contains B2B docs and none of Pixl's", () => {
   const ctx = knowledge.getContext("how does back to basics work", "back-to-basics");
@@ -240,23 +218,16 @@ test("Pixl's namespace is unchanged and does not see B2B docs", () => {
   assert.doesNotMatch(ctx, /vibe-code/i);
 });
 
-// B2B opts out of the shared YSWS layer: the Hack-Club-wide "30% AI cap"
-// guideline is real, but B2B's own docs override it, so it must not reach a
-// B2B answer where it would contradict the program.
 test("B2B does not inherit the shared YSWS submission guidelines", () => {
   const b2bAi = knowledge.getContext("can i use ai on my project", "back-to-basics");
   assert.doesNotMatch(b2bAi, /hard ceiling of 30%/i);
   assert.doesNotMatch(b2bAi, /README must be written by you, not AI/i);
   assert.match(b2bAi, /no percentage cap|agent hook/i);
-  // No real program inherits the shared layer any more (lib/programs.js
-  // sharedSources): Pixl's AI answer comes from Pixl's own docs, which state
-  // the cap as "30 percent".
   const pixlAi = knowledge.getContext("can i use ai on my project", "pixl");
   assert.match(pixlAi, /30 percent|30%/i);
   assert.doesNotMatch(pixlAi, /hard ceiling of 30% of the total/i);
 });
 
-/* ------------------------------------------------------- adversarial: shared vocab */
 
 const SHARED_VOCAB_CASES = [
   ["can i use ai on my project", /no percentage cap|agent hook|deflation/i, /30 percent|<=30%/i],
@@ -274,10 +245,7 @@ for (const [q, wantB2B, mustNotLeak] of SHARED_VOCAB_CASES) {
   });
 }
 
-/* --------------------------------------------------- full answer path (stubbed llm) */
 
-// The real retrieved B2B corpus flowing into the real prompt builder: this is
-// the exact string the model sees for a B2B question asked in a B2B channel.
 test("the B2B corpus retrieved for a real question carries B2B facts into the prompt and nothing of Pixl's", () => {
   for (const q of [
     "how does back to basics work",
@@ -297,8 +265,6 @@ test("the B2B corpus retrieved for a real question carries B2B facts into the pr
   }
 });
 
-// Parsing the model's grounded reply must attribute the citation to a B2B
-// section and rewrite any "#channel" the docs mention to B2B's own channel.
 test("a grounded B2B reply is parsed and its help-channel reference points at B2B", () => {
   const parsed = answer.parseAnswerOrChat(
     "SOURCE: Where to get help\nANSWER: ask in #pixl-help if you get stuck",
@@ -314,11 +280,9 @@ test("when B2B docs do not cover a question the model is told to decline, not in
   assert.match(prompt, new RegExp(answer.NONE_MARKER));
   assert.match(prompt, /Never invent a Back to Basics fact/i);
   assert.match(prompt, /a helper in this channel will pick it up/i);
-  // the decline path must never send a B2B user to another program's channel
   assert.doesNotMatch(prompt, /#pixl/i);
 });
 
-/* --------------------------------------------------------------- crawler -- */
 
 test("a url source crawls recursively within its path scope and canonicalises urls", async () => {
   const guard = require("./sourceGuard");
@@ -326,7 +290,7 @@ test("a url source crawls recursively within its path scope and canonicalises ur
   const realGuard = guard.fetchSourceUrl;
   const realKey = firecrawl.getApiKey;
   firecrawl.getApiKey = () => null;
-  const fetched: any[] = [];
+  const fetched: string[] = [];
   const pages: Record<string, string> = {
     "https://ex.test/docs": '<a href="/docs/a">a</a><a href="/docs/b/">b</a><a href="/other">out of scope</a><p>root</p>',
     "https://ex.test/docs/a": '<a href="/docs/c#frag">c</a><a href="/docs/a?x=1">self</a><p>page a xyz</p>',
@@ -334,7 +298,7 @@ test("a url source crawls recursively within its path scope and canonicalises ur
     "https://ex.test/docs/c": "<p>page c tuv</p>",
     "https://ex.test/other": "<p>OUT_OF_SCOPE_MARKER</p>",
   };
-  guard.fetchSourceUrl = async (url: any) => {
+  guard.fetchSourceUrl = async (url: string) => {
     fetched.push(url);
     if (pages[url] !== undefined) return { data: pages[url] };
     throw new Error(`404 ${url}`);
@@ -343,10 +307,10 @@ test("a url source crawls recursively within its path scope and canonicalises ur
     const text = await knowledge.fetchSourceText({ name: "Rec", type: "url", url: "https://ex.test/docs" }, true);
     assert.match(text, /page a xyz/);
     assert.match(text, /page b qrs/);
-    assert.match(text, /page c tuv/); // reached at depth 2 via /docs/a
-    assert.doesNotMatch(text, /OUT_OF_SCOPE_MARKER/); // /other is outside the /docs scope
+    assert.match(text, /page c tuv/);
+    assert.doesNotMatch(text, /OUT_OF_SCOPE_MARKER/);
     assert.ok(!fetched.includes("https://ex.test/other"), "/other was never fetched");
-    assert.equal(fetched.filter((u: any) => u === "https://ex.test/docs/a").length, 1, "/docs/a fetched once (query-string dupe collapsed)");
+    assert.equal(fetched.filter((u: string) => u === "https://ex.test/docs/a").length, 1, "/docs/a fetched once (query-string dupe collapsed)");
   } finally {
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;

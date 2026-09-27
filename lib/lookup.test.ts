@@ -6,13 +6,6 @@ const programs = require("./programs");
 
 db.open(":memory:");
 
-/* ---------------------------------------------------------- dateFallback -- */
-// The timeline's own answer to "is it out yet", used when the docs come up
-// empty. It was calling directAnswer(question, programId) — and that second
-// parameter is the current date. Every timing question threw
-// `now.getTime is not a function`, respond() caught it, and the person got the
-// generic error reply instead of the date. Nothing failed loudly enough to
-// notice, which is why these tests exist.
 
 const PROG = {
   id: "t-timeline",
@@ -40,14 +33,9 @@ test("dateFallback returns null for a question that isn't about timing", () => {
 });
 
 test("dateFallback falls back to the shared timeline with no program", () => {
-  // Whatever the shared milestones say, the call must not throw — that throw
-  // is the bug this covers.
   assert.doesNotThrow(() => lookup.dateFallback("when does it drop", "", null));
 });
 
-/* ------------------------------------------------------------------ idOf -- */
-// Callers hand over a record, an id, or nothing. The cache and corpus key off
-// the id; the prompt needs the record.
 
 test("idOf accepts a record, an id, or nothing", () => {
   assert.equal(lookup.idOf({ id: "pixl", name: "Pixl" }), "pixl");
@@ -56,7 +44,6 @@ test("idOf accepts a record, an id, or nothing", () => {
   assert.equal(lookup.idOf({ name: "no id" }), null);
 });
 
-/* --------------------------------------------------------- retrievalQuery -- */
 
 test("retrievalQuery augments follow-up questions with program name and thread context", () => {
   const context = "User: what is pixl and how does it work\nAssistant: pixl is a hack club ysws program!";
@@ -179,18 +166,13 @@ test("grounding rejects related policy evidence and malformed fenced verdicts", 
   );
 });
 
-/* ---------------------------------------- authoritative-only classifier -- */
-// Fixtures B, C, D, E from the live-failure audit: review mechanics/timing,
-// eligibility/hours edge cases, and AI/enforcement must never be answered
-// from model prior knowledge — only a matched, current source, with every
-// number it states actually present in what was retrieved.
 
 test("isAuthoritativeOnlyTopic flags review, hours, AI, and money/fulfillment questions", () => {
   const yes = [
-    "will learning Java count in the hours of making an MC mod?", // fixture B
-    "can I journal hand-drawn art?", // fixture C
-    "how long will second review take?", // fixture D
-    "what exactly is first pass?", // fixture E (part)
+    "will learning Java count in the hours of making an MC mod?",
+    "can I journal hand-drawn art?",
+    "how long will second review take?",
+    "what exactly is first pass?",
     "is my project in the fraud review queue?",
     "why is my project still waiting on review?",
     "how much AI can I use?",
@@ -267,10 +249,6 @@ test("numericClaimsGrounded rejects invented digit-bearing claims and allows one
   assert.equal(lookup.numericClaimsGrounded("80% chance", ""), true, "no corpus supplied is a no-op, not a reject");
 });
 
-/* -------------------------------- exact numbers need evidence (§37) -- */
-// "What is the exact maximum percentage of AI code allowed?" answered "30%"
-// from a corpus with no percentage anywhere is fabrication, even with a fresh
-// owned source. Same for an unknown payout amount.
 
 function ownedFresh() {
   const knowledge = require("./knowledge");
@@ -328,20 +306,15 @@ test("an unknown payout amount is never fabricated, a documented one passes", ()
   }
 });
 
-/* ------------------------------ ANSWER PIPELINE characterization (audit) -- */
 
 test("CHAR: deterministic dispatch order is shop, liveShop, calculator, validator, retrieval, dateFallback", async () => {
-  const order: any[] = [];
+  const order: string[] = [];
   const shop = require("./shop");
   const liveShop = require("./liveShop");
   const calculator = require("./calculator");
   const validator = require("./validator");
   const knowledge = require("./knowledge");
   const answer = require("./answer");
-  // Both shop gates key off the program's sources, so the probe program
-  // claims both catalogues; stubbed currents keep the answers empty so every
-  // stage is reached. The question names a repo + asks for a check so the
-  // validator stage fires too, but is stubbed to miss.
   const prog = { id: "char-shop", name: "CharShop", sources: [{ type: "pixl-shop" }, { type: "live-shop" }] };
   const orig = {
     shop: shop.directAnswer, live: liveShop.directAnswer, calc: calculator.directAnswer,
@@ -350,10 +323,10 @@ test("CHAR: deterministic dispatch order is shop, liveShop, calculator, validato
   };
   shop.current = () => ({ items: [{ name: "Unrelated Widget", price: 100 }], economy: shop.DEFAULT_ECONOMY });
   liveShop.current = () => [{ name: "Unrelated Reward", hours: 99 }];
-  shop.directAnswer = (...a: any[]) => { order.push("shop"); return orig.shop(...a); };
-  liveShop.directAnswer = (...a: any[]) => { order.push("liveShop"); return orig.live(...a); };
-  calculator.directAnswer = (...a: any[]) => { order.push("calculator"); return orig.calc(...a); };
-  validator.validateRepository = async (...a: any[]) => { order.push("validator"); return null; };
+  shop.directAnswer = (...a: unknown[]) => { order.push("shop"); return orig.shop(...a); };
+  liveShop.directAnswer = (...a: unknown[]) => { order.push("liveShop"); return orig.live(...a); };
+  calculator.directAnswer = (...a: unknown[]) => { order.push("calculator"); return orig.calc(...a); };
+  validator.validateRepository = async (..._a: unknown[]) => { order.push("validator"); return null; };
   knowledge.getContext = () => { order.push("retrieval"); return ""; };
   answer.getAnswerOrChat = async () => { order.push("answer"); return null; };
   try {
@@ -435,16 +408,13 @@ test("CHAR: cache key includes the program (no cross-program leakage)", () => {
   }
 });
 
-// Regression: an end-date question used to be answered by a canned "No
-// official end date... at least 4 months" before retrieval ran, so the
-// program's own docs (Pixl's KB states Jan 1, 2027) were never consulted.
 test("an end-date question reaches retrieval and the answer model, not a canned reply", async () => {
   const knowledge = require("./knowledge");
   const answer = require("./answer");
   const orig = { ctx: knowledge.getContext, ans: answer.getAnswerOrChat };
   const prog = { id: "enddate-prog", name: "EndDate", milestones: [], sharedSources: false };
-  const seen: any[] = [];
-  knowledge.getContext = (q: any) => { seen.push("retrieval"); return "Pixl's current stated final end date is January 1, 2027."; };
+  const seen: string[] = [];
+  knowledge.getContext = (_q: string) => { seen.push("retrieval"); return "Pixl's current stated final end date is January 1, 2027."; };
   answer.getAnswerOrChat = async () => { seen.push("answer"); return { answer: "January 1, 2027.", source: "Pixl Pixie Knowledge Base" }; };
   try {
     const result = await lookup.answerOrChat("when does it end?", "", { program: prog, skipCache: true });

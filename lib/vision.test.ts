@@ -1,17 +1,11 @@
-// STEP 1 characterization pins for lib/vision.js (PLATFORM FOUNDATION).
-// Image handling: Slack files fetched with the bot token, public URLs passed
-// through, fetch failures surfaced as a friendly error, empty replies as null.
-//
-// NOTE: vision.js destructures `complete` from ./llm at require time, so the
-// model leg is stubbed at the axios.post transport it rides on — same reason
-// firecrawl.test.js brackets axios.post in before()/after().
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const axios = require("axios");
 const vision = require("./vision");
 
-let realPost: any;
-let realGet: any;
+type AxiosResponseBody = { messages: Array<{ content: Array<{ image_url: { url: string } }> }> };
+let realPost: typeof axios.post;
+let realGet: typeof axios.get;
 before(() => {
   realPost = axios.post;
   realGet = axios.get;
@@ -67,20 +61,22 @@ test("char: empty model replies resolve to null, not empty strings", async () =>
 });
 
 test("char: Slack files inline as data URIs with the bot token", async () => {
-  let sawAuth: any = null;
-  let sawBody: any = null;
-  axios.get = async (url: any, opts: any) => {
+  let sawAuth: string | undefined;
+  let sawBody: AxiosResponseBody | null = null;
+  axios.get = async (_url: string, opts: { headers?: { Authorization?: string } }) => {
     sawAuth = opts?.headers?.Authorization;
     return { data: Buffer.from("bytes"), headers: { "content-type": "image/png" } };
   };
-  axios.post = async (url: any, body: any) => {
+  axios.post = async (_url: string, body: AxiosResponseBody) => {
     sawBody = body;
     return { data: { choices: [{ message: { content: "ok" } }] } };
   };
   try {
     await vision.analyzeImage("https://files.slack.com/files-pri/T1-F1/x.png", "q?", "", "xoxb-tok");
     assert.equal(sawAuth, "Bearer xoxb-tok");
-    const imgUrl = sawBody.messages[1].content[1].image_url.url;
+    if (!sawBody) throw new Error("model body was not captured");
+    const body = sawBody as AxiosResponseBody;
+    const imgUrl = body.messages[1].content[1].image_url.url;
     assert.match(imgUrl, /^data:image\/png;base64,/);
   } finally {
     axios.get = realGet;

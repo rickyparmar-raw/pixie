@@ -21,14 +21,13 @@ A: The launch date has not been announced.
 Q: What do I win?
 A: Prizes ship to your door once your project is approved.`;
 
-/* ---------------------------------------------------------------- chunking -- */
 
 test("chunkSection splits on headings and keeps the heading with the body", () => {
   const chunks = retrieve.chunkSection("Pixl Docs", DOCS);
 
   assert.equal(chunks.length, 3);
   assert.deepEqual(
-    chunks.map((c: any) => c.heading),
+    chunks.map((c: { heading: string }) => c.heading),
     ["Exporting sprites", "Restoration energy", "Hackatime"],
   );
   assert.match(chunks[0].text, /Exporting sprites/);
@@ -42,10 +41,8 @@ test("chunkSection returns nothing for empty input", () => {
   assert.deepEqual(retrieve.chunkSection("Empty", undefined), []);
 });
 
-// A chunk cut mid-sentence is worse than no chunk — the model gets a fragment
-// that reads as a complete statement and answers from it.
 test("chunkSection splits an oversized paragraph on sentence ends", () => {
-  const long = Array.from({ length: 60 }, (_: any, i: any) => `Sentence number ${i} explains a detail about the thing.`).join(" ");
+  const long = Array.from({ length: 60 }, (_: undefined, i: number) => `Sentence number ${i} explains a detail about the thing.`).join(" ");
   const chunks = retrieve.chunkSection("Long", long);
 
   assert.ok(chunks.length > 1);
@@ -61,7 +58,6 @@ test("chunkSection keeps every chunk under the cap for real doc shapes", () => {
   }
 });
 
-/* --------------------------------------------------------------- retrieval -- */
 
 const SOURCES = [
   ["Pixl Docs", DOCS],
@@ -86,13 +82,10 @@ test("selectChunks returns nothing when no term matches", () => {
 
 test("selectChunks respects the character budget", () => {
   const chunks = retrieve.selectChunks(index, "sprite export restoration energy hackatime", 300);
-  const total = chunks.reduce((sum: any, c: any) => sum + c.text.length, 0);
+  const total = chunks.reduce((sum: number, c: { text: string }) => sum + c.text.length, 0);
   assert.ok(total <= 300, `selected ${total} chars against a 300 budget`);
 });
 
-// Used to skip a chunk that didn't fit and keep scanning for a smaller one
-// further down the ranking — so a highly relevant chunk could get bumped for
-// filler nobody asked about, just because it happened to be shorter.
 test("selectChunks stops at the first chunk that doesn't fit, instead of skipping ahead to a smaller lower-ranked one", () => {
   const BIG = "gizmo ".repeat(40) + "widget contraption apparatus mechanism instrument.";
   const SMALL = "gizmo mentioned once, short.";
@@ -107,23 +100,18 @@ test("selectChunks stops at the first chunk that doesn't fit, instead of skippin
   const [top, second] = ranked;
   assert.ok(top.value >= second.value, "test setup: Big must rank at or above Small");
 
-  // Fits the lower-ranked chunk on its own, but not the top-ranked one.
   const budget = second.chunk.text.length + 5;
   assert.ok(budget < top.chunk.text.length, "test setup: top chunk must not fit in the budget");
 
   assert.deepEqual(retrieve.selectChunks(localIndex, "gizmo", budget), []);
 });
 
-/* ----------------------------------------------------------------- context -- */
 
 const GENERATED = [
   ["About pixie", "Q: Who are you?\nA: I'm pixie."],
   ["Program timeline", "Pixl launches at some point."],
 ];
 
-// These are the authoritative sections. Ranking them against the question would
-// eventually drop one, which is exactly the failure knowledge.buildCorpus warns
-// about.
 test("selectContext always includes every generated section", () => {
   const context = retrieve.selectContext({
     generated: GENERATED,
@@ -146,7 +134,7 @@ test("selectContext drops the source passages a question doesn't need", () => {
   });
 
   assert.doesNotMatch(context, /Prizes ship to your door/);
-  assert.ok(context.length < [...GENERATED, ...SOURCES].map(([, t]: any) => t).join("").length);
+  assert.ok(context.length < [...GENERATED, ...SOURCES].map(([, t]: string[]) => t).join("").length);
 });
 
 test("selectContext labels passages with the source they came from", () => {
@@ -160,8 +148,6 @@ test("selectContext labels passages with the source they came from", () => {
   assert.match(context, /### Pixl FAQ/);
 });
 
-// Too much context beats none: a question with no lexical overlap must still get
-// a corpus to answer from rather than being told the docs are empty.
 test("selectContext falls back to the full corpus when nothing matches", () => {
   const context = retrieve.selectContext({
     generated: GENERATED,
@@ -175,10 +161,6 @@ test("selectContext falls back to the full corpus when nothing matches", () => {
   assert.match(context, /### About pixie/);
 });
 
-// Production's taught-answers section is unbounded and once filled the Jev
-// gate's truncation window ahead of the retrieved evidence, so a documented
-// question ("what is RE") was judged from boilerplate alone. generatedLast
-// puts retrieved passages first; the default order is unchanged.
 test("selectContext with generatedLast puts retrieved passages before generated boilerplate", () => {
   const bigGenerated = [["Learned answers", "x".repeat(5000)]];
   const ordered = retrieve.selectContext({
@@ -202,11 +184,6 @@ test("selectContext with generatedLast puts retrieved passages before generated 
   assert.ok(defawlt.indexOf("### Learned answers") < defawlt.indexOf("native size"), "default order unchanged");
 });
 
-// Matching was exact, so "what are pixl rates" scored nothing against docs that
-// say "rate" and the retriever returned the right PAGE but the wrong chunks of
-// it — the model got a rates question with no rate in front of it and invented
-// one. Folding is applied to documents and queries alike so both sides meet.
-// Measured on a 16-question rates/rules/moderation set: 15/16 -> 16/16.
 test("tokenize folds regular plurals so rates matches rate", () => {
   assert.deepEqual(tokenize("rates"), tokenize("rate"));
   assert.deepEqual(tokenize("pixels"), tokenize("pixel"));
@@ -218,15 +195,12 @@ test("tokenize folds -es and -ies plurals", () => {
   assert.deepEqual(tokenize("policies"), tokenize("policy"));
 });
 
-// Over-stemming is worse than under-stemming: it collides unrelated words.
 test("tokenize leaves short words and double-s words alone", () => {
   assert.deepEqual(tokenize("class"), ["class"]);
   assert.deepEqual(tokenize("pass"), ["pass"]);
   assert.deepEqual(tokenize("gas"), ["gas"]);
 });
 
-// "bonuses" -> "bonus" and "houses" -> "house" need opposite rules for the same
-// -ses ending, so neither folds. A missed match costs less than a collision.
 test("tokenize leaves ambiguous -uses plurals unfolded", () => {
   assert.deepEqual(tokenize("bonus"), ["bonus"]);
   assert.deepEqual(tokenize("status"), ["status"]);
@@ -258,7 +232,6 @@ test("tokenize expands expiration and resubmission synonyms", () => {
   assert.ok(retTokens.includes("return"));
 });
 
-/* -------------------------------------- domain detection & chunk metadata -- */
 
 test("detectDomain accurately classifies software, hardware, and general text", () => {
   assert.equal(retrieve.detectDomain("A web app built with React, deployed on Vercel with a github repo"), "software");
@@ -299,7 +272,6 @@ For hardware projects, the repo must contain everything needed to build it from 
   assert.equal(chunks[0].domain, "hardware");
 });
 
-/* ----------------------------- domain specificity: software vs hardware -- */
 
 const DOMAIN_DOCS = [
   [
@@ -324,9 +296,8 @@ test("software README query retrieves software README and NEVER receives hardwar
     assert.doesNotMatch(chunk.text, /\bpcb\b/i);
   }
 
-  // Also verify hardware chunk receives score 0
   const scores = retrieve.score(domainIndex, retrieve.tokenize(query));
-  const hardwareMatch = scores.find((s: any) => /wiring diagram|\bpcb\b/i.test(s.chunk.text));
+  const hardwareMatch = scores.find((s: { chunk: { text: string } }) => /wiring diagram|\bpcb\b/i.test(s.chunk.text));
   assert.equal(hardwareMatch, undefined, "hardware chunk must have score 0 and be filtered out");
 });
 
@@ -341,7 +312,6 @@ test("hardware requirements query retrieves hardware chunks and does not retriev
   }
 });
 
-/* ---------------- returned submissions vs reduced-hours approval rules -- */
 
 const RETURNED_DOCS = [
   [
@@ -364,19 +334,16 @@ test("returned-submission query retrieves feedback/resubmitting and excludes red
   assert.match(selected[0].text, /feedback/i);
   assert.match(selected[0].text, /resubmit/i);
 
-  // Deflation rules must NOT be included in the selected chunks
   for (const chunk of selected) {
     assert.doesNotMatch(chunk.text, /deflate approved hours/i);
     assert.doesNotMatch(chunk.text, /aggressive deflation/i);
   }
 
-  // Deflation chunk receives score 0
   const scores = retrieve.score(returnedIndex, retrieve.tokenize(query));
-  const deflationMatch = scores.find((s: any) => /deflate/i.test(s.chunk.text));
+  const deflationMatch = scores.find((s: { chunk: { text: string } }) => /deflate/i.test(s.chunk.text));
   assert.equal(deflationMatch, undefined, "deflation chunk must be filtered out when asking about returned submissions");
 });
 
-/* ---------------- rule hierarchy: specific rule beats general rule ---- */
 
 const HIERARCHY_DOCS = [
   [
@@ -398,12 +365,10 @@ test("hardware AI query strictly ranks 0% AI CAD/PCB prohibition over generic so
   const scores = retrieve.score(hierarchyIndex, retrieve.tokenize(query));
 
   assert.ok(scores.length > 0);
-  // Specific rule must be rank #1
   assert.match(scores[0].chunk.text, /100% original/i);
   assert.match(scores[0].chunk.text, /not generated by ai/i);
 
-  // Generic 30% code AI allowance chunk must be zeroed out
-  const genericMatch = scores.find((s: any) => /up to 30% of your project's code/i.test(s.chunk.text));
+  const genericMatch = scores.find((s: { chunk: { text: string } }) => /up to 30% of your project's code/i.test(s.chunk.text));
   assert.equal(genericMatch, undefined, "generic 30% AI allowance must receive score 0 and be filtered out for hardware CAD/PCB queries");
 });
 
@@ -414,11 +379,10 @@ test("README AI query strictly ranks README AI prohibition over generic code AI 
   assert.ok(scores.length > 0);
   assert.match(scores[0].chunk.text, /README cannot be built by AI/i);
 
-  const genericMatch = scores.find((s: any) => /up to 30% of your project's code/i.test(s.chunk.text));
+  const genericMatch = scores.find((s: { chunk: { text: string } }) => /up to 30% of your project's code/i.test(s.chunk.text));
   assert.equal(genericMatch, undefined, "generic 30% code AI allowance must receive score 0 when asking about README");
 });
 
-/* ------------------------------- 30% AI policy ------------------------ */
 
 const AI_POLICY_DOCS = [
   [
@@ -441,31 +405,26 @@ For firmware (microcontroller code), AI is permitted only under the standard sof
 const aiIndex = retrieve.buildIndex(retrieve.chunkSections(AI_POLICY_DOCS));
 
 test("30% AI policy: retrieves code cap, disclosure, fully AI ban, and consequences", () => {
-  // Query 1: cap and fully AI ban
   const q1 = retrieve.selectChunks(aiIndex, "how much ai can i use and can a project be fully ai generated?");
   assert.ok(q1.length > 0);
   assert.match(q1[0].text, /30%/);
   assert.match(q1[0].text, /fully AI-generated project is strictly prohibited/i);
 
-  // Query 2: disclosure requirement
   const q2 = retrieve.selectChunks(aiIndex, "do i have to disclose ai usage in my submission?");
   assert.ok(q2.length > 0);
   assert.match(q2[0].text, /disclose where and how AI was used/i);
 
-  // Query 3: consequences of exceeding limit or hiding AI
   const q3 = retrieve.selectChunks(aiIndex, "what happens if i exceed the ai limit or hide ai?");
   assert.ok(q3.length > 0);
-  const combinedQ3 = q3.map((c: any) => c.text).join("\n\n");
+  const combinedQ3 = q3.map((c: { text: string }) => c.text).join("\n\n");
   assert.match(combinedQ3, /reject your project or reduce\/deflate your payout/i);
   assert.match(combinedQ3, /dishonesty and fraud.*permanent ban/i);
 
-  // Query 4: firmware AI
   const q4 = retrieve.selectChunks(aiIndex, "can ai generate firmware for microcontrollers?");
   assert.ok(q4.length > 0);
   assert.match(q4[0].text, /standard software code limit of up to 30%/i);
 });
 
-/* ---------------- referral-code rule 48h / 2-day expiration ---------- */
 
 const REFERRAL_DOCS = [
   [
@@ -498,7 +457,6 @@ test("referral-code query retrieves 48-hour / 2-day expiration across various ph
   }
 });
 
-/* ------------------------------------------- STEP 1 characterization pins -- */
 
 test("chunk size and budget constants pin the retrieval contract", () => {
   assert.equal(retrieve.MIN_CHUNK, 100);
@@ -506,11 +464,6 @@ test("chunk size and budget constants pin the retrieval contract", () => {
   assert.equal(retrieve.DEFAULT_BUDGET, 2500);
 });
 
-/* ------------------------------------------- production budget contract -- */
-// A 14k-char "Learned answers" section once rode outside every budget and
-// filled the whole prompt. Identity, timeline, evidence and learned answers
-// each bill against a named cap now, and the assembled context never exceeds
-// the hard total — whatever the sections cost.
 
 test("budget constants pin the per-section and total contract", () => {
   assert.equal(retrieve.IDENTITY_BUDGET, 2500);
@@ -534,7 +487,6 @@ test("selectContext never exceeds the total budget, even with unbounded generate
   });
 
   assert.ok(context.length <= retrieve.TOTAL_CONTEXT_BUDGET, `context is ${context.length} chars`);
-  // Caps trim bodies, never headings — citations still resolve.
   assert.match(context, /### About pixie/);
   assert.match(context, /### Program timeline/);
   assert.match(context, /### Learned answers/);
@@ -571,7 +523,6 @@ test("chunkSection merges tiny neighbours and never emits an empty chunk", () =>
   const chunks = retrieve.chunkSection("Tiny", "hi\n\nthere\n\nthis is a longer paragraph that pushes past the minimum chunk size threshold for merging");
   assert.ok(chunks.length >= 1);
   for (const c of chunks) assert.ok(c.text.trim().length > 0);
-  // Merged tiny fragments carry at least MIN_CHUNK unless the whole input is smaller.
   const whole = "hi\n\nthere";
   const small = retrieve.chunkSection("Tiny", whole);
   assert.equal(small.length, 1);
@@ -591,7 +542,7 @@ test("BM25 idf stays positive for a term in every chunk", () => {
   const idx = retrieve.buildIndex(retrieve.chunkSections([["A", "gizmo alpha ".repeat(20)], ["B", "gizmo beta ".repeat(20)]]));
   const ranked = retrieve.score(idx, retrieve.tokenize("gizmo"));
   assert.equal(ranked.length, 2);
-  assert.ok(ranked.every((r: any) => r.value > 0));
+  assert.ok(ranked.every((r: { value: number }) => r.value > 0));
 });
 
 test("selectContext exclude drops a banned source from chunks and fallback", () => {
@@ -599,7 +550,6 @@ test("selectContext exclude drops a banned source from chunks and fallback", () 
   const excluded = new Set(["Shop"]);
   const ctx = retrieve.selectContext({ generated: [], index: localIndex, sources: [["Shop", "gizmo price 700 px"], ["Docs", "gizmo repair guide"]], question: "gizmo shop price", exclude: excluded });
   assert.doesNotMatch(ctx, /Shop/);
-  // Fallback path (no match) also respects exclude.
   const fallback = retrieve.selectContext({ generated: [], index: localIndex, sources: [["Shop", "unrelated shop text"], ["Docs", "unrelated docs text"]], question: "zzzz qqqq", exclude: excluded });
   assert.doesNotMatch(fallback, /### Shop/);
   assert.match(fallback, /### Docs/);

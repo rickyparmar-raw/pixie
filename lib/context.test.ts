@@ -7,8 +7,6 @@ const context = require("./context");
 
 db.open(":memory:");
 
-// Raw question text used to be stored as the "topic" and pasted verbatim into
-// every prompt — ten full sentences of prompt bloat per user.
 test("deriveTopic reduces a question to keywords", () => {
   assert.equal(context.deriveTopic("how do i unlock the next region?"), "unlock next region");
   assert.equal(context.deriveTopic("Where can I find the docs"), "find docs");
@@ -111,9 +109,6 @@ test("getUserContext returns null for an unseen user", () => {
   assert.equal(context.getUserContext("U-nobody"), null);
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
-// Thread key scoping: threads are isolated by ts; seeding skips the live
-// message and never throws.
 
 test("char: threads are isolated by ts", () => {
   context.addToThread("char-t-a", "user", "alpha question", "U1", "C1");
@@ -143,7 +138,6 @@ test("char: seedFromSlack skips the live message and empty texts", async () => {
   const ctx = context.getThreadContext("char-seed-1");
   assert.match(ctx, /first question/);
   assert.doesNotMatch(ctx, /live question/);
-  // Second call is a no-op (seeded flag): no duplicate rows.
   await context.seedFromSlack(client, "C1", "char-seed-1", "UBOT", "10.3");
   assert.equal(context.getThreadContext("char-seed-1"), ctx);
 });
@@ -167,8 +161,8 @@ test("char: bot messages seed as assistant role", async () => {
 test("threadCrowd: Pixie follows a thread alone only while it is her and one person", () => {
   const BOT = "UBOT";
   const pixie = { user: BOT, ts: "1" };
-  const me = (ts: any) => ({ user: "UME", ts });
-  const other = (ts: any) => ({ user: "UOTHER", ts });
+  const me = (ts: string) => ({ user: "UME", ts });
+  const other = (ts: string) => ({ user: "UOTHER", ts });
   assert.deepEqual(context.threadCrowd([me("0"), pixie], "UME", BOT), { pixieIn: true, othersPresent: false });
   assert.deepEqual(context.threadCrowd([me("0"), pixie, other("2")], "UME", BOT), { pixieIn: true, othersPresent: true });
   assert.deepEqual(context.threadCrowd([other("0"), pixie], "UME", BOT), { pixieIn: true, othersPresent: true }, "someone else started it");

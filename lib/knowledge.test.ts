@@ -10,6 +10,9 @@ const {
   dropSharedLines,
 } = require("./knowledge");
 
+type SourceLike = { name: string; url?: string; type?: string; content?: unknown; siteUrl?: string };
+type SourceStatus = { name: string; status: string; type: string | null; url: string | null; error: string | null; lastSuccessAt: number | null; chunks: number };
+
 test("textFromJsonFaq extracts question/answer pairs", () => {
   const data = {
     faq: {
@@ -48,8 +51,6 @@ test("stripHtml removes tags and decodes entities", () => {
   assert.equal(text, "Hello & welcome");
 });
 
-// Tag stripping used to discard hrefs entirely, so a doc that linked out to
-// setup instructions became a dead sentence in the corpus.
 test("preserveLinks keeps the href alongside the link text", () => {
   const html = '<p>See <a href="https://example.com/setup">the setup guide</a> first.</p>';
   assert.match(preserveLinks(html), /the setup guide \(https:\/\/example\.com\/setup\)/);
@@ -71,7 +72,6 @@ test("stripHtml surfaces link targets in the final corpus text", () => {
   assert.equal(stripHtml(html), "Play at the game (https://play.pixl.rsvp/) .");
 });
 
-// A URL inside a <script> string must not be promoted into a real link.
 test("stripHtml removes script contents before link rewriting", () => {
   const html = '<script>var a = \'<a href="https://evil.example">x</a>\';</script><p>hi</p>';
   assert.equal(stripHtml(html), "hi");
@@ -118,10 +118,6 @@ test("annotateHeadingAnchors extracts article content and direct heading tags wi
   assert.equal(links.get("age"), "https://pixl.hackclub.com/docs/eligibility#h-age");
 });
 
-// The Pixl docs live as 30 numbered markdown files in a GitHub directory
-// (010-welcome.md, 040-rules.md, …). None of the existing source types could
-// read that shape: json-faq wants a JSON envelope, gdoc wants one document,
-// and url crawls <a href="/docs/…"> out of rendered HTML. Hence github-dir.
 test("docTitleFromFilename turns a numbered doc filename into a heading", () => {
   assert.equal(docTitleFromFilename("010-welcome.md"), "Welcome");
   assert.equal(docTitleFromFilename("100-first-project.md"), "First Project");
@@ -144,22 +140,17 @@ test("markdownFilesFromListing keeps only markdown files, in filename order", ()
   const files = markdownFilesFromListing(listing);
 
   assert.equal(files.length, 2);
-  assert.deepEqual(files.map((f: any) => f.name), ["010-welcome.md", "040-rules.md"]);
+  assert.deepEqual(files.map((f: { name: string }) => f.name), ["010-welcome.md", "040-rules.md"]);
   assert.equal(files[0].title, "Welcome");
   assert.equal(files[0].pageUrl, "https://gh/10");
 });
 
-// A file with no download_url cannot be fetched; including it would produce an
-// empty section that reads to the model as "this topic is documented as blank".
 test("markdownFilesFromListing drops entries with no download_url and non-arrays", () => {
   assert.deepEqual(markdownFilesFromListing([{ type: "file", name: "a.md" }]), []);
   assert.deepEqual(markdownFilesFromListing(null), []);
   assert.deepEqual(markdownFilesFromListing({ message: "Not Found" }), []);
 });
 
-// Citations are more useful pointing at the rendered docs site than at raw
-// GitHub, and the site slug is just the filename minus its ordering prefix:
-// 270-pixel-art.md -> pixl.hackclub.com/docs/pixel-art.
 test("markdownFilesFromListing builds site URLs from a siteUrl base", () => {
   const listing = [
     { type: "file", name: "270-pixel-art.md", download_url: "https://raw/270", html_url: "https://gh/270" },
@@ -177,11 +168,6 @@ test("markdownFilesFromListing falls back to the GitHub URL with no siteUrl", ()
   assert.equal(markdownFilesFromListing(listing)[0].pageUrl, "https://gh/10");
 });
 
-// The repo markdown is a template: rates render as {{basePx}}, tiers as {{t1}}.
-// Feeding that to the model produced invented numbers ("10 pixels an hour"),
-// so when a siteUrl is configured the body must come from the rendered page.
-// GitHub stays the index only -- /docs on the site is a redirect stub with a
-// single href, so it cannot enumerate the pages itself.
 test("markdownFilesFromListing reads bodies from the site when siteUrl is set", () => {
   const listing = [{ type: "file", name: "150-energy.md", download_url: "https://raw/150", html_url: "https://gh/150" }];
 
@@ -200,10 +186,6 @@ test("markdownFilesFromListing reads raw markdown when no siteUrl is set", () =>
   assert.equal(file.isHtml, false);
 });
 
-// Every rendered docs page carries the full sidebar nav — ~700 chars of other
-// pages' titles. Across 30 pages that is ~20KB of noise that makes every page
-// look keyword-relevant to every question, which is what pushed the rates
-// question off its own section.
 test("dropSharedLines removes chrome repeated across pages, keeps unique content", () => {
   const pages = [
     "PIXL DOCS\nWelcome to Pixl (/docs/welcome/)\nIt starts at 50 px an hour",
@@ -224,22 +206,11 @@ test("dropSharedLines keeps a line that only most pages share below threshold", 
   assert.match(out[0], /keep me/);
 });
 
-// Too few pages to tell chrome from a genuinely repeated sentence.
 test("dropSharedLines is a no-op for fewer than three pages", () => {
   const pages = ["PIXL DOCS\nonly page", "PIXL DOCS\nsecond page"];
   assert.deepEqual(dropSharedLines(pages), pages);
 });
 
-/* ------------------------------------------------ fetch failure fallback -- */
-// The 403 that started this: api.github.com rate-limits by IP, Railway's egress
-// IP is shared, and a deploy restarts the container. Fetch fails, the in-memory
-// "last good copy" is empty because the process is seconds old, and pixie comes
-// up answering every docs question with nothing. The copy on disk is what makes
-// the fallback in the log message actually true.
-//
-// Corpora are program-scoped, so these tests register a hermetic program
-// holding the source and read that program's corpus — a source no program
-// claims can never appear in any corpus, by tenant-isolation design.
 test("a source that fails to fetch falls back to the copy on disk", async () => {
   const db = require("./db");
   const knowledge = require("./knowledge");
@@ -257,8 +228,7 @@ test("a source that fails to fetch falls back to the copy on disk", async () => 
 
   const realGuard = guard.fetchSourceUrl;
   guard.fetchSourceUrl = async () => {
-    const err: any = new Error("Request failed with status code 403");
-    err.response = { status: 403 };
+    const err = Object.assign(new Error("Request failed with status code 403"), { response: { status: 403 } });
     throw err;
   };
 
@@ -267,7 +237,7 @@ test("a source that fails to fetch falls back to the copy on disk", async () => 
     assert.match(knowledge.getCorpus("flaky-prog"), /the deadline is august 18/);
   } finally {
     guard.fetchSourceUrl = realGuard;
-    try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("Flaky Source", "Flaky Source::https://example.com/docs"); } catch (_: any) {}
+    try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("Flaky Source", "Flaky Source::https://example.com/docs"); } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     programs.invalidate();
@@ -275,9 +245,6 @@ test("a source that fails to fetch falls back to the copy on disk", async () => 
   }
 });
 
-// The shop is not a document: knowledge.js hands the whole fetch to lib/shop.js
-// and takes back rendered text, so the catalogue lands in the corpus the same
-// way a docs page does and the parsed copy stays available for the price maths.
 test("a pixl-shop source is rendered by lib/shop.js", async () => {
   const knowledge = require("./knowledge");
   const shop = require("./shop");
@@ -316,10 +283,6 @@ test("a live-shop source is rendered by lib/liveShop.js", async () => {
   }
 });
 
-// The catalogue is a knowledge source, so retrieval would hand it to the model
-// for any message that happens to name something on the shelf. That is the
-// other half of pixie quoting prices at people who never asked: even with the
-// price maths declining to answer, the model would answer from the corpus.
 test("the shop catalogue only enters the context when the question is about the shop", async () => {
   const knowledge = require("./knowledge");
   const shop = require("./shop");
@@ -345,10 +308,6 @@ test("the shop catalogue only enters the context when the question is about the 
   }
 });
 
-/* ------------------------------------------------- inline source content -- */
-// One engine image serves the whole fleet, so a bot's own FAQ can't be a file
-// baked into it. Typed into the wizard, an inline source travels inside the
-// config blob and has no URL to fetch at all.
 
 test("fetchSourceText renders an inline json-faq from a bare items array", async () => {
   const knowledge = require("./knowledge");
@@ -365,8 +324,6 @@ test("fetchSourceText renders an inline json-faq from a bare items array", async
   assert.match(text, /Q: Who can join\?\nA: Teenagers 13-18\./);
 });
 
-// Same envelope a json-faq file uses, so wizard output and a pasted file body
-// both work without the user knowing which shape they have.
 test("fetchSourceText accepts the wrapped faq envelope inline too", async () => {
   const knowledge = require("./knowledge");
   const text = await knowledge.fetchSourceText({
@@ -389,8 +346,6 @@ test("fetchSourceText returns inline text content as-is", async () => {
   assert.equal(text, "No AI-generated submissions.");
 });
 
-// The bug this guards: reading source.url.startsWith on a source that has no url
-// threw before the inline branch was ever reached.
 test("fetchSourceText fails clearly when a source has neither url nor content", async () => {
   const knowledge = require("./knowledge");
   await assert.rejects(
@@ -407,9 +362,6 @@ test("fetchSourceText refuses inline content for a type that must be fetched", a
   );
 });
 
-// loadSources used to require a url, which silently dropped every inline source
-// before it could reach fetchSourceText — the corpus came up empty and the bot
-// answered "I don't know" to everything in its own FAQ.
 test("loadSources keeps inline sources and tells same-named ones apart", () => {
   const knowledge = require("./knowledge");
   const programs = require("./programs");
@@ -430,7 +382,7 @@ test("loadSources keeps inline sources and tells same-named ones apart", () => {
   knowledge.invalidate();
 
   try {
-    const names = knowledge.loadSources().map((s: any) => s.name);
+    const names = knowledge.loadSources().map((s: SourceLike) => s.name);
     assert.ok(names.includes("Bot FAQ"), "inline source was dropped");
     assert.ok(names.includes("Other FAQ"), "second inline source collapsed onto the first");
     assert.ok(!names.includes("No Name Source"), "a source with no url and no content is not usable");
@@ -442,7 +394,6 @@ test("loadSources keeps inline sources and tells same-named ones apart", () => {
   }
 });
 
-/* ------------------------------------------- STEP 1 characterization pins -- */
 
 test("sourceCacheKey namespaces by location, including inline content", () => {
   const knowledge = require("./knowledge");
@@ -455,7 +406,6 @@ test("sourceCacheKey namespaces by location, including inline content", () => {
   assert.equal(knowledge.sourceCacheKey(null), null);
 });
 
-/* --------------------------------------- source freshness contract -- */
 
 test("a successfully refreshed source is fresh and exact-claim eligible", () => {
   const knowledge = require("./knowledge");
@@ -505,7 +455,7 @@ test("a failed refresh keeps last-good content and marks the source stale", asyn
     assert.match(knowledge.getCorpus("stale-prog"), /last good contract copy/);
   } finally {
     guard.fetchSourceUrl = original;
-    try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("Stale Contract Source", key); } catch (_: any) {}
+    try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("Stale Contract Source", key); } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     programs.invalidate();
@@ -556,10 +506,10 @@ test("automatic refresh fallback records failure and stale dynamic metrics", asy
   const key = knowledge.sourceCacheKey(source);
   const original = guard.fetchSourceUrl;
   const originalMetric = db.recordMetric;
-  const metrics: any[] = [];
+  const metrics: unknown[][] = [];
   db.saveSourceText(key, "last good dynamic metric copy");
   guard.fetchSourceUrl = async () => { throw new Error("metric refresh offline"); };
-  db.recordMetric = (...args: any[]) => metrics.push(args);
+  db.recordMetric = (...args: unknown[]) => metrics.push(args);
   try {
     await knowledge.refreshSource(source, false);
     assert.deepEqual(metrics, [
@@ -588,10 +538,10 @@ test("loadSources dedupes by name::url but keeps same-name different-URL", () =>
   programs.invalidate();
   knowledge.invalidate();
   try {
-    const kept = knowledge.loadSources().filter((s: any) => s.name === "Same");
+    const kept = knowledge.loadSources().filter((s: SourceLike) => s.name === "Same");
     assert.equal(kept.length, 2);
-    assert.ok(kept.some((s: any) => s.url === "file://./quick-links.json"));
-    assert.ok(kept.some((s: any) => s.url === "file://./data/ysws-submission-guidelines.md"));
+    assert.ok(kept.some((s: SourceLike) => s.url === "file://./quick-links.json"));
+    assert.ok(kept.some((s: SourceLike) => s.url === "file://./data/ysws-submission-guidelines.md"));
   } finally {
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
@@ -625,11 +575,9 @@ test("github-dir fetch skips unrendered {{placeholder}} pages and drops shared c
     { type: "file", name: "030-c.md", download_url: "https://raw/c", html_url: "https://gh/c" },
     { type: "file", name: "040-d.md", download_url: "https://raw/d", html_url: "https://gh/d" },
   ];
-  guard.fetchSourceUrl = async (url: any) => {
+  guard.fetchSourceUrl = async (url: string) => {
     if (url === "https://api.example.com/dir") return { data: listing };
     if (url.includes("not-used")) throw new Error("unexpected");
-    // Three good pages share a chrome line (needs >=3 pages for dropSharedLines
-    // to tell chrome from content); one page is all placeholders and is skipped.
     if (url.endsWith("/a")) return { data: "<h1>Alpha</h1><p>CHROME LINE</p><p>alpha unique body text here</p>" };
     if (url.endsWith("/b")) return { data: "<h1>Beta</h1><p>CHROME LINE</p><p>beta unique body text here</p>" };
     if (url.endsWith("/c")) return { data: "<h1>Gamma</h1><p>CHROME LINE</p><p>gamma unique body text here</p>" };
@@ -667,15 +615,14 @@ test("a source that succeeds then fails keeps serving the in-memory last good co
   } finally {
     guard.fetchSourceUrl = real;
   }
-  // Remove the disk row so only memory can serve the fallback.
-  try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("CharMemFallback", "CharMemFallback::https://example.com/char-faq"); } catch (_: any) {}
+  try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("CharMemFallback", "CharMemFallback::https://example.com/char-faq"); } catch (_: unknown) {}
   guard.fetchSourceUrl = async () => { throw new Error("boom"); };
   try {
     await knowledge.refreshSource(src, true);
     assert.match(knowledge.getCorpus("charmem-prog"), /mem good copy/);
   } finally {
     guard.fetchSourceUrl = real;
-    try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("CharMemFallback", "CharMemFallback::https://example.com/char-faq"); } catch (_: any) {}
+    try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("CharMemFallback", "CharMemFallback::https://example.com/char-faq"); } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     programs.invalidate();
@@ -693,7 +640,6 @@ test("corpus puts generated sections first and memoizes per program until invali
   assert.ok(gen.length >= 1);
   assert.equal(gen[0][0], "About pixie");
   if (gen.length >= 2) assert.equal(gen[1][0], "Program timeline");
-  // Generated headings lead the corpus string.
   const aboutIdx = first.indexOf("### About pixie");
   assert.ok(aboutIdx === 0 || aboutIdx > -1);
   knowledge.invalidate();
@@ -701,11 +647,7 @@ test("corpus puts generated sections first and memoizes per program until invali
   assert.equal(typeof after, "string");
 });
 
-/* ---------------------------------------- STEP 2 regression: bug fixes -- */
 
-// Mem used to be keyed by bare name, so two programs sharing a source name but
-// not a URL overwrote each other: whichever refreshed last won for BOTH
-// programs. Namespaced mem keeps each program on its own copy.
 test("same-name different-URL sources stay isolated across programs", async () => {
   const knowledge = require("./knowledge");
   const programs = require("./programs");
@@ -719,7 +661,7 @@ test("same-name different-URL sources stay isolated across programs", async () =
   programs.invalidate();
   knowledge.invalidate();
   const real = guard.fetchSourceUrl;
-  guard.fetchSourceUrl = async (url: any) => {
+  guard.fetchSourceUrl = async (url: string) => {
     if (url === "https://example.com/a-faq") return { data: { faq: { items: [{ question: "qa", answer: "alpha unique text" }] } } };
     if (url === "https://example.com/b-faq") return { data: { faq: { items: [{ question: "qb", answer: "beta unique text" }] } } };
     throw new Error(`unexpected ${url}`);
@@ -736,7 +678,7 @@ test("same-name different-URL sources stay isolated across programs", async () =
     assert.doesNotMatch(bSecs, /alpha unique text/);
   } finally {
     guard.fetchSourceUrl = real;
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Collision Docs%'").run(); } catch (_: any) {}
+    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Collision Docs%'").run(); } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     programs.invalidate();
@@ -758,7 +700,7 @@ test("same-name different-content inline sources stay isolated across programs",
   programs.invalidate();
   knowledge.invalidate();
   try {
-    const loaded = knowledge.loadSources().filter((source: any) => source.name === "Inline Collision");
+    const loaded = knowledge.loadSources().filter((source: SourceLike) => source.name === "Inline Collision");
     assert.equal(loaded.length, 2);
     await knowledge.refreshSource(sourceA, true);
     await knowledge.refreshSource(sourceB, true);
@@ -773,7 +715,7 @@ test("same-name different-content inline sources stay isolated across programs",
   } finally {
     try {
       db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Inline Collision%'").run();
-    } catch (_: any) {}
+    } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     programs.invalidate();
@@ -781,9 +723,6 @@ test("same-name different-content inline sources stay isolated across programs",
   }
 });
 
-// The non-Firecrawl url path used raw axios.get for subpages, skipping the
-// SSRF guard the root fetch went through — a crafted /docs href could pull
-// link-local metadata. Every subpage now goes through fetchSourceUrl.
 test("url subpages are fetched through the SSRF guard, not raw axios", async () => {
   const knowledge = require("./knowledge");
   const guard = require("./sourceGuard");
@@ -794,7 +733,7 @@ test("url subpages are fetched through the SSRF guard, not raw axios", async () 
   const realAxios = axios.get;
   firecrawl.getApiKey = () => null;
   axios.get = async () => { throw new Error("raw axios must not be called for subpages"); };
-  guard.fetchSourceUrl = async (url: any) => {
+  guard.fetchSourceUrl = async (url: string) => {
     if (url === "https://example.com/docs-root") return { data: '<a href="/docs/sub">sub</a><p>root marker</p>' };
     if (url === "https://example.com/docs/sub") return { data: "<p>subpage unique marker xyz</p>" };
     throw new Error(`unexpected ${url}`);
@@ -816,11 +755,8 @@ test("file:// sources outside the app root are refused", () => {
   assert.throws(() => knowledge.resolveLocalPath("file://./../../etc/passwd"), /outside app root/);
 });
 
-/* --------------------------------- hermetic fleet helper for §37 tests -- */
 
-// Corpora are program-scoped: every test below registers its own fleet blob,
-// refreshes inline sources (no network), runs, and restores the environment.
-async function withFleet(fleet: any, fn: any) {
+async function withFleet(fleet: unknown[], fn: () => Promise<void>) {
   const knowledge = require("./knowledge");
   const programs = require("./programs");
   const saved = process.env.PIXIE_PROGRAMS_JSON;
@@ -844,11 +780,7 @@ async function withFleet(fleet: any, fn: any) {
   }
 }
 
-/* --------------------------------------- retrieval budget (§37, prod) -- */
 
-// The production bug: generatedSections() ("About pixie", "Program timeline",
-// "Learned answers") rode OUTSIDE the retrieval budget, and "Learned answers"
-// alone was ~14k chars. Everything getContext() returns must fit the total.
 test("getContext fits the total budget with a 14k-char learned section", async () => {
   const knowledge = require("./knowledge");
   const learn = require("./learn");
@@ -898,12 +830,11 @@ test("getContext fits the total budget with a 14k-char learned section", async (
       assert.ok(cold.length <= retrieve.TOTAL_CONTEXT_BUDGET, `cold context is ${cold.length} chars`);
       assert.doesNotMatch(cold, /relevant-override-marker|kiln-marker/);
     } finally {
-      ids.forEach((id: any) => learn.forget(id));
+      ids.forEach((id) => learn.forget(id));
     }
   });
 });
 
-/* ----------------------------------------- tenant isolation (§37) -- */
 
 test("taught facts never cross programs: same question, each program answers from its own", async () => {
   const knowledge = require("./knowledge");
@@ -938,12 +869,11 @@ test("taught facts never cross programs: same question, each program answers fro
       assert.doesNotMatch(b2bCtx, /bud-pixl-marker/);
       assert.doesNotMatch(b2bCtx, /shop credit/);
     } finally {
-      ids.forEach((id: any) => learn.forget(id));
+      ids.forEach((id) => learn.forget(id));
     }
   });
 });
 
-/* ----------------------------------- untrusted sources (§37) -- */
 
 test("untrusted sources never enter the corpus: SSRF targets, oversized bodies, script HTML", async () => {
   const knowledge = require("./knowledge");
@@ -970,7 +900,7 @@ test("untrusted sources never enter the corpus: SSRF targets, oversized bodies, 
   const realGuard = guard.fetchSourceUrl;
   const realKey = firecrawl.getApiKey;
   firecrawl.getApiKey = () => null;
-  guard.fetchSourceUrl = async (url: any, opts: any) => {
+  guard.fetchSourceUrl = async (url: string, opts: Record<string, unknown>) => {
     if (url === "https://example.com/big") {
       return { data: `BIG-HEAD-MARKER ${"padded body text ".repeat(20000)} BIG-TAIL-MARKER` };
     }
@@ -991,7 +921,7 @@ test("untrusted sources never enter the corpus: SSRF targets, oversized bodies, 
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;
     const db = require("./db");
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Evil%' OR name LIKE 'Big Docs%' OR name LIKE 'Script Docs%'").run(); } catch (_: any) {}
+    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Evil%' OR name LIKE 'Big Docs%' OR name LIKE 'Script Docs%'").run(); } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     programs.invalidate();
@@ -999,7 +929,6 @@ test("untrusted sources never enter the corpus: SSRF targets, oversized bodies, 
   }
 });
 
-/* ------------------------------------------ source sync status API -- */
 
 test("sourceStatus reports ready/stale/error/pending with no secrets", async () => {
   const knowledge = require("./knowledge");
@@ -1024,13 +953,11 @@ test("sourceStatus reports ready/stale/error/pending with no secrets", async () 
       sources: [{ name: "Stat Untouched", type: "url", url: "https://example.com/untouched" }],
     },
   ];
-  // Last good copy on disk for the flaky source before it starts failing.
   db.saveSourceText("Stat Flaky::https://example.com/flaky", "flaky last good copy");
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   process.env.PIXIE_PROGRAMS_JSON = JSON.stringify(fleet);
   require("./programs").invalidate();
   knowledge.invalidate();
-  // Pending is the never-attempted state: assert it before the first refresh.
   const pending = knowledge.sourceStatus("stat-pending-prog");
   assert.equal(pending.length, 1);
   assert.equal(pending[0].status, "pending");
@@ -1039,15 +966,16 @@ test("sourceStatus reports ready/stale/error/pending with no secrets", async () 
   const firecrawl = require("./firecrawl");
   const realKey = firecrawl.getApiKey;
   firecrawl.getApiKey = () => null;
-  guard.fetchSourceUrl = async (url: any) => {
+  guard.fetchSourceUrl = async (url: string) => {
     if (url === "https://example.com/docs") return { data: "<p>token docs are public</p>" };
     throw new Error("stat offline");
   };
   try {
     await knowledge.refreshCorpus();
-    const byName = new Map<string, any>(knowledge.sourceStatus("stat-prog").map((s: any): [string, any] => [s.name, s]));
+    const byName = new Map<string, SourceStatus>(knowledge.sourceStatus("stat-prog").map((s: SourceStatus): [string, SourceStatus] => [s.name, s]));
 
     const faq = byName.get("Stat FAQ");
+    if (!faq) throw new Error("Stat FAQ status missing");
     assert.equal(faq.status, "ready");
     assert.equal(faq.type, "json-faq");
     assert.equal(faq.url, null);
@@ -1056,18 +984,21 @@ test("sourceStatus reports ready/stale/error/pending with no secrets", async () 
     assert.ok(faq.chunks >= 1);
 
     const down = byName.get("Stat Down");
+    if (!down) throw new Error("Stat Down status missing");
     assert.equal(down.status, "error");
     assert.equal(down.lastSuccessAt, null);
     assert.match(down.error, /stat offline/);
     assert.equal(down.chunks, 0);
 
     const flaky = byName.get("Stat Flaky");
+    if (!flaky) throw new Error("Stat Flaky status missing");
     assert.equal(flaky.status, "stale");
     assert.ok(typeof flaky.lastSuccessAt === "number");
     assert.match(flaky.error, /stat offline/);
     assert.match(knowledge.getCorpus("stat-prog"), /flaky last good copy/);
 
     const token = byName.get("Stat Token");
+    if (!token) throw new Error("Stat Token status missing");
     assert.equal(token.url, "https://example.com/docs");
     assert.doesNotMatch(token.url, /SECRET123/);
 
@@ -1075,7 +1006,7 @@ test("sourceStatus reports ready/stale/error/pending with no secrets", async () 
   } finally {
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Stat%'").run(); } catch (_: any) {}
+    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Stat%'").run(); } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     require("./programs").invalidate();
@@ -1083,12 +1014,12 @@ test("sourceStatus reports ready/stale/error/pending with no secrets", async () 
   }
 });
 
-async function drainUntil(fn: any, timeoutMs: any = 5000) {
+async function drainUntil(fn: () => boolean, timeoutMs: number = 5000) {
   const start = Date.now();
   for (;;) {
     if (fn()) return true;
     if (Date.now() - start > timeoutMs) return false;
-    await new Promise((resolve: any) => setTimeout(resolve, 25));
+    await new Promise<void>((resolve) => setTimeout(resolve, 25));
   }
 }
 
@@ -1118,8 +1049,8 @@ test("refreshProgramSources starts without blocking and refreshes only its progr
   const realGuard = guard.fetchSourceUrl;
   const realKey = firecrawl.getApiKey;
   firecrawl.getApiKey = () => null;
-  const calls: any[] = [];
-  guard.fetchSourceUrl = async (url: any) => {
+  const calls: string[] = [];
+  guard.fetchSourceUrl = async (url: string) => {
     calls.push(url);
     if (url === "https://example.com/rps-a") return { data: "<p>RPS-A-MARKER fresh copy</p>" };
     throw new Error("must not fetch program B");
@@ -1128,13 +1059,13 @@ test("refreshProgramSources starts without blocking and refreshes only its progr
     const ret = knowledge.refreshProgramSources("rps-a");
     assert.deepEqual(ret, { started: true, sources: 1 });
     assert.ok(await drainUntil(() => knowledge.getCorpus("rps-a").includes("RPS-A-MARKER")), "refresh did not land");
-    assert.ok(!calls.some((u: any) => u.includes("rps-b")), "other program's source was fetched");
+    assert.ok(!calls.some((u: string) => u.includes("rps-b")), "other program's source was fetched");
     assert.doesNotMatch(knowledge.getCorpus("rps-b"), /RPS-A-MARKER/);
     assert.deepEqual(knowledge.refreshProgramSources("no-such-program"), { started: false, sources: 0 });
   } finally {
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Rps%'").run(); } catch (_: any) {}
+    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Rps%'").run(); } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     require("./programs").invalidate();
@@ -1162,8 +1093,8 @@ test("refreshProgramSources dedupes in-flight sources and reports fetching", asy
   const realGuard = guard.fetchSourceUrl;
   const realKey = firecrawl.getApiKey;
   firecrawl.getApiKey = () => null;
-  let release: any;
-  const gate = new Promise((resolve: any) => { release = resolve; });
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => { release = resolve; });
   let calls = 0;
   guard.fetchSourceUrl = async () => {
     calls += 1;
@@ -1179,10 +1110,10 @@ test("refreshProgramSources dedupes in-flight sources and reports fetching", asy
     assert.equal(calls, 1);
     assert.match(knowledge.getCorpus("dedup-prog"), /DEDUP-MARKER/);
   } finally {
-    try { release(); } catch (_: any) {}
+    try { release(); } catch (_: unknown) {}
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Dedup%'").run(); } catch (_: any) {}
+    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Dedup%'").run(); } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     require("./programs").invalidate();
@@ -1219,7 +1150,7 @@ test("a failed program refresh never erases the last-known-good text", async () 
   } finally {
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Good Docs%'").run(); } catch (_: any) {}
+    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Good Docs%'").run(); } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     require("./programs").invalidate();

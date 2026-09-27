@@ -4,9 +4,22 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const reply = require("./reply");
 
-// Pixie is not allowed to talk in dashes. The model reaches for them constantly
-// and static copy is full of them, so this is enforced on the way out to Slack
-// rather than trusted to every author and every completion.
+type MessagePayload = {
+  channel?: string;
+  ts?: string;
+  text?: string;
+  blocks?: Array<{ type?: string; text?: { text?: string }; elements?: Array<{ action_id?: string }> }>;
+  [key: string]: unknown;
+};
+type TestClient = {
+  calls: { posts: MessagePayload[]; updates: MessagePayload[] };
+  chat: {
+    postMessage: (payload: MessagePayload) => Promise<{ ts: string }>;
+    update: (payload: MessagePayload) => Promise<Record<string, unknown>>;
+    delete?: (payload: MessagePayload) => Promise<Record<string, unknown>>;
+  };
+};
+
 
 test("an em dash becomes a comma", () => {
   assert.equal(
@@ -24,8 +37,6 @@ test("a dash with no spaces around it is still a dash", () => {
   assert.equal(reply.plainDashes("11,400 px—202h at T4"), "11,400 px, 202h at T4");
 });
 
-// A comma at the end of a sentence or the start of a line reads as a typo,
-// which is worse than the dash was.
 test("a dash at the edge of a line is dropped, not turned into a comma", () => {
   assert.equal(reply.plainDashes("hang on —"), "hang on");
   assert.equal(reply.plainDashes("— hang on"), "hang on");
@@ -38,9 +49,6 @@ test("no doubled or stranded punctuation is left behind", () => {
   assert.equal(reply.plainDashes("wait — ."), "wait.");
 });
 
-// Command flags are the reason this only touches real dashes and a spaced
-// double hyphen. Turning `git commit --amend` into `git commit, amend` would
-// hand somebody a broken command.
 test("hyphens inside words and flags are left completely alone", () => {
   const cmd = "run `git commit --amend` then `npm run build -- --watch`";
   assert.equal(reply.plainDashes(cmd), cmd);
@@ -59,18 +67,17 @@ test("empty and missing text survive", () => {
   assert.equal(reply.plainDashes(undefined), "");
 });
 
-/* ----------------------------------------------------- applied on the way out -- */
 
-function fakeClient(): any {
-  const calls: { posts: any[]; updates: any[] } = { posts: [], updates: [] };
+function fakeClient(): TestClient {
+  const calls: { posts: MessagePayload[]; updates: MessagePayload[] } = { posts: [], updates: [] };
   return {
     calls,
     chat: {
-      postMessage: async (payload: any) => {
+      postMessage: async (payload: MessagePayload) => {
         calls.posts.push(payload);
         return { ts: "posted-1" };
       },
-      update: async (payload: any) => {
+      update: async (payload: MessagePayload) => {
         calls.updates.push(payload);
         return {};
       },
@@ -109,7 +116,7 @@ test("finalize strips dashes from the text and from the blocks", async () => {
 
   const posted = client.calls.posts[0];
   assert.equal(posted.text, "the price, 11,400 px");
-  assert.equal(posted.blocks[0].text.text, "the price, 11,400 px");
+  assert.equal(posted.blocks?.[0]?.text?.text, "the price, 11,400 px");
 });
 
 test("streamed fragments are stripped as they go out", async () => {
@@ -120,10 +127,10 @@ test("streamed fragments are stripped as they go out", async () => {
     ensurePlaceholder: async () => "ts-1",
   });
   writer.write("the price — 11,400");
-  await new Promise((r: any) => setTimeout(r, 5));
+  await new Promise<void>((resolve) => setTimeout(resolve, 5));
   await writer.settle();
 
-  assert.equal(client.calls.updates.at(-1).text, "the price, 11,400");
+  assert.equal(client.calls.updates.at(-1)?.text, "the price, 11,400");
 });
 
 test("the source line pixie appends carries no dash either", () => {
@@ -134,16 +141,16 @@ test("the source line pixie appends carries no dash either", () => {
 test("muting mid-stream suppresses further edits and the final post", async () => {
   const reply = require("./reply");
   const db = require("./db");
-  const updates: any[] = [];
-  const deletes: any[] = [];
+  const updates: MessagePayload[] = [];
+  const deletes: MessagePayload[] = [];
   const client = {
     chat: {
       postMessage: async () => ({ ts: "ph-1" }),
-      update: async (args: any) => {
+      update: async (args: MessagePayload) => {
         updates.push(args);
         return {};
       },
-      delete: async (args: any) => {
+      delete: async (args: MessagePayload) => {
         deletes.push(args);
         return {};
       },
@@ -151,14 +158,14 @@ test("muting mid-stream suppresses further edits and the final post", async () =
   };
   const writer = reply.makeStreamWriter({ client, channel: "C1", ensurePlaceholder: async () => "ph-1", threadTs: "mute-stream-1" });
   writer.write("partial answer");
-  await new Promise((r: any) => setTimeout(r, reply.STREAM_UPDATE_MS + 50));
+  await new Promise<void>((resolve) => setTimeout(resolve, reply.STREAM_UPDATE_MS + 50));
   assert.equal(updates.length, 1);
 
   db.muteThread("mute-stream-1", "C1");
   try {
     writer.write("more answer arriving late");
     await writer.settle();
-    await new Promise((r: any) => setTimeout(r, reply.STREAM_UPDATE_MS + 50));
+    await new Promise<void>((resolve) => setTimeout(resolve, reply.STREAM_UPDATE_MS + 50));
     assert.equal(updates.length, 1, "no edit lands after mute");
 
     const ts = await reply.finalize(client, "C1", "mute-stream-1", Promise.resolve("ph-1"), "finished answer");
@@ -170,18 +177,18 @@ test("muting mid-stream suppresses further edits and the final post", async () =
 });
 
 test("finalize deletes placeholderTs before posting fresh when chat.update fails", async () => {
-  const deletes: any[] = [];
-  const posts: any[] = [];
+  const deletes: MessagePayload[] = [];
+  const posts: MessagePayload[] = [];
   const client = {
     chat: {
       update: async () => {
         throw new Error("cant_update_message");
       },
-      delete: async (args: any) => {
+      delete: async (args: MessagePayload) => {
         deletes.push(args);
         return { ok: true };
       },
-      postMessage: async (payload: any) => {
+      postMessage: async (payload: MessagePayload) => {
         posts.push(payload);
         return { ts: "fresh-post-1" };
       },
@@ -203,7 +210,7 @@ test("discardPlaceholder retries on transient errors with backoff", async () => 
       delete: async () => {
         attempts++;
         if (attempts < 2) {
-          const err: any = new Error("rate_limited");
+          const err = Object.assign(new Error("rate_limited"), { code: "rate_limited" });
           err.code = "rate_limited";
           throw err;
         }
@@ -222,7 +229,7 @@ test("discardPlaceholder safely ignores permanent errors without retrying", asyn
     chat: {
       delete: async () => {
         attempts++;
-        const err: any = new Error("message_not_found");
+        const err = Object.assign(new Error("message_not_found"), { data: { error: "message_not_found" } });
         err.data = { error: "message_not_found" };
         throw err;
       },
@@ -250,30 +257,29 @@ test("finalize strips reasoning and instruction leak from text and blocks", asyn
 
   const posted = client.calls.posts[0];
   assert.equal(posted.text, "real answer");
-  assert.equal(posted.blocks[0].text.text, "real answer");
+  assert.equal(posted.blocks?.[0]?.text?.text, "real answer");
 });
 
-/* ------------------------------ ANSWER PIPELINE characterization (audit) -- */
 
 test("CHAR: stream re-checks takeover per edit, not just mute", async () => {
   const db = require("./db");
-  const updates: any[] = [];
+  const updates: MessagePayload[] = [];
   const client = {
     chat: {
       postMessage: async () => ({ ts: "ph-take" }),
-      update: async (args: any) => { updates.push(args); return {}; },
+      update: async (args: MessagePayload) => { updates.push(args); return {}; },
       delete: async () => ({}),
     },
   };
   const writer = reply.makeStreamWriter({ client, channel: "C1", ensurePlaceholder: async () => "ph-take", threadTs: "take-stream-1" });
   writer.write("first fragment");
-  await new Promise((r: any) => setTimeout(r, reply.STREAM_UPDATE_MS + 50));
+  await new Promise<void>((resolve) => setTimeout(resolve, reply.STREAM_UPDATE_MS + 50));
   assert.equal(updates.length, 1);
   db.markTakeover("take-stream-1", "C1", "U-helper");
   try {
     writer.write("second fragment after takeover");
     await writer.settle();
-    await new Promise((r: any) => setTimeout(r, reply.STREAM_UPDATE_MS + 50));
+    await new Promise<void>((resolve) => setTimeout(resolve, reply.STREAM_UPDATE_MS + 50));
     assert.equal(updates.length, 1, "takeover parks the stream like mute does");
   } finally {
     db.clearTakeover("take-stream-1");
@@ -288,13 +294,13 @@ test("CHAR: finalize with no placeholder posts fresh instead of dropping", async
 });
 
 test("CHAR: finalize in shadow mode sends nothing and discards the placeholder", async () => {
-  const deletes: any[] = [];
-  const posts: any[] = [];
+  const deletes: number[] = [];
+  const posts: MessagePayload[] = [];
   const client = {
     chat: {
-      update: async (args: any) => { posts.push(args); return {}; },
+      update: async (args: MessagePayload) => { posts.push(args); return {}; },
       delete: async () => { deletes.push(1); return {}; },
-      postMessage: async (args: any) => { posts.push(args); return { ts: "x" }; },
+      postMessage: async (args: MessagePayload) => { posts.push(args); return { ts: "x" }; },
     },
   };
   const ts = await reply.finalize(client, "C1", "t-shadow", Promise.resolve("ph-s"), "should not send", { program: { shadowMode: true } });
@@ -305,11 +311,11 @@ test("CHAR: finalize in shadow mode sends nothing and discards the placeholder",
 
 test("finalize keeps an answer to a ping in a thread that was already taken over", async () => {
   const db = require("./db");
-  const deletes: any[] = [];
-  const updates: any[] = [];
+  const deletes: number[] = [];
+  const updates: MessagePayload[] = [];
   const client = {
     chat: {
-      update: async (args: any) => { updates.push(args); return {}; },
+      update: async (args: MessagePayload) => { updates.push(args); return {}; },
       delete: async () => { deletes.push(1); return {}; },
       postMessage: async () => ({ ts: "x" }),
     },
@@ -328,7 +334,7 @@ test("finalize keeps an answer to a ping in a thread that was already taken over
 
 test("finalize still drops the answer when the thread goes quiet mid-answer", async () => {
   const db = require("./db");
-  const deletes: any[] = [];
+  const deletes: number[] = [];
   const client = {
     chat: {
       update: async () => ({}),

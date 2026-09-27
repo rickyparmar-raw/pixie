@@ -14,8 +14,6 @@ const {
   timelineAuthorityRule,
 } = answer;
 
-// The model writes `:3c` because it reads as a kaomoji, and Slack then renders
-// it as literal text instead of the custom emoji.
 test("normalizeEmoji closes a bare :3c", () => {
   assert.equal(normalizeEmoji("nice one :3c"), "nice one :3c:");
   assert.equal(normalizeEmoji("go for it :3c and lmk"), "go for it :3c: and lmk");
@@ -25,18 +23,14 @@ test("normalizeEmoji leaves an already-closed :3c: alone", () => {
   assert.equal(normalizeEmoji("all good :3c:"), "all good :3c:");
 });
 
-// Slack renders a channel in blue only as <#ID>. Every doc pixie reads writes
-// the bare `#pixl-help`, so the model writes it back the same way.
 test("normalizeEmoji linkifies the help channel", () => {
   const original = config.slack.helpChannel;
   try {
     config.slack.helpChannel = "C1";
     assert.equal(normalizeEmoji("ask in #pixl-help"), "ask in <#C1>");
     assert.equal(normalizeEmoji("ask in <#pixl-help>"), "ask in <#C1>");
-    // An already-correct link must not be rewritten into a nested one.
     assert.equal(normalizeEmoji("ask in <#C1>"), "ask in <#C1>");
 
-    // Unconfigured, the plain name is still the most useful thing to say.
     config.slack.helpChannel = null;
     assert.equal(normalizeEmoji("ask in #pixl-help"), "ask in #pixl-help");
   } finally {
@@ -49,8 +43,6 @@ test("normalizeEmoji handles empty input", () => {
   assert.equal(normalizeEmoji(undefined), "");
 });
 
-// Slack mrkdwn bold is a single asterisk — **this** renders the asterisks
-// literally, which the model does whenever it emphasises a date.
 test("normalizeEmoji converts Markdown bold to Slack mrkdwn", () => {
   assert.equal(normalizeEmoji("drops on **august 18, 2026**"), "drops on *august 18, 2026*");
   assert.equal(normalizeEmoji("__emphasis__"), "_emphasis_");
@@ -104,35 +96,23 @@ test("parseReply strips a leading ### from the source if the model echoes the he
   assert.deepEqual(result, { source: "Pixl FAQ", answer: "Anyone can join." });
 });
 
-/* --------------------------------------------- merged answer-or-chat parse -- */
-// Three response shapes, all observed against the live model. A source means
-// the corpus covered it; a null source drives recordGap/flagForHumans.
 
 test("parseAnswerOrChat reports a grounded answer with its source", () => {
   const result = parseAnswerOrChat("SOURCE: Pixl FAQ\nANSWER: Anyone can join, no team needed.");
   assert.deepEqual(result, { source: "Pixl FAQ", answer: "Anyone can join, no team needed." });
 });
 
-// The model pads NONE with trailing spaces and separates the lines with a blank
-// one. Comparing without trimming would treat "NONE  " as a real section name
-// and cite a source that doesn't exist.
 test("parseAnswerOrChat treats a padded NONE as uncovered", () => {
   const result = parseAnswerOrChat("SOURCE: NONE  \n\nANSWER: no clue on that one, ask a helper :hii:");
   assert.deepEqual(result, { source: null, answer: "no clue on that one, ask a helper :hii:" });
   assert.equal(parseAnswerOrChat("SOURCE: none\nANSWER: hey").source, null);
 });
 
-// Greetings come back as plain prose with no prefix at all. Dropping those sent
-// a perfectly good reply to the generic fallback.
 test("parseAnswerOrChat treats an unprefixed reply as conversational", () => {
   const result = parseAnswerOrChat("not much, just vibing :3c");
   assert.deepEqual(result, { source: null, answer: "not much, just vibing :3c:" });
 });
 
-// An unlabeled reply never becomes a grounded answer, even for a program
-// that owns a single source: attribution requires the model to cite. This
-// replaces a baseline test that asserted anchoring — that would let any
-// chat-shaped reply pass the grounding check (spec §11: do not weaken guards).
 test("parseAnswerOrChat never attributes an unlabeled reply to a source", () => {
   const result = parseAnswerOrChat("Jame Gam is a game-jam program.", { id: "jame-gam" });
   assert.equal(result?.source, null);
@@ -156,10 +136,9 @@ test("parseAnswerOrChat returns null when the model gave us nothing", () => {
   assert.equal(parseAnswerOrChat(undefined), null);
 });
 
-/* --------------------------------------------------------- streamed answer -- */
 
-function streamOf(text: any) {
-  return async (_options: any, onDelta: any) => {
+function streamOf(text: string) {
+  return async (_options: unknown, onDelta: (delta: string, text: string) => boolean | void) => {
     let seen = "";
     for (const chunk of text.match(/.{1,7}/gs) || []) {
       seen += chunk;
@@ -169,14 +148,12 @@ function streamOf(text: any) {
   };
 }
 
-// SOURCE: comes first, so nothing is forwarded until the ANSWER: marker lands —
-// otherwise Slack would briefly show the citation machinery.
 test("getAnswerOrChatStream emits the answer only, never the SOURCE line", async () => {
   const original = llm.completeStream;
   llm.completeStream = streamOf("SOURCE: Pixl FAQ\nANSWER: just sign up at play.pixl.rsvp :yay:");
   try {
-    const seen: any[] = [];
-    const result = await answer.getAnswerOrChatStream("how do i join", "docs", "", { onText: (t: any) => seen.push(t) });
+    const seen: string[] = [];
+    const result = await answer.getAnswerOrChatStream("how do i join", "docs", "", { onText: (t: string) => seen.push(t) });
 
     assert.ok(seen.length > 1, "should have streamed more than once");
     for (const text of seen) assert.doesNotMatch(text, /SOURCE|ANSWER:/);
@@ -187,15 +164,12 @@ test("getAnswerOrChatStream emits the answer only, never the SOURCE line", async
   }
 });
 
-// Greetings come back as bare prose with no SOURCE/ANSWER structure at all, so
-// there is no marker to wait for and nothing streams — the reply still lands
-// through the normal finish path.
 test("getAnswerOrChatStream emits nothing when the model skips the ANSWER marker", async () => {
   const original = llm.completeStream;
   llm.completeStream = streamOf("not much, just vibing");
   try {
-    const seen: any[] = [];
-    const result = await answer.getAnswerOrChatStream("whats up", "docs", "", { onText: (t: any) => seen.push(t) });
+    const seen: string[] = [];
+    const result = await answer.getAnswerOrChatStream("whats up", "docs", "", { onText: (t: string) => seen.push(t) });
 
     assert.deepEqual(seen, []);
     assert.deepEqual(result, { source: null, answer: "not much, just vibing" });
@@ -216,11 +190,7 @@ test("getAnswerOrChatStream returns null rather than calling the model on an emp
   }
 });
 
-/* -------------------------------------------- help-channel self-awareness -- */
 
-// Pixie used to tell someone reading #pixl-help right now to go ask in
-// #pixl-help — the guardrail's redirect line never knew which channel it was
-// actually speaking in.
 test("pixlGuardrail points elsewhere by default and stays local when already in the help channel", () => {
   assert.match(pixlGuardrail(false), /point them at (?:<#|#pixl-help)/);
   assert.doesNotMatch(pixlGuardrail(false), /already here/);
@@ -230,19 +200,10 @@ test("pixlGuardrail points elsewhere by default and stays local when already in 
   assert.doesNotMatch(pixlGuardrail(true), /point them at (?:<#|#pixl-help)/);
 });
 
-// A vague follow-up to pixie's OWN previous reply ("what do u mean by that
-// tho") used to get swallowed by the always-included "About pixie" identity
-// section — it shares words like "what"/"mean" with the identity Q&A, so a
-// question that should be answered from the thread above instead came back
-// as a canned "I'm a bot running on documentation" non-answer.
 test("answerOrChatPrompt tells the model not to let identity docs hijack a follow-up to its own reply", () => {
   assert.match(answerOrChatPrompt("docs", "", false), /About pixie.*section happens to share a word/s);
 });
 
-// A follow-up asking specifically for Linux install commands for KiCad got
-// matched onto the git-setup docs instead — both mention "commands" and
-// "terminal", but the docs section had nothing to do with what was actually
-// asked. Vocabulary overlap alone must not be enough to win CASE 1.
 test("answerOrChatPrompt warns against vocabulary-overlap doc matches on an unrelated topic", () => {
   const prompt = answerOrChatPrompt("docs", "", false);
   assert.match(prompt, /not merely because it shares a word or two/);
@@ -250,11 +211,6 @@ test("answerOrChatPrompt warns against vocabulary-overlap doc matches on an unre
   assert.match(prompt, /is general tech knowledge, CASE 2/);
 });
 
-// Live example: "@pixie tell me how to cook chicken" got a normal CASE 2
-// answer, but the thread follow-up "actual step by step pls pixie" — no
-// subject mentioned, just a request for a numbered list — matched onto the
-// submit-project doc's own 5-step list instead of continuing the chicken
-// answer. Shared FORMAT (both are numbered steps) is not shared SUBJECT.
 test("answerOrChatPrompt warns that 'step by step' describes format, not subject, and inherits the topic from context", () => {
   const prompt = answerOrChatPrompt("docs", "", false);
   assert.match(prompt, /describe the FORMAT someone wants/);
@@ -262,24 +218,15 @@ test("answerOrChatPrompt warns that 'step by step' describes format, not subject
   assert.match(prompt, /inherits its subject from the immediately preceding exchange/);
 });
 
-// Same thread, next message: "step two now pixie" got back item #2 of the
-// submit-project doc's own numbered list, literally indexed by ordinal —
-// the general "step by step" guard above wasn't explicit enough to stop the
-// model from treating "step N" as "read out the Nth bullet of some doc".
 test("answerOrChatPrompt explicitly rules out treating 'step N' as an index into a doc's numbered list", () => {
   const prompt = answerOrChatPrompt("docs", "", false);
   assert.match(prompt, /never treat 'step N' as an index into whichever doc section has a step N/);
 });
 
-// Live example: "how do i start pcb, what is pcb and schematics" got answered
-// with the launch date instead of the actual question. "no matter how the
-// question is worded" had no boundary, so a bare "start" read as "has it
-// started" and hijacked a completely unrelated question.
 test("timelineAuthorityRule does not let a bare 'start'/'begin' alone trigger the launch-date override", () => {
   const rule = timelineAuthorityRule(NONE_MARKER);
   assert.match(rule, /how do i start building a PCB/);
   assert.match(rule, /must never trigger this rule on its own/);
-  // Named from the resolved program now, not shouted as a hardcoded "PIXL".
   assert.match(rule, /ONLY on questions asking specifically whether the Pixl program itself has launched/);
 });
 
@@ -295,8 +242,8 @@ test("answerOrChatPrompt swaps in the help-channel guardrail copy", () => {
 
 test("getAnswerOrChatStream threads inHelpChannel through to the actual system prompt", async () => {
   const original = llm.completeStream;
-  let seenPrompt: any = null;
-  llm.completeStream = async (options: any) => {
+  let seenPrompt: string | null = null;
+  llm.completeStream = async (options: { messages: Array<{ content: string }> }) => {
     seenPrompt = options.messages[0].content;
     return { text: "SOURCE: NONE\nANSWER: not sure on that one", stopped: false };
   };
@@ -309,10 +256,6 @@ test("getAnswerOrChatStream threads inHelpChannel through to the actual system p
   assert.match(seenPrompt, /a helper in this channel will pick it up/);
 });
 
-/* ------------------------------------------------------------ whereYouAre -- */
-// One deployment sits in every YSWS channel at once, so "the deadline" means a
-// different date depending on where it was typed. Nothing used to tell the
-// model where it was.
 
 test("whereYouAre names the channel and the program that owns it", () => {
   const block = answer.whereYouAre({ id: "pixl", name: "Pixl", helpChannel: "C-help" }, "C-help");
@@ -327,11 +270,6 @@ test("whereYouAre distinguishes a program's other channels from its help channel
   assert.doesNotMatch(block, /the help channel for Pixl/);
 });
 
-// Regression: in a program's own channel the prompt used to list every other
-// program by name and tell the model to redirect if a question was "clearly
-// about one of those" — which fired on "what to do in hardware" -> "you mean
-// Hardwire? the other ysws". A named channel must not name other programs or
-// invite that redirect.
 test("whereYouAre does not name or redirect to other programs from inside a named channel", () => {
   const block = answer.whereYouAre({ id: "pixl", name: "Pixl", helpChannel: "C-help" }, "C-help");
   assert.match(block, /This is a Pixl channel only/);
@@ -340,9 +278,6 @@ test("whereYouAre does not name or redirect to other programs from inside a name
   assert.doesNotMatch(block, /Hardwire/);
 });
 
-// A channel nobody has claimed must not be told it belongs to a program —
-// guessing there is exactly how one program's dates end up answering another's
-// question.
 test("whereYouAre refuses to assume a program in an unowned channel", () => {
   const block = answer.whereYouAre(null, "C-random");
   assert.match(block, /isn't tied to any one YSWS program/);
@@ -356,8 +291,6 @@ test("whereYouAre survives having no channel to name", () => {
   assert.doesNotMatch(block, /undefined/);
 });
 
-// The bug this replaced: callers passed the id string, and the prompt printed
-// it verbatim — channels were told they belonged to "the pixl program".
 test("a bare program id resolves to the program's real name, not the id", () => {
   const resolved = answer.resolveProgram("ysws-global");
   assert.equal(resolved.name, "YSWS Global");
@@ -370,12 +303,6 @@ test("both prompts carry the where-you-are block", () => {
   assert.match(answer.answerOrChatPrompt("docs", "", true, prog, "C-help"), /WHERE YOU ARE: <#C-help>/);
 });
 
-// "eh how do i do tthis ?" got back forty words: a question, then a menu of
-// things pixie could help with, then an offer to walk them through it. Nobody
-// had addressed pixie and nobody could have answered that message, so the right
-// reply was nothing at all. The model is given a way to say exactly that —
-// a marker, not prose — because prose has to be posted somewhere before anyone
-// can decide it was worthless.
 test("answerOrChatPrompt gives the model a way to say it cannot tell what is being asked", () => {
   const prompt = answerOrChatPrompt("docs", "", false);
   assert.match(prompt, /cannot tell what they.re asking about/i);
@@ -390,18 +317,12 @@ test("parseAnswerOrChat turns the unclear marker into no answer at all", () => {
   assert.equal(parsed.source, null);
 });
 
-// An ordinary reply must not be mistaken for the marker just because it opens
-// with the same letters.
 test("parseAnswerOrChat leaves an ordinary reply alone", () => {
   const parsed = answer.parseAnswerOrChat("SOURCE: NONE\nANSWER: unclear on that one, but the deadline is the 18th");
   assert.equal(parsed.unclear, undefined);
   assert.match(parsed.answer, /deadline/);
 });
 
-// Prices are live and the hours behind them come off a stepped payout table.
-// lib/shop.js works those out in code and answers before the model is called,
-// so the only thing left for the model to do here is read the numbers that are
-// already printed — arithmetic is exactly where it goes wrong.
 test("the prompts forbid working out shop numbers by hand", () => {
   for (const prompt of [
     answer.systemPrompt("corpus"),
@@ -412,9 +333,6 @@ test("the prompts forbid working out shop numbers by hand", () => {
   }
 });
 
-// Stripping dashes on the way out works, but it leaves mechanical commas where
-// the model meant a dash. Telling it not to reach for one in the first place is
-// what actually makes the replies read right.
 test("the voice rules forbid dashes outright", () => {
   for (const prompt of [answer.systemPrompt("corpus"), answer.answerOrChatPrompt("corpus", "", false)]) {
     assert.match(prompt, /never use (?:em )?dashes|no dashes/i);
@@ -471,7 +389,7 @@ test("getAnswerOrChatStream does not emit scratchpad or template placeholders to
   const originalCompleteStream = llm.completeStream;
 
   try {
-    llm.completeStream = async (_req: any, onDelta: any) => {
+    llm.completeStream = async (_req: unknown, onDelta: (delta: string, text: string) => void) => {
       const chunks = [
         "SOURCE: NONE\nANSWER: <a normal, friendly reply, 1-3 sentences>\n",
         "We should give some ideas.\n",
@@ -488,9 +406,9 @@ test("getAnswerOrChatStream does not emit scratchpad or template placeholders to
       return { text, stopped: false };
     };
 
-    const emitted: any[] = [];
+    const emitted: string[] = [];
     await answer.getAnswerOrChatStream("give me typescript ideas", "documentation", "", {
-      onText: (t: any) => emitted.push(t),
+      onText: (t: string) => emitted.push(t),
       inHelpChannel: false,
     });
 
@@ -543,7 +461,6 @@ test("answer prompt preserves an explicit request for ideas", () => {
   assert.equal(answer.isExplicitIdeasRequest("what is the current policy?"), false);
 });
 
-/* ---------------- prompt quality: domain, hierarchy, scenarios -------- */
 
 test("prompts enforce domain specificity isolating software and hardware terms", () => {
   for (const prompt of [
@@ -558,10 +475,6 @@ test("prompts enforce domain specificity isolating software and hardware terms",
   }
 });
 
-// Pixl's concrete policy (30% AI cap, referral expiry, hardware CAD 0% AI,
-// returned-submission scope) is pinned into ITS prompt via programs.json
-// pinnedRules — a specific number small models kept getting wrong. Every other
-// program answers purely from its own corpus.
 const pixlProgram = require("./programs").get("pixl");
 
 test("Pixl's prompt pins its concrete policy: 30% AI cap, referral expiry, CAD rule, returned-submission scope", () => {
@@ -592,17 +505,13 @@ test("another program's prompt carries none of Pixl's pinned policy", () => {
     assert.doesNotMatch(prompt, /REFERRAL CODES/);
     assert.doesNotMatch(prompt, /100% original CAD/i);
     assert.doesNotMatch(prompt, /reduced-hour approvals/i);
-    // the generic anti-blending rule still applies to every program
     assert.match(prompt, /STRICT SCENARIO FOCUS/);
   }
 });
 
-/* ------------------------------ ANSWER PIPELINE characterization (audit) -- */
 
 test("CHAR: selectAnswerTier routes pings outside help to the ping tier", () => {
   const { config } = require("./config");
-  // Mirrors answer.selectAnswerTier without importing internals: ping outside
-  // help resolves pingAnswer, everything else resolves helpAnswer.
   const pingTier = config.pingAnswer || config.answer;
   const helpTier = config.helpAnswer || config.answer;
   assert.ok(pingTier.model || pingTier.baseUrl, "ping tier is configured");

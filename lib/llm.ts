@@ -1,44 +1,70 @@
-// Shared OpenAI-compatible chat-completions client. answer/intent/chat/vision
-// all POST the same shape to different base URLs with different keys, so the
-// transport — including retry policy — lives here once.
 const axios = require("axios");
 const https = require("https");
 const log = require("./log");
 const db = require("./db");
 const crypto = require("crypto");
 
-// 25s was long enough that three attempts could stack to 75s+ before the user
-// saw anything. Measured p90 for a real answer is ~4s, so 12s is still four
-// standard deviations of slack while bounding the worst case to ~36s.
+interface ChatMessage { role: string; content: unknown }
+interface Usage { promptTokens: number | null; cachedPromptTokens: number | null; completionTokens: number | null; totalTokens: number | null }
+interface Telemetry { operation?: string; provider?: string | null; programId?: string | null; channel?: string | null; requestId?: string; }
+interface CompletionOptions {
+  baseUrl: string;
+  apiKey: string | (() => string);
+  model: string;
+  messages: ChatMessage[];
+  maxTokens: number;
+  temperature?: number;
+  thinking?: unknown;
+  timeout?: number;
+  fallback?: CompletionOptions;
+  telemetry?: Telemetry;
+  onRateLimited?: (key: string) => void;
+}
+interface LlmError extends Error { response?: { status?: number }; usedKey?: string; code?: string; cause?: { code?: string } }
+interface CompletionResult { text: string; finishReason?: string; usedKey?: string; usage?: Usage; stopped?: boolean; attempt?: number; retryCount?: number; latencyMs?: number }
+interface ResultMeta extends Partial<CompletionResult> { status?: string; httpStatus?: number; errorKind?: string; eventId?: string; }
+interface Price { input: number; output: number }
+interface JsonRecord { [key: string]: unknown }
+
+function asRecord(value: unknown): JsonRecord {
+  return value && typeof value === "object" ? value as JsonRecord : {};
+}
+
+function toLlmError(error: unknown): LlmError {
+  return error instanceof Error ? error as LlmError : Object.assign(new Error(String(error)), { cause: error }) as LlmError;
+}
+
+function numberOrNull(value: unknown) {
+  return typeof value === "number" ? value : null;
+}
+
+function firstChoice(value: unknown): JsonRecord {
+  const choices = asRecord(value).choices;
+  return Array.isArray(choices) ? asRecord(choices[0]) : {};
+}
+
 const DEFAULT_TIMEOUT_MS = 25000;
 const MAX_ATTEMPTS = 3;
 const BASE_BACKOFF_MS = 400;
 
-// axios opens a fresh TLS connection per request by default, so every call paid
-// a full handshake. Reusing sockets is worth ~200ms per call and, more usefully,
-// collapses the spread — measured interleaved against the live endpoint, the
-// range tightened from 1632-2744ms to 1711-2055ms.
 const keepAliveAgent = new https.Agent({ keepAlive: true, maxSockets: 20 });
 
-// Transient: worth another attempt. Anything else (401, 400, 404) is a config
-// or prompt problem that retrying can only make slower.
-function isRetryableStatus(status: any) {
-  return status === 408 || status === 429 || (status >= 500 && status < 600);
+function isRetryableStatus(status: number | undefined) {
+  return status === 408 || status === 429 || (status !== undefined && status >= 500 && status < 600);
 }
 
-function isRetryableError(err: any) {
+function isRetryableError(err: LlmError) {
   if (err.response) return isRetryableStatus(err.response.status);
-  // No response at all — timeout, socket hang-up, DNS blip.
   return true;
 }
 
-function usageFor(data: any) {
-  const usage = data?.usage || {};
+function usageFor(data: unknown): Usage {
+  const usage = asRecord(asRecord(data).usage);
   return {
-    promptTokens: usage.prompt_tokens ?? usage.input_tokens ?? null,
-    cachedPromptTokens: usage.cached_prompt_tokens ?? usage.cache_read_input_tokens ?? null,
-    completionTokens: usage.completion_tokens ?? usage.output_tokens ?? null,
-    totalTokens: usage.total_tokens ?? null,
+    promptTokens: numberOrNull(usage.prompt_tokens ?? usage.input_tokens),
+    cachedPromptTokens: numberOrNull(usage.cached_prompt_tokens ?? usage.cache_read_input_tokens),
+    completionTokens: numberOrNull(usage.completion_tokens ?? usage.output_tokens),
+    totalTokens: numberOrNull(usage.total_tokens),
   };
 }
 
@@ -47,17 +73,20 @@ const KNOWN_PRICING = Object.freeze({
   "gpt-4o": { input: 2.5, output: 10 },
 });
 
-function costFor(model: any, usage: any) {
-  let prices: Record<string, any> = { ...KNOWN_PRICING };
-  try { prices = { ...KNOWN_PRICING, ...JSON.parse(process.env.PIXIE_LLM_PRICING_JSON || "{}") }; } catch (_: any) { prices = { ...KNOWN_PRICING }; }
+function costFor(model: string, usage: Usage) {
+  let prices: Record<string, Price> = { ...KNOWN_PRICING };
+  try {
+    const configured = JSON.parse(process.env.PIXIE_LLM_PRICING_JSON || "{}");
+    if (configured && typeof configured === "object") prices = { ...KNOWN_PRICING, ...configured as Record<string, Price> };
+  } catch (_error: unknown) { prices = { ...KNOWN_PRICING }; }
   const price = prices[model];
   if (!price || usage.promptTokens === null || usage.completionTokens === null) return null;
   return (usage.promptTokens * Number(price.input || 0) + usage.completionTokens * Number(price.output || 0)) / 1000000;
 }
 
-function recordUsage(options: any, result: any = {}) {
+function recordUsage(options: CompletionOptions, result: ResultMeta = {}) {
   const context = options.telemetry || {};
-  const usage = result.usage || {};
+  const usage: Usage = result.usage || { promptTokens: null, cachedPromptTokens: null, completionTokens: null, totalTokens: null };
   try {
     db.recordLlmUsage({
       operation: context.operation || "llm",
@@ -77,52 +106,34 @@ function recordUsage(options: any, result: any = {}) {
       rateLimited: result.httpStatus === 429,
       latencyMs: result.latencyMs,
     });
-  } catch (e: any) {
-    log.debug("llm", `telemetry failed: ${e.message}`);
+  } catch (error: unknown) {
+    log.debug("llm", `telemetry failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 }
 
-function providerFor(baseUrl: any) {
-  try { return new URL(baseUrl).hostname || null; } catch (_: any) { return null; }
+function providerFor(baseUrl: string) {
+  try { return new URL(baseUrl).hostname || null; } catch (_error: unknown) { return null; }
 }
 
-function backoffMs(attempt: any) {
-  // 400ms, 800ms, 1600ms + jitter, so a burst of concurrent questions doesn't
-  // retry in lockstep against an endpoint that's already rate-limiting us.
+function backoffMs(attempt: number) {
   return BASE_BACKOFF_MS * 2 ** attempt + Math.floor(Math.random() * 200);
 }
 
-function sleep(ms: any) {
-  return new Promise((resolve: any) => setTimeout(resolve, ms));
+function sleep(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
-// WHY: one attribution rule, not one per loop. A 429 penalizes the key that
-// actually 429'd (err.usedKey, set by requestCompletion/streamCompletion), not
-// whatever the rotation hands back next — penalizing the next key punishes an
-// unrelated healthy key and lets the hotspot keep burning.
-function noteRateLimit(options: any, err: any) {
+function noteRateLimit(options: CompletionOptions, err: LlmError) {
   if (err?.response?.status !== 429 || !options.onRateLimited) return;
   const usedKey = err.usedKey || (typeof options.apiKey === "function" ? options.apiKey() : options.apiKey);
   options.onRateLimited(usedKey);
 }
 
-// `thinking` is DeepSeek-native. Zen honours it and it is worth ~4x on latency
-// there, but other gateways can reject an unknown field outright — so it is only
-// sent to models that understand it.
-//
-// A bare "deepseek" match isn't enough: a gateway's own catalogue can name a
-// model "deepseek/..." too (HCAI does), and that model is DeepSeek by way of a
-// proxy that doesn't know this param either. Every gateway-catalogue name in
-// this codebase is namespaced with a "/" (kr/claude-sonnet-4.5,
-// gc/gemini-3.1-flash-lite-preview, deepseek/deepseek-v4-flash-latest) —
-// Zen's own native names never are — so excluding anything with a "/" is what
-// actually distinguishes "real Zen DeepSeek" from "DeepSeek behind someone
-// else's gateway", which a bare substring match on "deepseek" cannot.
-function thinkingFor(model: any, thinking: any) {
+function thinkingFor(model: string, thinking: unknown) {
   return thinking && !/\//.test(model || "") && /deepseek/i.test(model || "") ? thinking : undefined;
 }
 
-function stripThinking(text: any) {
+function stripThinking(text: string) {
   if (!text) return "";
   let clean = text
     .replace(/<(?:think|thinking|thought|scratchpad)>[\s\S]*?<\/(?:think|thinking|thought|scratchpad)>/gi, "")
@@ -148,7 +159,7 @@ function stripThinking(text: any) {
     let foundIndex = -1;
     for (const m of markers) {
       const match = clean.match(m);
-      if (match && (foundIndex === -1 || match.index < foundIndex)) {
+      if (match && match.index !== undefined && (foundIndex === -1 || match.index < foundIndex)) {
         foundIndex = match.index;
       }
     }
@@ -163,9 +174,7 @@ function stripThinking(text: any) {
 }
 
 
-// One request. Returns the raw text plus finish_reason so callers can detect
-// the empty-completion case (see complete() below).
-async function requestCompletion({ baseUrl, apiKey, model, messages, maxTokens, temperature, thinking, timeout }: any) {
+async function requestCompletion({ baseUrl, apiKey, model, messages, maxTokens, temperature, thinking, timeout }: CompletionOptions): Promise<CompletionResult> {
   const usedKey = typeof apiKey === "function" ? apiKey() : apiKey;
   const filteredThinking = thinkingFor(model, thinking);
 
@@ -189,51 +198,40 @@ async function requestCompletion({ baseUrl, apiKey, model, messages, maxTokens, 
       },
     );
 
-    const rawContent = res.data?.choices?.[0]?.message?.content;
-    const cleanContent = stripThinking(rawContent);
+    const choice = firstChoice(res.data);
+    const rawContent = asRecord(choice.message).content;
+    const cleanContent = stripThinking(typeof rawContent === "string" ? rawContent : "");
 
     return {
       text: cleanContent,
-      finishReason: res.data?.choices?.[0]?.finish_reason,
+      finishReason: typeof choice.finish_reason === "string" ? choice.finish_reason : undefined,
       usedKey,
       usage: usageFor(res.data),
     };
-  } catch (err: any) {
-    // Attribution for the retry loop's onRateLimited: without this, a catch
-    // block has no way to know which key just 429'd and ends up penalizing
-    // whatever the rotation hands back next — an unrelated, healthy key.
+  } catch (error: unknown) {
+    const err = toLlmError(error);
     err.usedKey = usedKey;
     throw err;
   }
 }
 
-// Retries on two distinct failure modes:
-//
-//  1. Transient HTTP (429/5xx/timeout) — exponential backoff. Previously these
-//     escaped on the first attempt and surfaced to the user as an error string.
-//  2. Empty completion with finish_reason "length" — deepseek-v4-flash-free is
-//     a reasoning model that sometimes burns its whole token budget on
-//     invisible thinking tokens before writing anything visible. Non-
-//     deterministic, so a fresh attempt usually succeeds; cheaper than paying
-//     for a different model to work around a free tier's inconsistency.
-//
-// Throws the last error if every attempt fails.
-async function completeAttempts(options: any, scope: any) {
-  let lastError: any = null;
+async function completeAttempts(options: CompletionOptions, scope: string): Promise<CompletionResult> {
+  let lastError: LlmError | null = null;
   const requestId = options.telemetry?.requestId || crypto.randomUUID();
   const instrumented = { ...options, telemetry: { ...options.telemetry, operation: options.telemetry?.operation || scope, requestId } };
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const startedAt = Date.now();
     try {
-      const result: any = await requestCompletion(instrumented);
+      const result = await requestCompletion(instrumented);
       result.attempt = attempt + 1;
       result.retryCount = attempt;
       result.latencyMs = Date.now() - startedAt;
       recordUsage(instrumented, { ...result, status: result.text?.trim() ? "success" : "empty" });
       if (result.text?.trim()) return result;
       log.debug(scope, `empty completion (finish_reason=${result.finishReason}), attempt ${attempt + 1}/${MAX_ATTEMPTS}`);
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = toLlmError(error);
       lastError = err;
       recordUsage(instrumented, { status: "error", httpStatus: err.response?.status, attempt: attempt + 1, retryCount: attempt, latencyMs: Date.now() - startedAt, errorKind: err.response?.status === 429 ? "rate_limit" : (err.code || "request") });
       noteRateLimit(options, err);
@@ -246,94 +244,60 @@ async function completeAttempts(options: any, scope: any) {
   }
 
   if (lastError) throw lastError;
-  // All attempts came back empty — treat as "no answer" rather than an error.
   return { text: "", finishReason: "length" };
 }
 
-/* -------------------------------------------------------------- fallback -- */
 
-// Pointing a call site at a self-hosted gateway (9Router, a local proxy) buys a
-// better model than the free tier, at the cost of depending on a component that
-// can simply be down. `options.fallback` names a standby to try once the primary
-// has exhausted its retries.
-//
-// This exists because of the failure mode it prevents, which is worse than it
-// looks: an unreachable gateway threw, classifyIntent turned the throw into a
-// null verdict, and HELP_ONLY reads null as "nobody was asking" — so a dead
-// router made pixie mute in every gated channel with nothing in the logs
-// pointing at the cause. Degraded answers beat silence.
-function describeError(err: any) {
+function describeError(err: LlmError) {
   return err.response?.status || err.cause?.code || err.code || "network";
 }
 
-// A fallback can itself carry a `.fallback` — recursing into complete() rather
-// than calling completeAttempts() directly turns that into a real chain
-// (HCAI -> Zen -> 9Router, say), not just one extra hop. Existing single-hop
-// callers are unaffected: their fallback object has no `.fallback` of its own,
-// so the recursive call's catch block just has nothing left to try.
-async function complete(options: any, scope: any = "llm") {
+async function complete(options: CompletionOptions, scope = "llm") {
   const { fallback, ...primary } = options;
 
   try {
     return await completeAttempts(primary, scope);
-  } catch (err: any) {
+  } catch (error: unknown) {
+    const err = toLlmError(error);
     if (!fallback) throw err;
     log.warn(scope, `${primary.model || primary.baseUrl} failed (${describeError(err)}) — falling back to ${fallback.model || fallback.baseUrl}`);
     return await complete({ ...primary, ...fallback }, `${scope}-fallback`);
   }
 }
 
-/* ------------------------------------------------------------- streaming -- */
 
-// Non-streaming answers meant nothing was on screen until the whole completion
-// landed — measured p50 4891ms with the first token available at ~1500ms. The
-// gap was pure dead air.
-//
-// Built on global fetch rather than axios: Bun's fetch gives a real
-// ReadableStream and pools connections itself, and this is the exact shape
-// measured against Zen. complete() keeps axios — short classifier-style calls
-// gain nothing from streaming and want the retry semantics above.
 
-// SSE frames arrive split across chunk boundaries, so a partial line is held
-// back until its newline shows up. Returns the deltas found in `buffer` and
-// whatever tail could not be parsed yet.
-function parseSseChunk(buffer: any, { flush = false }: any = {}) {
-  const deltas: any[] = [];
+function parseSseChunk(buffer: string, { flush = false }: { flush?: boolean } = {}) {
+  const deltas: string[] = [];
   const lines = buffer.split("\n");
   let rest = lines.pop();
   if (flush && rest) {
     lines.push(rest);
     rest = "";
   }
-  let finishReason: any = null;
+  let finishReason: string | null = null;
 
   for (const line of lines) {
     if (!line.startsWith("data:")) continue;
     const payload = line.slice(5).trim();
     if (!payload || payload === "[DONE]") continue;
-    let frame: any;
+    let frame: JsonRecord;
     try {
-      frame = JSON.parse(payload);
+      frame = asRecord(JSON.parse(payload));
     } catch {
-      // A frame we can't read is one lost token, not a failed answer.
       continue;
     }
-    const delta = frame?.choices?.[0]?.delta?.content;
-    if (delta) deltas.push(delta);
-    if (frame?.choices?.[0]?.finish_reason) finishReason = frame.choices[0].finish_reason;
+    const choice = firstChoice(frame);
+    const delta = asRecord(choice.delta).content;
+    if (typeof delta === "string" && delta) deltas.push(delta);
+    if (typeof choice.finish_reason === "string" && choice.finish_reason) finishReason = choice.finish_reason;
   }
 
   return { deltas, rest, finishReason };
 }
 
-// One streaming attempt. `onDelta` is called with each fragment as it arrives;
-// returning false from it stops the stream (used by the SILENT gate, which
-// knows the answer is nothing after the very first token).
-async function streamCompletion({ baseUrl, apiKey, model, messages, maxTokens, temperature, thinking, timeout }: any, onDelta: any) {
+async function streamCompletion({ baseUrl, apiKey, model, messages, maxTokens, temperature, thinking, timeout }: CompletionOptions, onDelta: (delta: string, text: string) => boolean | void) {
   const controller = new AbortController();
-  // Armed against time-to-FIRST-token, not total duration: a stream that is
-  // still producing text is healthy however long it runs, and killing it
-  // mid-sentence would truncate a reply already visible in Slack.
   let timer: ReturnType<typeof setTimeout> | null = setTimeout(() => controller.abort(), timeout || DEFAULT_TIMEOUT_MS);
   const clearFirstTokenTimer = () => {
     if (timer) clearTimeout(timer);
@@ -360,9 +324,7 @@ async function streamCompletion({ baseUrl, apiKey, model, messages, maxTokens, t
 
     if (!res.ok) {
       const body = await res.text().catch(() => "");
-      const err: any = new Error(`stream failed: HTTP ${res.status} ${body.slice(0, 200)}`);
-      err.response = { status: res.status };
-      err.usedKey = usedKey;
+      const err = Object.assign(new Error(`stream failed: HTTP ${res.status} ${body.slice(0, 200)}`), { response: { status: res.status }, usedKey });
       throw err;
     }
     if (!res.body) throw new Error("stream failed: no response body");
@@ -374,15 +336,15 @@ async function streamCompletion({ baseUrl, apiKey, model, messages, maxTokens, t
     let stopped = false;
     let insideThink = false;
     let thinkBuffer = "";
-    let finishReason: any = null;
+    let finishReason: string | null = null;
 
-    const applyFrames = (frames: any) => {
+    const applyFrames = (frames: { finishReason: string | null; deltas: string[] }) => {
       if (frames.finishReason) finishReason = frames.finishReason;
       for (const delta of frames.deltas) {
         clearFirstTokenTimer();
 
-        const hasThinkOpen = (s: any) => /<(?:think|thinking|thought|scratchpad)>/i.test(s);
-        const hasThinkClose = (s: any) => /<\/(?:think|thinking|thought|scratchpad)>/i.test(s);
+        const hasThinkOpen = (s: string) => /<(?:think|thinking|thought|scratchpad)>/i.test(s);
+        const hasThinkClose = (s: string) => /<\/(?:think|thinking|thought|scratchpad)>/i.test(s);
 
         if (insideThink || hasThinkOpen(delta) || hasThinkOpen(thinkBuffer)) {
           insideThink = true;
@@ -412,7 +374,7 @@ async function streamCompletion({ baseUrl, apiKey, model, messages, maxTokens, t
 
       buffer += decoder.decode(value, { stream: true });
       const frames = parseSseChunk(buffer);
-      buffer = frames.rest;
+      buffer = frames.rest ?? "";
       stopped = applyFrames(frames);
 
       if (stopped) {
@@ -433,15 +395,12 @@ async function streamCompletion({ baseUrl, apiKey, model, messages, maxTokens, t
   }
 }
 
-// Retries only when NOTHING was streamed. Once a fragment has been handed to
-// onDelta it is already on screen, and a second attempt would rewrite the reply
-// in front of whoever is reading it.
-async function streamAttempts(options: any, onDelta: any, scope: any) {
-  let lastError: any = null;
+async function streamAttempts(options: CompletionOptions, onDelta: (delta: string, text: string) => boolean | void, scope: string) {
+  let lastError: LlmError | null = null;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     let streamed = false;
-    const track = (delta: any, text: any) => {
+    const track = (delta: string, text: string) => {
       streamed = true;
       return onDelta ? onDelta(delta, text) : undefined;
     };
@@ -450,7 +409,8 @@ async function streamAttempts(options: any, onDelta: any, scope: any) {
       const result = await streamCompletion(options, track);
       if (result.text.trim() || result.stopped) return result;
       log.debug(scope, `empty stream, attempt ${attempt + 1}/${MAX_ATTEMPTS}`);
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = toLlmError(error);
       lastError = err;
       noteRateLimit(options, err);
       if (streamed) throw err;
@@ -466,26 +426,21 @@ async function streamAttempts(options: any, onDelta: any, scope: any) {
   return { text: "", stopped: false };
 }
 
-async function completeStream(options: any, onDelta: any, scope: any = "llm") {
+async function completeStream(options: CompletionOptions, onDelta: (delta: string, text: string) => boolean | void, scope = "llm") {
   const { fallback, ...primary } = options;
 
-  // Tracked across attempts, not within one: the moment any text reaches Slack
-  // the reply is visible, and a standby model would rewrite it mid-sentence in
-  // front of whoever is reading. Falling back is only safe from silence.
   let streamedAny = false;
-  const track = (delta: any, text: any) => {
+  const track = (delta: string, text: string) => {
     streamedAny = true;
     return onDelta ? onDelta(delta, text) : undefined;
   };
 
   try {
     return await streamAttempts(primary, track, scope);
-  } catch (err: any) {
+  } catch (error: unknown) {
+    const err = toLlmError(error);
     if (!fallback || streamedAny) throw err;
     log.warn(scope, `${primary.model || primary.baseUrl} failed (${describeError(err)}) — falling back to ${fallback.model || fallback.baseUrl}`);
-    // Recurses into completeStream() rather than streamAttempts() so a
-    // fallback with its own `.fallback` chains further — see complete()'s
-    // matching comment above.
     return await completeStream({ ...primary, ...fallback }, track, `${scope}-fallback`);
   }
 }

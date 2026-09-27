@@ -4,10 +4,7 @@ const axios = require("axios");
 const { config } = require("./config");
 const firecrawl = require("./firecrawl");
 
-// axios is a shared module object across every file that requires it, same
-// stubbing reason as lib/llm.js elsewhere in this codebase — before()/after()
-// bracket the stub around this file's own execution window.
-let realPost: any;
+let realPost: typeof axios.post;
 before(() => {
   realPost = axios.post;
 });
@@ -15,7 +12,7 @@ after(() => {
   axios.post = realPost;
 });
 
-let savedApiKey: any;
+let savedApiKey: string | null;
 before(() => {
   savedApiKey = config.firecrawlApiKey;
   config.firecrawlApiKey = "test-key";
@@ -48,10 +45,6 @@ test("scrapeUrl returns the markdown on a successful scrape", async () => {
   assert.equal(await firecrawl.scrapeUrl("https://example.com/docs"), "# Hello\n\nworld");
 });
 
-// The whole point of this fix: knowledge.js's corpus refresh runs every 30
-// minutes and used to re-scrape every doc page on every single cycle, which
-// blew through Firecrawl's free-tier rate limit for content that almost
-// never changes.
 test("scrapeUrl serves a cached copy instead of re-scraping the same URL", async () => {
   let calls = 0;
   axios.post = async () => {
@@ -69,7 +62,7 @@ test("scrapeUrl serves a cached copy instead of re-scraping the same URL", async
 
 test("scrapeUrl caches independently per URL", async () => {
   let calls = 0;
-  axios.post = async (_endpoint: any, body: any) => {
+  axios.post = async (_endpoint: string, body: { url: string }) => {
     calls += 1;
     return { data: { success: true, data: { markdown: `content for ${body.url}` } } };
   };
@@ -82,8 +75,6 @@ test("scrapeUrl caches independently per URL", async () => {
   assert.equal(calls, 2);
 });
 
-// The explicit "reload the docs now" admin command needs a real hard refresh
-// — a cached copy from earlier today defeats the point of asking for one.
 test("scrapeUrl's skipCache option bypasses the cache and re-scrapes", async () => {
   let calls = 0;
   axios.post = async () => {
@@ -99,8 +90,6 @@ test("scrapeUrl's skipCache option bypasses the cache and re-scrapes", async () 
   assert.equal(calls, 2);
 });
 
-// A rate limit or a transient hiccup shouldn't drop a page from the corpus
-// when a perfectly good — just not brand new — copy is sitting in the cache.
 test("scrapeUrl falls back to a stale cached copy when a re-scrape fails", async () => {
   axios.post = async () => ({ data: { success: true, data: { markdown: "good copy" } } });
   await firecrawl.scrapeUrl("https://example.com/docs");
@@ -135,9 +124,6 @@ test("clearScrapeCache forces the next call to hit the network again", async () 
   assert.equal(calls, 2);
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
-// Web fallback client: keyless and credit-exhausted paths stay offline and
-// fail-closed; search mirrors scrape's key gate.
 
 test("char: searchWeb returns null without an API key, never calling the network", async () => {
   const saved = config.firecrawlApiKey;

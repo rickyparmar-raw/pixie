@@ -1,6 +1,3 @@
-// Firecrawl integration for pixie.
-// Converts documentation and web pages into clean Markdown using Firecrawl's API,
-// and provides live web search when questions go beyond static sources.
 const axios = require("axios");
 const { config } = require("./config");
 const log = require("./log");
@@ -8,20 +5,22 @@ const log = require("./log");
 const FIRECRAWL_BASE_URL = "https://api.firecrawl.dev/v1";
 const DEFAULT_TIMEOUT_MS = 15000;
 
-// One hour: a 402 means the whole key is dry, and retrying sooner just burns
-// the rate limit alongside the credits.
 const CREDITS_PAUSE_MS = 60 * 60 * 1000;
 const SEARCH_TIMEOUT_MS = 5000;
 
-function authHeaders(apiKey: any) {
+interface ScrapeCacheEntry { markdown: string; fetchedAt: number }
+interface FirecrawlError { response?: { status?: number; data?: { error?: string } }; message?: string }
+interface FirecrawlSearchItem { url?: string; title?: string; markdown?: string; description?: string }
+interface FirecrawlSearchResult { url?: string; title?: string; markdown: string }
+
+function authHeaders(apiKey: string) {
   return { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
 }
 
-// A 402 — or any error that says "insufficient credits" — pauses ALL live web
-// requests for an hour. Anything else is just a failed call.
-function noteFailure({ exhaustedNote, failedNote, err }: any) {
-  const errMsg = err.response?.data?.error || err.message;
-  if (err.response?.status === 402 || (typeof errMsg === "string" && errMsg.toLowerCase().includes("insufficient credits"))) {
+function noteFailure({ exhaustedNote, failedNote, err }: { exhaustedNote: string; failedNote: string; err: unknown }) {
+  const error = err as FirecrawlError;
+  const errMsg = error.response?.data?.error || error.message || String(err);
+  if (error.response?.status === 402 || (typeof errMsg === "string" && errMsg.toLowerCase().includes("insufficient credits"))) {
     markCreditsExhausted();
     log.warn("firecrawl", exhaustedNote);
   } else {
@@ -33,14 +32,8 @@ function getApiKey() {
   return config.firecrawlApiKey || process.env.FIRECRAWL_API_KEY || null;
 }
 
-// knowledge.js's corpus refresh runs every 30 minutes (plus once at boot) and
-// re-scraped every single doc subpage on every cycle — 20-30 pages against a
-// ~28-30 req/min free-tier limit, so most cycles were mostly 429s for content
-// that's almost always byte-identical to what was already scraped a half
-// hour earlier. Docs don't change that often; cache per URL and only pay for
-// a real Firecrawl call once a page is actually stale.
 const SCRAPE_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
-const scrapeCache = new Map();
+const scrapeCache = new Map<string, ScrapeCacheEntry>();
 let creditsExhaustedUntil = 0;
 
 function isCreditsExhausted() {
@@ -51,10 +44,7 @@ function markCreditsExhausted() {
   creditsExhaustedUntil = Date.now() + CREDITS_PAUSE_MS;
 }
 
-// Scrapes a single URL into clean markdown using Firecrawl, reusing a recent
-// cached copy instead of re-fetching. Exported so a caller that needs a hard
-// refresh (an explicit "reload docs" command, say) can bypass the cache.
-async function scrapeUrl(url: any, { skipCache = false }: any = {}) {
+async function scrapeUrl(url: string, { skipCache = false }: { skipCache?: boolean } = {}) {
   const cached = scrapeCache.get(url);
   if (!skipCache && cached && Date.now() - cached.fetchedAt < SCRAPE_CACHE_TTL_MS) {
     return cached.markdown;
@@ -80,10 +70,8 @@ async function scrapeUrl(url: any, { skipCache = false }: any = {}) {
       log.info("firecrawl", `scraped ${url} (${markdown.length} chars)`);
       return markdown;
     }
-  } catch (e: any) {
-    noteFailure({ exhaustedNote: "credits exhausted — pausing live web requests for 1 hour", failedNote: `scrape failed for ${url}`, err: e });
-    // A rate limit or a hiccup shouldn't drop the page from the corpus when a
-    // perfectly good copy — just not brand new — is sitting right here.
+  } catch (error: unknown) {
+    noteFailure({ exhaustedNote: "credits exhausted — pausing live web requests for 1 hour", failedNote: `scrape failed for ${url}`, err: error });
     if (cached) {
       log.debug("firecrawl", `serving stale cached copy for ${url} after a scrape failure`);
       return cached.markdown;
@@ -96,8 +84,7 @@ function clearScrapeCache() {
   scrapeCache.clear();
 }
 
-// Searches the web or specific domains via Firecrawl search endpoint and returns markdown snippets.
-async function searchWeb(query: any, limit: any = 3) {
+async function searchWeb(query: string, limit = 3): Promise<FirecrawlSearchResult[] | null> {
   if (isCreditsExhausted()) return null;
   const apiKey = getApiKey();
   if (!apiKey) return null;
@@ -111,14 +98,14 @@ async function searchWeb(query: any, limit: any = 3) {
 
     if (res.data?.success && Array.isArray(res.data?.data)) {
       log.info("firecrawl", `search "${query}" returned ${res.data.data.length} results`);
-      return res.data.data.map((item: any) => ({
+      return res.data.data.map((item: FirecrawlSearchItem) => ({
         url: item.url,
         title: item.title,
         markdown: item.markdown || item.description || "",
       }));
     }
-  } catch (e: any) {
-    noteFailure({ exhaustedNote: "credits exhausted — pausing web search for 1 hour", failedNote: `search failed for "${query}"`, err: e });
+  } catch (error: unknown) {
+    noteFailure({ exhaustedNote: "credits exhausted — pausing web search for 1 hour", failedNote: `search failed for "${query}"`, err: error });
   }
   return null;
 }

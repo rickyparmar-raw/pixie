@@ -4,23 +4,18 @@ const dns = require("dns").promises;
 const net = require("net");
 const knowledge = require("./knowledge");
 const log = require("./log");
+import type { IncomingMessage, RequestOptions } from "http";
 
 const MAX_REDIRECTS = 3;
 const FETCH_TIMEOUT_MS = 8000;
-const MAX_CONTENT_LENGTH = 2 * 1024 * 1024; // 2MB
-const MAX_TEXT_BUDGET = 6000; // 6000 chars
+const MAX_CONTENT_LENGTH = 2 * 1024 * 1024;
+const MAX_TEXT_BUDGET = 6000;
 
-// Identifies as a bot so hosts that gate on UA see an honest one, and asks for
-// text-first so a page that negotiates doesn't hand back a binary.
 const FETCH_USER_AGENT = "PixieBot/1.0";
 const FETCH_ACCEPT = "text/html,application/xhtml+xml,text/plain,application/json;q=0.9";
 
-// Redirects are followed, not trusted: each hop is re-validated, so a public
-// shortlink that lands on 169.254.169.254 still stops at the boundary.
 const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 
-// One blocked shape for every guard below, so new checks can't invent a second
-// one callers forget to handle.
 function blocked() {
   return {
     blocked: true,
@@ -28,60 +23,55 @@ function blocked() {
   };
 }
 
-// Unwraps Slack formatted links <url|label> or <url> and extracts the first http(s) URL.
-function extractUrl(text: any) {
+function extractUrl(text: string) {
   if (!text) return null;
   const unwrapped = text.replace(/<(https?:\/\/[^|>]+)(?:\|[^>]+)?>/g, "$1");
   const match = unwrapped.match(/https?:\/\/[^\s>]+/i);
   if (!match) return null;
   let urlStr = match[0];
-  // Strip trailing punctuation if present
   urlStr = urlStr.replace(/[.,;:!?)]+$/, "");
   return urlStr;
 }
 
-function isPrivateOrLoopbackIp(ip: any) {
+function isPrivateOrLoopbackIp(ip: string) {
   if (!ip) return false;
 
-  // Handle IPv4-mapped IPv6 addresses like ::ffff:127.0.0.1
   if (ip.startsWith("::ffff:")) {
     ip = ip.slice(7);
   }
 
-  // IPv4 check
   if (ip.includes(".")) {
     const parts = ip.split(".").map(Number);
-    if (parts.length !== 4 || parts.some((p: any) => isNaN(p) || p < 0 || p > 255)) {
-      return true; // Malformed IPv4 -> treat as blocked
+    if (parts.length !== 4 || parts.some((p) => isNaN(p) || p < 0 || p > 255)) {
+      return true;
     }
     const [a, b] = parts;
-    if (a === 127) return true; // 127.0.0.0/8
-    if (a === 10) return true; // 10.0.0.0/8
-    if (a === 172 && b >= 16 && b <= 31) return true; // 172.16.0.0/12
-    if (a === 192 && b === 168) return true; // 192.168.0.0/16
-    if (a === 169 && b === 254) return true; // 169.254.0.0/16
-    if (a === 0) return true; // 0.0.0.0/8
+    if (a === 127) return true;
+    if (a === 10) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 0) return true;
     return false;
   }
 
-  // IPv6 check
   const lower = ip.toLowerCase();
   if (lower === "::1" || lower === "0:0:0:0:0:0:0:1") return true;
-  if (lower.startsWith("fc") || lower.startsWith("fd")) return true; // fc00::/7
+  if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
   if (
     lower.startsWith("fe8") ||
     lower.startsWith("fe9") ||
     lower.startsWith("fea") ||
     lower.startsWith("feb")
   ) {
-    return true; // fe80::/10
+    return true;
   }
 
   return false;
 }
 
-async function resolveAndValidateHost(urlStr: any) {
-  let parsed: any;
+async function resolveAndValidateHost(urlStr: string) {
+  let parsed: URL;
   try {
     parsed = new URL(urlStr);
   } catch {
@@ -97,7 +87,6 @@ async function resolveAndValidateHost(urlStr: any) {
     return { isBlocked: true, reason: "localhost blocked" };
   }
 
-  // Check if hostname is raw IP
   if (net.isIP(hostname) !== 0) {
     if (isPrivateOrLoopbackIp(hostname)) {
       return { isBlocked: true, reason: "private IP blocked" };
@@ -105,7 +94,6 @@ async function resolveAndValidateHost(urlStr: any) {
     return { isBlocked: false, parsed, validatedIp: hostname };
   }
 
-  // Resolve DNS to check all IPs behind hostname
   try {
     const records = await dns.lookup(hostname, { all: true });
     if (!records || records.length === 0) {
@@ -117,19 +105,19 @@ async function resolveAndValidateHost(urlStr: any) {
       }
     }
     return { isBlocked: false, parsed, validatedIp: records[0].address };
-  } catch (e: any) {
-    return { isBlocked: true, reason: `DNS lookup failed: ${e.message}` };
+  } catch (error: unknown) {
+    return { isBlocked: true, reason: `DNS lookup failed: ${error instanceof Error ? error.message : String(error)}` };
   }
 }
 
-async function isBlockedHost(urlStr: any) {
+async function isBlockedHost(urlStr: string) {
   const result = await resolveAndValidateHost(urlStr);
   return result.isBlocked;
 }
 
-function requestOptions(parsed: any, validatedIp: any) {
+function requestOptions(parsed: URL, validatedIp: string): RequestOptions {
   const isHttps = parsed.protocol === "https:";
-  const options: any = {
+  const options: RequestOptions = {
     hostname: validatedIp,
     port: parsed.port ? parseInt(parsed.port, 10) : isHttps ? 443 : 80,
     path: parsed.pathname + parsed.search,
@@ -140,18 +128,18 @@ function requestOptions(parsed: any, validatedIp: any) {
       Accept: FETCH_ACCEPT,
     },
   };
-  if (isHttps) options.servername = parsed.hostname;
+  if (isHttps) (options as RequestOptions & { servername: string }).servername = parsed.hostname;
   return options;
 }
 
-function requestResolved(parsed: any, validatedIp: any) {
-  return new Promise<any>((resolve: any, reject: any) => {
+function requestResolved(parsed: URL, validatedIp: string) {
+  return new Promise<IncomingMessage>((resolve, reject) => {
     const transport = parsed.protocol === "https:" ? https : http;
-    const req = transport.request(requestOptions(parsed, validatedIp), (res: any) => {
+    const req = transport.request(requestOptions(parsed, validatedIp), (res: IncomingMessage) => {
       resolve(res);
     });
 
-    req.on("error", (err: any) => reject(err));
+    req.on("error", reject);
     req.setTimeout(FETCH_TIMEOUT_MS, () => {
       req.destroy(new Error("Request timeout"));
     });
@@ -159,7 +147,7 @@ function requestResolved(parsed: any, validatedIp: any) {
   });
 }
 
-async function fetchUrlContent(urlStr: any) {
+async function fetchUrlContent(urlStr: string) {
   let currentUrl = urlStr;
   let redirectCount = 0;
 
@@ -168,11 +156,13 @@ async function fetchUrlContent(urlStr: any) {
     if (hostValidation.isBlocked) return blocked();
 
     const { parsed, validatedIp } = hostValidation;
+    if (!parsed || !validatedIp) return blocked();
 
     try {
       const res = await requestResolved(parsed, validatedIp);
 
-      if (REDIRECT_STATUSES.has(res.statusCode)) {
+      const statusCode = res.statusCode ?? 0;
+      if (REDIRECT_STATUSES.has(statusCode)) {
         const location = res.headers["location"];
         if (!location) {
           return { error: true, message: "Redirect missing Location header" };
@@ -182,8 +172,8 @@ async function fetchUrlContent(urlStr: any) {
         continue;
       }
 
-      if (res.statusCode < 200 || res.statusCode >= 300) {
-        return { error: true, message: `HTTP ${res.statusCode}` };
+      if (statusCode < 200 || statusCode >= 300) {
+        return { error: true, message: `HTTP ${statusCode}` };
       }
 
       const contentType = res.headers["content-type"] || "";
@@ -199,7 +189,7 @@ async function fetchUrlContent(urlStr: any) {
         return { error: true, message: "Content exceeds 2MB limit" };
       }
 
-      const chunks: any[] = [];
+      const chunks: Buffer[] = [];
       let totalLength = 0;
 
       for await (const chunk of res) {
@@ -207,7 +197,7 @@ async function fetchUrlContent(urlStr: any) {
         if (totalLength > MAX_CONTENT_LENGTH) {
           return { error: true, message: "Content exceeds 2MB limit" };
         }
-        chunks.push(chunk);
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
       }
 
       const rawText = Buffer.concat(chunks).toString("utf-8");
@@ -218,9 +208,10 @@ async function fetchUrlContent(urlStr: any) {
       }
 
       return { url: currentUrl, text };
-    } catch (e: any) {
-      log.debug("link", `fetch failed for ${currentUrl}: ${e.message}`);
-      return { error: true, message: e.message };
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      log.debug("link", `fetch failed for ${currentUrl}: ${message}`);
+      return { error: true, message };
     }
   }
 

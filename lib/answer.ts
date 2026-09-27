@@ -1,17 +1,50 @@
-// Grounded-answer step: one LLM call that either answers strictly from the
-// knowledge corpus or declines. Transport (and retry policy) lives in llm.js.
 const { config } = require("./config");
 const programs = require("./programs");
 const llm = require("./llm");
 const brand = require("./brand");
+import type { Program } from "./types";
 declare const log: { debug(scope: string, message: string): void };
 
+type ProgramLike = Partial<Program> & { id?: string; name?: string };
+type ProgramRef = ProgramLike | string | null | undefined;
+interface AnswerTier {
+  baseUrl: string;
+  apiKey: string | (() => string);
+  model: string;
+  fallback: AnswerTier | null;
+  onRateLimited?: (...args: unknown[]) => void;
+}
+interface AnswerRequest {
+  baseUrl: string;
+  apiKey: string | (() => string);
+  model: string;
+  fallback: AnswerTier | null;
+  onRateLimited?: (...args: unknown[]) => void;
+  maxTokens: number;
+  thinking: { type: string };
+  messages: Array<{ role: string; content: string }>;
+  telemetry: { operation: string; programId: string | null; channel: string | null };
+}
+interface ParsedAnswer {
+  source: string | null;
+  answer: string;
+}
+interface ParsedAnswerOrChat extends ParsedAnswer {
+  unclear?: boolean;
+}
+interface AnswerOptions {
+  isPing?: boolean;
+  inHelpChannel?: boolean;
+  onText?: ((text: string) => void) | null;
+  program?: ProgramRef;
+  channel?: string | null;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 const NONE_MARKER = "NONE";
-// "the docs don't cover this" and "I can't tell what this person is even asking
-// about" are different failures with different right answers. NONE still gets a
-// friendly conversational reply; this one gets no reply at all — see
-// lib/respond.js. It's a marker rather than prose because prose has to be
-// written into a Slack message before anyone can decide it was worthless.
 const UNCLEAR_MARKER = "UNCLEAR";
 const MAX_TOKENS = 600;
 const DEBUG_MAX_TOKENS = 700;
@@ -25,26 +58,27 @@ const UNCLOSED_EMOJI = /:3c(?!:)/g;
 const MD_BOLD = /\*\*([^*\n]+)\*\*/g;
 const MD_UNDERSCORE_BOLD = /__([^_\n]+)__/g;
 
-function stripChannelMentions(text: any) {
+function stripChannelMentions(text: string) {
   if (!text) return "";
   return text
     .replace(/<#[A-Z0-9]+(?:\|[^>]+)?>/gi, "")
-    .replace(/#[-a-zA-Z0-9_]+/gi, (m: any) => (/^#+$/.test(m) ? m : ""))
+    .replace(/#[-a-zA-Z0-9_]+/gi, (m: string) => (/^#+$/.test(m) ? m : ""))
     .replace(/\s{2,}/g, " ")
     .trim();
 }
 
-function linkifyHelpChannel(text: any, program: any = null) {
-  if (process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || program?.requireGroundedAnswer) {
+function linkifyHelpChannel(text: string, program: ProgramRef = null) {
+  const resolved = resolveProgram(program);
+  if (process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || resolved?.requireGroundedAnswer) {
     return stripChannelMentions(text);
   }
-  const id = (program && program.helpChannel) ? program.helpChannel : config.slack.helpChannel;
+  const id = resolved?.helpChannel || config.slack.helpChannel;
   const pattern = /<?#pixl-help>?/gi;
   if (!id) return text;
   return text.replace(pattern, `<#${id}>`);
 }
 
-function normalizeEmoji(text: any, program: any = null) {
+function normalizeEmoji(text: string, program: ProgramRef = null) {
   const normalized = (text || "")
     .replace(UNCLOSED_EMOJI, ":3c:")
     .replace(MD_BOLD, "*$1*")
@@ -56,72 +90,55 @@ function normalizeEmoji(text: any, program: any = null) {
 const CODE_BLOCK = /```[\s\S]*?```|`[^`\n]{12,}`/;
 const STACK_TRACE = /\b(?:Traceback \(most recent call last\)|at [\w$.]+\s*\(.*:\d+:\d+\)|[\w.]+Error:|[\w.]+Exception:|SyntaxError|ReferenceError|TypeError|NullPointerException|panic:|segmentation fault)/i;
 
-function looksLikeCode(text: any) {
+function looksLikeCode(text: string) {
   return CODE_BLOCK.test(text || "") || STACK_TRACE.test(text || "");
 }
 
-function isExplicitIdeasRequest(text: any) {
+function isExplicitIdeasRequest(text: string) {
   return /\b(?:give|share|suggest|brainstorm|list|any)\b[^?.!\n]{0,50}\b(?:ideas?|project ideas?|things to build|examples?)\b/i.test(String(text || ""));
 }
 
-// Callers pass whatever they have — a program object, a bare id string, or
-// nothing. They used to be printed straight into the prompt, so a channel could
-// be told it belonged to "the pixl program" (the lowercase database id) or "the
-// ysws-global program". One place resolves it now, and everything downstream
-// works with a real program record or null.
-function resolveProgram(program: any) {
+function resolveProgram(program: ProgramRef): ProgramLike | null {
   if (!program) return null;
   if (typeof program === "object") return program;
   try {
-    return programs.get(program);
-  } catch (e: any) {
+    return programs.get(program) as ProgramLike;
+  } catch (_error: unknown) {
     return null;
   }
 }
 
-function programName(program: any) {
+function programName(program: ProgramRef) {
   return resolveProgram(program)?.name || "Pixl";
 }
 
-// Concrete policy lines a program pins into its own prompt as reinforcement —
-// a specific number a small model kept getting wrong. Only the program that
-// actually holds that policy gets them: every other program (B2B, hosted
-// programs, an unclaimed channel) gets an empty list and answers strictly from
-// its own corpus, so Pixl's 30% AI cap or referral expiry can't surface in a
-// channel it doesn't belong to.
-function pinnedRules(program: any) {
+function pinnedRules(program: ProgramRef): string[] {
   const p = resolveProgram(program);
   return Array.isArray(p?.pinnedRules) ? p.pinnedRules : [];
 }
 
-function helpChannelRef(program: any) {
+function helpChannelRef(program: ProgramRef) {
   const id = resolveProgram(program)?.helpChannel || config.slack.helpChannel;
   return id ? `<#${id}>` : "#pixl-help";
 }
 
-function otherProgramNames(current: any) {
+function otherProgramNames(current: ProgramLike | null) {
   try {
     return programs
       .all()
-      .filter((p: any) => p.id !== "ysws-global" && (!current || p.id !== current.id))
-      .map((p: any) => p.name)
+      .filter((p: ProgramLike) => p.id !== "ysws-global" && (!current || p.id !== current.id))
+      .map((p: ProgramLike) => p.name)
       .filter(Boolean);
-  } catch (e: any) {
+  } catch (_error: unknown) {
     return [];
   }
 }
 
-// One deployment sits in every YSWS channel at once, which means "the deadline"
-// is a different date depending on where it was typed. Nothing in the prompt
-// used to say where pixie was — she inferred the program from whichever docs
-// happened to be retrieved, and got it wrong whenever the shared docs matched
-// first. This is a few lines of prompt and it is the difference between an
-// answer and the wrong program's answer.
-function whereYouAre(program: any = null, channel: any = null) {
+function whereYouAre(program: ProgramRef = null, channel: string | null = null) {
   const p = resolveProgram(program);
   const here = channel ? `<#${channel}>` : "a Slack channel";
   const named = p && p.id !== "ysws-global";
-  const lines: any[] = [];
+  const lines: string[] = [];
 
   const requireGrounded = process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || p?.requireGroundedAnswer;
 
@@ -131,10 +148,6 @@ function whereYouAre(program: any = null, channel: any = null) {
     lines.push(
       `Unless somebody names a different program, every question here is about ${p.name}. "the deadline", "the docs", "when does it launch", "how do i submit", "is it out yet" all mean ${p.name}'s.`,
     );
-    // This channel is one program's. Don't volunteer other programs, and never
-    // "correct" someone to a different program because a word sounded like its
-    // name ("hardware" is not a person asking about Hardwire). Only treat it as
-    // another program's question when they actually write that program's name.
     lines.push(
       `This is a ${p.name} channel only. Do not mention, suggest, or redirect to any other Hack Club program or YSWS unless the person explicitly writes that other program's name themselves. A word that merely sounds like another program's name is still a ${p.name} question.`,
     );
@@ -155,7 +168,7 @@ function whereYouAre(program: any = null, channel: any = null) {
   return lines.join("\n");
 }
 
-function programGuardrail(program: any = null, inHelpChannel: any = false) {
+function programGuardrail(program: ProgramRef = null, inHelpChannel = false) {
   const p = resolveProgram(program);
   const name = programName(program);
   const helpChan = helpChannelRef(program);
@@ -182,22 +195,18 @@ function programGuardrail(program: any = null, inHelpChannel: any = false) {
   ].join("\n");
 }
 
-function pixlGuardrail(inHelpChannel: any = false) {
+function pixlGuardrail(inHelpChannel = false) {
   return programGuardrail("Pixl", inHelpChannel);
 }
 
 const PIXL_GUARDRAIL = programGuardrail(null, false);
 
-function timelineAuthorityRule(marker: any, alwaysLabel: any = "covered", program: any = null) {
+function timelineAuthorityRule(marker: string, alwaysLabel = "covered", program: ProgramRef = null) {
   const progDesc = `${programName(program)} program itself`;
 
   return `- If a "Program timeline" section is present, it is the authority ONLY on questions asking specifically whether the ${progDesc} has launched, released, gone live, or about its dates/deadlines — "is it out yet", "when does it drop", "has it launched", "is it released", "how long until launch". Those are ALWAYS ${alwaysLabel} — never answer ${marker} to one, and never contradict it, no matter how it's worded. This does NOT extend to "how do i start/begin doing X" questions about a task, tool, or project (e.g. "how do i start building a PCB") — that "start" means beginning an activity, not asking whether the program has launched. The bare word "start" or "begin" alone must never trigger this rule on its own.`;
 }
 
-// Prices move when someone restocks and the hours behind them come off a
-// stepped payout table, so lib/shop.js works both out in code and answers
-// before this prompt is ever built. What reaches the model is the browsing
-// case, where every number it needs is already printed next to the item.
 function shopAuthorityRule() {
   return (
     '- If a shop section is present it is the only source of reward thresholds, and the hours printed beside an item are the only hours you may give. ' +
@@ -211,7 +220,7 @@ const VOICE = [
   `You can sprinkle in these custom Slack emoji where they genuinely fit — use 0-2 per reply, never force one in: ${CASUAL_EMOJI}`,
 ];
 
-function systemPrompt(corpus: any, additionalContext: any = "", program: any = null, channel: any = null) {
+function systemPrompt(corpus: string, additionalContext = "", program: ProgramRef = null, channel: string | null = null) {
   const p = resolveProgram(program);
   const requireGrounded = process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || p?.requireGroundedAnswer;
   const helpChan = helpChannelRef(program);
@@ -261,7 +270,7 @@ function systemPrompt(corpus: any, additionalContext: any = "", program: any = n
   return parts.join("\n");
 }
 
-function stripLeadingSafety(text: any) {
+function stripLeadingSafety(text: string) {
   if (!text) return "";
   let clean = text.trim();
   while (true) {
@@ -275,7 +284,7 @@ function stripLeadingSafety(text: any) {
   return clean;
 }
 
-function sanitizeAnswer(text: any) {
+function sanitizeAnswer(text: string) {
   if (!text) return "";
   let clean = stripLeadingSafety(text);
 
@@ -302,19 +311,11 @@ function sanitizeAnswer(text: any) {
 
   clean = clean.replace(/\n\s*Proceed\.?\s*$/i, "").trim();
 
-  // Public-output boundary: small models sometimes echo the format
-  // instructions or deliberate out loud ("my short, casual answer…", "we need
-  // to determine whether the docs cover this…") instead of answering. Any
-  // such text must fail closed here — never streamed, never posted.
   if (looksLikeInstructionEcho(clean)) return "";
 
   return clean;
 }
 
-// Fragments of this module's own instruction vocabulary plus task-deliberation
-// phrasing. Derived from the prompts above, not from any single incident: any
-// model that repeats our format language or narrates its coverage decision is
-// malfunctioning, whatever the exact words.
 const INSTRUCTION_ECHO_STRONG = [
   "in your voice",
   "1-3 sentences",
@@ -349,10 +350,10 @@ const INSTRUCTION_ECHO_WEAK = [
   "answer in your voice",
 ];
 
-function looksLikeInstructionEcho(text: any) {
+function looksLikeInstructionEcho(text: string) {
   const lowered = String(text || "").toLowerCase();
   if (!lowered) return false;
-  if (INSTRUCTION_ECHO_STRONG.some((f: any) => lowered.includes(f))) return true;
+  if (INSTRUCTION_ECHO_STRONG.some((f: string) => lowered.includes(f))) return true;
   let weak = 0;
   for (const f of INSTRUCTION_ECHO_WEAK) {
     if (lowered.includes(f) && ++weak >= 2) return true;
@@ -360,8 +361,8 @@ function looksLikeInstructionEcho(text: any) {
   return false;
 }
 
-function parseReply(raw: any, program: any = null) {
-  const text = stripLeadingSafety(raw || "").trim();
+function parseReply(raw: unknown, program: ProgramRef = null): ParsedAnswer | null {
+  const text = stripLeadingSafety(typeof raw === "string" ? raw : String(raw || "")).trim();
   if (!text || text === NONE_MARKER) return null;
 
   const sourceMatch = text.match(/^\s*(?:\*\*)?SOURCE:(?:\*\*)?\s*(.+)$/im);
@@ -378,8 +379,6 @@ function parseReply(raw: any, program: any = null) {
     .replace(/^(?:your\s+|my\s+)?(?:short,?\s*casual\s+answer|answer\s+in\s+your\s+voice)(?:,?\s*1-3\s+sentences)?[:\s-]*/i, "")
     .trim();
 
-  // Instruction echo fails closed: a model that repeats the format language
-  // instead of answering produces no public output, and the caller escalates.
   if (looksLikeInstructionEcho(rawAnswer)) return null;
 
   const cleaned = sanitizeAnswer(rawAnswer);
@@ -391,7 +390,7 @@ function parseReply(raw: any, program: any = null) {
   };
 }
 
-function answerOrChatPrompt(corpus: any, additionalContext: any = "", inHelpChannel: any = false, program: any = null, channel: any = null) {
+function answerOrChatPrompt(corpus: string, additionalContext = "", inHelpChannel = false, program: ProgramRef = null, channel: string | null = null) {
   const p = resolveProgram(program);
   const name = programName(program);
   const helpChan = helpChannelRef(program);
@@ -502,34 +501,29 @@ function answerOrChatPrompt(corpus: any, additionalContext: any = "", inHelpChan
 const DANGLING_END_WORDS = /\b(?:and|or|but|the|a|an|to|for|with|in|on|at|by|of|from|that|which|who|after|before|because|if|when|as|while|so|than|you|your|their|its|our|my|his|her|this|these|those|is|are|was|were|be|been|have|has|had|will|would|should|could|can|cannot|do|does|did)\s*$/i;
 const DANGLING_CONTRACTION = /\b(?:i|you|we|they|he|she|it|that|there|what|who)(?:'ll|'re|'ve|'d|'m|n't)\s*$/i;
 
-function looksTruncated(text: any) {
+function looksTruncated(text: string) {
   if (!text) return false;
   let trimmed = text.trim();
   if (!trimmed) return false;
 
-  // Unclosed code block: odd number of ```
   const codeBlocks = (trimmed.match(/```/g) || []).length;
   if (codeBlocks % 2 !== 0) return true;
 
-  // Unclosed inline backtick: odd number of `
   const backticks = (trimmed.match(/`/g) || []).length;
   if (backticks % 2 !== 0) return true;
 
-  // Strip trailing Slack emoji (:yay:) or unicode emoji before checking trailing punctuation
   const withoutEmoji = trimmed.replace(/(:[a-z0-9_+-]+:|\p{Emoji_Presentation})\s*$/u, "").trim();
 
-  // Ends on punctuation that expects a continuation: comma, colon, semicolon, dash, slash, open paren/bracket
   if (/[,:;\-–—/(\[{]\s*$/.test(withoutEmoji)) return true;
 
-  // Ends on dangling preposition, conjunction, pronoun, auxiliary verb
   if (DANGLING_END_WORDS.test(trimmed)) return true;
   if (DANGLING_CONTRACTION.test(trimmed)) return true;
 
   return false;
 }
 
-function parseAnswerOrChat(raw: any, program: any = null) {
-  const text = stripLeadingSafety(raw || "").trim();
+function parseAnswerOrChat(raw: unknown, program: ProgramRef = null): ParsedAnswerOrChat | null {
+  const text = stripLeadingSafety(typeof raw === "string" ? raw : String(raw || "")).trim();
   if (!text) return null;
 
   const parsed = parseReply(text, program);
@@ -540,18 +534,12 @@ function parseAnswerOrChat(raw: any, program: any = null) {
       .trim();
     const sanitized = sanitizeAnswer(cleanedText);
     if (!sanitized || looksLikeInstructionEcho(sanitized)) return null;
-    // No SOURCE line: the model did not cite anything, so this is not a
-    // grounded answer — even for a program with a single source. Attributing
-    // it would let chat-shaped replies pass as documented fact (and be posted
-    // ambiently in a main channel).
     return { source: null, answer: normalizeEmoji(sanitized, program) };
   }
 
   const source = parsed.source;
   const covered = source && source.trim().toUpperCase() !== NONE_MARKER;
 
-  // Matched whole, not by prefix: "unclear on that one, but the deadline is the
-  // 18th" is a real answer that happens to start with the same word.
   if (parsed.answer.trim().toUpperCase() === UNCLEAR_MARKER) {
     return { source: null, answer: "", unclear: true };
   }
@@ -559,36 +547,30 @@ function parseAnswerOrChat(raw: any, program: any = null) {
   return { source: covered ? source : null, answer: parsed.answer };
 }
 
-// The single source a program's unlabeled answer must have come from —
-// Jame Gam's "Jame Gam Complete Docs", a single-FAQ hosted bot's inline FAQ.
-// Callers hand over a bare id, a thin { id } (which resolveProgram returns
-// as-is, sources unseen), or a full record, so a thin reference is resolved
-// through the registry. Anything but exactly one named source is ambiguous
-// and stays null.
-function ownedSourceName(program: any) {
+function ownedSourceName(program: ProgramRef) {
   let record = resolveProgram(program);
   if (record && !Array.isArray(record.sources)) {
     const id = typeof program === "string" ? program : record.id;
     if (id) {
       try {
         record = programs.get(id) || record;
-      } catch (e: any) {
+      } catch (_error: unknown) {
         record = record;
       }
     }
   }
-  const sources = Array.isArray(record?.sources) ? record.sources.filter((s: any) => s && s.name) : [];
+  const sources = Array.isArray(record?.sources) ? record.sources.filter((s): s is { name: string } => Boolean(s && typeof s === "object" && "name" in s && s.name)) : [];
   return sources.length === 1 ? sources[0].name : null;
 }
 
-function selectAnswerTier({ isPing = false, inHelpChannel = false }: any = {}) {
+function selectAnswerTier({ isPing = false, inHelpChannel = false }: AnswerOptions = {}): AnswerTier {
   if (isPing && !inHelpChannel) {
-    return config.pingAnswer || config.answer;
+    return (config.pingAnswer || config.answer) as AnswerTier;
   }
-  return config.helpAnswer || config.answer;
+  return (config.helpAnswer || config.answer) as AnswerTier;
 }
 
-function answerRequest(question: any, corpus: any, additionalContext: any, inHelpChannel: any = false, program: any = null, channel: any = null, { isPing = false }: any = {}) {
+function answerRequest(question: string, corpus: string, additionalContext: string, inHelpChannel = false, program: ProgramRef = null, channel: string | null = null, { isPing = false }: AnswerOptions = {}): AnswerRequest {
   const tier = selectAnswerTier({ isPing, inHelpChannel });
   const fallbackWithHeadroom = tier.fallback
     ? { ...tier.fallback, maxTokens: FALLBACK_MAX_TOKENS }
@@ -610,7 +592,7 @@ function answerRequest(question: any, corpus: any, additionalContext: any, inHel
   };
 }
 
-async function getAnswerOrChat(question: any, corpus: any, additionalContext: any = "", inHelpChannel: any = false, program: any = null, channel: any = null, { isPing = false }: any = {}) {
+async function getAnswerOrChat(question: string, corpus: string, additionalContext = "", inHelpChannel = false, program: ProgramRef = null, channel: string | null = null, { isPing = false }: AnswerOptions = {}) {
   if (!corpus || !corpus.trim()) return null;
 
   const req = answerRequest(question, corpus, additionalContext, inHelpChannel, program, channel, { isPing });
@@ -620,19 +602,19 @@ async function getAnswerOrChat(question: any, corpus: any, additionalContext: an
   return retryIfTruncated(parsed, req, program);
 }
 
-async function getAnswerOrChatStream(question: any, corpus: any, additionalContext: any = "", { onText, inHelpChannel = false, program = null, channel = null, isPing = false }: any = {}) {
+async function getAnswerOrChatStream(question: string, corpus: string, additionalContext = "", { onText, inHelpChannel = false, program = null, channel = null, isPing = false }: AnswerOptions = {}) {
   if (!corpus || !corpus.trim()) return null;
 
   let sent = "";
   let leakedPlaceholder = false;
-  const emit = (_delta: any, text: any) => {
+  const emit = (_delta: string, text: string) => {
     const marker = text.match(/ANSWER:\s*/i);
     if (!marker) {
       if (/^SOURCE:\s*/i.test(text)) return undefined;
       return undefined;
     }
 
-    let answer = text.slice(marker.index + marker[0].length);
+    let answer = text.slice((marker.index ?? 0) + marker[0].length);
     answer = stripLeadingSafety(answer);
 
     if (leakedPlaceholder || /^<(?:a\s+|the\s+|exact\s+|think|thinking|thought|scratchpad)/i.test(answer.trimStart())) {
@@ -658,10 +640,6 @@ async function getAnswerOrChatStream(question: any, corpus: any, additionalConte
     if (looksLikeInstructionEcho(answer)) return undefined;
 
     answer = normalizeEmoji(answer, program).trimEnd();
-    // Hold anything that could still turn out to be the "can't tell" marker.
-    // Without this the word streams into the placeholder a moment before
-    // parsing decides the reply should never have been written at all. Costs a
-    // single chunk of latency on a real answer starting with the same letters.
     const upper = answer.toUpperCase();
     if (upper && UNCLEAR_MARKER.startsWith(upper)) return undefined;
     if (answer && answer !== sent) {
@@ -682,13 +660,7 @@ async function getAnswerOrChatStream(question: any, corpus: any, additionalConte
   return retryIfTruncated(parsed, req, program, { onText });
 }
 
-// WHY: one retry policy, not two pasted blocks. A truncated answer means the
-// model ran out of tokens mid-sentence; the standby tier gets 900 tokens of
-// headroom for exactly one more attempt. Still truncated after that means the
-// question genuinely needs more than any reply budget allows, so null (the
-// caller escalates) beats posting half a sentence. Streaming callers pass
-// onText so the replacement answer still reaches the placeholder.
-async function retryIfTruncated(parsed: any, req: any, program: any, { onText = null }: any = {}) {
+async function retryIfTruncated(parsed: ParsedAnswerOrChat | null, req: AnswerRequest, program: ProgramRef, { onText = null }: Pick<AnswerOptions, "onText"> = {}) {
   if (!parsed?.answer || !looksTruncated(parsed.answer)) return parsed;
   const fallbackTier = req.fallback || answerFallbackWithHeadroom;
   if (fallbackTier) {
@@ -699,8 +671,8 @@ async function retryIfTruncated(parsed: any, req: any, program: any, { onText = 
         if (onText) onText(retryParsed.answer);
         return retryParsed;
       }
-    } catch (e: any) {
-      log.debug("answer", `fallback retry failed: ${e.message}`);
+    } catch (error: unknown) {
+      log.debug("answer", `fallback retry failed: ${errorMessage(error)}`);
     }
   }
   if (parsed?.answer && looksTruncated(parsed.answer)) {
@@ -709,7 +681,7 @@ async function retryIfTruncated(parsed: any, req: any, program: any, { onText = 
   return parsed;
 }
 
-async function getGroundedAnswer(question: any, corpus: any, additionalContext: any = "", program: any = null, channel: any = null, { isPing = false, inHelpChannel = false }: any = {}) {
+async function getGroundedAnswer(question: string, corpus: string, additionalContext = "", program: ProgramRef = null, channel: string | null = null, { isPing = false, inHelpChannel = false }: AnswerOptions = {}) {
   if (!corpus || !corpus.trim()) return null;
 
   const tier = selectAnswerTier({ isPing, inHelpChannel });

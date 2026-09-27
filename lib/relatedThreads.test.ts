@@ -60,21 +60,18 @@ test("findRelatedThread finds past thread and ignores current active thread", as
     threadTs: "1788100100.111111",
   });
 
-  // Simple query should return null
   const simple = await relatedThreads.findRelatedThread("where is the shop", {
     currentThreadTs: "1788200000.222222",
     channel: "C0B6STY9G5N",
   });
   assert.equal(simple, null);
 
-  // Current thread should be excluded
   const selfMatch = await relatedThreads.findRelatedThread("godot web export error", {
     currentThreadTs: "1788100100.111111",
     channel: "C0B6STY9G5N",
   });
   assert.equal(selfMatch, null);
 
-  // Nuanced query matching past thread should return thread details
   const match = await relatedThreads.findRelatedThread("how do i fix godot web export wasm error on chrome", {
     currentThreadTs: "1788200000.222222",
     channel: "C0B6STY9G5N",
@@ -89,9 +86,6 @@ test("findRelatedThread finds past thread and ignores current active thread", as
   assert.ok(line.includes("view previous thread"));
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
-// Related threads: fail-closed on thin queries, strict permalinks, empty
-// formatting on no-match.
 
 test("char: thin token queries never match", async () => {
   assert.equal(await relatedThreads.findRelatedThread("", { currentThreadTs: "x" }), null);

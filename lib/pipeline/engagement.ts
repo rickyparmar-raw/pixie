@@ -1,20 +1,11 @@
-// Conversational engagement: "should Pixie engage with this, and what kind of
-// interaction is it?" One service, one result shape. It never sees
-// documentation and never decides whether Pixie can answer — retrieval and
-// grounding own that.
-//
-// Classifier: Jev (lib/jevDecision.js). When Jev is switched off
-// (JEV_ENABLED unset) the older model classifier in lib/intent.js fills the
-// same role so a deployment without Jev still has a working gate. The two
-// never run for the same message.
-//
-// Result: { engage: bool, intent: string|null, error: string|null, source: "jev"|"intent"|"heuristic" }
 const jevDecision = require("../jevDecision");
 const intent = require("../intent");
 const log = require("../log");
+interface RecentMessage { text?: string; speaker?: string; userId?: string | null }
+interface EngagementContext { message: string; program: unknown; userId?: string | null; channel?: string | null; addressed?: boolean; threadMessages?: unknown[]; recentMessages?: RecentMessage[] }
+interface JEVResult { action?: string; errorKind?: string; intent?: string; decision?: { intent?: string } }
 
-// Addressed smalltalk/identity needs no model call.
-function isIdentityOrSmalltalk(text: any) {
+function isIdentityOrSmalltalk(text: string) {
   const t = String(text || "")
     .replace(/^<@[^>]+>\s*/, "")
     .trim()
@@ -31,13 +22,13 @@ function isIdentityOrSmalltalk(text: any) {
   return false;
 }
 
-function postureFor(role: any) {
+function postureFor(role: string) {
   if (role === "help") return "help";
   if (role === "dm") return "dm";
   return "main";
 }
 
-function fromJev(res: any) {
+function fromJev(res: JEVResult | null) {
   if (!res) return { engage: false, intent: null, error: "unknown", source: "jev" };
   if (res.action === "error" || res.errorKind) {
     return { engage: false, intent: null, error: res.errorKind || "unknown", source: "jev" };
@@ -46,7 +37,7 @@ function fromJev(res: any) {
   return { engage: res.action === "engage", intent: intentName, error: null, source: "jev" };
 }
 
-async function fromLegacyIntent({ message, program, userId, channel, addressed, threadMessages, recentMessages }: any) {
+async function fromLegacyIntent({ message, program, userId, channel, addressed, threadMessages, recentMessages }: EngagementContext) {
   const result = await intent
     .classifyIntentContext(message, program, { userId, channel, addressed, threadMessages, recentMessages })
     .catch(() => null);
@@ -57,29 +48,26 @@ async function fromLegacyIntent({ message, program, userId, channel, addressed, 
   return { engage: false, intent: addressed ? "addressed_smalltalk" : "human_conversation", error: null, source: "intent" };
 }
 
-// Jev reads context as one plain-text block. Recent channel messages come
-// first (oldest to newest), then the thread transcript; the sender's own lines
-// are marked so a continuation of their earlier message reads as one.
 const RECENT_LINE_CHARS = 200;
 
-function formatRecent(recentMessages: any, userId: any) {
+function formatRecent(recentMessages: RecentMessage[] = [], userId: string | null | undefined) {
   return (recentMessages || [])
-    .filter((m: any) => m && m.text)
-    .map((m: any) => {
+    .filter((m) => m && m.text)
+    .map((m) => {
       const who = m.speaker === "pixie" ? "pixie" : userId && m.userId === userId ? "same sender" : "other member";
       return `${who}: ${String(m.text).replace(/\s+/g, " ").slice(0, RECENT_LINE_CHARS)}`;
     })
     .join("\n");
 }
 
-function conversationContextFor({ threadContext, recentMessages, userId }: any) {
+function conversationContextFor({ threadContext, recentMessages, userId }: { threadContext?: string; recentMessages?: RecentMessage[]; userId?: string | null }) {
   const recent = formatRecent(recentMessages, userId);
   return [recent && `Recent channel messages:\n${recent}`, threadContext && `Thread:\n${threadContext}`]
     .filter(Boolean)
     .join("\n\n");
 }
 
-async function classify({ message, threadContext = "", program, role, addressed = false, userId = null, channel = null, threadMessages = [], recentMessages = [] }: any) {
+async function classify({ message, threadContext = "", program, role, addressed = false, userId = null, channel = null, threadMessages = [], recentMessages = [] }: EngagementContext & { threadContext?: string; role: string }) {
   if (addressed && isIdentityOrSmalltalk(message)) {
     return { engage: true, intent: "addressed_smalltalk", error: null, source: "heuristic" };
   }
@@ -93,8 +81,8 @@ async function classify({ message, threadContext = "", program, role, addressed 
         addressed,
       });
       if (res && res.action !== "existing") return fromJev(res);
-    } catch (e: any) {
-      log.debug("engagement", `jev threw: ${e.name}`);
+    } catch (error: unknown) {
+      log.debug("engagement", `jev threw: ${error instanceof Error ? error.name : "Error"}`);
       return { engage: false, intent: null, error: "unknown", source: "jev" };
     }
   }

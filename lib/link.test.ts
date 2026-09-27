@@ -32,7 +32,6 @@ test("isPrivateOrLoopbackIp detects loopback and private IPv4 and IPv6 addresses
   assert.equal(link.isPrivateOrLoopbackIp("fd00::1234"), true);
   assert.equal(link.isPrivateOrLoopbackIp("fe80::1"), true);
 
-  // Public IPs
   assert.equal(link.isPrivateOrLoopbackIp("8.8.8.8"), false);
   assert.equal(link.isPrivateOrLoopbackIp("1.1.1.1"), false);
   assert.equal(link.isPrivateOrLoopbackIp("93.184.216.34"), false);
@@ -61,9 +60,6 @@ test("fetchUrlContent returns blocked response for local or internal hosts", asy
   assert.match(result.reason, /pixie can only open public URLs/);
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
-// Link unfurl/safety: extraction trims punctuation, non-http is blocked,
-// metadata-cloud IP is blocked.
 
 test("char: extractUrl strips trailing punctuation and handles empties", () => {
   assert.equal(link.extractUrl("see https://example.com/page."), "https://example.com/page");

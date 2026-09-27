@@ -1,28 +1,29 @@
-// Grounding is deliberately conservative: the model may identify evidence,
-// but only retrieved records (or explicitly supplied fixtures) can support a
-// claim in the answer pipeline.
 
 const VERDICTS = new Set(["supported", "unsupported", "needs_review"]);
+type JsonRecord = Record<string, unknown>;
+interface GroundingClaim { claim: string; supported: boolean; evidenceIds: string[] }
+interface ParsedVerdict { ok: boolean; verdict: string; claims: GroundingClaim[]; errors: string[] }
+interface EvidenceRecord extends JsonRecord { id?: unknown; programId?: unknown; program_id?: unknown; supportsClaims?: unknown; supportedClaims?: unknown }
+interface ValidateOptions { verdict?: unknown; evidence?: EvidenceRecord[]; programId?: string; fixtureClaims?: unknown[]; parse?: (raw: unknown) => ParsedVerdict }
 
-function fail(errors: any) {
+function fail(errors: string[]): ParsedVerdict {
   return { ok: false, verdict: "unsupported", claims: [], errors };
 }
 
-function asString(value: any) {
+function asString(value: unknown) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function decodeJson(text: any) {
+function decodeJson(text: unknown): JsonRecord | null {
   const input = asString(text);
   if (!input) return null;
 
-  const candidates: any[] = [];
+  const candidates: string[] = [];
   const fenced = /```(?:json|javascript|js)?\s*([\s\S]*?)```/gi;
-  let match: any;
+  let match: RegExpExecArray | null;
   while ((match = fenced.exec(input))) candidates.push(match[1].trim());
   candidates.push(input);
 
-  // Also handle a short explanation before/after an unfenced JSON object.
   for (let start = 0; start < input.length; start += 1) {
     if (input[start] !== "{" && input[start] !== "[") continue;
     let depth = 0;
@@ -52,77 +53,78 @@ function decodeJson(text: any) {
     try {
       const value = JSON.parse(candidate);
       if (value && typeof value === "object" && !Array.isArray(value)) return value;
-    } catch (_: any) {
-      // Try the next fenced or balanced candidate; parsing is fail closed.
+    } catch (_error: unknown) {
     }
   }
   return null;
 }
 
-function parseGroundingVerdict(raw: any) {
+function parseGroundingVerdict(raw: unknown): ParsedVerdict {
   const value = typeof raw === "string" ? decodeJson(raw) : raw;
   if (!value || typeof value !== "object" || Array.isArray(value)) return fail(["verdict must be a JSON object"]);
-  if (!VERDICTS.has(value.verdict)) return fail(["verdict must be supported, unsupported, or needs_review"]);
-  if (!Array.isArray(value.claims) || value.claims.length === 0) return fail(["claims must be a non-empty array"]);
+  const record = value as JsonRecord;
+  if (typeof record.verdict !== "string" || !VERDICTS.has(record.verdict)) return fail(["verdict must be supported, unsupported, or needs_review"]);
+  if (!Array.isArray(record.claims) || record.claims.length === 0) return fail(["claims must be a non-empty array"]);
 
-  const claims: any[] = [];
-  for (const [index, item] of value.claims.entries()) {
+  const claims: GroundingClaim[] = [];
+  for (const [index, item] of record.claims.entries()) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return fail([`claims[${index}] must be an object`]);
-    const claim = asString(item.claim);
+    const claimRecord = item as JsonRecord;
+    const claim = asString(claimRecord.claim);
     if (!claim) return fail([`claims[${index}].claim must be a non-empty string`]);
-    if (typeof item.supported !== "boolean") return fail([`claims[${index}].supported must be boolean`]);
-    if (!Array.isArray(item.evidenceIds) || item.evidenceIds.some((id: any) => !asString(id))) {
+    if (typeof claimRecord.supported !== "boolean") return fail([`claims[${index}].supported must be boolean`]);
+    if (!Array.isArray(claimRecord.evidenceIds) || claimRecord.evidenceIds.some((id) => !asString(id))) {
       return fail([`claims[${index}].evidenceIds must be an array of strings`]);
     }
-    if (item.supported && item.evidenceIds.length === 0) return fail([`claims[${index}] supported claims need evidenceIds`]);
+    if (claimRecord.supported && claimRecord.evidenceIds.length === 0) return fail([`claims[${index}] supported claims need evidenceIds`]);
     claims.push({
       claim,
-      supported: item.supported,
-      evidenceIds: item.evidenceIds.map(asString),
+      supported: claimRecord.supported,
+      evidenceIds: claimRecord.evidenceIds.map((id) => asString(id)),
     });
   }
-  return { ok: true, verdict: value.verdict, claims };
+  return { ok: true, verdict: record.verdict, claims, errors: [] };
 }
 
-function claimKey(value: any) {
+function claimKey(value: unknown) {
   return asString(value).replace(/\s+/g, " ").toLowerCase();
 }
 
-function evidenceProgramId(evidence: any) {
+function evidenceProgramId(evidence: EvidenceRecord | undefined) {
   return asString(evidence && (evidence.programId || evidence.program_id));
 }
 
-function validateClaimSupport({ verdict, evidence = [], programId, fixtureClaims = [], parse = parseGroundingVerdict }: any = {}) {
+function validateClaimSupport({ verdict, evidence = [], programId, fixtureClaims = [], parse = parseGroundingVerdict }: ValidateOptions = {}) {
   if (typeof parse !== "function") return { ok: false, supported: false, claims: [], errors: ["parse must be a function"] };
-  const parsed = verdict && verdict.ok === true ? verdict : parse(verdict);
+  const parsed: ParsedVerdict = verdict && typeof verdict === "object" && "ok" in verdict && verdict.ok === true
+    ? verdict as ParsedVerdict
+    : parse(verdict);
   if (!parsed.ok) return { ok: false, supported: false, claims: [], errors: parsed.errors };
   if (!asString(programId)) return { ok: false, supported: false, claims: [], errors: ["programId is required"] };
   if (!Array.isArray(evidence) || !Array.isArray(fixtureClaims)) return { ok: false, supported: false, claims: [], errors: ["evidence and fixtureClaims must be arrays"] };
 
-  const byId = new Map(evidence.map((item: any) => [asString(item && item.id), item]));
+  const byId = new Map(evidence.map((item) => [asString(item && item.id), item]));
   const fixtures = new Set(fixtureClaims.map(claimKey));
-  const results = parsed.claims.map((claim: any) => {
+  const results = parsed.claims.map((claim) => {
     const explicitFixture = fixtures.has(claimKey(claim.claim));
-    const validEvidence = claim.evidenceIds.every((id: any) => {
+    const validEvidence = claim.evidenceIds.every((id) => {
       const item = byId.get(id);
       if (!item || evidenceProgramId(item) !== programId) return false;
       const supportedClaims = item.supportsClaims || item.supportedClaims || [];
-      return Array.isArray(supportedClaims) && supportedClaims.some((supported: any) => claimKey(supported) === claimKey(claim.claim));
+      return Array.isArray(supportedClaims) && supportedClaims.some((supported) => claimKey(supported) === claimKey(claim.claim));
     });
     const supported = claim.supported && (explicitFixture || (claim.evidenceIds.length > 0 && validEvidence));
     return { claim: claim.claim, supported, reason: supported ? "explicit evidence" : "no exact same-program support" };
   });
-  const supported = results.length > 0 && results.every((claim: any) => claim.supported);
+  const supported = results.length > 0 && results.every((claim) => claim.supported);
   return { ok: true, supported, verdict: supported ? "supported" : "unsupported", claims: results, errors: [] };
 }
 
-// The model/client is intentionally outside this module. Callers inject a
-// parser (or a test double) and pass its raw result to validate().
-function createGroundingValidator({ parse = parseGroundingVerdict }: any = {}) {
+function createGroundingValidator({ parse = parseGroundingVerdict }: { parse?: (raw: unknown) => ParsedVerdict } = {}) {
   if (typeof parse !== "function") throw new TypeError("parse must be a function");
   return {
     parse,
-    validate(input: any = {}) {
+    validate(input: ValidateOptions = {}) {
       return validateClaimSupport({ ...input, parse });
     },
   };

@@ -13,31 +13,21 @@ const lookup = require("./lookup");
 const context = require("./context");
 const { config } = require("./config");
 
+type SlackElement = { action_id?: string; text?: string };
+type SlackBlock = { type?: string; text?: { text?: string }; elements?: SlackElement[] };
+type SlackPost = { text?: string; blocks?: SlackBlock[]; isUpdate?: boolean; username?: string; [key: string]: unknown };
+type StreamOptions = { onText?: (text: string) => void };
+type AnswerOptions = StreamOptions & { inHelpChannel?: boolean };
+type RichClient = { posts: SlackPost[]; chat: { postMessage: (payload: SlackPost) => Promise<{ ts: string }>; update: (payload: SlackPost) => Promise<Record<string, unknown>> } };
+
 db.open(":memory:");
 
-// respond() drives the model. Without this it makes a real call to the model API
-// per assertion, which made the test slow, network-dependent, and non-hermetic —
-// it timed out at node:test's 5s default whenever the API was having a slow
-// minute, and a timed-out test also swallows the *next* file's tests under Bun's
-// node:test shim ("test() inside another test() is not yet implemented").
-// Returning null is the "docs didn't cover it" answer, which is the branch every
-// assertion below is about.
 answer.getGroundedAnswer = async () => null;
 answer.getAnswerOrChat = async () => null;
-// respond() also runs guide detection first, which falls back to a model call
-// when its keyword pass misses. NONE keeps these tests on the answer path.
-//
-// llm is a shared, cached module — every test file `require("./llm")`s the
-// same exports object. Stubbing at require time (module top level) poisons it
-// during Bun's collection phase, before any file's tests have run at all, so
-// before()/after() bracket the stub around this file's own execution window
-// instead — anything outside that window sees the real llm.complete.
-let realComplete: any;
-let savedFaq: any;
+let realComplete: typeof llm.complete;
+let savedFaq: string[];
 before(() => {
-  // Test channels without their own program config are claimed as main
-  // (FAQ) channels: respond() ignores channels nobody claimed.
-  savedFaq = config.slack.faqChannels;
+  savedFaq = config.slack.faqChannels || [];
   config.slack.faqChannels = [...(savedFaq || []), "C1", "C-where", "C-latest", "C-followup", "C-ctx", "C-scope", "C-scoped", "C-charhand", "C0OTHER", "C-help"];
   realComplete = llm.complete;
   llm.complete = async () => ({ text: "NONE", finishReason: "stop" });
@@ -47,9 +37,6 @@ after(() => {
   config.slack.faqChannels = savedFaq;
 });
 
-/* -------------------------------------------------- isClarifyingQuestion -- */
-// Suppresses the reply that started this: an unaddressed message getting
-// "sorry, what about ridit? could you clarify what you mean?" back.
 
 test("isClarifyingQuestion catches a short question handed back to the user", () => {
   assert.equal(respond.isClarifyingQuestion("sorry, what about ridit? could you clarify what you mean?"), true);
@@ -62,8 +49,6 @@ test("isClarifyingQuestion ignores replies that are not questions", () => {
   assert.equal(respond.isClarifyingQuestion(undefined), false);
 });
 
-// A real answer may still end in a question. Only the short ones — the ones
-// that are nothing but the question — count as handing the work back.
 test("isClarifyingQuestion ignores a real answer that ends in a question", () => {
   assert.equal(
     respond.isClarifyingQuestion(
@@ -89,21 +74,14 @@ test("gap recording is gated on engagement: chatter records nothing, an engaged 
     },
   };
 
-  // The question asked of this test isn't "does this gap appear in the ranked
-  // list" (which has its own asker-count floor now) — it's "did the bot
-  // record the miss at all". Look directly at doc_gaps to avoid coupling the
-  // recording test to ranking changes.
   const initialGaps = db.handle().query("SELECT COUNT(*) AS c FROM doc_gaps").get().c;
 
-  // Ambient chatter never reaches retrieval, so there is no miss to record.
-  // An engaged question whose answer comes back ungrounded IS the miss.
   const originalIntent = intent.classifyIntent;
-  intent.classifyIntent = async (message: any) => (/sprite wont load/.test(message) ? intent.HELP_NEEDED : intent.CASUAL_CHAT);
+  intent.classifyIntent = async (message: string) => (/sprite wont load/.test(message) ? intent.HELP_NEEDED : intent.CASUAL_CHAT);
   const restoreAnswers = stubAnswers(async () => ({ source: null, answer: "hmm not sure on that one" }));
   const restoreCache = stubNoCache();
 
   try {
-    // "thanks guys" is small talk -> should NOT record gap
     await respond.respond({
       client: mockClient,
       channel: "C-help",
@@ -116,7 +94,6 @@ test("gap recording is gated on engagement: chatter records nothing, an engaged 
     assert.equal(db.handle().query("SELECT COUNT(*) AS c FROM doc_gaps").get().c, initialGaps);
     assert.equal(escalateAdded, false);
 
-    // Engaged but ungrounded in ambient -> SHOULD record gap (and stay silent)
     const replied = await respond.respond({
       client: mockClient,
       channel: "C-help",
@@ -129,7 +106,7 @@ test("gap recording is gated on engagement: chatter records nothing, an engaged 
     assert.equal(replied, false);
     const after = db.handle().query("SELECT question FROM doc_gaps").all();
     assert.equal(after.length, initialGaps + 1);
-    assert.ok(after.some((g: any) => g.question === "my sprite wont load at all, what should i do?"));
+    assert.ok(after.some((g: { question: string }) => g.question === "my sprite wont load at all, what should i do?"));
   } finally {
     intent.classifyIntent = originalIntent;
     restoreAnswers();
@@ -141,8 +118,8 @@ test("respond refuses blocked local URLs with a friendly explanation", async () 
   let postedText = "";
   const mockClient = {
     chat: {
-      postMessage: async ({ text }: any) => {
-        postedText = text;
+      postMessage: async ({ text }: { text?: string }) => {
+        postedText = text || "";
         return { ts: "msg-blocked" };
       },
     },
@@ -161,19 +138,18 @@ test("respond refuses blocked local URLs with a friendly explanation", async () 
   assert.match(postedText, /localhost on your machine isn't reachable from the bot/);
 });
 
-/* ------------------------------------------------------ streaming + cache -- */
 
-function fakeClient(): any {
-  const calls: { posts: any[]; updates: any[]; deletes: number } = { posts: [], updates: [], deletes: 0 };
+function fakeClient() {
+  const calls: { posts: string[]; updates: string[]; deletes: number } = { posts: [], updates: [], deletes: 0 };
   return {
     calls,
     chat: {
-      postMessage: async ({ text }: any) => {
-        calls.posts.push(text);
+      postMessage: async ({ text }: { text?: string }) => {
+        calls.posts.push(text || "");
         return { ts: `msg-${calls.posts.length}` };
       },
-      update: async ({ text }: any) => {
-        calls.updates.push(text);
+      update: async ({ text }: { text?: string }) => {
+        calls.updates.push(text || "");
         return {};
       },
       delete: async () => {
@@ -185,10 +161,9 @@ function fakeClient(): any {
   };
 }
 
-// Drives respond() with a stubbed streaming answer, restoring the stub after.
-async function withStreamedAnswer(chunks: any, fn: any) {
+async function withStreamedAnswer(chunks: string[], fn: () => Promise<unknown>) {
   const original = answer.getAnswerOrChatStream;
-  answer.getAnswerOrChatStream = async (_q: any, _corpus: any, _ctx: any, { onText }: any = {}) => {
+  answer.getAnswerOrChatStream = async (_q: string, _corpus: string, _ctx: string, { onText }: StreamOptions = {}) => {
     let seen = "";
     for (const chunk of chunks) {
       seen += chunk;
@@ -203,25 +178,18 @@ async function withStreamedAnswer(chunks: any, fn: any) {
   }
 }
 
-// The pipeline only streams an addressed general request — every program-kind
-// path (ambient, addressed program, help) calls the NON-streaming
-// getAnswerOrChat. Stub both so a test pins the answer whichever path the
-// pipeline picks, and restore both afterwards. impl receives the normalized
-// streaming-style args (question, corpus, contextPrompt, opts).
-function stubAnswers(impl: any) {
+function stubAnswers(impl: (...args: never[]) => unknown) {
   const origPlain = answer.getAnswerOrChat;
   const origStream = answer.getAnswerOrChatStream;
-  answer.getAnswerOrChat = async (q: any, corpus: any, ctx: any, inHelp: any, prog: any, channel: any, opts: any = {}) =>
-    impl(q, corpus, ctx, { onText: null, inHelpChannel: inHelp, program: prog, channel, ...(opts || {}) });
-  answer.getAnswerOrChatStream = async (q: any, corpus: any, ctx: any, opts: any = {}) => impl(q, corpus, ctx, opts);
+  answer.getAnswerOrChat = async (q: string, corpus: string, ctx: string, inHelp: boolean, prog: unknown, channel: string, opts: Record<string, unknown> = {}) =>
+    (impl as (...args: unknown[]) => unknown)(q, corpus, ctx, { onText: null, inHelpChannel: inHelp, program: prog, channel, ...(opts || {}) });
+  answer.getAnswerOrChatStream = async (q: string, corpus: string, ctx: string, opts: StreamOptions = {}) => (impl as (...args: unknown[]) => unknown)(q, corpus, ctx, opts);
   return () => {
     answer.getAnswerOrChat = origPlain;
     answer.getAnswerOrChatStream = origStream;
   };
 }
 
-// Pin the fast path shut for tests about ungrounded/unclear behavior: a stale
-// grounded entry cached by an earlier test must not answer for the stub.
 function stubNoCache() {
   const orig = lookup.knownAnswer;
   lookup.knownAnswer = () => null;
@@ -230,18 +198,13 @@ function stubNoCache() {
   };
 }
 
-// Only an addressed general request streams: program-kind answers are posted
-// whole, after the grounding guards have run, so there is never a moment
-// where an unverified claim is visible on screen.
 test("respond streams the answer into the placeholder instead of waiting for all of it", async () => {
   const client = fakeClient();
   const originalIntent = intent.classifyIntent;
-  // CASUAL_CHAT + addressed -> addressed_smalltalk -> general kind, the one
-  // path that still streams.
   intent.classifyIntent = async () => intent.CASUAL_CHAT;
 
   const original = answer.getAnswerOrChatStream;
-  answer.getAnswerOrChatStream = async (_q: any, _corpus: any, _ctx: any, { onText }: any = {}) => {
+  answer.getAnswerOrChatStream = async (_q: string, _corpus: string, _ctx: string, { onText }: StreamOptions = {}) => {
     let seen = "";
     for (const chunk of ["Cream butter", "Cream butter and sugar, add chips, bake at 180C"]) {
       seen = chunk;
@@ -261,7 +224,6 @@ test("respond streams the answer into the placeholder instead of waiting for all
     });
 
     assert.equal(replied, true);
-    // One placeholder posted, then edited in place — never a second message.
     assert.equal(client.calls.posts.length, 1);
     assert.equal(client.calls.posts[0], "_thinking..._");
     assert.ok(client.calls.updates.length >= 1, "expected at least one streamed update");
@@ -272,9 +234,6 @@ test("respond streams the answer into the placeholder instead of waiting for all
   }
 });
 
-// The bug this whole path existed to fix: respond() used to add the question to
-// the thread transcript *before* reading it back, so contextPrompt was never
-// empty and the cache could never be written or read on any threaded path.
 test("a fresh question is cacheable, and the repeat costs no model call", async () => {
   const client = fakeClient();
   const question = "how do i export a sprite";
@@ -295,13 +254,10 @@ test("a fresh question is cacheable, and the repeat costs no model call", async 
       mode: respond.ALWAYS,
     });
     assert.equal(modelCalls, 1);
-    // Cache reads are tenant-scoped: the same program hits, another program
-    // must not borrow the answer even for identical wording.
     const progId = require("./programs").forChannel("C1").id;
     assert.notEqual(cache.get(question, progId), null, "the answer should have been cached");
     assert.equal(cache.get(question, "__other_program__"), null, "another program must miss");
 
-    // Same question, different thread, different person, reworded.
     await respond.respond({
       client,
       channel: "C1",
@@ -316,22 +272,16 @@ test("a fresh question is cacheable, and the repeat costs no model call", async 
   }
 });
 
-/* ------------------------------------------------- help-channel awareness -- */
 
-// respond() knows the channel it's posting to — it must tell the model
-// whether that channel IS #pixl-help, so an ungrounded miss doesn't tell
-// someone already reading #pixl-help to go ask in #pixl-help.
 test("respond tells the model when the channel it's replying in is the help channel", async () => {
   const savedHelpChannel = config.slack.helpChannel;
   config.slack.helpChannel = "C0HELP";
 
-  const seen: any[] = [];
+  const seen: boolean[] = [];
   const originalIntent = intent.classifyIntent;
   intent.classifyIntent = async () => intent.HELP_NEEDED;
-  // Program-kind answers take the non-streaming path, which receives the
-  // help-channel flag as a positional arg.
-  const restoreAnswers = stubAnswers(async (_q: any, _c: any, _ctx: any, opts: any = {}) => {
-    seen.push(opts.inHelpChannel);
+  const restoreAnswers = stubAnswers(async (_q: unknown, _c: unknown, _ctx: unknown, opts: AnswerOptions = {}) => {
+    seen.push(opts.inHelpChannel === true);
     return { source: "Pixl Docs", answer: "here is the launch status" };
   });
 
@@ -361,8 +311,6 @@ test("respond tells the model when the channel it's replying in is the help chan
   assert.deepEqual(seen, [true, false]);
 });
 
-// A genuine follow-up depends on what was said above, so it must NOT be served
-// a cached answer shaped by someone else's conversation.
 test("a follow-up in a live thread still bypasses the cache", async () => {
   const client = fakeClient();
   let modelCalls = 0;
@@ -372,7 +320,7 @@ test("a follow-up in a live thread still bypasses the cache", async () => {
   });
 
   try {
-    const ask = (question: any) =>
+    const ask = (question: string) =>
       respond.respond({ client, channel: "C1", threadTs: "t-followup", userId: "U-f", question, mode: respond.ALWAYS });
 
     await ask("why is my tileset blurry");
@@ -383,22 +331,15 @@ test("a follow-up in a live thread still bypasses the cache", async () => {
   }
 });
 
-// The intent gate now runs alongside the answer instead of in front of it, so
-// the answer can be mid-stream when the verdict lands. Nothing may have reached
-// Slack: the old serial path never started the answer at all, and posting then
-// deleting a placeholder is worse noise than the delay it hides.
 test("a message the gate rejects never reaches Slack, even mid-stream", async () => {
   const client = fakeClient();
   const originalAnswer = answer.getAnswerOrChat;
   const originalStream = answer.getAnswerOrChatStream;
   const originalIntent = intent.classifyIntent;
 
-  // Answer streams first, verdict lands after — the race the old code never ran.
-  // Ambient program answers are never streamed, so even a streaming-shaped
-  // answer must not reach Slack when the gate rejects the message.
-  answer.getAnswerOrChatStream = async (_q: any, _c: any, _ctx: any, { onText }: any = {}) => {
+  answer.getAnswerOrChatStream = async (_q: string, _c: string, _ctx: string, { onText }: StreamOptions = {}) => {
     if (onText) onText("well actually, the thing about rust is");
-    await new Promise((r: any) => setTimeout(r, 5));
+    await new Promise<void>((resolve) => setTimeout(resolve, 5));
     return { source: null, answer: "well actually, the thing about rust is" };
   };
   answer.getAnswerOrChat = async () => ({ source: null, answer: "well actually, the thing about rust is" });
@@ -456,9 +397,7 @@ test("a message the gate accepts is answered normally", async () => {
   const client = fakeClient();
   const originalIntent = intent.classifyIntent;
 
-  // Ambient program answers post whole, with no placeholder and no streamed
-  // edits — streaming would show text before the grounding guards run.
-  const restoreAnswers = stubAnswers(async (_q: any, _c: any, _ctx: any, { onText }: any = {}) => {
+  const restoreAnswers = stubAnswers(async (_q: unknown, _c: unknown, _ctx: unknown, { onText }: StreamOptions = {}) => {
     if (onText) onText("check your canvas size");
     return { source: "Pixl Docs", answer: "check your canvas size" };
   });
@@ -484,17 +423,12 @@ test("a message the gate accepts is answered normally", async () => {
   }
 });
 
-// classifyIntent returns null when the call itself fails — every provider
-// rate-limited at once, not a real "nobody's asking" verdict. That used to fall
-// back to a regex over the message. There is no regex any more, and guessing is
-// exactly what this change exists to stop, so a verdict pixie could not get is
-// a verdict pixie does not act on.
 test("a gate that errors stays quiet rather than guessing", async () => {
   const client = fakeClient();
   const originalAnswer = answer.getAnswerOrChatStream;
   const originalIntent = intent.classifyIntent;
 
-  answer.getAnswerOrChatStream = async (_q: any, _c: any, _ctx: any, { onText }: any = {}) => {
+  answer.getAnswerOrChatStream = async (_q: string, _c: string, _ctx: string, { onText }: StreamOptions = {}) => {
     if (onText) onText("check your canvas size");
     return { source: "Pixl Docs", answer: "check your canvas size" };
   };
@@ -518,10 +452,6 @@ test("a gate that errors stays quiet rather than guessing", async () => {
   }
 });
 
-// Being addressed is not a verdict the gate gets to overturn — ALWAYS never
-// calls it at all, so an outage in the classifier cannot silence a DM or a
-// direct ping. A classifier error on an addressed message is treated as a
-// program question: grounded answer or transparent uncertainty.
 test("a gate outage cannot silence someone who addressed pixie directly", async () => {
   const client = fakeClient();
   const originalIntent = intent.classifyIntent;
@@ -549,20 +479,17 @@ test("a gate outage cannot silence someone who addressed pixie directly", async 
   }
 });
 
-// The gate is given the person's own recent messages, not just the message it
-// is judging — that is the whole point of the change. Without them "still
-// nothing" is unreadable.
 test("the gate is handed the asker and channel so it can read their recent messages", async () => {
   const client = fakeClient();
   const originalAnswer = answer.getAnswerOrChatStream;
   const originalIntent = intent.classifyIntent;
 
-  let seen: any = null;
-  answer.getAnswerOrChatStream = async (_q: any, _c: any, _ctx: any, { onText }: any = {}) => {
+  let seen: { userId?: string; channel?: string } | null = null;
+  answer.getAnswerOrChatStream = async (_q: string, _c: string, _ctx: string, { onText }: StreamOptions = {}) => {
     if (onText) onText("check the log");
     return { source: "Pixl Docs", answer: "check the log" };
   };
-  intent.classifyIntent = async (_msg: any, _prog: any, opts: any) => {
+  intent.classifyIntent = async (_msg: string, _prog: unknown, opts: { userId?: string; channel?: string }) => {
     seen = opts;
     return intent.HELP_NEEDED;
   };
@@ -581,13 +508,14 @@ test("the gate is handed the asker and channel so it can read their recent messa
     intent.classifyIntent = originalIntent;
   }
 
-  assert.equal(seen?.userId, "U-ctx");
-  assert.equal(seen?.channel, "C-ctx");
+  const gateSeen = seen as { userId?: string; channel?: string } | null;
+  assert.equal(gateSeen?.userId, "U-ctx");
+  assert.equal(gateSeen?.channel, "C-ctx");
 });
 
 test("respond passes the latest question into context selection", async () => {
   let seen = "";
-  const restoreAnswers = stubAnswers(async (_q: any, _c: any, contextPrompt: any) => {
+  const restoreAnswers = stubAnswers(async (_q: unknown, _c: unknown, contextPrompt: string) => {
     seen = contextPrompt;
     return { source: "Pixl Docs", answer: "got it" };
   });
@@ -607,12 +535,12 @@ test("respond passes the latest question into context selection", async () => {
 test("HELP_ONLY consumes structured intent and preserves Pixie follow-up context", async () => {
   const client = fakeClient();
   const originalContextIntent = intent.classifyIntentContext;
-  let seen: any = null;
-  const restoreAnswers = stubAnswers(async (_q: any, _c: any, contextPrompt: any) => {
+  let seen = "";
+  const restoreAnswers = stubAnswers(async (_q: unknown, _c: unknown, contextPrompt: string) => {
     seen = contextPrompt;
     return { source: "Pixl Docs", answer: "yes, it should be public" };
   });
-  intent.classifyIntentContext = async (_message: any, _program: any, options: any) => ({
+  intent.classifyIntentContext = async (_message: string, _program: unknown, options: { threadMessages?: unknown[] }) => ({
     verdict: intent.HELP_NEEDED,
     addressedToPixie: false,
     directedAtPixie: false,
@@ -641,16 +569,13 @@ test("HELP_ONLY consumes structured intent and preserves Pixie follow-up context
   }
 });
 
-// A program scoped to its own questions gets a third verdict. It is not a gap
-// in the docs — nothing was missing, the question just wasn't pixie's to take —
-// so it is counted apart from the ordinary "nobody was asking" silence.
 test("an OFF_TOPIC verdict stays quiet and is not filed as a docs gap", async () => {
   const client = fakeClient();
   const originalAnswer = answer.getAnswerOrChatStream;
   const originalIntent = intent.classifyIntent;
   const before = db.topGaps(50).length;
 
-  answer.getAnswerOrChatStream = async (_q: any, _c: any, _ctx: any, { onText }: any = {}) => {
+  answer.getAnswerOrChatStream = async (_q: string, _c: string, _ctx: string, { onText }: StreamOptions = {}) => {
     if (onText) onText("flexbox has a few ways to do that");
     return { source: null, answer: "flexbox has a few ways to do that" };
   };
@@ -675,19 +600,17 @@ test("an OFF_TOPIC verdict stays quiet and is not filed as a docs gap", async ()
   }
 });
 
-// The whole point of the escape hatch: scope decides what pixie volunteers,
-// never what she refuses when asked.
 test("addressed is passed to the gate so a direct ask escapes the scope", async () => {
   const client = fakeClient();
   const originalAnswer = answer.getAnswerOrChatStream;
   const originalIntent = intent.classifyIntent;
 
-  let seen: any = null;
-  answer.getAnswerOrChatStream = async (_q: any, _c: any, _ctx: any, { onText }: any = {}) => {
+  let seen: Record<string, unknown> | null = null;
+  answer.getAnswerOrChatStream = async (_q: string, _c: string, _ctx: string, { onText }: StreamOptions = {}) => {
     if (onText) onText("use flexbox");
     return { source: "Pixl Docs", answer: "use flexbox" };
   };
-  intent.classifyIntent = async (_msg: any, _prog: any, opts: any) => {
+  intent.classifyIntent = async (_msg: string, _prog: unknown, opts: Record<string, unknown>) => {
     seen = opts;
     return intent.HELP_NEEDED;
   };
@@ -707,22 +630,16 @@ test("addressed is passed to the gate so a direct ask escapes the scope", async 
     intent.classifyIntent = originalIntent;
   }
 
-  assert.equal(seen?.addressed, true);
+  const addressedSeen = seen as Record<string, unknown> | null;
+  assert.equal(addressedSeen?.addressed, true);
 });
 
-// The program record and the channel both have to reach the answer call, or the
-// prompt can't say where it is. Passing the bare id was the old bug: the model
-// was told it served "the pixl program", lowercase, because that is the
-// database key rather than the name.
 test("the answer call is handed the program record and the channel it is in", async () => {
   const client = fakeClient();
   const originalIntent = intent.classifyIntent;
 
-  // The non-streaming answer call takes (question, corpus, context, inHelp,
-  // program, channel): the model must be told where it is, and the program
-  // as a record (with a display name), never a bare id string.
-  let seen: any = null;
-  const restoreAnswers = stubAnswers(async (_q: any, _c: any, _ctx: any, opts: any = {}) => {
+  let seen: (AnswerOptions & { channel?: string; program?: { name?: string } }) | null = null;
+  const restoreAnswers = stubAnswers(async (_q: unknown, _c: unknown, _ctx: unknown, opts: AnswerOptions & { channel?: string; program?: { name?: string } } = {}) => {
     seen = opts;
     return { source: "Pixl Docs", answer: "check the docs" };
   });
@@ -742,17 +659,13 @@ test("the answer call is handed the program record and the channel it is in", as
     intent.classifyIntent = originalIntent;
   }
 
-  assert.equal(seen?.channel, "C-where");
-  assert.equal(typeof seen?.program, "object", "a program record, not an id string");
-  assert.ok(seen?.program?.name, "with a display name the prompt can use");
+  const answerSeen = seen as (AnswerOptions & { channel?: string; program?: { name?: string } }) | null;
+  assert.equal(answerSeen?.channel, "C-where");
+  assert.equal(typeof answerSeen?.program, "object", "a program record, not an id string");
+  assert.ok(answerSeen?.program?.name, "with a display name the prompt can use");
 });
 
-/* ------------------------------------------------------ the instant path -- */
 
-// A known answer used to cost two Slack round trips — placeholder, then edit —
-// because the cache was only consulted inside answerOrChat, after the
-// "_thinking..._" message had already gone out. ~800ms to say something pixie
-// worked out in about a millisecond.
 test("a known answer is one Slack call, with no placeholder", async () => {
   const client = fakeClient();
   let modelCalls = 0;
@@ -762,7 +675,7 @@ test("a known answer is one Slack call, with no placeholder", async () => {
   });
 
   try {
-    const ask = (threadTs: any, question: any) =>
+    const ask = (threadTs: string, question: string) =>
       respond.respond({ client, channel: "C1", threadTs, userId: `U-${threadTs}`, question, mode: respond.ALWAYS });
 
     await ask("t-instant-a", "who can join pixl");
@@ -779,16 +692,12 @@ test("a known answer is one Slack call, with no placeholder", async () => {
   }
 });
 
-// Being fast is not a reason to speak when nobody asked — a cached answer has
-// to clear the same gate a fresh one would.
 test("the instant path still respects the gate", async () => {
   const client = fakeClient();
   const originalIntent = intent.classifyIntent;
   intent.classifyIntent = async () => intent.CASUAL_CHAT;
 
   try {
-    // Seeded under this channel's own program: the instant path is
-    // tenant-scoped, so the seed must be too.
     const progId = require("./programs").forChannel("C1").id;
     cache.put("how do i export a tileset", { source: "Pixl Docs", answer: "export at native size" }, progId);
 
@@ -808,9 +717,6 @@ test("the instant path still respects the gate", async () => {
   }
 });
 
-// A pasted link has to be read before pixie says anything about it. The page
-// content joins the prompt after the cache probe, so answering from cache here
-// would reply to the question and ignore the link entirely.
 test("a message with a link never takes the instant path", async () => {
   const client = fakeClient();
   let modelCalls = 0;
@@ -819,8 +725,6 @@ test("a message with a link never takes the instant path", async () => {
     return { source: "Pixl Docs", answer: "looks fine" };
   });
 
-  // Stubbed so the suite stays hermetic — this test is about which path
-  // respond() takes, not about fetching a real page.
   const originalFetch = link.fetchUrlContent;
   link.fetchUrlContent = async () => ({ text: "a page", blocked: false });
 
@@ -841,14 +745,6 @@ test("a message with a link never takes the instant path", async () => {
   }
 });
 
-/* --------------------------------------------------------- guide steps -- */
-// A :upvote: reaction is now an alternative to typing "yes" (see
-// onReactionAdded in lib/handlers.js), so the old "(yes/no)" wording is
-// misleading on its own — formatGuideText drops it. The "here's how to
-// react" explanation itself lives in a Block Kit context element
-// (guides.buildGuideBlocks), not in this plain-text fallback, and only shows
-// on a guide's first step — repeating it in the text of every single step
-// read as spam.
 
 test("formatGuideText leaves a step with no checkNext untouched", () => {
   assert.equal(respond.formatGuideText({ message: "all done!" }), "all done!");
@@ -888,8 +784,8 @@ test("postGuideStep records the posted message's ts so a reaction can find it la
 });
 
 test("postGuideStep shows the reaction hint only on a guide's first step", async () => {
-  let lastBlocks: any = null;
-  const client = { chat: { postMessage: async ({ blocks }: any) => { lastBlocks = blocks; return { ts: "msg-hint-1" }; } } };
+  let lastBlocks: SlackBlock[] = [];
+  const client = { chat: { postMessage: async ({ blocks }: { blocks?: SlackBlock[] }) => { lastBlocks = blocks || []; return { ts: "msg-hint-1" }; } } };
 
   await respond.postGuideStep({
     client,
@@ -898,7 +794,7 @@ test("postGuideStep shows the reaction hint only on a guide's first step", async
     result: { message: "step one", checkNext: "ready? (yes/no)" },
     isFirstStep: true,
   });
-  assert.ok(lastBlocks.some((b: any) => b.type === "context"));
+  assert.ok(lastBlocks.some((b: SlackBlock) => b.type === "context"));
 
   await respond.postGuideStep({
     client,
@@ -906,16 +802,11 @@ test("postGuideStep shows the reaction hint only on a guide's first step", async
     threadTs: "thread-hint-later",
     result: { message: "step two", checkNext: "ready? (yes/no)" },
   });
-  assert.ok(!lastBlocks.some((b: any) => b.type === "context"));
+  assert.ok(!lastBlocks.some((b: SlackBlock) => b.type === "context"));
 });
 
 test("postGuideStep does not record a message_ts for a completed or cancelled guide", async () => {
   const guides = require("./guides");
-  // Guide row still exists at post time (continueGuide/advanceGuideByReaction
-  // delete it as part of returning the completed/cancelled result, so this
-  // simulates the row NOT having been cleared yet) — if postGuideStep skipped
-  // the completed/cancelled check, this write would succeed and the
-  // assertion below would catch it.
   guides.startGuide("submit-ysws-guidelines", "thread-post-done", "U1");
 
   const client = { chat: { postMessage: async () => ({ ts: "msg-completed-1" }) } };
@@ -929,18 +820,6 @@ test("postGuideStep does not record a message_ts for a completed or cancelled gu
   assert.equal(db.getGuideByMessageTs("msg-completed-1"), null);
 });
 
-/* ------------------------------------------------ handing the work back -- */
-// The reply that prompted this: someone posted "eh how do i do tthis ?" in a
-// program channel and got back
-//
-//   "do what? if you're asking about something pixl-specific like submitting,
-//    setting up hackatime, git, or starting a project, just tell me what part
-//    you're stuck on and i can walk you through it :hii:"
-//
-// which is pixie saying, at length, that it has no idea what was asked. The
-// guard for this already existed — it just only recognised a hand-back that was
-// nothing but a short question, and this one opens with the question and then
-// keeps talking, so it sailed straight through.
 
 test("isClarifyingQuestion catches a hand-back that carries on past the question", () => {
   assert.equal(
@@ -960,9 +839,6 @@ test("isClarifyingQuestion catches a hand-back that carries on past the question
   );
 });
 
-// The cost of getting this wrong is a real answer deleted, so the phrases have
-// to be ones that only ever appear when pixie is asking what the subject IS —
-// not ones that show up in an answer that happens to ask for a detail.
 test("isClarifyingQuestion leaves real answers alone", () => {
   assert.equal(
     respond.isClarifyingQuestion(
@@ -979,9 +855,6 @@ test("isClarifyingQuestion leaves real answers alone", () => {
   );
 });
 
-// A hand-back is not a documentation gap. Nothing was missing from the docs;
-// pixie never worked out what the subject was, so writing the message to the
-// "what should we document" list just fills it with unanswerable noise.
 test("an unaddressed hand-back is deleted and not recorded as a docs gap", async () => {
   const client = fakeClient();
   const originalIntent = intent.classifyIntent;
@@ -990,8 +863,6 @@ test("an unaddressed hand-back is deleted and not recorded as a docs gap", async
     "do what? if you're asking about something pixl-specific like submitting, setting up hackatime," +
     " git, or starting a project, just tell me what part you're stuck on and i can walk you through it :hii:";
 
-  // Ungrounded by construction (no source): ambient never posts it, so there
-  // is no placeholder to delete — silence is the whole behavior.
   const restoreAnswers = stubAnswers(async () => ({ source: null, answer: handBack }));
   const restoreCache = stubNoCache();
   intent.classifyIntent = async () => intent.HELP_NEEDED;
@@ -1018,10 +889,6 @@ test("an unaddressed hand-back is deleted and not recorded as a docs gap", async
   }
 });
 
-// The regex above is the backstop for a model that writes the paragraph anyway.
-// The primary path is the model saying, in one token, that the message gave it
-// nothing to answer — which has to end in silence and not in the "ask a helper"
-// fallback, or the noise is the same noise with different words.
 test("an unclear verdict is silence, not the mention fallback", async () => {
   const client = fakeClient();
   const originalIntent = intent.classifyIntent;
@@ -1052,9 +919,6 @@ test("an unclear verdict is silence, not the mention fallback", async () => {
   }
 });
 
-// Somebody typed pixie's name and asked. Silence there reads as broken, so a
-// reply stands — but it is the transparent uncertainty text now, never the
-// old "not totally sure" guess-shaped fallback and never an ungrounded fact.
 test("an unclear verdict still answers someone who addressed pixie directly", async () => {
   const client = fakeClient();
 
@@ -1129,11 +993,6 @@ test("stfu pixie mutes the thread and leaves", async () => {
   assert.match(client.calls.posts.join(" "), /leaving the thread/);
 });
 
-// The shop maths is worked out in code, and it only ever fires on a message
-// that named a priced item or answered pixie's own question about a tier. The
-// gate's job is deciding whether anybody is asking for help, and by the time
-// one of these comes back it has already been established that they were — so
-// letting the gate bin it drops a correct, cited answer for no reason.
 test("an unaddressed deterministic answer still requires support intent", async () => {
   const client = fakeClient();
   const originalLookup = lookup.answerOrChat;
@@ -1188,15 +1047,9 @@ test("an ordinary ungrounded answer is still thrown away by the gate", async () 
   }
 });
 
-/* ------------------------------------------------ brand-aware text matching -- */
-// Two plain-text triggers used to be hardcoded to the word "pixie": asking for
-// the guide menu, and telling the bot to be quiet. On a rebranded bot both are
-// typed with its own name, so the literals would simply never fire — the mute
-// request in particular is the one people reach for when the bot is being
-// annoying, and it silently doing nothing is the worst version of that.
 
-function withBrand(vars: any, fn: any) {
-  const saved: Record<string, any> = {};
+function withBrand(vars: Record<string, string | undefined>, fn: () => unknown) {
+  const saved: Record<string, string | undefined> = {};
   for (const [k, v] of Object.entries(vars)) {
     saved[k] = process.env[k];
     if (v === undefined) delete process.env[k];
@@ -1217,7 +1070,6 @@ test("the guide menu answers to the bot's own name", () => {
     assert.equal(respond.isGuideMenuRequest("sol guides"), true);
     assert.equal(respond.isGuideMenuRequest("sol-guide"), true);
     assert.equal(respond.isGuideMenuRequest("/sol-guide"), true);
-    // Unprefixed and pixie's own forms keep working either way.
     assert.equal(respond.isGuideMenuRequest("!guides"), true);
     assert.equal(respond.isGuideMenuRequest("/guide"), true);
   });
@@ -1229,9 +1081,6 @@ test("a mute request works by the bot's own name", () => {
     assert.equal(respond.isMuteRequest("sol shut up"), true);
     assert.equal(respond.isMuteRequest("sol stfu"), true);
     assert.equal(respond.isMuteRequest("quiet sol"), true);
-    // Same shape as the original matcher: the shush word has to lead, so a
-    // mid-sentence "be quiet sol please" is not a mute. Left as-is deliberately —
-    // widening it here would change what pixie itself does.
     assert.equal(respond.isMuteRequest("be quiet sol please"), false);
   });
 });
@@ -1244,7 +1093,6 @@ test("an unrelated message is still not a mute request", () => {
   });
 });
 
-// The default deployment must behave exactly as before.
 test("with no brand set, the pixie forms still match", () => {
   withBrand({ PIXIE_BOT_NAME: undefined, PIXIE_BOT_SLUG: undefined }, () => {
     assert.equal(respond.isGuideMenuRequest("pixie guides"), true);
@@ -1254,8 +1102,6 @@ test("with no brand set, the pixie forms still match", () => {
   });
 });
 
-// A slug with regex metacharacters must not blow up the matcher — it's
-// interpolated into a RegExp, so it has to be escaped.
 test("a slug containing regex metacharacters is escaped, not executed", () => {
   withBrand({ PIXIE_BOT_NAME: "c++ bot", PIXIE_BOT_SLUG: undefined }, () => {
     assert.doesNotThrow(() => respond.isMuteRequest("stfu c++ bot"));
@@ -1263,10 +1109,6 @@ test("a slug containing regex metacharacters is escaped, not executed", () => {
   });
 });
 
-// Live failure: Pixie could acknowledge "got it, leaving the thread" for
-// some stop phrasings but not others, so mute never actually engaged for the
-// ones it missed — "stop pixie", "pixiestop" and "stop pinging him" in
-// particular kept getting silently ignored.
 test("every documented stop/leave phrasing is recognized, and 'stop' alone is anchored, not bare", () => {
   assert.equal(respond.isMuteRequest("stop pixie"), true);
   assert.equal(respond.isMuteRequest("pixiestop"), true);
@@ -1276,17 +1118,12 @@ test("every documented stop/leave phrasing is recognized, and 'stop' alone is an
   assert.equal(respond.isMuteRequest("pixie leave"), true);
   assert.equal(respond.isMuteRequest("shut up pixie"), true);
 
-  // Bare "stop" must stay anchored the same way every other shush word is —
-  // message-initial with the name following, never a substring match.
   assert.equal(respond.isMuteRequest("please stop, pixie already helped"), false);
   assert.equal(respond.isMuteRequest("stop the build please"), false);
   assert.equal(respond.isMuteRequest("can we stop for today"), false);
-  // "stopping" is literally "stop"+"ping" with zero separator and must never
-  // be mistaken for "stop ping(ing)".
   assert.equal(respond.isMuteRequest("pixie is stopping by later"), false);
 });
 
-/* --------------------------------- help channel replies even if unknown -- */
 
 test("help channel hands an unclear question to a helper with the escalated uncertainty text", async () => {
   const originalIntent = intent.classifyIntent;
@@ -1295,7 +1132,7 @@ test("help channel hands an unclear question to a helper with the escalated unce
   const restoreCache = stubNoCache();
   intent.classifyIntent = async () => intent.HELP_NEEDED;
 
-  await withHelpProgram({ id: "help-unclear" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "help-unclear" }, async (programId: string, channel: string) => {
     const client = richClient();
     try {
       const replied = await respond.respond({
@@ -1308,7 +1145,7 @@ test("help channel hands an unclear question to a helper with the escalated unce
       });
 
       assert.equal(replied, true);
-      const said = client.posts.map((p: any) => p.text || "").join(" ");
+      const said = client.posts.map((p: SlackPost) => p.text || "").join(" ");
       assert.match(said, /couldn't verify/);
       assert.match(said, /flagged it for a helper/);
       const ticket = db.getTicketByThreadTs("t-help-unclear");
@@ -1329,7 +1166,7 @@ test("a ping in the help channel gets the answer and still goes to a helper", as
   const restoreCache = stubNoCache();
   intent.classifyIntent = async () => intent.HELP_NEEDED;
 
-  await withHelpProgram({ id: "help-firmware" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "help-firmware" }, async (programId: string, channel: string) => {
     const client = richClient();
     try {
       const replied = await respond.respond({
@@ -1342,7 +1179,7 @@ test("a ping in the help channel gets the answer and still goes to a helper", as
       });
 
       assert.equal(replied, true);
-      const said = client.posts.map((p: any) => p.text || "").join(" ");
+      const said = client.posts.map((p: SlackPost) => p.text || "").join(" ");
       assert.match(said, /wokwi simulator/);
       assert.doesNotMatch(said, /couldn't verify/);
       const ticket = db.getTicketByThreadTs("t-help-firmware");
@@ -1361,7 +1198,7 @@ test("help channel stays quiet when gate returns OFF_TOPIC in thread", async () 
   const originalAnswer = answer.getAnswerOrChatStream;
   const originalIntent = intent.classifyIntent;
 
-  answer.getAnswerOrChatStream = async (_q: any, _c: any, _ctx: any, { onText }: any = {}) => {
+  answer.getAnswerOrChatStream = async (_q: string, _c: string, _ctx: string, { onText }: StreamOptions = {}) => {
     if (onText) onText("here is some advice");
     return { source: null, answer: "here is some advice" };
   };
@@ -1397,7 +1234,7 @@ test("an ungrounded answer in help hands off with uncertainty even when PIXIE_RE
   intent.classifyIntent = async () => intent.HELP_NEEDED;
   process.env.PIXIE_REQUIRE_GROUNDED_ANSWER = "1";
 
-  await withHelpProgram({ id: "help-grounded-req" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "help-grounded-req" }, async (programId: string, channel: string) => {
     const client = richClient();
     try {
       const replied = await respond.respond({
@@ -1409,10 +1246,8 @@ test("an ungrounded answer in help hands off with uncertainty even when PIXIE_RE
         mode: respond.ALWAYS,
       });
 
-      // Help never drops the support request: ticket + handoff, and the only
-      // public text is the transparent uncertainty — never the guess.
       assert.equal(replied, true);
-      const said = client.posts.map((p: any) => p.text || "").join(" ");
+      const said = client.posts.map((p: SlackPost) => p.text || "").join(" ");
       assert.doesNotMatch(said, /grant amounts/);
       assert.match(said, /couldn't verify/);
       assert.ok(db.getTicketByThreadTs("t-help-ungrounded"));
@@ -1469,8 +1304,6 @@ test("a meta source or channel redirect stays unposted in a DM, with uncertainty
       mode: respond.ALWAYS,
     });
 
-    // An unclaimed channel with an addressed caller is a DM: the redirect is
-    // stripped and the caller hears transparent uncertainty, never the guess.
     assert.equal(replied, true);
     const said = [...client.calls.posts, ...client.calls.updates].join(" ");
     assert.doesNotMatch(said, /live-ysws/);
@@ -1527,10 +1360,6 @@ test("a classifier outage in a help channel preserves the support path (ticket +
   const savedHelp = config.slack.helpChannel;
   config.slack.helpChannel = "C0OUTAGE";
   const client = fakeClient();
-  // No classifier stub: the suite-wide llm stub ("NONE") makes the legacy
-  // classifier return null, i.e. the outage path. The ticket needs no AI, so
-  // the support request still lands with humans — and with nobody addressed,
-  // nothing is posted publicly.
   try {
     const replied = await respond.respond({
       client,
@@ -1544,9 +1373,7 @@ test("a classifier outage in a help channel preserves the support path (ticket +
     const ticket = db.getTicketByThreadTs("t-outage-1");
     assert.ok(ticket, "the outage must not swallow the support request");
     assert.equal(ticket.status, "waiting_for_helper");
-    // The open-ticket UI posts (the thread reads: question, ticket UI), but
-    // no AI answer of any kind goes out during the outage.
-    assert.ok(client.calls.posts.every((t: any) => /Someone will be here to help you soon!/.test(t)));
+    assert.ok(client.calls.posts.every((t: string) => /Someone will be here to help you soon!/.test(t)));
   } finally {
     config.slack.helpChannel = savedHelp;
   }
@@ -1561,8 +1388,8 @@ test("shadow mode evaluates but sends nothing publicly", async () => {
   ]);
   programs.invalidate();
   const client = fakeClient();
-  const posted: any[] = [];
-  client.chat.postMessage = async (p: any) => {
+  const posted: SlackPost[] = [];
+  client.chat.postMessage = async (p: SlackPost) => {
     posted.push(p);
     return { ts: "x" };
   };
@@ -1598,14 +1425,14 @@ test("a support question in an active help channel opens a ticket that stays OPE
   const restoreCache = stubNoCache();
   intent.classifyIntent = async () => intent.HELP_NEEDED;
 
-  await withHelpProgram({ id: "one-terminal" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "one-terminal" }, async (programId: string, channel: string) => {
     const client = richClient();
     try {
       const threadTs = "t-help-open";
       const replied = await respond.respond({ client, channel, threadTs, userId: "U-open", question: "how do I get started?", mode: respond.ALWAYS });
       assert.equal(replied, true);
 
-      const said = client.posts.map((p: any) => p.text || "").join(" ");
+      const said = client.posts.map((p: SlackPost) => p.text || "").join(" ");
       assert.match(said, /here is how to get started/);
       assert.match(said, /Someone will be here to help you soon/);
 
@@ -1627,7 +1454,6 @@ test("rate limiting posts limit message but does not create tickets or leave stu
   const client = fakeClient();
 
   const userId = "U-rate-limit-test";
-  // Exhaust rate limit
   for (let i = 0; i < 20; i++) {
     rateLimit.check(userId);
   }
@@ -1646,7 +1472,7 @@ test("rate limiting posts limit message but does not create tickets or leave stu
   const ticket = db.getTicketByThreadTs(threadTs);
   assert.equal(ticket, null, "rate limiting must not open tickets");
   assert.match(client.calls.posts.join(" "), /slow down a sec/);
-  assert.deepEqual(client.calls.posts.filter((t: any) => t === "_thinking..._"), [], "no placeholder posted");
+  assert.deepEqual(client.calls.posts.filter((t: string) => t === "_thinking..._"), [], "no placeholder posted");
 });
 
 test("answer generation throwing still leaves an open, usable ticket in the thread", async () => {
@@ -1654,13 +1480,13 @@ test("answer generation throwing still leaves an open, usable ticket in the thre
   const originalStream = answer.getAnswerOrChatStream;
   const originalIntent = intent.classifyIntent;
   intent.classifyIntent = async () => intent.HELP_NEEDED;
-  answer.getAnswerOrChatStream = async (_q: any, _c: any, _ctx: any, { onText }: any = {}) => {
+  answer.getAnswerOrChatStream = async (_q: string, _c: string, _ctx: string, { onText }: StreamOptions = {}) => {
     if (onText) onText("something partial");
-    await new Promise((r: any) => setTimeout(r, 10));
+    await new Promise<void>((resolve) => setTimeout(resolve, 10));
     throw new Error("provider error");
   };
 
-  await withHelpProgram({ id: "esc-throw" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "esc-throw" }, async (programId: string, channel: string) => {
     const client = richClient();
     try {
       const threadTs = "t-esc-throw";
@@ -1669,7 +1495,7 @@ test("answer generation throwing still leaves an open, usable ticket in the thre
       const ticket = db.getTicketByThreadTs(threadTs);
       assert.ok(ticket, "the ticket is the reliable baseline — it exists even when answer generation throws");
       assert.ok(["open", "waiting_for_helper", "assigned"].includes(ticket.status));
-      assert.match(client.posts.map((p: any) => p.text || "").join(" "), /Someone will be here to help you soon/);
+      assert.match(client.posts.map((p: SlackPost) => p.text || "").join(" "), /Someone will be here to help you soon/);
     } finally {
       answer.getAnswerOrChatStream = originalStream;
       intent.classifyIntent = originalIntent;
@@ -1681,8 +1507,6 @@ test("prevent public reasoning and instruction leak in respond()", async () => {
   const client = fakeClient();
   const originalIntent = intent.classifyIntent;
 
-  // A general (conversational) request is posted as written, so the
-  // reasoning-strip has to have run before it reaches Slack.
   intent.classifyIntent = async () => intent.CASUAL_CHAT;
   const restoreAnswers = stubAnswers(async () => ({
     source: null,
@@ -1721,8 +1545,8 @@ test("the mute acknowledgement is branded with the resolved program's support id
   ]);
   programs.invalidate();
 
-  const posted: any[] = [];
-  const client = { chat: { postMessage: async (payload: any) => { posted.push(payload); return { ts: "b-1" }; } } };
+  const posted: SlackPost[] = [];
+  const client = { chat: { postMessage: async (payload: SlackPost) => { posted.push(payload); return { ts: "b-1" }; } } };
 
   try {
     const handled = await respond.respond({
@@ -1743,18 +1567,11 @@ test("the mute acknowledgement is branded with the resolved program's support id
   }
 });
 
-/* ------------------------------------------------- ticket-per-question -- */
-// A ticket is the canonical record of every eligible support question in
-// the configured help channel — not merely a human-escalation object.
 
-function withHelpProgram(overrides: any, fn: any) {
+function withHelpProgram(overrides: Record<string, unknown> & { id?: string }, fn: (programId: string, channel: string) => Promise<unknown>) {
   const programs = require("./programs");
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   const id = overrides.id || "ticket-prog";
-  // guides: [] — the default fixture would otherwise inherit
-  // "submit-ysws-guidelines", whose keyword detection ("submit") can hijack
-  // an unrelated test question into the interactive guide flow instead of
-  // the normal answer path.
   process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([{ id, name: id, helpChannel: `C-${id}`, channels: [`C-${id}`], guides: [], ...overrides }]);
   programs.invalidate();
   return Promise.resolve()
@@ -1767,15 +1584,15 @@ function withHelpProgram(overrides: any, fn: any) {
 }
 
 function richClient() {
-  const posts: any[] = [];
+  const posts: SlackPost[] = [];
   return {
     posts,
     chat: {
-      postMessage: async (payload: any) => {
+      postMessage: async (payload: SlackPost) => {
         posts.push(payload);
         return { ts: `msg-${posts.length}` };
       },
-      update: async (payload: any) => {
+      update: async (payload: SlackPost) => {
         posts.push({ ...payload, isUpdate: true });
         return {};
       },
@@ -1786,7 +1603,7 @@ function richClient() {
 
 test("HELP_ONLY rejects intent before answer generation and ticket creation", async () => {
   const lookup = require("./lookup");
-  await withHelpProgram({ id: "intent-first" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "intent-first" }, async (programId: string, channel: string) => {
     const client = richClient();
     const originalLookup = lookup.answerOrChat;
     const originalIntent = intent.classifyIntent;
@@ -1816,13 +1633,9 @@ test("HELP_ONLY rejects intent before answer generation and ticket creation", as
   });
 });
 
-// Section 9 fixture: "lol", "wtf", "hi" and similar must never select a
-// helper. worthClassifying (lib/intent.js) already filters pure reactions
-// before any model call; this locks in the case where the words survive that
-// filter but the classifier still correctly reads them as chatter.
 test("chatter that clears the noise filter still selects no helper and opens no ticket", async () => {
   const lookup = require("./lookup");
-  await withHelpProgram({ id: "chatter-no-select", helperPing: true }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "chatter-no-select", helperPing: true }, async (programId: string, channel: string) => {
     for (const chatter of ["lol what do u think", "wtf is happening", "hii everyone"]) {
       const client = richClient();
       const originalLookup = lookup.answerOrChat;
@@ -1847,7 +1660,7 @@ test("chatter that clears the noise filter still selects no helper and opens no 
 
 test("grounded HELP_ONLY support still answers when tickets are disabled", async () => {
   const lookup = require("./lookup");
-  await withHelpProgram({ id: "answers-no-tickets", ticketsEnabled: false }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "answers-no-tickets", ticketsEnabled: false }, async (programId: string, channel: string) => {
     const client = richClient();
     const originalLookup = lookup.answerOrChat;
     const originalIntent = intent.classifyIntent;
@@ -1863,7 +1676,7 @@ test("grounded HELP_ONLY support still answers when tickets are disabled", async
         mode: respond.HELP_ONLY,
       });
       assert.equal(handled, true);
-      assert.match(client.posts.map((p: any) => p.text || "").join(" "), /export as PNG/);
+      assert.match(client.posts.map((p: SlackPost) => p.text || "").join(" "), /export as PNG/);
       assert.equal(db.getTicketByThreadTs("t-no-tickets-grounded"), null);
     } finally {
       lookup.answerOrChat = originalLookup;
@@ -1874,7 +1687,7 @@ test("grounded HELP_ONLY support still answers when tickets are disabled", async
 
 test("an accepted support question with no grounded answer waits on its ticket", async () => {
   const lookup = require("./lookup");
-  await withHelpProgram({ id: "no-grounding" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "no-grounding" }, async (programId: string, channel: string) => {
     const client = richClient();
     const originalLookup = lookup.answerOrChat;
     const originalIntent = intent.classifyIntent;
@@ -1900,7 +1713,7 @@ test("an accepted support question with no grounded answer waits on its ticket",
 
 test("persisted aiAnswers=false skips answer generation without disabling tickets", async () => {
   const lookup = require("./lookup");
-  await withHelpProgram({ id: "answers-off", aiAnswers: false }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "answers-off", aiAnswers: false }, async (programId: string, channel: string) => {
     const client = richClient();
     const originalLookup = lookup.answerOrChat;
     const originalIntent = intent.classifyIntent;
@@ -1932,7 +1745,7 @@ test("persisted aiAnswers=false skips answer generation without disabling ticket
 test("a grounded answer opens a ticket that stays OPEN with a Mark as resolved button; resolve then reopen then resolve works", async () => {
   const db = require("./db");
   const tickets = require("./tickets");
-  await withHelpProgram({ id: "grounded" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "grounded" }, async (programId: string, channel: string) => {
     const client = richClient();
     const originalIntent = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: "Docs", answer: "export as PNG at native size" }));
@@ -1945,29 +1758,26 @@ test("a grounded answer opens a ticket that stays OPEN with a Mark as resolved b
       assert.ok(ticket);
       assert.equal(ticket.status, "open", "answering never resolves or re-statuses the ticket");
 
-      const uiMsg = client.posts.find((p: any) => /Someone will be here to help you soon/.test(p.text || ""));
+      const uiMsg = client.posts.find((p: SlackPost) => /Someone will be here to help you soon/.test(p.text || ""));
       assert.ok(uiMsg, "the thread carries the open ticket UI");
-      const resolveBtn = uiMsg.blocks.find((b: any) => b.type === "actions")?.elements.find((e: any) => e.action_id === "st_resolve");
+      const resolveBtn = uiMsg?.blocks?.find((b: SlackBlock) => b.type === "actions")?.elements?.find((e: SlackElement) => e.action_id === "st_resolve");
       assert.ok(resolveBtn, "open state has one Mark as resolved button");
 
-      // resolve
       const r1 = await tickets.publicResolveTicket({ ticketId: ticket.id, actorId: "U-grounded", client });
       assert.equal(r1.ok, true);
       assert.equal(db.getTicket(ticket.id).status, "resolved");
       assert.equal(db.getTicket(ticket.id).resolved_by, "U-grounded");
-      const afterResolve = client.posts.filter((p: any) => p.isUpdate).at(-1);
-      assert.match(afterResolve.blocks.map((b: any) => JSON.stringify(b)).join(""), /Resolved by <@U-grounded>/);
-      assert.ok(afterResolve.blocks.find((b: any) => b.type === "actions")?.elements.find((e: any) => e.action_id === "st_reopen"), "resolved state swaps in a Reopen button");
-      assert.ok(!afterResolve.blocks.some((b: any) => (b.elements || []).some((e: any) => e.action_id === "st_resolve")), "no stale Mark as resolved button after resolve");
+      const afterResolve = client.posts.filter((p: SlackPost) => p.isUpdate).at(-1);
+      assert.match(afterResolve?.blocks?.map((b: SlackBlock) => JSON.stringify(b)).join(""), /Resolved by <@U-grounded>/);
+      assert.ok(afterResolve?.blocks?.find((b: SlackBlock) => b.type === "actions")?.elements?.find((e: SlackElement) => e.action_id === "st_reopen"), "resolved state swaps in a Reopen button");
+      assert.ok(!afterResolve?.blocks?.some((b: SlackBlock) => (b.elements || []).some((e: SlackElement) => e.action_id === "st_resolve")), "no stale Mark as resolved button after resolve");
 
-      // reopen
       const ro = await tickets.publicReopenTicket({ ticketId: ticket.id, actorId: "U-grounded", client });
       assert.equal(ro.ok, true);
       assert.equal(db.getTicket(ticket.id).status, "reopened");
       assert.equal(db.getTicket(ticket.id).reopen_count, 1);
-      assert.match(client.posts.map((p: any) => p.text || "").join(" "), /Ticket reopened by <@U-grounded>/);
+      assert.match(client.posts.map((p: SlackPost) => p.text || "").join(" "), /Ticket reopened by <@U-grounded>/);
 
-      // resolve again
       const r2 = await tickets.publicResolveTicket({ ticketId: ticket.id, actorId: "U-grounded", client });
       assert.equal(r2.ok, true);
       assert.equal(db.getTicket(ticket.id).status, "resolved");
@@ -1981,7 +1791,7 @@ test("a grounded answer opens a ticket that stays OPEN with a Mark as resolved b
 test("resolving twice records one transition and posts one confirmation; an unauthorized user cannot resolve", async () => {
   const db = require("./db");
   const tickets = require("./tickets");
-  await withHelpProgram({ id: "dblresolve" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "dblresolve" }, async (programId: string, channel: string) => {
     const client = richClient();
     const originalIntent = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: "Docs", answer: "ok" }));
@@ -1997,7 +1807,7 @@ test("resolving twice records one transition and posts one confirmation; an unau
       const second = await tickets.publicResolveTicket({ ticketId: ticket.id, actorId: "U-owner", client });
       assert.equal(first.ok, true);
       assert.equal(second.deduped, true);
-      const resolvedEvents = db.listTicketEvents(ticket.id).filter((e: any) => e.event_type === "resolved");
+      const resolvedEvents = db.listTicketEvents(ticket.id).filter((e: { event_type: string }) => e.event_type === "resolved");
       assert.equal(resolvedEvents.length, 1, "exactly one persisted resolved transition");
     } finally {
       restoreAnswers();
@@ -2008,7 +1818,7 @@ test("resolving twice records one transition and posts one confirmation; an unau
 
 test("escalation reuses the SAME ticket created for the question — never a second one — and specialist routing runs only there", async () => {
   const db = require("./db");
-  await withHelpProgram({ id: "escreuse", autoAssign: true, organizerChannel: "C-escreuse-org" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "escreuse", autoAssign: true, organizerChannel: "C-escreuse-org" }, async (programId: string, channel: string) => {
     const client = richClient();
     const originalIntent = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: null, answer: "", unclear: true }));
@@ -2031,24 +1841,20 @@ test("escalation reuses the SAME ticket created for the question — never a sec
   });
 });
 
-/* --------------------------------------------- per-program reply signature -- */
 
-// The visible text of the answer Pixie actually posted, blocks first then the
-// top-level fallback, skipping the "_thinking..._" placeholder and the support
-// ticket UI ("Someone will be here to help you soon!" / "Resolved by …").
-function answerText(client: any) {
-  const isTicketUI = (p: any) => /Someone will be here to help you soon|Resolved by|Ticket reopened/i.test(p.text || "")
-    || (p.blocks || []).some((b: any) => (b.elements || []).some((e: any) => /^st_/.test(e.action_id || "")));
-  const real = client.posts.filter((p: any) => p.text !== "_thinking..._" && !isTicketUI(p));
-  const post = real.find((p: any) => (p.blocks || []).some((b: any) => b.type === "section")) || real[0] || {};
-  const section = (post.blocks || []).find((b: any) => b.type === "section");
+function answerText(client: { posts: SlackPost[] }) {
+  const isTicketUI = (p: SlackPost) => /Someone will be here to help you soon|Resolved by|Ticket reopened/i.test(p.text || "")
+    || (p.blocks || []).some((b: SlackBlock) => (b.elements || []).some((e: SlackElement) => /^st_/.test(e.action_id || "")));
+  const real = client.posts.filter((p: SlackPost) => p.text !== "_thinking..._" && !isTicketUI(p));
+  const post = real.find((p: SlackPost) => (p.blocks || []).some((b: SlackBlock) => b.type === "section")) || real[0] || {};
+  const section = (post.blocks || []).find((b: SlackBlock) => b.type === "section");
   return (section && section.text && section.text.text) || post.text || "";
 }
 
 test("a program's reply signature ends its genuine answers (grounded and conversational)", async () => {
   const SIG = "stay wired :hardwire:";
 
-  await withHelpProgram({ id: "hw-sig-grounded", replySignature: SIG }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "hw-sig-grounded", replySignature: SIG }, async (programId: string, channel: string) => {
     const client = richClient();
     const oi = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: "Docs", answer: "Tier 2 needs a testbench." }));
@@ -2059,10 +1865,9 @@ test("a program's reply signature ends its genuine answers (grounded and convers
     } finally { restoreAnswers(); intent.classifyIntent = oi; }
   });
 
-  await withHelpProgram({ id: "hw-sig-chat", replySignature: SIG }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "hw-sig-chat", replySignature: SIG }, async (programId: string, channel: string) => {
     const client = richClient();
     const oi = intent.classifyIntent;
-    // Chatter addressed at pixie -> general kind -> conversational reply.
     intent.classifyIntent = async () => intent.CASUAL_CHAT;
     const restoreAnswers = stubAnswers(async () => ({ source: null, answer: "yeah the iCE40 board handles that fine" }));
     try {
@@ -2075,8 +1880,7 @@ test("a program's reply signature ends its genuine answers (grounded and convers
 test("the reply signature is never stapled to a fallback or an escalation acknowledgement", async () => {
   const SIG = "stay wired :hardwire:";
 
-  // "not sure, ask a helper" human-defer fallback
-  await withHelpProgram({ id: "hw-sig-fb", replySignature: SIG }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "hw-sig-fb", replySignature: SIG }, async (programId: string, channel: string) => {
     const client = richClient();
     const restoreAnswers = stubAnswers(async () => ({ source: null, answer: "", unclear: true }));
     const restoreCache = stubNoCache();
@@ -2086,8 +1890,7 @@ test("the reply signature is never stapled to a fallback or an escalation acknow
     } finally { restoreAnswers(); restoreCache(); }
   });
 
-  // escalation acknowledgement to the requester
-  await withHelpProgram({ id: "hw-sig-esc", replySignature: SIG, organizerChannel: "C-hw-sig-esc-org" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "hw-sig-esc", replySignature: SIG, organizerChannel: "C-hw-sig-esc-org" }, async (programId: string, channel: string) => {
     const client = richClient();
     const oi = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: null, answer: "", unclear: true }));
@@ -2096,7 +1899,7 @@ test("the reply signature is never stapled to a fallback or an escalation acknow
     try {
       await respond.respond({ client, channel, threadTs: "t-hwsig-4", userId: "U4", question: "my board is bricked and my deadline is tonight", mode: respond.HELP_ONLY });
       const everything = client.posts
-        .map((p: any) => (p.text || "") + " " + (p.blocks || []).map((b: any) => (b.text && b.text.text) || (b.elements || []).map((e: any) => e.text || "").join(" ")).join(" "))
+        .map((p: SlackPost) => (p.text || "") + " " + (p.blocks || []).map((b: SlackBlock) => (b.text && b.text.text) || (b.elements || []).map((e: SlackElement) => e.text || "").join(" ")).join(" "))
         .join("\n");
       assert.ok(!everything.includes("stay wired"), `escalation must stay serious, no catchphrase:\n${everything}`);
     } finally { restoreAnswers(); restoreCache(); intent.classifyIntent = oi; }
@@ -2104,7 +1907,7 @@ test("the reply signature is never stapled to a fallback or an escalation acknow
 });
 
 test("reply signature stays scoped to its program — an unsigned program never inherits it", async () => {
-  await withHelpProgram({ id: "pixl-unsigned" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "pixl-unsigned" }, async (programId: string, channel: string) => {
     const client = richClient();
     const oi = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: "Docs", answer: "export as PNG at native size" }));
@@ -2119,17 +1922,17 @@ test("reply signature stays scoped to its program — an unsigned program never 
 
 test("chatter addressed in a help channel gets a conversational reply but opens no ticket", async () => {
   const db = require("./db");
-  await withHelpProgram({ id: "chatter" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "chatter" }, async (programId: string, channel: string) => {
     const client = richClient();
     const originalIntent = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: null, answer: "haha yeah" }));
     intent.classifyIntent = async () => intent.CASUAL_CHAT;
     try {
       const handled = await respond.respond({ client, channel, threadTs: "t-chatter-1", userId: "U-chatter", question: "sam are you coming to the call?", mode: respond.ALWAYS });
-      assert.equal(handled, true); // pixie still replies — ALWAYS mode
+      assert.equal(handled, true);
       const ticket = db.getTicketByThreadTs("t-chatter-1");
       assert.equal(ticket, null, "chatter is not a support request, so no ticket");
-      assert.match(client.posts.map((p: any) => p.text || "").join(" "), /haha yeah/);
+      assert.match(client.posts.map((p: SlackPost) => p.text || "").join(" "), /haha yeah/);
     } finally {
       restoreAnswers();
       intent.classifyIntent = originalIntent;
@@ -2196,7 +1999,7 @@ test("two tenants asking the identical question in their own help channels get s
 
 test("public_tickets_enabled=false: Pixie still answers, but no ticket is created", async () => {
   const db = require("./db");
-  await withHelpProgram({ id: "notix", publicTicketsEnabled: false }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "notix", publicTicketsEnabled: false }, async (programId: string, channel: string) => {
     const client = richClient();
     const originalIntent = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: "Docs", answer: "still answering" }));
@@ -2215,7 +2018,7 @@ test("public_tickets_enabled=false: Pixie still answers, but no ticket is create
 
 test("public_tickets_enabled=true (default): a same-thread follow-up reuses the existing ticket rather than opening a second one", async () => {
   const db = require("./db");
-  await withHelpProgram({ id: "dedupe" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "dedupe" }, async (programId: string, channel: string) => {
     const client = richClient();
     const originalIntent = intent.classifyIntent;
     let answerText = "first answer";
@@ -2239,34 +2042,28 @@ test("public_tickets_enabled=true (default): a same-thread follow-up reuses the 
   });
 });
 
-/* --------------------------------- ANSWER PIPELINE characterization (audit) -- */
-// Pinned before the respond.js gate/decide/compose/post split. Every test
-// below asserts behavior the rewrite must preserve verbatim.
 
 test("CHAR: HELP_ONLY answers HELP_NEEDED, drops on CASUAL_CHAT", async () => {
-  await withHelpProgram({ id: "chargate" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "chargate" }, async (programId: string, channel: string) => {
     const originalIntent = intent.classifyIntent;
     try {
-      // HELP_NEEDED verdict -> a ticket opens and the grounded answer posts
-      // whole (ambient never streams: no text may show before the guards).
       let restoreAnswers = stubAnswers(async () => ({ source: "Docs", answer: "held answer text" }));
       intent.classifyIntent = async () => intent.HELP_NEEDED;
       const clientOk = richClient();
       const handledOk = await respond.respond({ client: clientOk, channel, threadTs: "t-char-hold-1", userId: "U-char-hold", question: "how do i submit my project", mode: respond.HELP_ONLY });
       assert.equal(handledOk, true);
       assert.ok(clientOk.posts.length >= 1);
-      assert.ok(clientOk.posts.some((p: any) => /held answer text/.test(p.text || "")));
+      assert.ok(clientOk.posts.some((p: SlackPost) => /held answer text/.test(p.text || "")));
       assert.ok(db.getTicketByThreadTs("t-char-hold-1"), "an engaged help question opens a ticket");
       restoreAnswers();
 
-      // CASUAL_CHAT verdict -> dropped, silent, no ticket.
       restoreAnswers = stubAnswers(async () => ({ source: null, answer: "should never surface" }));
       intent.classifyIntent = async () => intent.CASUAL_CHAT;
       const clientDrop = richClient();
       const handledDrop = await respond.respond({ client: clientDrop, channel, threadTs: "t-char-drop-1", userId: "U-char-drop", question: "lol that game was wild", mode: respond.HELP_ONLY });
       assert.equal(handledDrop, false, "CASUAL_CHAT still suppresses Pixie's reply");
       assert.equal(db.getTicketByThreadTs("t-char-drop-1"), null, "casual chatter must not become a ticket");
-      assert.ok(!clientDrop.posts.some((p: any) => /should never surface/.test(p.text || "")), "the dropped answer never surfaces");
+      assert.ok(!clientDrop.posts.some((p: SlackPost) => /should never surface/.test(p.text || "")), "the dropped answer never surfaces");
       restoreAnswers();
     } finally {
       intent.classifyIntent = originalIntent;
@@ -2275,7 +2072,7 @@ test("CHAR: HELP_ONLY answers HELP_NEEDED, drops on CASUAL_CHAT", async () => {
 });
 
 test("CHAR: HELP_ONLY classifier failure still tickets, and answers when grounded", async () => {
-  await withHelpProgram({ id: "charnull" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "charnull" }, async (programId: string, channel: string) => {
     const originalIntent = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: "Docs", answer: "a docs answer" }));
     const restoreCache = stubNoCache();
@@ -2285,7 +2082,7 @@ test("CHAR: HELP_ONLY classifier failure still tickets, and answers when grounde
       const handled = await respond.respond({ client, channel, threadTs: "t-char-null-1", userId: "U-char-null", question: "how do i submit", mode: respond.HELP_ONLY });
       assert.equal(handled, true, "a classifier outage must not swallow a help support request");
       assert.ok(db.getTicketByThreadTs("t-char-null-1"), "the ticket path needs no AI");
-      assert.ok(client.posts.some((p: any) => /a docs answer/.test(p.text || "")), "a grounded answer still posts");
+      assert.ok(client.posts.some((p: SlackPost) => /a docs answer/.test(p.text || "")), "a grounded answer still posts");
     } finally {
       restoreAnswers();
       restoreCache();
@@ -2295,7 +2092,7 @@ test("CHAR: HELP_ONLY classifier failure still tickets, and answers when grounde
 });
 
 test("Jame Gam help still attempts its owned answer when intent classification fails", async () => {
-  await withHelpProgram({ id: "jame-gam", name: "Jame Gam", sources: [{ name: "Jame Gam Complete Docs", type: "text", content: "Jame Gam answer" }] }, async (_programId: any, channel: any) => {
+  await withHelpProgram({ id: "jame-gam", name: "Jame Gam", sources: [{ name: "Jame Gam Complete Docs", type: "text", content: "Jame Gam answer" }] }, async (_programId: string, channel: string) => {
     const originalAnswer = answer.getAnswerOrChat;
     const originalIntent = intent.classifyIntent;
     let answerCalled = false;
@@ -2314,7 +2111,7 @@ test("Jame Gam help still attempts its owned answer when intent classification f
 });
 
 test("CHAR: OFF_TOPIC in a help channel stays silent", async () => {
-  await withHelpProgram({ id: "charoff", scope: "program" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "charoff", scope: "program" }, async (programId: string, channel: string) => {
     const original = answer.getAnswerOrChatStream;
     const originalIntent = intent.classifyIntent;
     answer.getAnswerOrChatStream = async () => ({ source: null, answer: "that one belongs to another program, try their channel" });
@@ -2331,7 +2128,7 @@ test("CHAR: OFF_TOPIC in a help channel stays silent", async () => {
 });
 
 test("CHAR: ALWAYS replies conversationally to chatter without opening a ticket", async () => {
-  await withHelpProgram({ id: "charworthy" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "charworthy" }, async (programId: string, channel: string) => {
     const originalIntent = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: null, answer: "haha yeah" }));
     intent.classifyIntent = async () => intent.CASUAL_CHAT;
@@ -2340,7 +2137,7 @@ test("CHAR: ALWAYS replies conversationally to chatter without opening a ticket"
       const handled = await respond.respond({ client, channel, threadTs: "t-char-worthy-1", userId: "U-char-worthy", question: "sam are you coming to the call?", mode: respond.ALWAYS });
       assert.equal(handled, true, "ALWAYS mode always replies");
       assert.equal(db.getTicketByThreadTs("t-char-worthy-1"), null, "chatter is a general reply, not a support request");
-      assert.ok(client.posts.some((p: any) => /haha yeah/.test(p.text || "")));
+      assert.ok(client.posts.some((p: SlackPost) => /haha yeah/.test(p.text || "")));
     } finally {
       restoreAnswers();
       intent.classifyIntent = originalIntent;
@@ -2349,7 +2146,7 @@ test("CHAR: ALWAYS replies conversationally to chatter without opening a ticket"
 });
 
 test("CHAR: chatter addressed at pixie opens no ticket; a real support question still does", async () => {
-  await withHelpProgram({ id: "charground" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "charground" }, async (programId: string, channel: string) => {
     const originalIntent = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: "Docs", answer: "export as PNG at native size" }));
     intent.classifyIntent = async () => intent.CASUAL_CHAT;
@@ -2358,7 +2155,6 @@ test("CHAR: chatter addressed at pixie opens no ticket; a real support question 
       await respond.respond({ client, channel, threadTs: "t-char-ground-2", userId: "U-char-g2", question: "png export lol", mode: respond.ALWAYS });
       assert.equal(db.getTicketByThreadTs("t-char-ground-2"), null, "addressed chatter is general chat, not a ticket");
 
-      // The same channel, a real support question -> ticket, still OPEN.
       intent.classifyIntent = async () => intent.HELP_NEEDED;
       const client2 = richClient();
       await respond.respond({ client: client2, channel, threadTs: "t-char-ground-3", userId: "U-char-g3", question: "how do i export my sprite", mode: respond.ALWAYS });
@@ -2373,7 +2169,7 @@ test("CHAR: chatter addressed at pixie opens no ticket; a real support question 
 });
 
 test("CHAR: shadow program evaluates but posts nothing publicly", async () => {
-  await withHelpProgram({ id: "charshadow", shadowMode: true }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "charshadow", shadowMode: true }, async (programId: string, channel: string) => {
     const originalIntent = intent.classifyIntent;
     const restoreAnswers = stubAnswers(async () => ({ source: "Docs", answer: "a grounded answer" }));
     intent.classifyIntent = async () => intent.HELP_NEEDED;
@@ -2413,7 +2209,7 @@ test("CHAR: sensitive match escalates with zero model calls", async () => {
 });
 
 test("CHAR: accepted support with model outage files a ticket and stays quiet", async () => {
-  await withHelpProgram({ id: "charoutage" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "charoutage" }, async (programId: string, channel: string) => {
       const original = answer.getAnswerOrChatStream;
       const originalLookup = lookup.answerOrChat;
       const originalIntent = intent.classifyIntent;
@@ -2435,7 +2231,6 @@ test("CHAR: accepted support with model outage files a ticket and stays quiet", 
 
 test("CHAR: HELP_ONLY suppresses hand-back clarification questions outside help", async () => {
   const originalIntent = intent.classifyIntent;
-  // Non-help channel: use a bare program channel fixture instead.
   const programs = require("./programs");
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([{ id: "charhand", name: "charhand", channels: ["C-charhand"], guides: [] }]);
@@ -2461,7 +2256,6 @@ test("CHAR: HELP_ONLY suppresses hand-back clarification questions outside help"
 test("CHAR: ASKS_WHAT_THEY_MEAN regex stays as backstop + MAX_CLARIFY_WORDS bound", () => {
   assert.equal(respond.isClarifyingQuestion("what do you mean?"), true);
   assert.equal(respond.isClarifyingQuestion("could you clarify what you mean"), true);
-  // Long genuine answer ending in a question is not a hand-back.
   const longReal = "check your canvas size is small, 32x32 or 16x16, and that you are exporting as PNG at native size without scaling it up because the file extension matters too for the reviewer pipeline. does that sort it for your sprite workflow today?";
   assert.equal(respond.isClarifyingQuestion(longReal), false);
 });
@@ -2471,12 +2265,9 @@ test("CHAR: answerOrChat is the single call shared by the mention path and --ask
 });
 
 test("CHAR: cache serves a grounded answer in help even when the classifier failed", async () => {
-  await withHelpProgram({ id: "charcache" }, async (programId: any, channel: any) => {
+  await withHelpProgram({ id: "charcache" }, async (programId: string, channel: string) => {
     const originalIntent = intent.classifyIntent;
     const originalKnown = lookup.knownAnswer;
-    // A grounded cache entry is servable: the help ticket path needs no
-    // classifier, and only grounded-or-deterministic entries may serve a
-    // program question.
     lookup.knownAnswer = () => ({ source: "Docs", answer: "cached answer here" });
     intent.classifyIntent = async () => null;
     try {
@@ -2484,7 +2275,7 @@ test("CHAR: cache serves a grounded answer in help even when the classifier fail
       const handled = await respond.respond({ client, channel, threadTs: "t-char-cache-1", userId: "U-char-cache", question: "cached question here", mode: respond.HELP_ONLY });
       assert.equal(handled, true, "a grounded cached answer still serves the help request");
       assert.ok(db.getTicketByThreadTs("t-char-cache-1"), "the ticket path needs no AI");
-      assert.ok(client.posts.some((p: any) => /cached answer here/.test(p.text || "")));
+      assert.ok(client.posts.some((p: SlackPost) => /cached answer here/.test(p.text || "")));
     } finally {
       lookup.knownAnswer = originalKnown;
       intent.classifyIntent = originalIntent;
@@ -2512,7 +2303,7 @@ test("active incidents bypass cache and model work, stay tenant-scoped, and stop
     return { source: "Docs", answer: "model answer" };
   };
   try {
-    await withHelpProgram({ id: "incident-respond" }, async (programId: any, channel: any) => {
+    await withHelpProgram({ id: "incident-respond" }, async (programId: string, channel: string) => {
       const created = incidents.createIncident({
         programId,
         title: "Pixl site is currently down",
@@ -2526,16 +2317,20 @@ test("active incidents bypass cache and model work, stay tenant-scoped, and stop
       assert.equal(cacheCalls, 0);
       assert.equal(modelCalls, 0);
       assert.equal(incidents.affectedReports(created.incident.id).length, 2);
-      assert.equal(client.posts.filter((post: any) => /Pixl site is currently down/.test(post.text || "")).length, 2);
+      assert.equal(client.posts.filter((post: SlackPost) => /Pixl site is currently down/.test(post.text || "")).length, 2);
 
       await respond.respond({ client, channel, threadTs: "t-incident-unrelated", userId: "U-3", question: "when does review finish?", mode: respond.HELP_ONLY });
-      assert.equal(client.posts.at(-1).text.includes("cached answer"), true);
+      const unrelatedPost = client.posts.at(-1);
+      if (!unrelatedPost?.text) throw new Error("cached answer post was not created");
+      assert.equal(unrelatedPost.text.includes("cached answer"), true);
       assert.equal(incidents.affectedReports(created.incident.id).length, 2);
       assert.equal(cacheCalls, 1);
 
       incidents.setIncidentStatus({ incidentId: created.incident.id, status: "resolved", actorId: "U-organizer" });
       await respond.respond({ client, channel, threadTs: "t-incident-resolved", userId: "U-4", question: "is the site down?", mode: respond.HELP_ONLY });
-      assert.equal(client.posts.at(-1).text.includes("cached answer"), true);
+      const resolvedPost = client.posts.at(-1);
+      if (!resolvedPost?.text) throw new Error("cached answer post was not created after resolution");
+      assert.equal(resolvedPost.text.includes("cached answer"), true);
       assert.equal(incidents.affectedReports(created.incident.id).length, 2);
       assert.equal(cacheCalls, 2);
       assert.equal(modelCalls, 0);

@@ -4,7 +4,7 @@ const axios = require("axios");
 const llm = require("./llm");
 const { isRetryableStatus, isRetryableError } = llm;
 
-async function withAxiosPost(impl: any, fn: any) {
+async function withAxiosPost(impl: typeof axios.post, fn: () => Promise<unknown>) {
   const original = axios.post;
   axios.post = impl;
   try {
@@ -20,7 +20,6 @@ test("isRetryableStatus covers throttling and server errors", () => {
   }
 });
 
-// Retrying a bad key or a malformed request just makes the failure slower.
 test("isRetryableStatus rejects client errors we cannot recover from", () => {
   for (const status of [400, 401, 403, 404, 422]) {
     assert.equal(isRetryableStatus(status), false, String(status));
@@ -37,9 +36,8 @@ test("isRetryableError defers to the status when there is a response", () => {
   assert.equal(isRetryableError({ response: { status: 401 } }), false);
 });
 
-/* ------------------------------------------------------------ SSE parsing -- */
 
-const sse = (c: any) => `data: ${JSON.stringify({ choices: [{ delta: { content: c } }] })}\n`;
+const sse = (c: string) => `data: ${JSON.stringify({ choices: [{ delta: { content: c } }] })}\n`;
 
 test("parseSseChunk pulls the content deltas out of complete lines", () => {
   const { deltas, rest } = llm.parseSseChunk(`${sse("he")}${sse("llo")}`);
@@ -47,8 +45,6 @@ test("parseSseChunk pulls the content deltas out of complete lines", () => {
   assert.equal(rest, "");
 });
 
-// Frames arrive split across network chunks, so half a line has to survive
-// until the rest of it shows up.
 test("parseSseChunk holds back a partial line", () => {
   const whole = sse("hi");
   const cut = whole.length - 4;
@@ -65,14 +61,22 @@ test("parseSseChunk ignores [DONE], keepalives and unparseable frames", () => {
   assert.deepEqual(deltas, []);
 });
 
-/* -------------------------------------------------------------- streaming -- */
 
-// Stands in for the endpoint: hands the frames back as one readable stream.
-function fakeFetch(chunks: any, { status = 200, finishReason = "stop" }: any = {}) {
+type MockFetchResponse = {
+  ok: boolean;
+  status: number;
+  text: () => Promise<string>;
+  body: { getReader: () => { read: () => Promise<{ done: boolean; value?: Uint8Array }> } };
+};
+
+type FetchImpl = (...args: Parameters<typeof fetch>) => Promise<MockFetchResponse>;
+type StreamResult = { text: string; stopped?: boolean };
+
+function fakeFetch(chunks: string[], { status = 200, finishReason = "stop" }: { status?: number; finishReason?: string | null } = {}): FetchImpl {
   const frames = finishReason
     ? [...chunks, `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: finishReason }] })}\n`]
     : chunks;
-  return async (..._args: any[]) => ({
+  return async (..._args: Parameters<typeof fetch>): Promise<MockFetchResponse> => ({
     ok: status >= 200 && status < 300,
     status,
     text: async () => "boom",
@@ -88,9 +92,9 @@ function fakeFetch(chunks: any, { status = 200, finishReason = "stop" }: any = {
   });
 }
 
-async function withFetch(impl: any, fn: any) {
+async function withFetch<T>(impl: FetchImpl, fn: () => Promise<T>): Promise<T> {
   const original = globalThis.fetch;
-  globalThis.fetch = impl;
+  globalThis.fetch = impl as unknown as typeof globalThis.fetch;
   try {
     return await fn();
   } finally {
@@ -101,9 +105,9 @@ async function withFetch(impl: any, fn: any) {
 const REQUEST = { baseUrl: "http://x", apiKey: "k", model: "m", messages: [] };
 
 test("completeStream assembles the deltas and reports each one as it lands", async () => {
-  const seen: any[] = [];
-  const result = await withFetch(fakeFetch([sse("one "), sse("two"), "data: [DONE]\n"]), () =>
-    llm.completeStream(REQUEST, (delta: any, text: any) => seen.push([delta, text])),
+  const seen: string[][] = [];
+  const result = await withFetch<StreamResult>(fakeFetch([sse("one "), sse("two"), "data: [DONE]\n"]), () =>
+    llm.completeStream(REQUEST, (delta: string, text: string) => seen.push([delta, text])),
   );
 
   assert.equal(result.text, "one two");
@@ -115,7 +119,7 @@ test("completeStream assembles the deltas and reports each one as it lands", asy
 
 test("completeStream retains a terminal SSE frame without its trailing newline", async () => {
   const terminal = 'data: {"choices":[{"delta":{"content":" complete."},"finish_reason":"stop"}]}';
-  const result = await withFetch(fakeFetch([sse("A grounded answer"), terminal], { finishReason: null }), () =>
+  const result = await withFetch<StreamResult>(fakeFetch([sse("A grounded answer"), terminal], { finishReason: null }), () =>
     llm.completeStream(REQUEST, () => {}),
   );
 
@@ -131,12 +135,10 @@ test("completeStream rejects a length-limited terminal stream", async () => {
   });
 });
 
-// The SILENT gate has to stop a stream the moment it knows there is nothing to
-// say, rather than paying for the rest of a completion it throws away.
 test("completeStream stops when the callback returns false", async () => {
-  const seen: any[] = [];
-  const result = await withFetch(fakeFetch([sse("SILENT"), sse(" and more")]), () =>
-    llm.completeStream(REQUEST, (delta: any) => {
+  const seen: string[] = [];
+  const result = await withFetch<StreamResult>(fakeFetch([sse("SILENT"), sse(" and more")]), () =>
+    llm.completeStream(REQUEST, (delta: string) => {
       seen.push(delta);
       return false;
     }),
@@ -149,31 +151,30 @@ test("completeStream stops when the callback returns false", async () => {
 
 test("completeStream retries an attempt that streamed nothing", async () => {
   let attempts = 0;
-  const flaky = async (...args: any[]) => {
+  const flaky = async (...args: Parameters<typeof fetch>) => {
     attempts += 1;
     if (attempts === 1) {
-      const err: any = new Error("503");
+      const err = Object.assign(new Error("503"), { response: { status: 503 } });
       err.response = { status: 503 };
       throw err;
     }
     return fakeFetch([sse("recovered")])(...args);
   };
 
-  const result = await withFetch(flaky, () => llm.completeStream(REQUEST, () => {}));
+  const result = await withFetch<StreamResult>(flaky, () => llm.completeStream(REQUEST, () => {}));
 
   assert.equal(attempts, 2);
   assert.equal(result.text, "recovered");
 });
 
-// Once a fragment is on screen a retry would rewrite the reply in front of
-// whoever is reading it, so a mid-stream failure has to surface instead.
 test("completeStream does not retry once text has been streamed", async () => {
   let attempts = 0;
-  const breaksMidStream = async () => {
+  const breaksMidStream: FetchImpl = async (_input, _init) => {
     attempts += 1;
     return {
       ok: true,
       status: 200,
+      text: async () => "",
       body: {
         getReader() {
           let first = true;
@@ -197,7 +198,7 @@ test("completeStream does not retry once text has been streamed", async () => {
 
 test("completeStream throws a non-retryable status straight away", async () => {
   let attempts = 0;
-  const unauthorized = async (...args: any[]) => {
+  const unauthorized = async (...args: Parameters<typeof fetch>) => {
     attempts += 1;
     return fakeFetch([], { status: 401 })(...args);
   };
@@ -208,34 +209,28 @@ test("completeStream throws a non-retryable status straight away", async () => {
   assert.equal(attempts, 1);
 });
 
-/* -------------------------------------------------------------- fallback -- */
 
-// A self-hosted gateway going down used to throw all the way up to
-// classifyIntent, which returns null on error — and HELP_ONLY reads null as
-// "nobody was asking", so pixie went silent everywhere with nothing in the logs
-// naming the cause. The standby turns that outage into a worse answer instead.
 const STANDBY = { baseUrl: "http://standby", apiKey: "k2", model: "m2" };
 
-// Routes each request by base URL so a test can kill one endpoint and keep the
-// other alive.
-function byBaseUrl(routes: any) {
-  return async (url: any, init: any) => {
-    const key = Object.keys(routes).find((k: any) => url.startsWith(k));
+function byBaseUrl(routes: Record<string, FetchImpl>): FetchImpl {
+  return async (input, init) => {
+    const url = String(input);
+    const key = Object.keys(routes).find((k: string) => url.startsWith(k));
     if (!key) throw Object.assign(new Error("ECONNREFUSED"), { cause: { code: "ECONNREFUSED" } });
     return routes[key](url, init);
   };
 }
 
 test("completeStream falls back to the standby when the primary is unreachable", async () => {
-  const seenUrls: any[] = [];
+  const seenUrls: string[] = [];
   const fetchImpl = byBaseUrl({
-    "http://standby": (...args: any[]) => {
+    "http://standby": (...args: Parameters<typeof fetch>) => {
       seenUrls.push("standby");
       return fakeFetch([sse("from the standby"), "data: [DONE]\n"])(...args);
     },
   });
 
-  const result = await withFetch(fetchImpl, () =>
+  const result = await withFetch<StreamResult>(fetchImpl, () =>
     llm.completeStream({ ...REQUEST, baseUrl: "http://dead", fallback: STANDBY }, () => {}),
   );
 
@@ -243,14 +238,13 @@ test("completeStream falls back to the standby when the primary is unreachable",
   assert.deepEqual(seenUrls, ["standby"]);
 });
 
-// The reply is already on screen at this point. Switching models would rewrite
-// it mid-sentence in front of whoever is reading it.
 test("completeStream does not fall back once text has reached the reader", async () => {
   let standbyCalls = 0;
   const fetchImpl = byBaseUrl({
     "http://flaky": async () => ({
       ok: true,
       status: 200,
+      text: async () => "",
       body: {
         getReader() {
           let sent = false;
@@ -264,7 +258,7 @@ test("completeStream does not fall back once text has reached the reader", async
         },
       },
     }),
-    "http://standby": (...args: any[]) => {
+    "http://standby": (...args: Parameters<typeof fetch>) => {
       standbyCalls += 1;
       return fakeFetch([sse("whole other answer")])(...args);
     },
@@ -287,37 +281,33 @@ test("thinkingFor only returns thinking object for deepseek models", () => {
   assert.equal(llm.thinkingFor("kr/claude-sonnet-4.5", thinkingObj), undefined);
 });
 
-// Regression: HCAI's catalogue names DeepSeek "deepseek/deepseek-v4-flash-latest"
-// — a bare substring match on "deepseek" wrongly caught this too and sent
-// `thinking` to a gateway that doesn't understand it, which HCAI's endpoint
-// rejected with a 400 on every single request.
 test("thinkingFor does not match a deepseek model behind someone else's gateway", () => {
   assert.equal(llm.thinkingFor("deepseek/deepseek-v4-flash-latest", { type: "disabled" }), undefined);
 });
 
 test("completeStream calls apiKey function per attempt and passes key to onRateLimited on 429", async () => {
-  let keysCalled: any[] = [];
+  let keysCalled: string[] = [];
   const apiKeyFn = () => {
     const k = `key-${keysCalled.length + 1}`;
     keysCalled.push(k);
     return k;
   };
 
-  let rateLimitedKey: any = null;
-  const onRateLimited = (key: any) => {
+  let rateLimitedKey: string | null = null;
+  const onRateLimited = (key: string) => {
     rateLimitedKey = key;
   };
 
   let attempts = 0;
-  const rateLimitFetch = async (url: any, options: any) => {
+  const rateLimitFetch: FetchImpl = async (_url, _options) => {
     attempts++;
     if (attempts === 1) {
-      return fakeFetch([], { status: 429 })();
+      return fakeFetch([], { status: 429 })("", {});
     }
-    return fakeFetch([sse("success")])();
+    return fakeFetch([sse("success")])("", {});
   };
 
-  const result = await withFetch(rateLimitFetch, () =>
+  const result = await withFetch<StreamResult>(rateLimitFetch, () =>
     llm.completeStream({ ...REQUEST, apiKey: apiKeyFn, onRateLimited }, () => {}),
   );
 
@@ -327,14 +317,6 @@ test("completeStream calls apiKey function per attempt and passes key to onRateL
   assert.deepEqual(keysCalled, ["key-1", "key-2"]);
 });
 
-// Regression for the non-streaming path: requestCompletion's catch used to have
-// no way to attribute a failure to the key that caused it, so the retry loop's
-// catch called apiKey() again on error — advancing rotation and penalizing
-// whatever key came back next, never the one that actually 429'd. Tested at
-// requestCompletion directly (not complete()), which lib/learn.test.js
-// permanently monkeypatches at require time with no restore — a pre-existing
-// cross-file pollution that only bites whichever test is first to call the
-// real llm.complete in a full-suite run.
 test("requestCompletion attaches the key it used to a thrown error", async () => {
   const apiKeyFn = () => "key-1";
   const err429 = Object.assign(new Error("Request failed with status code 429"), { response: { status: 429 } });
@@ -344,7 +326,7 @@ test("requestCompletion attaches the key it used to a thrown error", async () =>
       throw err429;
     },
     async () => {
-      await assert.rejects(() => llm.requestCompletion({ ...REQUEST, apiKey: apiKeyFn }), (thrown: any) => {
+      await assert.rejects(() => llm.requestCompletion({ ...REQUEST, apiKey: apiKeyFn }), (thrown: { usedKey?: string }) => {
         assert.equal(thrown, err429);
         assert.equal(thrown.usedKey, "key-1");
         return true;
@@ -353,20 +335,15 @@ test("requestCompletion attaches the key it used to a thrown error", async () =>
   );
 });
 
-/* -------------------------------------------------------- fallback chains -- */
 
-// A fallback can carry its own `.fallback` (e.g. HCAI -> Zen -> 9Router), so a
-// dead primary and a dead first standby must still reach the third tier
-// instead of giving up after one hop. Non-retryable status on the first two
-// tiers so each fails on its first attempt rather than burning backoff sleeps.
 test("complete falls through a two-hop fallback chain to reach a working tier", async () => {
-  const seenUrls: any[] = [];
-  await withAxiosPost(async (url: any) => {
+  const seenUrls: string[] = [];
+  await withAxiosPost(async (url: string) => {
     seenUrls.push(url);
     if (url.startsWith("http://hop2")) {
       return { data: { choices: [{ message: { content: "from hop2" }, finish_reason: "stop" }] } };
     }
-    const err: any = new Error("bad request");
+    const err = Object.assign(new Error("bad request"), { response: { status: 400 } });
     err.response = { status: 400 };
     throw err;
   }, async () => {
@@ -383,21 +360,19 @@ test("complete falls through a two-hop fallback chain to reach a working tier", 
     assert.equal(result.text, "from hop2");
   });
 
-  assert.ok(seenUrls.some((u: any) => u.startsWith("http://primary")));
-  assert.ok(seenUrls.some((u: any) => u.startsWith("http://hop1")));
-  assert.ok(seenUrls.some((u: any) => u.startsWith("http://hop2")));
+  assert.ok(seenUrls.some((u: string) => u.startsWith("http://primary")));
+  assert.ok(seenUrls.some((u: string) => u.startsWith("http://hop1")));
+  assert.ok(seenUrls.some((u: string) => u.startsWith("http://hop2")));
 });
 
 test("completeStream falls through a two-hop fallback chain to reach a working tier", async () => {
-  // Non-retryable status on the first two tiers, same reasoning as the
-  // complete() version above — one attempt per dead tier, not three.
   const fetchImpl = byBaseUrl({
-    "http://primary": (...args: any[]) => fakeFetch([], { status: 400 })(...args),
-    "http://hop1": (...args: any[]) => fakeFetch([], { status: 400 })(...args),
-    "http://standby": (...args: any[]) => fakeFetch([sse("from hop2"), "data: [DONE]\n"])(...args),
+    "http://primary": (...args: Parameters<typeof fetch>) => fakeFetch([], { status: 400 })(...args),
+    "http://hop1": (...args: Parameters<typeof fetch>) => fakeFetch([], { status: 400 })(...args),
+    "http://standby": (...args: Parameters<typeof fetch>) => fakeFetch([sse("from hop2"), "data: [DONE]\n"])(...args),
   });
 
-  const result = await withFetch(fetchImpl, () =>
+  const result = await withFetch<StreamResult>(fetchImpl, () =>
     llm.completeStream(
       {
         ...REQUEST,
@@ -408,7 +383,6 @@ test("completeStream falls through a two-hop fallback chain to reach a working t
     ),
   );
 
-  // http://standby is STANDBY's baseUrl — the chain's third tier.
   assert.equal(result.text, "from hop2");
 });
 
@@ -441,14 +415,13 @@ test("stripThinking removes unbracketed thinking process blocks", () => {
   );
 });
 
-/* ------------------------------ ANSWER PIPELINE characterization (audit) -- */
 
 test("CHAR: retryable 429 is retried up to 3 attempts with backoff, then succeeds", async () => {
   let calls = 0;
   await withAxiosPost(async () => {
     calls += 1;
     if (calls < 3) {
-      const err: any = new Error("rate limited");
+      const err = Object.assign(new Error("rate limited"), { response: { status: 429 } });
       err.response = { status: 429 };
       throw err;
     }
@@ -464,7 +437,7 @@ test("CHAR: non-retryable 401 throws immediately with no retry", async () => {
   let calls = 0;
   await withAxiosPost(async () => {
     calls += 1;
-    const err: any = new Error("bad key");
+    const err = Object.assign(new Error("bad key"), { response: { status: 401 } });
     err.response = { status: 401 };
     throw err;
   }, async () => {
@@ -482,7 +455,7 @@ test("CHAR: thinking param only goes to bare deepseek models, never gateway name
 
 test("CHAR: provider exhaustion with no fallback left rejects (defined degradation)", async () => {
   await withAxiosPost(async () => {
-    const err: any = new Error("down");
+    const err = Object.assign(new Error("down"), { response: { status: 500 } });
     err.response = { status: 500 };
     throw err;
   }, async () => {

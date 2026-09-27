@@ -1,4 +1,3 @@
-// Vision analysis for screenshots, mockups, and error images.
 const axios = require("axios");
 const { config } = require("./config");
 const { complete } = require("./llm");
@@ -7,16 +6,11 @@ const log = require("./log");
 
 const MAX_TOKENS = 500;
 const TIMEOUT_MS = 30000;
-// Slack-hosted bytes need the bot token and are invisible to the model, so
-// only this host goes through the fetch-and-inline path — every other URL is
-// passed straight to the model untouched.
 const SLACK_FILE_HOST = "https://files.slack.com/";
 const SLACK_FETCH_TIMEOUT_MS = 10000;
 const DEFAULT_QUESTION = "what am i looking at here?";
 
-// Slack's url_private needs the bot token to fetch and isn't reachable by the
-// model, so pull the bytes ourselves and inline them as a data URI.
-async function fetchSlackImageAsDataUri(imageUrl: any, slackToken: any) {
+async function fetchSlackImageAsDataUri(imageUrl: string, slackToken: string | null) {
   const res = await axios.get(imageUrl, {
     headers: { Authorization: `Bearer ${slackToken}` },
     responseType: "arraybuffer",
@@ -27,11 +21,11 @@ async function fetchSlackImageAsDataUri(imageUrl: any, slackToken: any) {
   return `data:${contentType};base64,${base64}`;
 }
 
-function needsSlackFetch(imageUrl: any, slackToken: any) {
+function needsSlackFetch(imageUrl: string, slackToken: string | null | undefined) {
   return imageUrl.startsWith(SLACK_FILE_HOST) && !!slackToken;
 }
 
-function visionSystemPrompt(context: any) {
+function visionSystemPrompt(context: string) {
   return [
     "You are pixie, helping debug code and answer questions about images.",
     "Be direct and clear. Skip filler phrases like 'this looks like' or 'it appears to be'.",
@@ -49,13 +43,13 @@ function visionSystemPrompt(context: any) {
     .join("\n");
 }
 
-async function analyzeImage(imageUrl: any, question: any, context: any = "", slackToken: any = null) {
+async function analyzeImage(imageUrl: string, question: string, context = "", slackToken: string | null = null) {
   let finalImageUrl = imageUrl;
   if (needsSlackFetch(imageUrl, slackToken)) {
     try {
       finalImageUrl = await fetchSlackImageAsDataUri(imageUrl, slackToken);
-    } catch (e: any) {
-      log.error("vision", "failed to fetch Slack image:", e.message);
+    } catch (error: unknown) {
+      log.error("vision", "failed to fetch Slack image:", error instanceof Error ? error.message : String(error));
       throw new Error("couldn't grab that image from Slack");
     }
   }

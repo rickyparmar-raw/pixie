@@ -4,7 +4,7 @@ const { planEngagement, finalAction } = require("./messagePolicy");
 
 const settings = { enabled: true, mentionReplies: true, generalMentionChat: true };
 
-function plan(role: any, intent: any, options: any = {}) {
+function plan(role: string, intent: string, options: Record<string, unknown> = {}) {
   return planEngagement({
     role,
     settings: { ...settings, ...(options.settings || {}) },

@@ -94,7 +94,7 @@ test("resolution transcripts stop at message and character caps", async () => {
   db.resolveTicket(ticketId, "Use the form.", "U-helper");
   const ticket = db.getTicket(ticketId);
   let calls = 0;
-  const transcriptPage = Array.from({ length: 100 }, (_: any, i: any) => ({ user: "U-requester", text: `${i} ${"x".repeat(300)}` }));
+  const transcriptPage = Array.from({ length: 100 }, (_: unknown, i: number) => ({ user: "U-requester", text: `${i} ${"x".repeat(300)}` }));
   const client = {
     conversations: {
       replies: async () => {
@@ -109,15 +109,17 @@ test("resolution transcripts stop at message and character caps", async () => {
   assert.equal(calls, 2);
 
   const originalComplete = llm.complete;
-  let request: any = null;
-  llm.complete = async (options: any) => {
+  let request: { messages: Array<{ content: string }> } | null = null;
+  llm.complete = async (options: { messages: Array<{ content: string }> }) => {
     request = options;
     throw new Error("provider unavailable");
   };
   try {
     const summary = await pipeline.summarizeResolution({ ticket, client });
     assert.ok(summary.length <= 24000);
-    assert.ok(request.messages[1].content.length <= 24000);
+    if (!request) throw new Error("completion request was not captured");
+    const completionRequest = request as { messages: Array<{ content: string }> };
+    assert.ok(completionRequest.messages[1].content.length <= 24000);
   } finally {
     llm.complete = originalComplete;
   }
@@ -139,7 +141,7 @@ test("active learning supersedes only questions with matching intent or informat
   let index = 0;
   llm.complete = async () => ({ text: JSON.stringify(extractions[index++]) });
   try {
-    const results: any[] = [];
+    const results: Array<{ fact: { id: number } }> = [];
     for (let i = 0; i < extractions.length; i += 1) {
       const id = db.createTicket({
         programId,
@@ -195,9 +197,9 @@ test("resolved macro uses canonical resolution attribution and schedules learnin
   programs.invalidate();
   const macro = macros.create({ programId, trigger: "?resolve-review", name: "Resolve", content: "Done.", onSendTransition: "resolved", createdBy: helperId });
   const ticketId = db.createTicket({ programId, channel: "C-macro-resolve", threadTs: "review-macro-resolve-thread", requesterId: "U-requester", question: "help" });
-  const scheduled: any[] = [];
+  const scheduled: Array<{ workerId: string }> = [];
   const originalSchedule = pipeline.schedule;
-  pipeline.schedule = (args: any) => scheduled.push(args);
+  pipeline.schedule = ((args: { workerId: string }) => scheduled.push(args)) as typeof pipeline.schedule;
   try {
     const result = await macros.send({ id: macro.macro.id, ticketId, actorId: helperId, client: { chat: { postMessage: async () => ({ ts: "macro-ts" }) } } });
     assert.equal(result.ok, true);
@@ -205,10 +207,10 @@ test("resolved macro uses canonical resolution attribution and schedules learnin
     pipeline.schedule = originalSchedule;
   }
   assert.equal(db.getTicket(ticketId).status, "resolved");
-  assert.equal(helperRoute.getExpertise(programId, helperId).find((row: any) => row.tag === "general")?.solved_count, 1);
+  assert.equal(helperRoute.getExpertise(programId, helperId).find((row: { tag: string }) => row.tag === "general")?.solved_count, 1);
   assert.equal(scheduled.length, 1);
   assert.equal(scheduled[0].workerId, helperId);
-  assert.equal(db.listTicketEvents(ticketId).some((event: any) => event.event_type === "macro_sent"), true);
+  assert.equal(db.listTicketEvents(ticketId).some((event: { event_type: string }) => event.event_type === "macro_sent"), true);
 });
 
 test("reply final open guard reports a close race before posting", async () => {
