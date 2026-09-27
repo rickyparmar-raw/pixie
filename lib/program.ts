@@ -18,7 +18,7 @@ interface ProgramMetadata {
   name?: string | null;
   aliases?: unknown[];
 }
-const PROGRAM_PATH = path.join(__dirname, "..", "program.json");
+const PROGRAM_PATH = path.join(__dirname, "..", "config", "program.json");
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 const NON_TIMING_RE =

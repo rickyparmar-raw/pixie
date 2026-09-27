@@ -1,37 +1,24 @@
 node_modules/
-**/node_modules/
-.git/
-docs/
-.pixie-bot-tmp/
 *.log
-*.sqlite
-*.sqlite-shm
-*.sqlite-wal
-# Local secrets — templates (*.example) stay tracked, values never do.
+.DS_Store
+
+# secrets
 .env
 .env.local
 .env.*.local
-# FUSE mount noise, never source.
-.fuse_hidden*
-# Local agent/session dumps that may carry credentials. Never commit.
-cookies.txt
-claudepixiesession.txt
-# Runtime SQLite state. Untracked per Amendment 6: verified backup at
-# ../pixie-platform-backups/20260907T094058Z/database/pixie.db (integrity ok),
-# schema recreates on boot and existing files migrate on open. Never commit.
-pixie.db
-probe.db
-*.db-wal
+
+# runtime state
+*.db
 *.db-shm
+*.db-wal
 *.db-journal
-# Pixie Wizard source is tracked in this repo (see amendment 1); only its
-# generated secrets/artifacts stay ignored. The old blanket `pixie-wizard/`
-# rule left the whole control plane outside version control.
-pixie-wizard/node_modules/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+.firecrawl/
+
+# dashboard build output
 pixie-wizard/.next/
 pixie-wizard/out/
-pixie-wizard/.env
-pixie-wizard/.env.local
-pixie-wizard/.env.*.local
 pixie-wizard/*.tsbuildinfo
 pixie-wizard/.vercel

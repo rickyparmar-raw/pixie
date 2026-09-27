@@ -1,9 +1,0 @@
-bun test v1.3.11 (af24e281)
-◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
-[pixie/db] migrated: answer_cache.ask_count
-[pixie/db] migrated: answer_cache.last_asked_at
-[pixie/db] migrated: answer_cache.refreshed_at
-[pixie/db] migrated: doc_gaps.kind
-[pixie/db] migrated: metrics.detail
-[pixie/db] migrated: active_guides.message_ts
-[pixie/db] opened :memory:

@@ -50,7 +50,7 @@ test("textFromJsonFaq returns empty string when faq.items is missing", () => {
 test("Twisted FAQ includes explicit current facts and abstention answers", () => {
   const fs = require("fs");
   const path = require("path");
-  const data = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "twisted-faq.json"), "utf8"));
+  const data = JSON.parse(fs.readFileSync(path.join(__dirname, "..", "knowledge", "twisted-faq.json"), "utf8"));
   const text = textFromJsonFaq(data);
   assert.match(text, /ages 13 through 18 inclusive/);
   assert.match(text, /maximum of 30% AI-assisted code/);
@@ -574,9 +574,9 @@ test("loadSources dedupes by name::url but keeps same-name different-URL", () =>
       id: "dedupe-test",
       name: "Dedupe",
       sources: [
-        { name: "Same", type: "json-faq", url: "file://./quick-links.json" },
-        { name: "Same", type: "json-faq", url: "file://./quick-links.json" },
-        { name: "Same", type: "json-faq", url: "file://./data/ysws-submission-guidelines.md" },
+        { name: "Same", type: "json-faq", url: "file://./knowledge/quick-links.json" },
+        { name: "Same", type: "json-faq", url: "file://./knowledge/quick-links.json" },
+        { name: "Same", type: "json-faq", url: "file://./knowledge/ysws-submission-guidelines.md" },
       ],
     },
   ]);
@@ -585,8 +585,8 @@ test("loadSources dedupes by name::url but keeps same-name different-URL", () =>
   try {
     const kept = knowledge.loadSources().filter((s: SourceLike) => s.name === "Same");
     assert.equal(kept.length, 2);
-    assert.ok(kept.some((s: SourceLike) => s.url === "file://./quick-links.json"));
-    assert.ok(kept.some((s: SourceLike) => s.url === "file://./data/ysws-submission-guidelines.md"));
+    assert.ok(kept.some((s: SourceLike) => s.url === "file://./knowledge/quick-links.json"));
+    assert.ok(kept.some((s: SourceLike) => s.url === "file://./knowledge/ysws-submission-guidelines.md"));
   } finally {
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
@@ -600,13 +600,13 @@ test("fetchSourceText dispatches file:// json-faq and text", async () => {
   const faqText = await knowledge.fetchSourceText({
     name: "Quick",
     type: "json-faq",
-    url: "file://./quick-links.json",
+    url: "file://./knowledge/quick-links.json",
   });
   assert.match(faqText, /Q: Where can I play Pixl\?/);
   const mdText = await knowledge.fetchSourceText({
     name: "Guide",
     type: "text",
-    url: "file://./data/ysws-submission-guidelines.md",
+    url: "file://./knowledge/ysws-submission-guidelines.md",
   });
   assert.ok(mdText.length > 50);
 });
@@ -838,7 +838,7 @@ test("url subpages are fetched through the SSRF guard, not raw axios", async () 
 
 test("file:// sources outside the app root are refused", () => {
   const knowledge = require("./knowledge");
-  assert.doesNotThrow(() => knowledge.resolveLocalPath("file://./quick-links.json"));
+  assert.doesNotThrow(() => knowledge.resolveLocalPath("file://./knowledge/quick-links.json"));
   assert.throws(() => knowledge.resolveLocalPath("file:///etc/passwd"), /outside app root/);
   assert.throws(() => knowledge.resolveLocalPath("file://./../../etc/passwd"), /outside app root/);
 });

@@ -171,9 +171,9 @@ test("Twisted is program-scoped and does not inherit shared program facts", () =
     const twisted = programs.get("twisted");
     assert.equal(twisted.scope, "program");
     assert.equal(twisted.sharedSources, false);
-    assert.ok(twisted.sources.some((source: TestAny) => source.url === "file://./twisted-faq.json"));
+    assert.ok(twisted.sources.some((source: TestAny) => source.url === "file://./knowledge/twisted-faq.json"));
     assert.ok(twisted.pinnedRules.some((rule: TestAny) => /program_id=twisted/.test(rule)));
-    assert.ok(!twisted.sources.some((source: TestAny) => source.url === "file://./quick-links.json"));
+    assert.ok(!twisted.sources.some((source: TestAny) => source.url === "file://./knowledge/quick-links.json"));
   });
 });
 

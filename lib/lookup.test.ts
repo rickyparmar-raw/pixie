@@ -111,9 +111,7 @@ test("Live accepts a markdown section citation from its owned KB", () => {
         { source: "11. Software time tracking", answer: "Use Hackatime for software time." },
         {
           id: "live-ysws",
-          sources: [
-            { name: "Live YSWS Pixie Knowledge Base", type: "text", url: "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md" },
-          ],
+          sources: [{ name: "Live YSWS Pixie Knowledge Base", type: "text", url: "file://./knowledge/live-ysws.md" }],
         },
       ),
       true,
@@ -133,9 +131,7 @@ test("Live static policy citations are not rejected without structured evidence"
         { source: "5. Eligibility", answer: "Live YSWS is open to ages 13 through 18." },
         {
           id: "live-ysws",
-          sources: [
-            { name: "Live YSWS Pixie Knowledge Base", type: "text", url: "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md" },
-          ],
+          sources: [{ name: "Live YSWS Pixie Knowledge Base", type: "text", url: "file://./knowledge/live-ysws.md" }],
         },
         "Who is eligible to submit to Live YSWS?",
       ),

@@ -72,14 +72,14 @@ interface RetrievalIndex {
   docs: Array<{ chunk: { source: string } }>;
 }
 
-const SOURCES_PATH = path.join(__dirname, "..", "sources.json");
+const SOURCES_PATH = path.join(__dirname, "..", "config", "sources.json");
 const APP_ROOT = path.join(__dirname, "..");
-const JAME_GAM_DOCS_PATH = path.join(APP_ROOT, "data", "jame-gam-complete-docs.md");
-const LIVE_YSWS_DOCS_PATH = path.join(APP_ROOT, "LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md");
+const JAME_GAM_DOCS_PATH = path.join(APP_ROOT, "knowledge", "jame-gam.md");
+const LIVE_YSWS_DOCS_PATH = path.join(APP_ROOT, "knowledge", "live-ysws.md");
 const LIVE_YSWS_SOURCE = {
   name: "Live YSWS Pixie Knowledge Base",
   type: "text",
-  url: "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md",
+  url: "file://./knowledge/live-ysws.md",
 };
 
 const FETCH_BATCH_SIZE = 5;

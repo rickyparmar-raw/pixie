@@ -61,6 +61,6 @@ test("private-looking hostnames never validate", () => {
 
 test("file and non-http protocols never validate", async () => {
   await assert.rejects(() => guard.validateUrl("ftp://example.com/x"), /protocol/);
-  await assert.rejects(() => guard.validateUrl("file://./quick-links.json"), /protocol/);
+  await assert.rejects(() => guard.validateUrl("file://./knowledge/quick-links.json"), /protocol/);
 });
 export {};

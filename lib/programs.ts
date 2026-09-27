@@ -75,9 +75,9 @@ function isRawProgram(value: unknown): value is RawProgramConfig {
 }
 
 // Config precedence
-const PROGRAMS_FILE = path.join(__dirname, "..", "programs.json");
-const SOURCES_FILE = path.join(__dirname, "..", "sources.json");
-const PROGRAM_FILE = path.join(__dirname, "..", "program.json");
+const PROGRAMS_FILE = path.join(__dirname, "..", "config", "programs.json");
+const SOURCES_FILE = path.join(__dirname, "..", "config", "sources.json");
+const PROGRAM_FILE = path.join(__dirname, "..", "config", "program.json");
 
 const DEFAULT_WORKSPACE = "default";
 const SHARED_PROGRAM_ID = "ysws-global";
