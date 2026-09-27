@@ -3,7 +3,6 @@ const { config, validate, resolveBotUserId } = require("./lib/config");
 const knowledge = require("./lib/knowledge");
 const handlers = require("./lib/handlers");
 const commands = require("./lib/commands");
-const guides = require("./lib/guides");
 const respond = require("./lib/respond");
 const warm = require("./lib/warm");
 const report = require("./lib/report");
@@ -47,9 +46,8 @@ async function startBot() {
 
   try {
     const channelPolicy = require("./lib/channelPolicy");
-    const legacyOwner = require("./lib/programs").get("pixl") ? "pixl" : null;
     const facts = db.assignUnownedLearnedFacts((channel: string | null) => {
-      if (!channel) return legacyOwner;
+      if (!channel) return null;
       const r = channelPolicy.resolve(channel);
       return r.role === "none" ? null : r.program?.id || null;
     });
@@ -135,16 +133,6 @@ async function runAskCli(question: string): Promise<void> {
   validate({ needsSlack: false });
   db.open();
   await knowledge.refreshCorpus();
-
-  const guideId = await guides.detectGuideIntent(question);
-  if (guideId) {
-    const result = guides.startGuide(guideId, "cli-test", "cli-user");
-    console.log(`[pixie] would start guide: "${guideId}"`);
-    console.log(`[pixie] first message: ${result.message}`);
-    if (result.checkNext) console.log(`[pixie] prompt: ${result.checkNext}`);
-    guides.cancelGuide("cli-test");
-    return;
-  }
 
   const result = await respond.answerOrChat(question, "");
   if (result?.answer) {

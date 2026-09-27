@@ -45,7 +45,7 @@ test("looksLikeQuestion treats pasted code as something to respond to", () => {
   assert.equal(looksLikeQuestion("```\nSyntaxError: bad\n```"), true);
 });
 
-test("chat prompts stay ungrounded-helpful but hard-block Pixl specifics", () => {
+test("chat prompts stay helpful but defer configured facts to documentation", () => {
   const chat = require("./chat");
   const sys = chat.chatSystemPrompt("", false);
   const dbg = chat.debugSystemPrompt("", false);

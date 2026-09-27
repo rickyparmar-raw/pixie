@@ -239,11 +239,6 @@ function humanReviewRequest(text: string): boolean {
 function sensitiveHit(text: string, program: Program | null = null): boolean {
   const cats = program && Array.isArray(program.sensitiveCategories) ? program.sensitiveCategories : [];
   const body = String(text || "");
-  const liveEligibilityFact =
-    program?.id === "live-ysws" &&
-    /\b(?:eligible|eligibility)\b/i.test(body) &&
-    !/\b(?:override|waive|waiver|bypass|exception|manually?)\b/i.test(body);
-  if (liveEligibilityFact && !cats.some((cat) => /refund|money|account|login|access/i.test(String(cat)))) return false;
   if (humanReviewRequest(body)) return true;
   if (cats.length === 0) return false;
   const lowered = body.toLowerCase();

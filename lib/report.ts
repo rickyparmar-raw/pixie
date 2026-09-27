@@ -42,12 +42,10 @@ interface ReportBlock {
 
 function programName() {
   try {
-    const progs = require("./programs")
-      .all()
-      .filter((p: Program) => p.id !== "ysws-global");
+    const progs = require("./programs").all();
     if (progs.length === 1 && progs[0].name) return progs[0].name;
   } catch (e) {}
-  return "Pixl";
+  return "the configured program";
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -87,7 +85,7 @@ function judgePrompt() {
     `${DOCS} — a real, genuine question about ${program} or its tooling that the documentation should answer.`,
     "  Three things have to be true at once: someone is asking a question, that question is about",
     "  the program or its tooling, and you could write a documentation section that would still be",
-    '  useful to a different person next month. Examples: "who are pixl orgs", "how do i be an org",',
+    '  useful to a different person next month. Examples: "what are the submission rules", "how do I join",',
     '  "which marketplaces should i look for", "how do i unlock the next region", "can i submit late".',
     "",
     `${TRANSIENT} — true when they asked, but useless as documentation. A service being down,`,
@@ -193,7 +191,7 @@ function draftPrompt(corpus: string): string {
     "git, coding, tools). Direct and factual, the way a FAQ entry reads. Write only the answer itself: no",
     'restated question, no "Q:"/"A:" labels, no mention that this is a draft or where it came from.',
     "",
-    answer.PIXL_GUARDRAIL,
+    answer.programGuardrail(null),
     "",
     "If none of the above actually answers it, reply with EXACTLY: UNKNOWN. A missing draft costs nothing — a",
     "maintainer writes it instead. A confident, invented answer in the review queue costs someone's trust.",

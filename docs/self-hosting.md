@@ -57,21 +57,20 @@ One JSON value carries the whole thing — channels, docs, behaviour:
 
 ```json
 [{
-  "id": "solvable",
-  "name": "Solvable",
-  "helpChannel": "C0SOLVE",
-  "channels": ["C0SOLVE", "C0CHAT"],
+  "id": "example",
+  "name": "Example",
+  "helpChannel": "C_HELP",
+  "channels": ["C_HELP", "C_MAIN"],
   "posture": "active",
   "scope": "program",
-  "guides": ["submit-ysws-guidelines"],
   "sources": [
-    { "name": "Solvable Docs", "type": "url", "url": "https://solvable.hackclub.com/docs" },
-    { "name": "Solvable FAQ", "type": "json-faq", "content": [
-      { "question": "What is Solvable?", "answer": "Find a problem in your life and 3D design a solution." }
+    { "name": "Example Docs", "type": "url", "url": "https://example.invalid/docs" },
+    { "name": "Example FAQ", "type": "json-faq", "content": [
+      { "question": "What is this program?", "answer": "Read the configured program documentation." }
     ]}
   ],
   "milestones": [
-    { "name": "Submissions close", "date": "2026-09-30" }
+    { "name": "Example milestone", "date": "2030-01-01" }
   ]
 }]
 ```

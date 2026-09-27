@@ -73,10 +73,7 @@ function linkifyHelpChannel(text: string, program: ProgramRef = null) {
   if (process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || resolved?.requireGroundedAnswer) {
     return stripChannelMentions(text);
   }
-  const id = resolved?.helpChannel || config.slack.helpChannel;
-  const pattern = /<?#pixl-help>?/gi;
-  if (!id) return text;
-  return text.replace(pattern, `<#${id}>`);
+  return text;
 }
 
 function normalizeEmoji(text: string, program: ProgramRef = null) {
@@ -113,7 +110,7 @@ function resolveProgram(program: ProgramRef): ProgramLike | null {
 }
 
 function programName(program: ProgramRef) {
-  return resolveProgram(program)?.name || "Pixl";
+  return resolveProgram(program)?.name || "the configured program";
 }
 
 function pinnedRules(program: ProgramRef): string[] {
@@ -123,14 +120,14 @@ function pinnedRules(program: ProgramRef): string[] {
 
 function helpChannelRef(program: ProgramRef) {
   const id = resolveProgram(program)?.helpChannel || config.slack.helpChannel;
-  return id ? `<#${id}>` : "#pixl-help";
+  return id ? `<#${id}>` : "the help channel";
 }
 
 function otherProgramNames(current: ProgramLike | null) {
   try {
     return programs
       .all()
-      .filter((p: ProgramLike) => p.id !== "ysws-global" && (!current || p.id !== current.id))
+      .filter((p: ProgramLike) => !current || p.id !== current.id)
       .map((p: ProgramLike) => p.name)
       .filter(Boolean);
   } catch (_error: unknown) {
@@ -141,7 +138,7 @@ function otherProgramNames(current: ProgramLike | null) {
 function whereYouAre(program: ProgramRef = null, channel: string | null = null) {
   const p = resolveProgram(program);
   const here = channel ? `<#${channel}>` : "a Slack channel";
-  const named = p && p.id !== "ysws-global";
+  const named = Boolean(p?.name);
   const lines: string[] = [];
 
   const requireGrounded = process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || p?.requireGroundedAnswer;
@@ -199,23 +196,10 @@ function programGuardrail(program: ProgramRef = null, inHelpChannel = false) {
   ].join("\n");
 }
 
-function pixlGuardrail(inHelpChannel = false) {
-  return programGuardrail("Pixl", inHelpChannel);
-}
-
-const PIXL_GUARDRAIL = programGuardrail(null, false);
-
 function timelineAuthorityRule(marker: string, alwaysLabel = "covered", program: ProgramRef = null) {
   const progDesc = `${programName(program)} program itself`;
 
   return `- If a "Program timeline" section is present, it is the authority ONLY on questions asking specifically whether the ${progDesc} has launched, released, gone live, or about its dates/deadlines — "is it out yet", "when does it drop", "has it launched", "is it released", "how long until launch". Those are ALWAYS ${alwaysLabel} — never answer ${marker} to one, and never contradict it, no matter how it's worded. This does NOT extend to "how do i start/begin doing X" questions about a task, tool, or project (e.g. "how do i start building a PCB") — that "start" means beginning an activity, not asking whether the program has launched. The bare word "start" or "begin" alone must never trigger this rule on its own.`;
-}
-
-function shopAuthorityRule() {
-  return (
-    "- If a shop section is present it is the only source of reward thresholds, and the hours printed beside an item are the only hours you may give. " +
-    "Never estimate a reward threshold from another item's hours or invent a payout rate. If a requested threshold is not shown, say you'll need to check."
-  );
 }
 
 const VOICE = [
@@ -235,7 +219,7 @@ function systemPrompt(
   const helpChan = helpChannelRef(program);
 
   const parts = [
-    `You are ${brand.name()}, a helper bot for Hack Club's YSWS programs and build guides. You answer questions using ONLY the documentation below.`,
+    `You are ${brand.name()}, a helper bot for configured programs and build tools. You answer questions using ONLY the documentation below.`,
     whereYouAre(program, channel),
     ...VOICE,
     "Rules:",
@@ -243,7 +227,6 @@ function systemPrompt(
     `- If the documentation does not clearly cover the question, reply with exactly: ${NONE_MARKER}`,
     "- Never guess, speculate, or use outside knowledge. A helper will follow up on anything the docs don't cover.",
     timelineAuthorityRule(NONE_MARKER, "covered", program),
-    shopAuthorityRule(),
     "- Match by meaning, not exact wording. Someone can ask a documented question in completely different words — slang, typos, reordered, whatever — and it still counts as a match. 'Strict' means don't answer a genuinely different topic, it does NOT mean the phrasing has to resemble the docs.",
     "- Never copy or lightly reword the doc's own phrasing. Explain it fresh, in your own words, like you already knew the answer off the top of your head — not like you're reciting a lookup result. Two people asking the same thing at different times should not get back the identical sentence.",
     "- NEVER invent approval rules, informal thresholds, or guarantees (e.g. never say 'a short paragraph usually gets it approved' or promise approval). State only the exact criteria explicitly required by the documentation.",
@@ -425,7 +408,7 @@ function answerOrChatPrompt(
   const requireGrounded = process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || p?.requireGroundedAnswer;
 
   const parts = [
-    `You are ${brand.name()}, a helper bot for Hack Club's YSWS programs and build guides.`,
+    `You are ${brand.name()}, a helper bot for configured programs and build tools.`,
     whereYouAre(program, channel),
     ...VOICE,
   ];
@@ -452,7 +435,6 @@ function answerOrChatPrompt(
       "- A doc section only counts as CASE 1 if it gives a direct factual answer to what was asked.",
       "- If the docs do not contain the answer, or only describe what not to answer, or say an answer is unconfirmed/unknown, that is CASE 2.",
       timelineAuthorityRule(NONE_MARKER, "CASE 1", program),
-      shopAuthorityRule(),
       "- Greetings, small talk, and anything not factually in the docs are CASE 2.",
       "",
       "Writing a CASE 1 answer:",
@@ -493,7 +475,6 @@ function answerOrChatPrompt(
       "- 'Step by step', 'actual steps', 'list it out', 'give me the exact steps', 'step two now', 'what's step 3', 'next step' and similar describe the FORMAT someone wants the answer in (or which numbered item of THEIR OWN topic they mean), not the subject. Never match a doc section just because it happens to BE a numbered list, and never treat 'step N' as an index into whichever doc section has a step N — a follow-up like 'step by step pls' or 'step two now' after a conversation about cooking chicken means 'give the chicken steps' / 'give step two of the chicken instructions', not 'go find whatever doc has a numbered list and read out its Nth item'. A subject-less follow-up like this always inherits its subject from the immediately preceding exchange in the conversation above, never from whichever doc section happens to share the requested format.",
       `- Installing, configuring or using a piece of software that isn't ${name} itself — an editor, KiCad, Fusion360, git, a package manager, anything — is general tech knowledge, CASE 2, answered like you would answer it anywhere else. It is not a ${name} doc question just because a ${name} doc happens to mention the same tool in passing.`,
       timelineAuthorityRule(NONE_MARKER, "CASE 1", program),
-      shopAuthorityRule(),
       "- Greetings, small talk and anything unrelated to the docs are CASE 2.",
       "",
       "Writing a CASE 1 answer:",
@@ -789,12 +770,9 @@ export = {
   UNCLEAR_MARKER,
   VOICE,
   CASUAL_EMOJI,
-  PIXL_GUARDRAIL,
   MAX_TOKENS,
   DEBUG_MAX_TOKENS,
-  pixlGuardrail,
   programGuardrail,
-  shopAuthorityRule,
   whereYouAre,
   resolveProgram,
   timelineAuthorityRule,

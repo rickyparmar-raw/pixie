@@ -8,8 +8,6 @@ const log = require("./log");
 const programs = require("./programs");
 const db = require("./db");
 const answerCache = require("./cache");
-const shop = require("./shop");
-const liveShop = require("./liveShop");
 const sourceGuard = require("./sourceGuard");
 const firecrawl = require("./firecrawl");
 const identity = require("./identity");
@@ -27,7 +25,6 @@ interface SourceRecord extends Partial<ProgramSource> {
   hidden?: boolean;
   dynamic?: boolean;
   paths?: string[];
-  minutesPerApprovedHour?: number;
 }
 type ProgramLike = Omit<Partial<Program>, "status" | "sources"> & {
   id?: string;
@@ -74,14 +71,6 @@ interface RetrievalIndex {
 
 const SOURCES_PATH = path.join(__dirname, "..", "config", "sources.json");
 const APP_ROOT = path.join(__dirname, "..");
-const JAME_GAM_DOCS_PATH = path.join(APP_ROOT, "knowledge", "jame-gam.md");
-const LIVE_YSWS_DOCS_PATH = path.join(APP_ROOT, "knowledge", "live-ysws.md");
-const LIVE_YSWS_SOURCE = {
-  name: "Live YSWS Pixie Knowledge Base",
-  type: "text",
-  url: "file://./knowledge/live-ysws.md",
-};
-
 const FETCH_BATCH_SIZE = 5;
 const INITIAL_FETCH_TIMEOUT_MS = 10000;
 const SUBPAGE_FETCH_TIMEOUT_MS = 15000;
@@ -116,32 +105,12 @@ function invalidate() {
 function registerDraftKnowledge(draftProgram: ProgramLike, sourceTexts: Record<string, string>) {
   if (!draftProgram?.id || draftProgram.status !== "suspended" || draftProgram.privateSandboxOnly !== true)
     throw new Error("invalid draft knowledge registration");
-  const canonicalJameDocs: Section[] | null =
-    draftProgram.id === "jame-gam" && fs.existsSync(JAME_GAM_DOCS_PATH)
-      ? [["Jame Gam Complete Docs", fs.readFileSync(JAME_GAM_DOCS_PATH, "utf8")]]
-      : null;
-  const canonicalLiveDocs: Section[] =
-    draftProgram.id === "live-ysws" && fs.existsSync(LIVE_YSWS_DOCS_PATH)
-      ? [[LIVE_YSWS_SOURCE.name, fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")]]
-      : [];
-  const sections: Section[] = canonicalJameDocs || [
-    ...Object.entries(sourceTexts || {}).filter(([, text]) => text),
-    ...canonicalLiveDocs,
-  ];
-  const generated: Section[] = canonicalJameDocs
-    ? []
-    : draftProgram.faqContent
-      ? [["Draft FAQs", draftProgram.faqContent]]
-      : [];
+  const sections: Section[] = Object.entries(sourceTexts || {}).filter(([, text]) => text);
+  const generated: Section[] = draftProgram.faqContent ? [["Draft FAQs", draftProgram.faqContent]] : [];
   const all = [...generated, ...sections];
   draftCorpusMap.set(draftProgram.id, all.map(([name, text]) => `### ${name}\n${text}`).join("\n\n"));
   draftIndexMap.set(draftProgram.id, retrieve.buildIndex(retrieve.chunkSections(all)));
   const sources = [...(draftProgram.sources || [])];
-  if (
-    draftProgram.id === "live-ysws" &&
-    !sources.some((source: SourceRecord) => source?.name === LIVE_YSWS_SOURCE.name)
-  )
-    sources.push(LIVE_YSWS_SOURCE);
   draftSandbox.register({ ...draftProgram, sources, sourceTexts: Object.fromEntries(sections) });
   return {
     sources: sections.length,
@@ -209,33 +178,15 @@ function loadDraftPersisted() {
     } catch (_error: unknown) {
       continue;
     }
-    const canonicalJameDocs: Section[] | null =
-      row.program_id === "jame-gam" && fs.existsSync(JAME_GAM_DOCS_PATH)
-        ? [["Jame Gam Complete Docs", fs.readFileSync(JAME_GAM_DOCS_PATH, "utf8")]]
-        : null;
-    const canonicalLiveDocs: Section[] =
-      row.program_id === "live-ysws" && fs.existsSync(LIVE_YSWS_DOCS_PATH)
-        ? [[LIVE_YSWS_SOURCE.name, fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")]]
-        : [];
-    const sections = canonicalJameDocs || [...(byProgram.get(row.program_id) || []), ...canonicalLiveDocs];
+    const sections = byProgram.get(row.program_id) || [];
     if (!program) continue;
-    const generated: Section[] = canonicalJameDocs
-      ? []
-      : program.faqContent
-        ? [["Draft FAQs", program.faqContent]]
-        : [];
+    const generated: Section[] = program.faqContent ? [["Draft FAQs", program.faqContent]] : [];
     const all = [...generated, ...sections];
     if (all.length === 0) continue;
     draftCorpusMap.set(row.program_id, all.map(([name, text]) => `### ${name}\n${text}`).join("\n\n"));
     try {
       draftIndexMap.set(row.program_id, retrieve.buildIndex(retrieve.chunkSections(all)));
-      const sourcesWithCanonical = [...(program.sources || [])];
-      if (
-        row.program_id === "live-ysws" &&
-        !sourcesWithCanonical.some((source: SourceRecord) => source?.name === LIVE_YSWS_SOURCE.name)
-      )
-        sourcesWithCanonical.push(LIVE_YSWS_SOURCE);
-      draftSandbox.register({ ...program, sources: sourcesWithCanonical, sourceTexts: Object.fromEntries(sections) });
+      draftSandbox.register({ ...program, sourceTexts: Object.fromEntries(sections) });
       rebuilt += 1;
     } catch (_error: unknown) {}
   }
@@ -451,7 +402,7 @@ function memKey(source: SourceRecord) {
 }
 
 function isDynamicSource(source: SourceRecord) {
-  return Boolean(source && (source.dynamic === true || source.type === "pixl-shop" || source.type === "live-shop"));
+  return Boolean(source && source.dynamic === true);
 }
 
 function sourceFreshness(source: SourceRecord) {
@@ -725,15 +676,6 @@ async function fetchSourceText(source: SourceRecord, force = false) {
   if (!source.url) throw new Error(`source "${source.name}" has neither a url nor inline content`);
   if (source.url.startsWith("file://")) return localFileText(source);
 
-  if (source.type === "pixl-shop") {
-    recordLink(source.name, source.siteUrl || "https://pixl.hackclub.com/shop");
-    return shop.refreshText();
-  }
-  if (source.type === "live-shop") {
-    recordLink(source.name, source.siteUrl || source.url);
-    return liveShop.refreshText(source.url);
-  }
-
   if (source.type === "json-faq") {
     const res = await sourceGuard.fetchSourceUrl(source.url, { timeout: INITIAL_FETCH_TIMEOUT_MS });
     return textFromJsonFaq(res.data);
@@ -921,11 +863,7 @@ function sourceContainsCitation(source: SourceRecord, citation: string) {
     .toLowerCase();
   if (!expected) return false;
   if (source.name.trim().toLowerCase() === expected) return true;
-  const text =
-    memText(source) ||
-    (source.name.trim().toLowerCase() === LIVE_YSWS_SOURCE.name.toLowerCase() && fs.existsSync(LIVE_YSWS_DOCS_PATH)
-      ? fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")
-      : null);
+  const text = memText(source);
   if (!text) return false;
   return String(text)
     .split(/\r?\n/)
@@ -970,16 +908,6 @@ function getIndex(programId: string | null = null) {
   return retrievalIndexMap.get(key)!;
 }
 
-function excludedSources(programId: string | null, question: string) {
-  const prog = programs.get(programId);
-  const shared = prog && prog.sharedSources === false ? [] : programs.shared().sources || [];
-  const all = [...(prog?.sources || []), ...shared];
-  const shopSources = all.filter((s: SourceRecord) => s && (s.type === "pixl-shop" || s.type === "live-shop"));
-  if (shopSources.length === 0) return null;
-  if (shop.isShopQuestion(question)) return null;
-  return new Set(shopSources.map((s) => s.name));
-}
-
 function selectContextFor(question: string, programId: string | null) {
   getCorpus(programId);
 
@@ -993,7 +921,7 @@ function selectContextFor(question: string, programId: string | null) {
     index: getIndex(programId),
     sources: sourceSections(programId),
     question,
-    exclude: excludedSources(programId, question),
+    exclude: null,
   });
 
   const fullCorpus = getCorpus(programId);
@@ -1174,7 +1102,6 @@ export = {
   getSourceUrl,
   startAutoRefresh,
   generatedSections,
-  excludedSources,
   MAX_SOURCE_TEXT_CHARS,
   get lastBuiltAt() {
     return lastBuiltAt;

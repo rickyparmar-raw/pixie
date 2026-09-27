@@ -16,7 +16,7 @@
 # ExecStart if the checkout lives somewhere else.
 
 [Unit]
-Description=Pixie — Pixl docs Slack bot
+Description=Pixie program support bot
 After=network-online.target
 Wants=network-online.target
 # A config error (missing env var) exits 1 immediately and would otherwise
@@ -28,7 +28,7 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-WorkingDirectory=/home/wizrizz/Desktop/pixl-plan/Pixl/apps/pixie
+WorkingDirectory=/path/to/pixie
 ExecStart=/home/wizrizz/.bun/bin/bun index.js
 Restart=always
 RestartSec=5

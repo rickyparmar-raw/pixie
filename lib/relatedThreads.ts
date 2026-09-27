@@ -196,7 +196,6 @@ const STOP_WORDS = new Set([
   "yourself",
   "yourselves",
   "pixie",
-  "pixl",
   "please",
   "pls",
   "thx",
@@ -212,8 +211,7 @@ const STOP_WORDS = new Set([
 const SIMPLE_LOOKUP_PATTERNS = [
   /\b(?:where\s+(?:is|can\s+i\s+find|do\s+i\s+go\s+for|to\s+go\s+for|do\s+i\s+go))\b/i,
   /\b(?:what(?:'s|\s+is)\s+(?:the\s+)?(?:link|url|website|site|repo|channel))\b/i,
-  /\b(?:link\s+to\s+shop|shop\s+link|website\s+link)\b/i,
-  /\b(?:when\s+(?:is|does)\s+(?:the\s+)?(?:deadline|due\s+date|pixl\s+end|pixl\s+end\s+date))\b/i,
+  /\b(?:what(?:'s|\s+is)\s+(?:the\s+)?(?:deadline|due\s+date))\b/i,
 ];
 
 const MIN_SHARED_TOKENS = 2;

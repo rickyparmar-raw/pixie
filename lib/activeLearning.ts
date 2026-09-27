@@ -54,7 +54,7 @@ interface LearningResult {
 }
 
 const SIMILARITY_THRESHOLD = 0.6;
-const PROGRAM_OBJECT_TOKENS = new Set(["submission", "project", "ysw", "pixl", "review", "payout"]);
+const PROGRAM_OBJECT_TOKENS = new Set(["submission", "project", "program", "review", "payout"]);
 const INTENT_GROUPS: Array<[string, string[]]> = [
   ["location", ["where", "find", "locate"]],
   ["timing", ["when", "long", "arrive", "take", "timing"]],

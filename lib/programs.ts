@@ -56,7 +56,6 @@ interface RawProgramConfig {
   helper_group?: string | null;
   sources?: ProgramSource[];
   milestones?: unknown[];
-  guides?: string[];
   pinnedRules?: string[];
   links?: Record<string, string>;
   behavior?: Record<string, unknown> | null;
@@ -77,10 +76,9 @@ function isRawProgram(value: unknown): value is RawProgramConfig {
 // Config precedence
 const PROGRAMS_FILE = path.join(__dirname, "..", "config", "programs.json");
 const SOURCES_FILE = path.join(__dirname, "..", "config", "sources.json");
-const PROGRAM_FILE = path.join(__dirname, "..", "config", "program.json");
 
 const DEFAULT_WORKSPACE = "default";
-const SHARED_PROGRAM_ID = "ysws-global";
+const SHARED_PROGRAM_ID = "shared";
 
 let cachedPrograms: ProgramRecord[] | null = null;
 
@@ -100,11 +98,6 @@ function readJsonFile(filePath: string, fallback: unknown = null): unknown {
 function readSourcesJson(): ProgramSource[] {
   const data = readJsonFile(SOURCES_FILE, []);
   return Array.isArray(data) ? (data as ProgramSource[]) : [];
-}
-
-function readProgramJsonMilestones(): unknown[] {
-  const data = readJsonFile(PROGRAM_FILE, {});
-  return isRecord(data) && Array.isArray(data.milestones) ? data.milestones : [];
 }
 
 function alt(p: RawProgramConfig | ProgramRecord, ...keys: string[]): string | undefined {
@@ -153,9 +146,8 @@ function normalizeProgram(p: RawProgramConfig): ProgramRecord {
     channels: Array.isArray(p.channels) ? p.channels : [],
     helperGroup: alt(p, "helperGroup", "helper_group") || null,
     sources: Array.isArray(p.sources) ? p.sources : [],
-    sharedSources: p.id === "ysws-global" ? true : false,
+    sharedSources: p.sharedSources === true,
     milestones: Array.isArray(p.milestones) ? p.milestones : [],
-    guides: Array.isArray(p.guides) ? p.guides : ["submit-ysws-guidelines"],
     pinnedRules: Array.isArray(p.pinnedRules)
       ? p.pinnedRules.filter((r): r is string => typeof r === "string" && Boolean(r.trim()))
       : [],
@@ -205,28 +197,6 @@ function loadEnvPrograms(): ProgramRecord[] | null {
   return cachedEnvPrograms;
 }
 
-function legacyFallbackProgram(): ProgramRecord {
-  const sources = readSourcesJson();
-  const milestones = readProgramJsonMilestones();
-  const helpChannel = config?.slack?.helpChannel || null;
-  const faqChannels = config?.slack?.faqChannels || [];
-  const channels = helpChannel && !faqChannels.includes(helpChannel) ? [helpChannel, ...faqChannels] : faqChannels;
-
-  return {
-    id: "pixl",
-    name: "Pixl",
-    posture: "active",
-    scope: process.env.PIXIE_SCOPE === "any" ? "any" : "program",
-    helpChannel,
-    channels,
-    helperGroup: null,
-    sources,
-    milestones,
-    guides: ["submit-ysws-guidelines"],
-    links: {},
-  } as ProgramRecord;
-}
-
 function loadFilePrograms(): ProgramRecord[] | null {
   const fileData = readJsonFile(PROGRAMS_FILE, null);
   if (!Array.isArray(fileData) || fileData.length === 0) {
@@ -267,11 +237,6 @@ function all(): ProgramRecord[] {
     dbProgs = [];
   }
 
-  if ((!fileProgs || fileProgs.length === 0) && dbProgs.length === 0) {
-    cachedPrograms = [legacyFallbackProgram()];
-    return cachedPrograms;
-  }
-
   const map = new Map<string, ProgramRecord>();
   if (fileProgs) {
     for (const p of fileProgs) {
@@ -288,7 +253,6 @@ function all(): ProgramRecord[] {
             ...p,
             sources: mergeSources(configured.sources, p.sources),
             milestones: p.milestones || configured.milestones || [],
-            guides: p.guides || configured.guides || [],
             links: p.links || configured.links || {},
             pinnedRules: p.pinnedRules || configured.pinnedRules || [],
             categories:
@@ -319,7 +283,7 @@ function invalidate() {
 function emptyShared(): ProgramRecord {
   return {
     id: SHARED_PROGRAM_ID,
-    name: "YSWS Global",
+    name: "Shared knowledge",
     posture: "active",
     scope: "any",
     helpChannel: null,
@@ -327,7 +291,7 @@ function emptyShared(): ProgramRecord {
     helperGroup: null,
     sources: [],
     milestones: [],
-    guides: ["submit-ysws-guidelines"],
+    sharedSources: true,
     links: {},
   } as ProgramRecord;
 }
@@ -342,7 +306,7 @@ function shared(): ProgramRecord {
   return {
     ...emptyShared(),
     sources: readSourcesJson(),
-    milestones: readProgramJsonMilestones(),
+    milestones: [],
   };
 }
 
@@ -384,11 +348,6 @@ function forChannel(channelId: string | null, workspaceId: string | null = null)
   const match = progs.find((p) => servesChannel(p, channelId, workspaceId));
   if (match) return match;
 
-  if (config?.slack?.helpChannel && channelId === config.slack.helpChannel) {
-    const helpProg = progs.find((p) => p.helpChannel === config.slack.helpChannel);
-    if (helpProg) return helpProg;
-  }
-
   return shared();
 }
 
@@ -400,7 +359,7 @@ function isHelpChannel(channelId: string | null, workspaceId: string | null = nu
   }
   const progs = all();
   if (progs.some((p) => p.helpChannel === channelId)) return true;
-  if (config?.slack?.helpChannel && channelId === config.slack.helpChannel) return true;
+  if (config?.slack?.helpChannel === channelId) return true;
   return false;
 }
 
@@ -515,28 +474,6 @@ function getChannelsList() {
             }),
           );
         }
-      }
-    }
-  }
-
-  if (config?.slack?.helpChannel && !channelsMap.has(config.slack.helpChannel)) {
-    channelsMap.set(
-      config.slack.helpChannel,
-      channelRow(config.slack.helpChannel, { programId: "pixl", programName: "Pixl", isHelp: true }),
-    );
-  }
-
-  if (Array.isArray(config?.slack?.faqChannels)) {
-    for (const ch of config.slack.faqChannels) {
-      if (!channelsMap.has(ch)) {
-        channelsMap.set(
-          ch,
-          channelRow(ch, {
-            programId: "pixl",
-            programName: "Pixl",
-            isHelp: ch === config?.slack?.helpChannel,
-          }),
-        );
       }
     }
   }
