@@ -7,7 +7,10 @@ const programs = require("./programs") as typeof import("./programs");
 const metrics = require("./ticketMetrics") as typeof import("./ticketMetrics");
 const helperStats = require("./helperStats") as typeof import("./helperStats");
 const supportAnalytics = require("./supportAnalytics") as typeof import("./supportAnalytics");
-const dashboardApi = require("./web/dashboardApi") as typeof import("./web/dashboardApi");
+const dashboardApi = require("./web/dashboardApi") as unknown as {
+  metricsOverview(...args: unknown[]): { resolved: number };
+  ticketSearchScoped(...args: unknown[]): { total: number };
+};
 const api = require("./web/api") as unknown as {
   internalAnalytics(...args: unknown[]): { byStatus: { resolved: number } };
 };

@@ -121,7 +121,7 @@ function guardTicket(ticket: TicketLike | null | undefined): ticket is TicketLik
 function emit({ ticket, eventType, actorId = null, detail = null, metricDetail = null }: { ticket: TicketLike; eventType: string; actorId?: string | null; detail?: unknown; metricDetail?: unknown }): number | null {
   let eventId = null;
   try {
-    const addTicketEvent = db.addTicketEvent as unknown as (row: Record<string, unknown>) => number | null;
+    const addTicketEvent = db.addTicketEvent as (row: Record<string, unknown>) => number | null;
     eventId = addTicketEvent({
       ticketId: ticket.id,
       programId: ticket.program_id,
@@ -134,7 +134,7 @@ function emit({ ticket, eventType, actorId = null, detail = null, metricDetail =
     return null;
   }
   try {
-    const recordMetric = db.recordMetric as unknown as (...args: unknown[]) => unknown;
+    const recordMetric = db.recordMetric as (...args: unknown[]) => unknown;
     recordMetric(eventType, null, metricDetail, ticket.program_id);
   } catch (e: any) {
     log.debug("assignmentLifecycle", `metric ${eventType} failed: ${e.message}`);

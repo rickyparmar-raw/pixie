@@ -7,6 +7,7 @@ import resolutionJudge = require("./resolutionJudge");
 import jobLease = require("./jobLease");
 import lastWord = require("./lastWord");
 import configModule = require("./config");
+import type { Program } from "./types";
 
 interface Row {
   id?: number;
@@ -17,7 +18,7 @@ interface Row {
   updated_at?: number;
   event_type?: string;
   actor_id?: string | null;
-  detail?: Detail;
+  detail?: string | Detail | null;
   ts?: string | number | null;
   text?: string;
   content?: string;
@@ -82,7 +83,7 @@ const SWEEP_MAX_EXAMINED = 40;
 const SWEEP_EXAMINE_SPACING_MS = 3000;
 const BACKOFF_ERRORS = new Set(["rate_limit", "quota"]);
 const timers = new Map<string, ReturnType<typeof setTimeout>>();
-const backlog: Array<{ ticketId: number; client: Client | null; program: Row | null; judge: Judge }> = [];
+const backlog: Array<{ ticketId: number; client: Client | null; program: Row | Program | null; judge: Judge }> = [];
 const backlogIds = new Set<string>();
 let backlogTimer: ReturnType<typeof setTimeout> | null = null;
 let backlogRunning = false;
@@ -96,8 +97,8 @@ function openStatus(status: unknown): boolean {
   return typeof status === "string" && ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened", "ai_answered"].includes(status);
 }
 
-function autoResolveEnabled(ticket: Row, program: Row | null): boolean {
-  const behavior = program ? programModel.behaviorFor(program as never) as unknown as { help?: { autoResolve?: boolean } } : null;
+function autoResolveEnabled(ticket: Row, program: Row | Program | null): boolean {
+  const behavior = program ? programModel.behaviorFor(program) as { help?: { autoResolve?: boolean } } : null;
   return !!behavior && behavior.help?.autoResolve === true;
 }
 
@@ -172,7 +173,7 @@ function wasJudged(ticketId: number, messageKey: string): boolean {
 }
 
 function recordJudgement(ticket: Row, messageKey: string, decision: JudgeResult): void {
-  const addTicketEvent = db.addTicketEvent as unknown as (event: Record<string, unknown>) => unknown;
+  const addTicketEvent = db.addTicketEvent as (event: Record<string, unknown>) => unknown;
   addTicketEvent({
     ticketId: ticket.id,
     programId: ticket.program_id,
@@ -208,7 +209,7 @@ function lastMessageAt(transcript: TranscriptRow[]): number | null {
   return latest;
 }
 
-async function judgeTicketOnce(ticketId: number, { client = null, program = null, now = Date.now(), judge = resolutionJudge.judgeResolution, historical = false }: { client?: Client | null; program?: Row | null; now?: number; judge?: Judge; historical?: boolean } = {}): Promise<Row> {
+async function judgeTicketOnce(ticketId: number, { client = null, program = null, now = Date.now(), judge = resolutionJudge.judgeResolution, historical = false }: { client?: Client | null; program?: Row | Program | null; now?: number; judge?: Judge; historical?: boolean } = {}): Promise<Row> {
   let ticket = db.getTicket(ticketId);
   const prog = program || (ticket && programs.get(ticket.program_id));
   if (!ticket || !openStatus(ticket.status) || !autoResolveEnabled(ticket, prog)) return { skipped: true };
@@ -280,7 +281,7 @@ async function judgeTicketOnce(ticketId: number, { client = null, program = null
   return { decision, result };
 }
 
-function judgeTicket(ticketId: number, options: { client?: Client | null; program?: Row | null; now?: number; judge?: Judge; historical?: boolean } = {}): Promise<Row> {
+function judgeTicket(ticketId: number, options: { client?: Client | null; program?: Row | Program | null; now?: number; judge?: Judge; historical?: boolean } = {}): Promise<Row> {
   const key = String(ticketId);
   const existing = inFlight.get(key);
   if (existing) return existing;
@@ -291,7 +292,7 @@ function judgeTicket(ticketId: number, options: { client?: Client | null; progra
   return run;
 }
 
-function schedule({ ticketId, client = null, program = null, delayMs = DEBOUNCE_MS, judge = resolutionJudge.judgeResolution }: { ticketId?: number; client?: Client | null; program?: Row | null; delayMs?: number; judge?: Judge } = {}): ReturnType<typeof setTimeout> | null {
+function schedule({ ticketId, client = null, program = null, delayMs = DEBOUNCE_MS, judge = resolutionJudge.judgeResolution }: { ticketId?: number; client?: Client | null; program?: Row | Program | null; delayMs?: number; judge?: Judge } = {}): ReturnType<typeof setTimeout> | null {
   if (!ticketId) return null;
   const prior = timers.get(String(ticketId));
   if (prior) clearTimeout(prior);
@@ -304,7 +305,7 @@ function schedule({ ticketId, client = null, program = null, delayMs = DEBOUNCE_
   return timer;
 }
 
-function enqueueForJudge({ ticketId, client = null, program = null, judge = resolutionJudge.judgeResolution, autoStart = true }: { ticketId: number; client?: Client | null; program?: Row | null; judge?: Judge; autoStart?: boolean }): boolean {
+function enqueueForJudge({ ticketId, client = null, program = null, judge = resolutionJudge.judgeResolution, autoStart = true }: { ticketId: number; client?: Client | null; program?: Row | Program | null; judge?: Judge; autoStart?: boolean }): boolean {
   const key = String(ticketId || "");
   if (!key || backlogIds.has(key)) return false;
   backlogIds.add(key);

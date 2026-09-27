@@ -15,7 +15,13 @@ const { config } = require("./config");
 
 type SlackElement = { action_id?: string; text?: string };
 type SlackBlock = { type?: string; text?: { text?: string }; elements?: SlackElement[] };
-type SlackPost = { text?: string; blocks?: SlackBlock[]; isUpdate?: boolean; username?: string; [key: string]: unknown };
+type SlackPost = {
+  text?: string;
+  blocks?: SlackBlock[];
+  isUpdate?: boolean;
+  username?: string;
+  [key: string]: unknown;
+};
 type StreamOptions = { onText?: (text: string) => void };
 type AnswerOptions = StreamOptions & { inHelpChannel?: boolean };
 type RichClient = { posts: SlackPost[]; chat: { postMessage: (payload: SlackPost) => Promise<{ ts: string }>; update: (payload: SlackPost) => Promise<Record<string, unknown>> } };

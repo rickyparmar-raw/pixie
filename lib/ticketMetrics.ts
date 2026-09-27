@@ -200,10 +200,11 @@ function leaderboard(programId: string, { since }: SinceOptions = {}): Leaderboa
     `SELECT DISTINCT ${CREDIT_SQL} AS userId FROM tickets t
      WHERE t.program_id = ? AND t.status = 'resolved' AND t.resolved_at IS NOT NULL
        AND t.resolved_at >= ? AND ${CREDIT_SQL} IS NOT NULL`,
-  ).all(programId, cutoff).map((row: MetricRow): string | undefined => row.userId)
+  ).all(programId, cutoff) as MetricRow[];
+  const creditedIds = credited.map((row: MetricRow): string | undefined => row.userId)
     .filter((userId: string | undefined): userId is string => Boolean(userId));
   const known = new Map(helperRows.map((helper) => [helper.user_id, helper]));
-  for (const userId of credited) if (!known.has(userId)) known.set(userId, { user_id: userId, role: "helper", active: 0 });
+  for (const userId of creditedIds) if (!known.has(userId)) known.set(userId, { user_id: userId, role: "helper", active: 0 });
   return [...known.values()].map((helper) => {
     const totals = helperTotals(programId, helper.user_id, { since: cutoff });
     return {

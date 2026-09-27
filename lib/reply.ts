@@ -68,11 +68,20 @@ function withReplySignature(text: string, program: ProgramLike | null) {
   return `${body}\n\n${sig}`;
 }
 
-function plainDashesInBlocks(blocks: ReplyBlock[]): ReplyBlock[] {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function plainDashesInBlocks<T extends object>(blocks: T[]): T[];
+function plainDashesInBlocks(blocks: unknown[]): unknown[];
+function plainDashesInBlocks(blocks: unknown[]): unknown[] {
   if (!Array.isArray(blocks)) return blocks;
   return blocks.map((block) => {
-    if (block?.text?.text) return { ...block, text: { ...block.text, text: plainDashes(block.text.text) } };
-    if (Array.isArray(block?.elements)) {
+    if (!isRecord(block)) return block;
+    const textObject = isRecord(block.text) ? block.text : null;
+    const text = textObject && typeof textObject.text === "string" ? textObject.text : null;
+    if (text) return { ...block, text: { ...textObject, text: plainDashes(text) } };
+    if (Array.isArray(block.elements)) {
       return { ...block, elements: plainDashesInBlocks(block.elements) };
     }
     return block;

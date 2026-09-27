@@ -4,6 +4,7 @@ import gapClusters = require("./gapClusters");
 import programs = require("./programs");
 import slackMessages = require("./slackMessages");
 import retrieve = require("./retrieve");
+import type { SlackClient } from "./types";
 
 interface Row {
   id?: number;
@@ -146,7 +147,7 @@ function fetchDuplicateRows(programId: string, cutoff: number): Row[] {
     `SELECT id, question, summary, status, created_at FROM tickets
      WHERE program_id = ? AND created_at > ? AND status IN ('open','waiting_for_helper','assigned','claimed','escalated','reopened','resolved')
      ORDER BY created_at DESC LIMIT 200`,
-  ).all(programId, cutoff);
+  ).all(programId, cutoff) as Row[];
 }
 
 function fetchRecentTickets(programId: string, cutoff: number): Row[] {
@@ -154,13 +155,13 @@ function fetchRecentTickets(programId: string, cutoff: number): Row[] {
     `SELECT id, question, thread_ts, created_at FROM tickets
      WHERE program_id = ? AND created_at > ? AND status NOT IN ('closed','spam','duplicate')
      ORDER BY created_at ASC LIMIT 300`,
-  ).all(programId, cutoff);
+  ).all(programId, cutoff) as Row[];
 }
 
 function fetchLiveIncidents(programId: string, now: number): Row[] {
   return db.handle().query(
     "SELECT * FROM program_incidents WHERE program_id = ? AND status IN ('candidate','confirmed') AND created_at > ? ORDER BY created_at DESC LIMIT 10",
-  ).all(programId, now - INCIDENT_COOLDOWN_MS);
+  ).all(programId, now - INCIDENT_COOLDOWN_MS) as Row[];
 }
 
 function findCooldownIncident(live: Row[], representative: string): Row | undefined {
@@ -217,20 +218,20 @@ function suggestDuplicates({ programId, ticketId = null, question, limit = 5 }: 
 }
 
 function getIncident(id: number): Row | null {
-  return db.handle().query("SELECT * FROM program_incidents WHERE id = ?").get(id) || null;
+  return db.handle().query("SELECT * FROM program_incidents WHERE id = ?").get(id) as Row | null;
 }
 
 function listIncidents(programId: string, status: string | null = null, limit = 50): Row[] {
   if (status) {
-    return db.handle().query("SELECT * FROM program_incidents WHERE program_id = ? AND status = ? ORDER BY created_at DESC LIMIT ?").all(programId, status, limit);
+    return db.handle().query("SELECT * FROM program_incidents WHERE program_id = ? AND status = ? ORDER BY created_at DESC LIMIT ?").all(programId, status, limit) as Row[];
   }
-  return db.handle().query("SELECT * FROM program_incidents WHERE program_id = ? ORDER BY created_at DESC LIMIT ?").all(programId, limit);
+  return db.handle().query("SELECT * FROM program_incidents WHERE program_id = ? ORDER BY created_at DESC LIMIT ?").all(programId, limit) as Row[];
 }
 
 function incidentTickets(incidentId: number): Row[] {
   return db.handle().query(
     `SELECT t.* FROM tickets t JOIN incident_tickets it ON it.ticket_id = t.id WHERE it.incident_id = ? ORDER BY t.created_at ASC`,
-  ).all(incidentId);
+  ).all(incidentId) as Row[];
 }
 
 function detectBursts({ programId, windowMs = INCIDENT_WINDOW_MS, threshold = INCIDENT_THRESHOLD }: { programId?: string; windowMs?: number; threshold?: number } = {}): Row {
@@ -269,7 +270,7 @@ function declareIncident({ incidentId, actorId = null, description = null, publi
   db.handle()
     .query("UPDATE program_incidents SET status = 'confirmed', confirmed_at = ?, description = ?, declared_by = ?, public_message = ? WHERE id = ?")
     .run(t, description || null, actorId, publicMessage || null, incidentId);
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: inc.program_id, actorId, action: "incident.declared", entityType: "incident", entityId: incidentId, metadata: { description, publicMessage } });
   return { ok: true, incident: getIncident(incidentId) };
 }
@@ -288,7 +289,7 @@ function createIncident({ programId, title, description = null, publicMessage = 
      VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?)`,
   ).run(programId, truncateTitle(cleanTitle), now, now, now, cleanDescription || null, actorId, cleanPublicMessage || null);
   const incidentId = Number(result.lastInsertRowid);
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({
     programId,
     actorId,
@@ -318,10 +319,10 @@ function recordAffectedReport({ incidentId, programId, ticketId = null, requeste
 
 function affectedReports(incidentId: number, onlyUnnotified = false): Row[] {
   const clause = onlyUnnotified ? "AND notified_at IS NULL" : "";
-  return db.handle().query(`SELECT * FROM incident_reports WHERE incident_id = ? ${clause} ORDER BY created_at ASC`).all(incidentId);
+  return db.handle().query(`SELECT * FROM incident_reports WHERE incident_id = ? ${clause} ORDER BY created_at ASC`).all(incidentId) as Row[];
 }
 
-async function notifyAffectedUsers({ incidentId, actorId = null, client, resolutionMessage = null }: { incidentId: number; actorId?: string | null; client?: Row; resolutionMessage?: string | null }): Promise<Row> {
+async function notifyAffectedUsers({ incidentId, actorId = null, client, resolutionMessage = null }: { incidentId: number; actorId?: string | null; client?: SlackClient; resolutionMessage?: string | null }): Promise<Row> {
   const inc = getIncident(incidentId);
   if (!inc) return { error: "incident not found" };
   if (!client) return { error: "slack client unavailable" };
@@ -332,14 +333,14 @@ async function notifyAffectedUsers({ incidentId, actorId = null, client, resolut
   const errors = [];
   for (const r of pending) {
     try {
-      await slackMessages.sendProgramMessage({ client, program: prog, channel: String(r.channel || ""), threadTs: (r.thread_ts || null) as unknown as null, text });
+      await slackMessages.sendProgramMessage({ client, program: prog, channel: String(r.channel || ""), threadTs: r.thread_ts || null, text });
       db.handle().query("UPDATE incident_reports SET notified_at = ? WHERE id = ?").run(Date.now(), r.id);
       notified += 1;
     } catch (e: any) {
       errors.push({ reportId: r.id, error: e.message });
     }
   }
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: inc.program_id, actorId, action: "incident.notified_affected", entityType: "incident", entityId: incidentId, metadata: { notified, failed: errors.length } });
   return { ok: true, notified, failed: errors.length, errors };
 }
@@ -352,7 +353,7 @@ function setIncidentStatus({ incidentId, status, actorId = null }: { incidentId:
   const extra = status === "confirmed" ? ", confirmed_at = ?" : status === "resolved" ? ", resolved_at = ?" : "";
   const params = status === "candidate" || status === "dismissed" ? [status, incidentId] : [status, t, incidentId];
   db.handle().query(`UPDATE program_incidents SET status = ?${extra} WHERE id = ?`).run(...params);
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: inc.program_id, actorId, action: `incident.${status}`, entityType: "incident", entityId: incidentId });
   return { ok: true, incident: getIncident(incidentId) };
 }

@@ -161,17 +161,17 @@ interface FinishResult extends TicketActionResult {
 
 const { config, isAdmin } = configModule;
 const { ticketPolicy, resolveTicketRole } = policy;
-const db = dbModule as unknown as TicketDbModule;
-const reply = replyModule as unknown as ReplyModule;
-const log = logModule as unknown as LogModule;
-const slackMessages = slackMessagesModule as unknown as SlackMessagesModule;
-const programs = programsModule as unknown as ProgramsModule;
-const audit = auditModule as unknown as AuditModule;
-const helperRoute = helperRouteModule as unknown as HelperRouteModule;
-const incidents = incidentsModule as unknown as IncidentsModule;
-const assignmentLifecycle = assignmentLifecycleModule as unknown as AssignmentLifecycleModule;
-const ticketCategory = ticketCategoryModule as unknown as TicketCategoryModule;
-const resolutionPipeline = resolutionPipelineModule as unknown as ResolutionPipelineModule;
+const db: TicketDbModule = dbModule as never;
+const reply = replyModule as ReplyModule;
+const log = logModule as LogModule;
+const slackMessages = slackMessagesModule as SlackMessagesModule;
+const programs = programsModule as ProgramsModule;
+const audit = auditModule as AuditModule;
+const helperRoute: HelperRouteModule = helperRouteModule as never;
+const incidents = incidentsModule as IncidentsModule;
+const assignmentLifecycle: AssignmentLifecycleModule = assignmentLifecycleModule as never;
+const ticketCategory = ticketCategoryModule as TicketCategoryModule;
+const resolutionPipeline = resolutionPipelineModule as ResolutionPipelineModule;
 
 function errorMessage(error: unknown): string {
   if (error && typeof error === "object" && "message" in error) {
@@ -538,7 +538,7 @@ async function reconcileTicketUIOnce({ client, ticket, program = null, cardText 
   const previous = renderedByTicket.get(String(ticket.id));
   if (previous === key) return true;
 
-  const destinationProgram = prog || ({ id: ticket.program_id } as unknown as Program);
+  const destinationProgram = prog || ({ id: ticket.program_id } as Program);
   const cardSynced = await syncSlack({
     client,
     channel: getOrganizerChannel(destinationProgram, ticket.workspace_id),
@@ -597,7 +597,7 @@ function isHelpChannelFor(prog: Program | null, channel: string | null, workspac
 
 function policyFor(prog: Program | null, { channel = null, workspaceId = null, role = null }: { channel?: string | null; workspaceId?: string | null; role?: string | null } = {}): TicketPolicy | null {
   if (!prog) return null;
-  return ticketPolicy({ program: prog, role: resolveTicketRole({ program: prog, channel, workspaceId, role: role as ChannelRole | null }) }) as unknown as TicketPolicy;
+  return ticketPolicy({ program: prog, role: resolveTicketRole({ program: prog, channel, workspaceId, role: role as ChannelRole | null }) }) as TicketPolicy & Record<string, boolean>;
 }
 
 interface RoutingTicket {
@@ -988,7 +988,7 @@ async function postCard({ prog, programId, resolvedWorkspaceId, ticket, client, 
     log.error("tickets", `no organizer channel configured for program ${programId} — ticket #${ticket.id} card not posted`);
     return ticket;
   }
-  if (client && client.chat && (client.chat as unknown as { postMessage?: unknown }).postMessage) {
+  if (client && client.chat && (client.chat as { postMessage?: unknown }).postMessage) {
     try {
       let candidates: TicketCandidate[] = [];
       try {

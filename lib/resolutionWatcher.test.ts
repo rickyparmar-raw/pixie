@@ -158,7 +158,7 @@ test("debounce judges one burst and stale sweep honors the job lease", async () 
   const holder = lease.acquire("ticket-resolution-sweep", 60 * 1000);
   const skipped = await watcher.sweepStale({ client, now: Date.now(), judge, useLease: true, examineSpacingMs: 0 });
   assert.equal(skipped.judged, 0);
-  lease.release("ticket-resolution-sweep", holder.owner);
+  if (holder.held) lease.release("ticket-resolution-sweep", holder.owner);
   await watcher.sweepStale({ client, now: Date.now(), judge, useLease: false, examineSpacingMs: 0 });
   assert.equal(db.getTicket(old.id).status, "open");
 });

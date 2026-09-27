@@ -12,17 +12,10 @@ import configModule = require("./config");
 import stats = require("./stats");
 import type { KnownBlock } from "@slack/types";
 import type { SlackClient } from "./types";
+import type { LearnedRow } from "./db.types";
 
 const { isAdmin } = configModule;
 const { relativeTime, coverageStats, statsText } = stats;
-interface LearnedRow {
-  id: number;
-  question: string;
-  answer: string;
-  author_id?: string | null;
-  created_at?: number | string | null;
-  ask_count?: number;
-}
 interface TopicRow { topic: string }
 interface GapRow { question: string; ask_count: number }
 interface SourceRow { name: string }
@@ -75,7 +68,7 @@ function learnedBlocks(): KnownBlock[] {
   const { known, cacheHits, instant } = coverageStats();
   if (known === 0) return [];
 
-  const top = cache.topCached(HOME_LEARNED_LIMIT).filter((row: LearnedRow) => (row.ask_count || 0) > 1);
+  const top = cache.topCached(HOME_LEARNED_LIMIT).filter((row) => (row.ask_count || 0) > 1);
   const lines = [`*answers known cold — ${known}*`, `${cacheHits} replies (${instant}%) needed no thinking at all.`];
 
   if (top.length > 0) {
@@ -104,7 +97,7 @@ function reviewBlocks(userId: string): KnownBlock[] {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*asked:* _${row.question.slice(0, 150)}_\n>${row.answer.slice(0, 300).replace(/\n/g, "\n>")}\n_${attribution}, ${relativeTime(row.created_at)}_`,
+          text: `*asked:* _${row.question.slice(0, 150)}_\n>${row.answer.slice(0, 300).replace(/\n/g, "\n>")}\n_${attribution}, ${relativeTime(Number(row.created_at))}_`,
         },
       },
       {

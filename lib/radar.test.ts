@@ -5,7 +5,12 @@ interface TicketOverrides {
   category?: string;
   confidence?: number;
 }
-interface SignalRow { suppressed_until: number; type: string; program_id: string; status: string; }
+interface SignalRow {
+  suppressed_until: number;
+  type: string;
+  program_id: string;
+  status: string;
+}
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");

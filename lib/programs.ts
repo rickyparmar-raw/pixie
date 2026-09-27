@@ -218,7 +218,7 @@ function legacyFallbackProgram(): ProgramRecord {
     milestones,
     guides: ["submit-ysws-guidelines"],
     links: {},
-  } as unknown as ProgramRecord;
+  } as ProgramRecord;
 }
 
 function loadFilePrograms(): ProgramRecord[] | null {
@@ -317,7 +317,7 @@ function emptyShared(): ProgramRecord {
     milestones: [],
     guides: ["submit-ysws-guidelines"],
     links: {},
-  } as unknown as ProgramRecord;
+  } as ProgramRecord;
 }
 
 function shared(): ProgramRecord {

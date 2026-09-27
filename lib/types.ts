@@ -9,6 +9,14 @@ export type TicketVisibility = "thread" | "organizer" | "dashboard";
 export type ProgramStatus = "sandbox" | "live" | "paused";
 export type ChannelRole = "main" | "help" | "organizer" | "dm" | "none";
 
+export interface ProviderTier {
+  apiKey: () => string | undefined;
+  baseUrl: string;
+  model: string;
+  fallback?: ProviderTier | null;
+  onRateLimited?: (key: string | undefined, ms?: number) => void;
+}
+
 // A program record after lib/programs.js has normalized it.
 export interface Program {
   id: string;
@@ -49,6 +57,13 @@ export interface Program {
   organizer_channel?: string;
   organizer_channel_id?: string;
   workspace_id?: string | null;
+  [key: string]: unknown;
+}
+
+export type BehaviorSettings = Record<string, boolean>;
+export interface ProgramBehavior {
+  main: BehaviorSettings;
+  help: BehaviorSettings;
 }
 
 export interface ProgramSource {
@@ -98,4 +113,5 @@ export interface Ticket {
   resolved_by?: string | null;
   resolved_credit_id?: string | null;
   reopened_by?: string | null;
+  [key: string]: unknown;
 }

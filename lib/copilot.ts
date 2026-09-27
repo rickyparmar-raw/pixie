@@ -19,7 +19,15 @@ interface TicketEvent { event_type: string; actor_id: string | null }
 interface RetrievalIndex { docs: Array<{ chunk: { source: string; heading?: string; text: string }; length: number }> }
 interface Verdict { sentence: string; verdict: string; evidence: Evidence[]; contradiction?: { against: Evidence } }
 interface Evidence { source: string; heading: string | null; excerpt: string; score: number }
-interface SimilarCandidate { ticketId: number; question: string; summary: string | null | undefined; resolution: string | null; category: string | null | undefined; resolvedAt: number | null; similarity: number }
+interface SimilarCandidate {
+  ticketId: number;
+  question: string;
+  summary: string | null | undefined;
+  resolution: string | null;
+  category: string | null | undefined;
+  resolvedAt: number | null;
+  similarity: number;
+}
 interface CopilotResponse {
   error?: string;
   draft?: string | null;
@@ -38,7 +46,10 @@ interface CopilotResponse {
   counts?: Record<string, number>;
   candidates?: SimilarCandidate[];
 }
-type RankedChunk = { chunk: { source: string; heading?: string; text: string }; value: number };
+type RankedChunk = {
+  chunk: { source: string; heading?: string; text: string };
+  value: number;
+};
 
 const COPILOT_WINDOW_MS = 60 * 1000;
 const COPILOT_MAX_PER_WINDOW = 20;

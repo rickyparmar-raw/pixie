@@ -45,7 +45,13 @@ interface CacheEntryRow { question_hash: string; question: string; ask_count: nu
 interface ChannelCountRow { count: number }
 interface ChannelConfigRow { channelId: string; [key: string]: unknown }
 interface ChannelClaimRow { program_id: string; channel_id?: string; workspace_id?: string | null }
-interface HelperRow { user_id: string; helper_source: string; role: string; active: number; ping_eligible: number }
+interface HelperRow {
+  user_id: string;
+  helper_source: string;
+  role: string;
+  active: number;
+  ping_eligible: number;
+}
 interface AffectedReportRow { notified_at: number | null }
 interface MacroRow { id: number; program_id: string; [key: string]: unknown }
 interface DraftBindingRow { program_id: string; channel_id?: string; channelId?: string; [key: string]: unknown }
@@ -66,33 +72,143 @@ interface ProgramSyncBody {
   [key: string]: unknown;
 }
 interface ChannelRoleBody { id: string; kind?: string }
-interface TestQuestionBody { question?: string; role?: string; channelId?: string; workspaceId?: string | null; addressed?: boolean }
-interface TicketSearchParams { programId?: string | null; status?: string | null; assigneeId?: string | null; requesterId?: string | null; category?: string | null; priority?: string | null; q?: string | null; since?: string | number | null; until?: string | number | null; sinceMs?: string | number | null; limit?: string | number; offset?: string | number }
-interface TicketActionBody { programId?: string | null; workspaceId?: string | null; actorId?: string | null; assigneeId?: string | null; resolution?: string | null; source?: string; text?: string; body?: string; until?: string | number; canonicalId?: string | number }
+interface TestQuestionBody {
+  question?: string;
+  role?: string;
+  channelId?: string;
+  workspaceId?: string | null;
+  addressed?: boolean;
+}
+interface TicketSearchParams {
+  programId?: string | null;
+  status?: string | null;
+  assigneeId?: string | null;
+  requesterId?: string | null;
+  category?: string | null;
+  priority?: string | null;
+  q?: string | null;
+  since?: string | number | null;
+  until?: string | number | null;
+  sinceMs?: string | number | null;
+  limit?: string | number;
+  offset?: string | number;
+}
+interface TicketActionBody {
+  programId?: string | null;
+  workspaceId?: string | null;
+  actorId?: string | null;
+  assigneeId?: string | null;
+  resolution?: string | null;
+  source?: string;
+  text?: string;
+  body?: string;
+  until?: string | number;
+  canonicalId?: string | number;
+}
 interface ChannelToggleBody { programId?: string; channelId?: string; field?: string; value?: string | boolean | null }
 interface ChannelAddBody { programId?: string; channelId?: string; isHelp?: boolean }
-interface HelperSyncBody { actorId?: string | null; source?: string; members?: string[]; pingIneligible?: string[]; reconcile?: boolean }
-interface CopilotBody { programId?: string | null; actorId?: string | null; question?: string; threadTs?: string | null; text?: string; ticketId?: string | number; limit?: string | number }
+interface HelperSyncBody {
+  actorId?: string | null;
+  source?: string;
+  members?: string[];
+  pingIneligible?: string[];
+  reconcile?: boolean;
+}
+interface CopilotBody {
+  programId?: string | null;
+  actorId?: string | null;
+  question?: string;
+  threadTs?: string | null;
+  text?: string;
+  ticketId?: string | number;
+  limit?: string | number;
+}
 interface KnowledgeProposeBody { actorId?: string | null; ticketId?: string | number }
 interface CandidateActionBody { actorId?: string | null; action?: string; edits?: Record<string, unknown> }
 interface GapClusterQuery { sinceMs?: string | number; minAskers?: string | number }
 interface FaqProposeBody { actorId?: string | null; question?: string }
-interface MacroQuery { actorId?: string | null; enabledOnly?: string; q?: string | null; category?: string | null; limit?: string | number }
-interface MacroBody extends MacroQuery { id?: string | number; onSendTransition?: unknown; on_send_transition?: unknown; ticketId?: string | number; ticketIds?: Array<string | number>; selector?: string; duration?: string; action?: string; userId?: string; tags?: string[]; [key: string]: unknown }
+interface MacroQuery {
+  actorId?: string | null;
+  enabledOnly?: string;
+  q?: string | null;
+  category?: string | null;
+  limit?: string | number;
+}
+interface MacroBody extends MacroQuery {
+  id?: string | number;
+  onSendTransition?: unknown;
+  on_send_transition?: unknown;
+  ticketId?: string | number;
+  ticketIds?: Array<string | number>;
+  selector?: string;
+  duration?: string;
+  action?: string;
+  userId?: string;
+  tags?: string[];
+  [key: string]: unknown;
+}
 interface IncidentQuery { status?: string | null; limit?: string | number; onlyUnnotified?: string; severity?: string }
-interface IncidentBody { actorId?: string | null; action?: string; ticketId?: string | number; title?: string; description?: string | null; publicMessage?: string | null; resolutionMessage?: string | null }
+interface IncidentBody {
+  actorId?: string | null;
+  action?: string;
+  ticketId?: string | number;
+  title?: string;
+  description?: string | null;
+  publicMessage?: string | null;
+  resolutionMessage?: string | null;
+}
 interface RadarQuery { status?: string | null; severity?: string | null; limit?: string | number }
 interface RadarActionBody { actorId?: string | null; action?: string; duration?: string }
-interface AnalyticsQuery { days?: string | number; from?: string | number; until?: string | number; bucket?: string; operation?: string | null; limit?: string | number; offset?: string | number; recentLimit?: string | number; since?: string | number; q?: string | null; category?: string | null; ticketId?: string | number }
+interface AnalyticsQuery {
+  days?: string | number;
+  from?: string | number;
+  until?: string | number;
+  bucket?: string;
+  operation?: string | null;
+  limit?: string | number;
+  offset?: string | number;
+  recentLimit?: string | number;
+  since?: string | number;
+  q?: string | null;
+  category?: string | null;
+  ticketId?: string | number;
+}
 interface RoutingBody { actorId?: string | null; userId?: string; tags?: string[] }
 interface RetentionBody { actorId?: string | null; confirm?: boolean; policy?: Record<string, unknown> }
-interface DraftSyncBody { draft?: { id?: string; status?: string; privateSandboxOnly?: boolean; autoAssign?: boolean; ticketsEnabled?: boolean; workspaceId?: string; sandboxBindings?: Array<{ sandboxOnly?: boolean; enabled?: boolean; role?: string; channelId?: string }> } }
+interface DraftSyncBody {
+  draft?: {
+    id?: string;
+    status?: string;
+    privateSandboxOnly?: boolean;
+    autoAssign?: boolean;
+    ticketsEnabled?: boolean;
+    workspaceId?: string;
+    sandboxBindings?: Array<{
+      sandboxOnly?: boolean;
+      enabled?: boolean;
+      role?: string;
+      channelId?: string;
+    }>;
+  };
+}
 interface TestQuestionSettings { aiReplies?: boolean; escalateUnknown?: boolean; [key: string]: unknown }
 interface EngagementResult { engage: boolean; intent: string | null; error: string | null; source: string | null }
 interface RetentionValues { [key: string]: number }
-interface UserInfoPublic { slackId: string; displayName?: string | null; realName?: string | null; username?: string | null; avatarUrl?: string | null }
+interface UserInfoPublic {
+  slackId: string;
+  displayName?: string | null;
+  realName?: string | null;
+  username?: string | null;
+  avatarUrl?: string | null;
+}
 interface TicketEventRow { event_type: string; actor_id: string | null; [key: string]: unknown }
-interface NoteRow { id: number; body: string; author_id: string | null; created_at: number; [key: string]: unknown }
+interface NoteRow {
+  id: number;
+  body: string;
+  author_id: string | null;
+  created_at: number;
+  [key: string]: unknown;
+}
 
 interface ApiResponse {
   [key: string]: unknown;
@@ -124,8 +240,22 @@ interface ApiResponse {
 }
 
 interface KnowledgeDoc { chunk: { source: string; heading?: string; text: string }; length: number }
-interface CacheRow { question_hash: string; question: string; ask_count: number; source: string | null; written_at: number }
-interface UserInfo { at: number; ok: boolean; displayName?: string | null; realName?: string | null; username?: string | null; avatarUrl?: string | null; reason?: string }
+interface CacheRow {
+  question_hash: string;
+  question: string;
+  ask_count: number;
+  source: string | null;
+  written_at: number;
+}
+interface UserInfo {
+  at: number;
+  ok: boolean;
+  displayName?: string | null;
+  realName?: string | null;
+  username?: string | null;
+  avatarUrl?: string | null;
+  reason?: string;
+}
 interface SlackError { message?: string; code?: string; data?: { error?: string } }
 interface SlackChannel { id: string; name: string; is_member?: boolean }
 interface SlackChannelPage { channels?: SlackChannel[]; response_metadata?: { next_cursor?: string } }

@@ -27,12 +27,43 @@ interface DashboardParams {
   pingEligible?: boolean;
 }
 interface SearchTicket extends Ticket { first_responder_id?: string | null; notes_count?: number }
-interface MetricTicketRow { created_at: number; first_response_at: number | null; first_human_response_at: number | null; resolved_at: number | null; resolved_by: string | null; assignee_id: string | null; status: string }
+interface MetricTicketRow {
+  created_at: number;
+  first_response_at: number | null;
+  first_human_response_at: number | null;
+  resolved_at: number | null;
+  resolved_by: string | null;
+  assignee_id: string | null;
+  status: string;
+}
 interface MetricRow { kind: string; detail: string | null }
 interface VolumeDay { date: string; questions: number; aiOnly: number; human: number }
-interface SourceStatusRow { name?: string; label?: string; type?: string; url?: string; status?: string; lastSyncedAt?: number | string | null; lastSuccessAt?: number | string | null; error?: string | null; chunks?: number | null }
-interface HelperDbRow { user_id: string; role: string; active: number; ping_eligible: number; helper_source: string }
-interface HelperStat { userId: string; expertise: string[]; categoryResolved: string[]; totals: { open: number; resolved: number }; helpfulPercentage: number | null; lastActivity: number | null }
+interface SourceStatusRow {
+  name?: string;
+  label?: string;
+  type?: string;
+  url?: string;
+  status?: string;
+  lastSyncedAt?: number | string | null;
+  lastSuccessAt?: number | string | null;
+  error?: string | null;
+  chunks?: number | null;
+}
+interface HelperDbRow {
+  user_id: string;
+  role: string;
+  active: number;
+  ping_eligible: number;
+  helper_source: string;
+}
+interface HelperStat {
+  userId: string;
+  expertise: string[];
+  categoryResolved: string[];
+  totals: { open: number; resolved: number };
+  helpfulPercentage: number | null;
+  lastActivity: number | null;
+}
 
 function needProgram(programId: string): { error: string } | null {
   // An empty helper roster denies access, matching the Slack path's fail-closed policy.

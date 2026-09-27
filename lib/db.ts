@@ -7,6 +7,7 @@ import schema = require("./schema");
 import log = require("./log");
 import type {
   AuditEventRow,
+  ActiveGuideRow,
   ChannelClaimRow,
   LearnedFactRow,
   ProgramRow,
@@ -21,6 +22,14 @@ const { SCHEMA, MIGRATIONS, POST_MIGRATION_SCHEMA } = schema;
 
 type DbValue = string | number | boolean | null | Uint8Array;
 interface SqlRow { [key: string]: unknown }
+interface TopicRow { topic: string; was_helpful: number }
+interface GapSummaryRow {
+  id: number;
+  question: string;
+  ask_count: number;
+  askers: number;
+  last_asked: number;
+}
 
 interface UsageRow extends SqlRow {
   requests?: number;
@@ -150,6 +159,7 @@ interface HistoryImportRow {
   started_at: number | null;
   completed_at: number | null;
   rules_version: number;
+  [key: string]: unknown;
 }
 
 interface HistoryImportPatch {
@@ -203,7 +213,7 @@ interface Statement<Row> {
 }
 
 function query<Row = SqlRow>(sql: string): Statement<Row> {
-  return handle().query<Row, SQLQueryBindings[]>(sql) as unknown as Statement<Row>;
+  return handle().query<Row, SQLQueryBindings[]>(sql) as Statement<Row>;
 }
 
 function errorMessage(error: unknown): string {
@@ -369,11 +379,11 @@ function recordTopic(userId: string, topic: string, wasHelpful = true) {
     .run(userId, userId, MAX_USER_TOPICS);
 }
 
-function getTopics(userId: string) {
+function getTopics(userId: string): TopicRow[] {
   // Topics are bounded by the same history window used by other user context.
   if (!userId) return [];
   const cutoff = now() - HISTORY_TTL_MS;
-  return query("SELECT topic, was_helpful FROM user_topics WHERE user_id = ? AND created_at > ? ORDER BY created_at DESC")
+  return query<TopicRow>("SELECT topic, was_helpful FROM user_topics WHERE user_id = ? AND created_at > ? ORDER BY created_at DESC")
     .all(userId, cutoff);
 }
 
@@ -450,7 +460,7 @@ function topGaps(limit = 20, sinceMs = 30 * 24 * 60 * 60 * 1000, {
                LIMIT ?`;
   params.push(minAskers, limit);
 
-  return query(sql).all(...params);
+  return query<GapSummaryRow>(sql).all(...params);
 }
 
 function unclassifiedGaps(limit = 5) {
@@ -535,13 +545,13 @@ function assignUnownedLearnedFacts(ownerOfChannel: (channel: string | null) => s
   return { unowned: rows.length, assigned, remaining: rows.length - assigned };
 }
 
-function listLearnedFacts(status: string, limit = 25, programId = null) {
+function listLearnedFacts(status: string, limit = 25, programId = null): LearnedFactRow[] {
   const statusClause = status === "approved" ? "status = ? AND superseded_by IS NULL" : "status = ?";
   if (programId) {
-    return query(`SELECT * FROM learned_facts WHERE ${statusClause} AND program_id = ? ORDER BY created_at ASC LIMIT ?`)
+    return query<LearnedFactRow>(`SELECT * FROM learned_facts WHERE ${statusClause} AND program_id = ? ORDER BY created_at ASC LIMIT ?`)
       .all(status, programId, limit);
   }
-  return query(`SELECT * FROM learned_facts WHERE ${statusClause} ORDER BY created_at ASC LIMIT ?`)
+  return query<LearnedFactRow>(`SELECT * FROM learned_facts WHERE ${statusClause} ORDER BY created_at ASC LIMIT ?`)
     .all(status, limit);
 }
 
@@ -580,9 +590,9 @@ function supersedeLearnedFact(id: number, supersededBy: unknown) {
     .run(supersededBy, now(), id).changes > 0;
 }
 
-function getLearnedFactById(id: number) {
+function getLearnedFactById(id: number): LearnedFactRow | null {
   return (
-    query("SELECT * FROM learned_facts WHERE id = ?")
+    query<LearnedFactRow>("SELECT * FROM learned_facts WHERE id = ?")
       .get(id) || null
   );
 }
@@ -656,20 +666,20 @@ function saveGuide(threadTs: string, guideId: string, currentStep: number, userI
     .run(threadTs, guideId, currentStep, userId, now());
 }
 
-function getGuide(threadTs: string) {
+function getGuide(threadTs: string): ActiveGuideRow | null {
   // Expired guides are invisible so a stale interactive prompt cannot advance.
   const cutoff = now() - GUIDE_TTL_MS;
-  return query("SELECT * FROM active_guides WHERE thread_ts = ? AND started_at > ?").get(threadTs, cutoff) || null;
+  return query<ActiveGuideRow>("SELECT * FROM active_guides WHERE thread_ts = ? AND started_at > ?").get(threadTs, cutoff) || null;
 }
 
 function setGuideMessageTs(threadTs: string, messageTs: string) {
   query("UPDATE active_guides SET message_ts = ? WHERE thread_ts = ?").run(messageTs, threadTs);
 }
 
-function getGuideByMessageTs(messageTs: string) {
+function getGuideByMessageTs(messageTs: string): ActiveGuideRow | null {
   const cutoff = now() - GUIDE_TTL_MS;
   return (
-    query("SELECT * FROM active_guides WHERE message_ts = ? AND started_at > ?").get(messageTs, cutoff) ||
+    query<ActiveGuideRow>("SELECT * FROM active_guides WHERE message_ts = ? AND started_at > ?").get(messageTs, cutoff) ||
     null
   );
 }
@@ -1098,7 +1108,7 @@ function toJson(value: unknown) {
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
-function createTicket({ programId, workspaceId = null, channel, threadTs, requesterId, question, category = null, priority = null, summary = null, createdAt = null, visibility = null }: CreateTicketOptions) {
+function createTicket({ programId, workspaceId = null, channel, threadTs, requesterId, question, category = null, priority = null, summary = null, createdAt = null, visibility = null }: CreateTicketOptions): number | null {
   // The unique thread key makes duplicate event delivery idempotent; the lookup handles conflicts.
   const t = createdAt === null || createdAt === undefined ? now() : Number(createdAt);
   try {
@@ -1114,21 +1124,21 @@ function createTicket({ programId, workspaceId = null, channel, threadTs, reques
   return null;
 }
 
-function getTicket(id: number) {
-  return query("SELECT * FROM tickets WHERE id = ?").get(id) || null;
+function getTicket(id: number): TicketRow | null {
+  return query<TicketRow>("SELECT * FROM tickets WHERE id = ?").get(id) || null;
 }
 
-function getTicketByThreadTs(threadTs: string, workspaceId: string | null = null, programId: string | null = null) {
+function getTicketByThreadTs(threadTs: string, workspaceId: string | null = null, programId: string | null = null): TicketRow | null {
   if (workspaceId) {
     if (programId) {
-      return query("SELECT * FROM tickets WHERE thread_ts = ? AND workspace_id = ? AND program_id = ? LIMIT 1").get(threadTs, workspaceId, programId) || null;
+      return query<TicketRow>("SELECT * FROM tickets WHERE thread_ts = ? AND workspace_id = ? AND program_id = ? LIMIT 1").get(threadTs, workspaceId, programId) || null;
     }
-    return query("SELECT * FROM tickets WHERE thread_ts = ? AND workspace_id = ? LIMIT 1").get(threadTs, workspaceId) || null;
+    return query<TicketRow>("SELECT * FROM tickets WHERE thread_ts = ? AND workspace_id = ? LIMIT 1").get(threadTs, workspaceId) || null;
   }
   if (programId) {
-    return query("SELECT * FROM tickets WHERE thread_ts = ? AND program_id = ? LIMIT 1").get(threadTs, programId) || null;
+    return query<TicketRow>("SELECT * FROM tickets WHERE thread_ts = ? AND program_id = ? LIMIT 1").get(threadTs, programId) || null;
   }
-  return query("SELECT * FROM tickets WHERE thread_ts = ? LIMIT 1").get(threadTs) || null;
+  return query<TicketRow>("SELECT * FROM tickets WHERE thread_ts = ? LIMIT 1").get(threadTs) || null;
 }
 
 function getTicketByChannelThreadTs(channel: string | null, threadTs: string, workspaceId = null, programId = null) {
@@ -1258,12 +1268,12 @@ function recordFirstResponse(id: number, human = false, at = null) {
   ).run(t, t, id).changes > 0;
 }
 
-function getTicketsForProgram(programId: string, status = null) {
+function getTicketsForProgram(programId: string, status = null): TicketRow[] {
   if (status) {
-    return query("SELECT * FROM tickets WHERE program_id = ? AND status = ? ORDER BY created_at DESC")
+    return query<TicketRow>("SELECT * FROM tickets WHERE program_id = ? AND status = ? ORDER BY created_at DESC")
       .all(programId, status);
   }
-  return query("SELECT * FROM tickets WHERE program_id = ? ORDER BY created_at DESC")
+  return query<TicketRow>("SELECT * FROM tickets WHERE program_id = ? ORDER BY created_at DESC")
     .all(programId);
 }
 
@@ -1320,8 +1330,8 @@ function listChannelClaims() {
   return query("SELECT workspace_id, channel_id, program_id, kind FROM program_channels").all();
 }
 
-function listProgramChannels(programId: string) {
-  return query("SELECT * FROM program_channels WHERE program_id = ? ORDER BY created_at ASC").all(programId);
+function listProgramChannels(programId: string): ChannelClaimRow[] {
+  return query<ChannelClaimRow>("SELECT * FROM program_channels WHERE program_id = ? ORDER BY created_at ASC").all(programId);
 }
 
 function addTicketEvent({ ticketId, programId, actorId = null, eventType, detail = null, createdAt = null }: Record<string, unknown>) {
@@ -1331,8 +1341,8 @@ function addTicketEvent({ ticketId, programId, actorId = null, eventType, detail
   return res.changes > 0 ? Number(res.lastInsertRowid) : null;
 }
 
-function listTicketEvents(ticketId: number, limit = 100) {
-  return query("SELECT * FROM ticket_events WHERE ticket_id = ? ORDER BY created_at ASC LIMIT ?").all(ticketId, limit);
+function listTicketEvents(ticketId: number, limit = 100): TicketEventRow[] {
+  return query<TicketEventRow>("SELECT * FROM ticket_events WHERE ticket_id = ? ORDER BY created_at ASC LIMIT ?").all(ticketId, limit);
 }
 
 function getHistoryImportProgress(programId: string, channelId: string): HistoryImportRow | null;
@@ -1392,11 +1402,11 @@ function recordAuditEvent({ programId = null, actorId = null, action, entityType
   return res.changes > 0 ? Number(res.lastInsertRowid) : null;
 }
 
-function listAuditEvents({ programId = null, limit = 100 }: Record<string, unknown> = {}) {
+function listAuditEvents({ programId = null, limit = 100 }: Record<string, unknown> = {}): AuditEventRow[] {
   if (programId) {
-    return query("SELECT * FROM audit_events WHERE program_id = ? ORDER BY created_at DESC LIMIT ?").all(programId, limit);
+    return query<AuditEventRow>("SELECT * FROM audit_events WHERE program_id = ? ORDER BY created_at DESC LIMIT ?").all(programId, limit);
   }
-  return query("SELECT * FROM audit_events ORDER BY created_at DESC LIMIT ?").all(limit);
+  return query<AuditEventRow>("SELECT * FROM audit_events ORDER BY created_at DESC LIMIT ?").all(limit);
 }
 
 function syncHelper({ programId, userId, source = "manual", role = "helper" }: Record<string, unknown>) {

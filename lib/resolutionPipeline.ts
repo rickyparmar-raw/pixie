@@ -147,7 +147,7 @@ async function summarizeResolution({ ticket, client }: { ticket: Ticket; client?
       transcript.length > 0 ? `Thread:\n${transcript.join("\n")}` : null,
       timeline.length > 0 ? `Timeline:\n${formatTimeline(timeline)}` : null,
     ].filter(Boolean).join("\n\n").slice(0, MAX_TRANSCRIPT_CHARS);
-    const answerConfig = config.answer as unknown as { onRateLimited?: unknown };
+    const answerConfig = config.answer as import("./types").ProviderTier;
     const { text } = await llm.complete(
       {
         baseUrl: config.answer.baseUrl,
@@ -184,7 +184,7 @@ async function summaryStep({ ticket, client }: PipelineArgs): Promise<string | n
 }
 
 async function learningStep({ ticket, workerId }: PipelineArgs): Promise<unknown> {
-  const learnFromResolution = activeLearning.learnFromResolution as unknown as (args: Record<string, unknown>) => Promise<unknown>;
+  const learnFromResolution = activeLearning.learnFromResolution as (args: Record<string, unknown>) => Promise<unknown>;
   return learnFromResolution({ ticket, workerId });
 }
 

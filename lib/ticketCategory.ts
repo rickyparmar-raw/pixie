@@ -8,6 +8,7 @@ interface CategoryRules {
   byChannel?: Record<string, unknown>;
   byKeyword?: KeywordRule[];
   fallback?: unknown;
+  [key: string]: unknown;
 }
 
 const DEFAULT_TAXONOMY = {

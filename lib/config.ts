@@ -2,17 +2,10 @@
 // callers cannot silently disagree about which endpoint or credentials to use.
 import dotenv = require("dotenv");
 import type { WebClient } from "@slack/web-api";
+import type { ProviderTier } from "./types";
 
 interface KeyPoolState { index: number; now: number }
 type RateLimitHandler = (key: string | undefined, ms?: number) => void;
-interface ProviderTier {
-  apiKey: () => string | undefined;
-  baseUrl: string;
-  model: string;
-  fallback?: ProviderTier | null;
-  onRateLimited?: RateLimitHandler;
-}
-
 dotenv.config();
 
 const ZEN_BASE_URL = "https://opencode.ai/zen/v1";

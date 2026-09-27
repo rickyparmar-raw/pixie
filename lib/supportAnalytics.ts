@@ -152,7 +152,7 @@ function overview(programId: string, sinceMs = DEFAULT_SINCE_MS): SupportOvervie
   ).get(programId, ...STALE48H_STATUSES, cutoff, now - STALE48H_MS) as AnalyticsRow;
 
   const duplicates = counts.duplicate || 0;
-  const gapCounts = (db.gapCountsByKind as unknown as (windowMs: number, kind: null, programId: string) => unknown)(GAP_COUNTS_WINDOW_MS, null, programId);
+  const gapCounts = (db.gapCountsByKind as (windowMs: number, kind: null, programId: string) => unknown)(GAP_COUNTS_WINDOW_MS, null, programId);
   const incidents = db.handle().query(
     "SELECT status, COUNT(*) AS n FROM program_incidents WHERE program_id = ? GROUP BY status",
   ).all(programId) as AnalyticsRow[];

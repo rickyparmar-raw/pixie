@@ -44,7 +44,7 @@ function release(name: string, owner: string) {
   } catch (_: unknown) {}
 }
 
-async function runOnce(name: string, ttlMs: number, fn: () => unknown | Promise<unknown>) {
+async function runOnce<T>(name: string, ttlMs: number, fn: () => T | Promise<T>): Promise<{ ran: boolean; result?: T }> {
   const lease = acquire(name, ttlMs);
   if (!lease.held) {
     log.debug("jobLease", `${name} already held — skipping`);

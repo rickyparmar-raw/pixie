@@ -6,6 +6,7 @@ import intent = require("./intent");
 import db = require("./db");
 import log = require("./log");
 import type { ActionsBlockElement, KnownBlock } from "@slack/types";
+import type { ProviderTier } from "./types";
 
 const { config } = configModule;
 const { looksLikeHelpRequest } = intent;
@@ -43,6 +44,7 @@ interface GuideResult {
   cancelled?: boolean;
   completed?: boolean;
   isAlternate?: boolean;
+  [key: string]: unknown;
 }
 interface IntentTierRequest {
   maxTokens: number;
@@ -1127,13 +1129,14 @@ function guideChooserPrompt() {
   ].join("\n");
 }
 
-function intentTierRequest({ maxTokens, temperature, messages }: IntentTierRequest): Record<string, unknown> {
+function intentTierRequest({ maxTokens, temperature, messages }: IntentTierRequest): Parameters<typeof llm.complete>[0] {
+  const intentConfig: ProviderTier = config.intent;
   return {
-    baseUrl: config.intent.baseUrl,
-    apiKey: config.intent.apiKey,
-    model: config.intent.model,
-    fallback: config.intent.fallback,
-    onRateLimited: config.intent.onRateLimited,
+    baseUrl: intentConfig.baseUrl,
+    apiKey: intentConfig.apiKey,
+    model: intentConfig.model,
+    fallback: intentConfig.fallback,
+    onRateLimited: intentConfig.onRateLimited,
     maxTokens,
     temperature,
     thinking: { type: "disabled" },
@@ -1332,7 +1335,7 @@ async function answerStuckQuestion(guide: Guide, step: GuideStep, alternateKey: 
         apiKey: config.answer.apiKey,
         model: config.answer.model,
         fallback: config.answer.fallback,
-      onRateLimited: (config.answer as typeof config.answer & { onRateLimited?: unknown }).onRateLimited,
+        onRateLimited: (config.answer as ProviderTier).onRateLimited,
         maxTokens: STUCK_ANSWER_MAX_TOKENS,
         temperature: 0.3,
         thinking: { type: "disabled" },
@@ -1370,12 +1373,12 @@ function advanceGuideByReaction(messageTsOrThreadTs: string | { messageTs: strin
   let uid = userId;
   let state = null;
 
-  if (typeof messageTsOrThreadTs === "object" && messageTsOrThreadTs !== null) {
+  if (typeof messageTsOrThreadTs === "string") {
+    state = db.getGuide(messageTsOrThreadTs) || db.getGuideByMessageTs(messageTsOrThreadTs);
+  } else {
     messageTs = messageTsOrThreadTs.messageTs;
     uid = messageTsOrThreadTs.userId || userId;
     state = db.getGuideByMessageTs(messageTs) || db.getGuide(messageTs);
-  } else {
-    state = db.getGuide(messageTsOrThreadTs) || db.getGuideByMessageTs(messageTsOrThreadTs);
   }
 
   if (!state) return null;

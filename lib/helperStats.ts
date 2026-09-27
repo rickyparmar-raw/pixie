@@ -93,12 +93,13 @@ function helperStats(programId: string, userId: string, { recentLimit = 20, sinc
   const byId = new Map(tickets.map((ticket) => [ticket.id, ticket]));
   const events = db.handle().query(
     "SELECT * FROM ticket_events WHERE program_id = ? ORDER BY created_at ASC, id ASC",
-  ).all(programId).map((event: DbRow) => ({ ...event, detail: detail(event) })) as DbRow[];
-  const assignments = events.filter((event) =>
+  ).all(programId) as DbRow[];
+  const normalizedEvents = events.map((event: DbRow) => ({ ...event, detail: detail(event) }));
+  const assignments = normalizedEvents.filter((event) =>
     (event.event_type === "claimed" && event.actor_id === userId) ||
     (event.event_type === "assigned" && event.detail?.to === userId),
   );
-  const replies = events.filter((event) => event.event_type === "helper_reply" && event.actor_id === userId);
+  const replies = normalizedEvents.filter((event) => event.event_type === "helper_reply" && event.actor_id === userId);
   const resolutions = db.handle().query(
     `SELECT t.* FROM tickets t
      WHERE t.program_id = ? AND t.status = 'resolved' AND t.resolved_at IS NOT NULL
@@ -146,7 +147,7 @@ function helperStats(programId: string, userId: string, { recentLimit = 20, sinc
       resolvedAt: resolutions.find((resolved) => resolved.id === ticket.id)?.resolved_at || null,
       reopened: (ticket.reopen_count || 0) > 0,
     }));
-  const lastActivity = events.filter((event) => event.actor_id === userId || assignments.includes(event)).at(-1)?.created_at || null;
+  const lastActivity = normalizedEvents.filter((event) => event.actor_id === userId || assignments.includes(event)).at(-1)?.created_at || null;
 
   const accept = assignmentLifecycle.helperAcceptStats(programId, userId);
 

@@ -2,9 +2,10 @@
 import configModule = require("./config");
 import llm = require("./llm");
 import log = require("./log");
+import type { ProviderTier } from "./types";
 
 const { config } = configModule;
-const answerConfig = config.answer as typeof config.answer & { onRateLimited?: unknown };
+const answerConfig: ProviderTier = config.answer;
 
 interface ThreadMessage {
   text?: string;

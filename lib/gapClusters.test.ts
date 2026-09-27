@@ -1,6 +1,12 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-interface ClusterRow { representative: string; variants: number; askers: number; askCount: number; covered: boolean; }
+interface ClusterRow {
+  representative: string;
+  variants: number;
+  askers: number;
+  askCount: number;
+  covered: boolean;
+}
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");

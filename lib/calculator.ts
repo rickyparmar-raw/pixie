@@ -13,8 +13,22 @@ interface ShopEconomy {
 
 interface ShopItem { name: string; price?: number }
 interface CalculatorData { economy?: ShopEconomy; items?: ShopItem[] }
-interface TargetArgs { question: string; targetItem: ShopItem | null; hours: number | null; currentRe: number; tier: number; economy: ShopEconomy }
-interface AffordableArgs { question: string; items: ShopItem[]; hours: number | null; currentRe: number; tier: number; economy: ShopEconomy }
+interface TargetArgs {
+  question: string;
+  targetItem: ShopItem | null;
+  hours: number | null;
+  currentRe: number;
+  tier: number;
+  economy: ShopEconomy;
+}
+interface AffordableArgs {
+  question: string;
+  items: ShopItem[];
+  hours: number | null;
+  currentRe: number;
+  tier: number;
+  economy: ShopEconomy;
+}
 interface PayoutArgs { hours: number | null; currentRe: number; tier: number; economy: ShopEconomy }
 const HOURS_REGEX = /\b(\d+(?:\.\d+)?)\s*(?:hrs?|hours?)\b/i;
 const RE_REGEX = /\b(\d+(?:\.\d+)?)\s*(?:re|restoration energy)\b/i;

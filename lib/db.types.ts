@@ -5,6 +5,16 @@ export interface ThreadRow {
   pixie_spoke: number;
   helper_pinged: number;
   updated_at: number;
+  [key: string]: unknown;
+}
+
+export interface ActiveGuideRow {
+  thread_ts: string;
+  guide_id: string;
+  current_step: number;
+  user_id?: string | null;
+  message_ts?: string | null;
+  [key: string]: unknown;
 }
 
 export type TicketRow = Ticket;
@@ -15,6 +25,7 @@ export interface ProgramRow {
   workspace_id: string | null;
   behavior: string | null;
   status: string | null;
+  [key: string]: unknown;
 }
 
 export interface ChannelClaimRow {
@@ -24,6 +35,7 @@ export interface ChannelClaimRow {
   kind: string;
   claimed_by: string | null;
   created_at: number;
+  [key: string]: unknown;
 }
 
 export interface TicketEventRow {
@@ -34,6 +46,7 @@ export interface TicketEventRow {
   event_type: string;
   detail: string | null;
   created_at: number;
+  [key: string]: unknown;
 }
 
 export interface AuditEventRow {
@@ -45,6 +58,7 @@ export interface AuditEventRow {
   entity_id: string | null;
   metadata: string | null;
   created_at: number;
+  [key: string]: unknown;
 }
 
 export interface LearnedFactRow {
@@ -56,5 +70,15 @@ export interface LearnedFactRow {
   category: string | null;
   created_at: number;
   updated_at: number | null;
+  [key: string]: unknown;
+}
+
+export interface LearnedRow {
+  id: number;
+  question: string;
+  answer: string;
+  author_id?: string | null;
+  created_at?: number | string | null;
+  ask_count?: number;
 }
 import type { Ticket } from "./types";

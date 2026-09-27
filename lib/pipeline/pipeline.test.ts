@@ -33,8 +33,22 @@ type TestRecord = Record<string, unknown>;
 type TestMessage = TestRecord & { text?: string; ts?: string };
 type DecisionArgs = TestRecord & { message: string; conversationContext: string };
 type ProgramOverride = { pixl?: TestRecord; b2b?: TestRecord };
-type SendArgs = { channel: string; text: string; addressed?: boolean; threadTs?: string | null; messageTs?: string | null; seedClient?: unknown };
-type MatrixWant = { spoke?: boolean; ticket?: number; handoff?: number; answer?: number; jev?: number; text?: RegExp };
+type SendArgs = {
+  channel: string;
+  text: string;
+  addressed?: boolean;
+  threadTs?: string | null;
+  messageTs?: string | null;
+  seedClient?: unknown;
+};
+type MatrixWant = {
+  spoke?: boolean;
+  ticket?: number;
+  handoff?: number;
+  answer?: number;
+  jev?: number;
+  text?: RegExp;
+};
 
 let savedEnv: string | undefined;
 const saved: Record<string, [Record<string, unknown>, unknown]> = {};

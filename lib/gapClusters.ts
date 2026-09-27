@@ -26,8 +26,21 @@ interface ClusterSummary {
   covered: boolean;
   threads: Array<{ channel: string; messageTs: string }>;
 }
-interface ClusterResponse { error?: string; clusters?: ClusterSummary[]; ok?: boolean; candidate?: { status: string; answer: string }; grounded?: boolean }
-type QuestionGroup = { question: string; askCount: number; askers: Set<string>; firstSeen: number; lastSeen: number; threads: Array<{ channel: string; messageTs: string }> };
+interface ClusterResponse {
+  error?: string;
+  clusters?: ClusterSummary[];
+  ok?: boolean;
+  candidate?: { status: string; answer: string };
+  grounded?: boolean;
+}
+type QuestionGroup = {
+  question: string;
+  askCount: number;
+  askers: Set<string>;
+  firstSeen: number;
+  lastSeen: number;
+  threads: Array<{ channel: string; messageTs: string }>;
+};
 
 const DEFAULT_THRESHOLD = 0.35;
 

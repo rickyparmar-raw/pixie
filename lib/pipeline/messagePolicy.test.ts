@@ -5,9 +5,10 @@ const { planEngagement, finalAction } = require("./messagePolicy");
 const settings = { enabled: true, mentionReplies: true, generalMentionChat: true };
 
 function plan(role: string, intent: string, options: Record<string, unknown> = {}) {
+  const extraSettings = options.settings;
   return planEngagement({
     role,
-    settings: { ...settings, ...(options.settings || {}) },
+    settings: { ...settings, ...(extraSettings && typeof extraSettings === "object" ? extraSettings : {}) },
     addressed: options.addressed ?? true,
     addressedHow: options.addressedHow,
     engagement: { intent, engage: intent !== "unrelated_chatter" && intent !== "human_conversation" },

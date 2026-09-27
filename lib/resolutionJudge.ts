@@ -84,7 +84,8 @@ async function judgeResolution({ ticket, transcript }: { ticket?: TicketForJudge
     program: { id: ticket?.program_id || null, name: ticket?.program_name || null },
   };
   try {
-    const evaluateDecision = deps.evaluateDecision || jev.evaluateCustomDecision;
+    const evaluateDecision: (input: unknown, deps: unknown) => Promise<DecisionOutcome> =
+      deps.evaluateDecision || jev.evaluateCustomDecision as (input: unknown, deps: unknown) => Promise<DecisionOutcome>;
     const outcome = await evaluateDecision({ state, questions: QUESTIONS }, deps.jev || deps);
     if (!outcome || outcome.status !== "ok") return { verdict: "unknown", errorKind: outcome?.errorKind || null };
     const answer = outcome.result?.answers?.resolution;

@@ -1,5 +1,5 @@
 import programModel = require("../programModel");
-import type { Program, ChannelRole } from "../types";
+import type { Program, ChannelRole, ProgramBehavior } from "../types";
 
 interface PolicyHelp {
   enabled: boolean;
@@ -16,11 +16,6 @@ interface PolicyMain {
   helperEscalationEnabled: boolean;
 }
 
-interface PolicyBehavior {
-  help: PolicyHelp;
-  main: PolicyMain;
-}
-
 const DENY_ALL = Object.freeze({
   createOnSupport: false,
   recordTicket: false,
@@ -32,7 +27,7 @@ const DENY_ALL = Object.freeze({
 function ticketPolicy({ program = null, role = "help" }: { program?: Program | null; role?: ChannelRole | "organizer" } = {}): Record<string, boolean> {
   if (!program) return { ...DENY_ALL };
   if (role === "organizer") return { ...DENY_ALL };
-  const behavior = programModel.behaviorFor(program) as unknown as PolicyBehavior;
+  const behavior: ProgramBehavior = programModel.behaviorFor(program);
   if (role === "help") {
     const h = behavior.help;
     const recordTicket = h.enabled && h.ticketsEnabled;

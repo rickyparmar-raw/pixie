@@ -9,7 +9,7 @@ import configModule = require("./config");
 import type { Program } from "./types";
 
 interface AnyRow {
-  id?: number;
+  id?: number | string;
   program_id?: string;
   workspace_id?: string | null;
   workspaceId?: string | null;
@@ -104,9 +104,9 @@ function errorMessage(error: unknown): string {
 function errorRow(error: unknown): AnyRow {
   return error && typeof error === "object" ? error as AnyRow : {};
 }
-const upsertProgress = db.upsertHistoryImportProgress as unknown as (programId: string, channelId: string, patch: AnyRow) => AnyRow;
-const ensureSupportTicket = tickets.ensureSupportTicket as unknown as (options: AnyRow) => Promise<AnyRow | null>;
-const getImportProgress = db.getHistoryImportProgress as unknown as (programId: string, channelId: string) => AnyRow | null;
+const upsertProgress = db.upsertHistoryImportProgress as (programId: string, channelId: string, patch: AnyRow) => AnyRow;
+const ensureSupportTicket: (options: AnyRow) => Promise<AnyRow | null> = tickets.ensureSupportTicket as never;
+const getImportProgress = db.getHistoryImportProgress as (programId: string, channelId: string) => AnyRow | null;
 
 const RULES_VERSION = 3;
 
@@ -188,10 +188,10 @@ function helpChannels(program: AnyRow): string[] {
   if (program?.helpChannel) ids.add(program.helpChannel);
   for (const channel of Array.isArray(program?.channels) ? program.channels : []) {
     const id = channelIdOf(channel);
-    if (id && programs.isHelpChannel(id, (program.workspaceId || program.workspace_id || null) as unknown as null)) ids.add(id);
+    if (id && programs.isHelpChannel(id, program.workspaceId || program.workspace_id || null)) ids.add(id);
   }
   try {
-    for (const row of db.listProgramChannels(program.id)) {
+    for (const row of db.listProgramChannels(String(program.id))) {
       if (row.kind === "help") ids.add(row.channel_id);
     }
   } catch (_) {}
@@ -245,7 +245,7 @@ function isHelper(programId: string, userId: string | null): boolean {
 
 function recordEvent(ticket: AnyRow, eventType: string, actorId: string | null, message: AnyRow, detail: AnyRow = {}): boolean {
   if (hasEventTs(Number(ticket.id), message.ts)) return false;
-  const addTicketEvent = db.addTicketEvent as unknown as (event: Record<string, unknown>) => unknown;
+  const addTicketEvent = db.addTicketEvent as (event: Record<string, unknown>) => unknown;
   addTicketEvent({
     ticketId: ticket.id,
     programId: ticket.program_id,
@@ -267,7 +267,7 @@ function addReplyEvents(ticket: AnyRow, program: AnyRow, messages: AnyRow[]): { 
     if (messageIsBot(message)) {
       if (recordEvent(ticket, "pixie_answer", userId, message)) pixieMessages.push(message);
       else pixieMessages.push(message);
-      const recordFirstResponse = db.recordFirstResponse as unknown as (...args: unknown[]) => unknown;
+      const recordFirstResponse = db.recordFirstResponse as (...args: unknown[]) => unknown;
       recordFirstResponse(ticket.id, false, tsMs(message.ts));
       continue;
     }
@@ -279,7 +279,7 @@ function addReplyEvents(ticket: AnyRow, program: AnyRow, messages: AnyRow[]): { 
     if (isHelper(String(program.id), userId)) {
       const recorded = recordEvent(ticket, "helper_reply", userId, message, { backfill: true });
       helperMessages.push(message);
-      const recordFirstResponse = db.recordFirstResponse as unknown as (...args: unknown[]) => unknown;
+      const recordFirstResponse = db.recordFirstResponse as (...args: unknown[]) => unknown;
       recordFirstResponse(ticket.id, true, tsMs(message.ts));
       if (recorded) {
         try { require("./helperRoute").recordReply({ programId: ticket.program_id, userId, category: ticket.category }); } catch (_) {}
@@ -310,12 +310,12 @@ function openStatus(status: unknown): boolean {
 async function resolveOrQueue(ticket: AnyRow, program: AnyRow, messages: AnyRow[], replyState: { helperMessages: AnyRow[]; pixieMessages: AnyRow[]; requesterMessages: AnyRow[] }, now: number, options: AnyRow): Promise<{ resolved: boolean; closed: boolean; queued: boolean }> {
   if (!openStatus(ticket.status)) return { resolved: false, closed: false, queued: false };
   const answerMessages = [...replyState.helperMessages, ...replyState.pixieMessages];
-  const existingAnswer = (db.listTicketEvents(ticket.id, 500) as AnyRow[]).some((event: AnyRow) => event.event_type === "helper_reply" || event.event_type === "pixie_answer");
+  const existingAnswer = (db.listTicketEvents(Number(ticket.id), 500) as AnyRow[]).some((event: AnyRow) => event.event_type === "helper_reply" || event.event_type === "pixie_answer");
   if (answerMessages.length === 0 && !existingAnswer) {
     if (now - tsMs(ticket.thread_ts) > QUIET_CLOSE_MS) {
-      const closeTicket = db.closeTicket as unknown as (...args: unknown[]) => unknown;
+      const closeTicket = db.closeTicket as (...args: unknown[]) => unknown;
       if (closeTicket(ticket.id, "no answer (history import)", now)) {
-        const addTicketEvent = db.addTicketEvent as unknown as (event: Record<string, unknown>) => unknown;
+        const addTicketEvent = db.addTicketEvent as (event: Record<string, unknown>) => unknown;
         addTicketEvent({ ticketId: ticket.id, programId: ticket.program_id, eventType: "closed", detail: { source: "backfill", reason: "no answer (history import)" }, createdAt: now });
         return { resolved: false, closed: true, queued: false };
       }
@@ -334,7 +334,7 @@ async function resolveOrQueue(ticket: AnyRow, program: AnyRow, messages: AnyRow[
       now,
     });
     if (helperLast) {
-      const resolveTicket = tickets.resolveTicket as unknown as (options: AnyRow) => AnyRow;
+      const resolveTicket: (options: AnyRow) => AnyRow = tickets.resolveTicket as never;
       const result = resolveTicket({
         ticketId: ticket.id,
         actorId: null,
@@ -351,7 +351,7 @@ async function resolveOrQueue(ticket: AnyRow, program: AnyRow, messages: AnyRow[
     }
   }
   if (signalAt) {
-    const resolveTicket = tickets.resolveTicket as unknown as (options: AnyRow) => AnyRow;
+    const resolveTicket: (options: AnyRow) => AnyRow = tickets.resolveTicket as never;
     const result = resolveTicket({
       ticketId: ticket.id,
       actorId: null,
@@ -364,7 +364,7 @@ async function resolveOrQueue(ticket: AnyRow, program: AnyRow, messages: AnyRow[
     });
     return { resolved: !!result.ok, closed: false, queued: false };
   }
-  const enqueueForJudge = resolutionWatcher.enqueueForJudge as unknown as (options: AnyRow) => boolean;
+  const enqueueForJudge: (options: AnyRow) => boolean = resolutionWatcher.enqueueForJudge as never;
   const queued = enqueueForJudge({ ticketId: ticket.id, client: options.client, program, judge: options.judge, autoStart: options.autoStartJudge !== false });
   return { resolved: false, closed: false, queued };
 }
@@ -400,8 +400,8 @@ async function importChannel(program: AnyRow, channel: string, client: SlackClie
       for (const message of messages) {
         if (!isTopLevelHuman(message)) continue;
         const timestamp = tsMs(message.ts, clock());
-        const getTicketByThread = db.getTicketByChannelThreadTs as unknown as (channel: string, threadTs: string, workspaceId: null, programId: string) => AnyRow | null;
-        const before = getTicketByThread(channel, String(message.ts), (program.workspaceId || program.workspace_id || null) as unknown as null, String(program.id));
+        const getTicketByThread = db.getTicketByChannelThreadTs as (channel: string, threadTs: string, workspaceId: string | null, programId: string) => AnyRow | null;
+        const before = getTicketByThread(channel, String(message.ts), program.workspaceId || program.workspace_id || null, String(program.id));
         const ticket = await ensureSupportTicket({
           program,
           channel,
@@ -418,7 +418,7 @@ async function importChannel(program: AnyRow, channel: string, client: SlackClie
         let counts = { messagesScanned: !before || !before.visibility ? 1 : 0, ticketsCreated: before ? 0 : 1, ticketsEnriched: before && (!before.visibility || !before.question || !before.requester_id) ? 1 : 0, resolved: 0, closed: 0, queuedForJudge: 0 };
         const thread = (message.reply_count || 0) > 0 ? await replies(client, channel, String(message.ts), throttle) : [message];
         const state = addReplyEvents(ticket, program, thread);
-        const outcome = await resolveOrQueue(db.getTicket(ticket.id), program, thread, state, clock(), options);
+        const outcome = await resolveOrQueue(db.getTicket(Number(ticket.id)), program, thread, state, clock(), options);
         counts.resolved = outcome.resolved ? 1 : 0;
         counts.closed = outcome.closed ? 1 : 0;
         counts.queuedForJudge = outcome.queued ? 1 : 0;

@@ -5,6 +5,8 @@ import db = require("./db");
 import retrieve = require("./retrieve");
 
 interface CacheRow {
+  question_hash?: string;
+  question: string;
   source: string | null;
   answer: string;
   ask_count: number;
@@ -119,10 +121,10 @@ function cachedCount() {
   return row?.n || 0;
 }
 
-function topCached(limit = 5) {
+function topCached(limit = 5): CacheRow[] {
   return db.handle()
     .query("SELECT question_hash, question, ask_count, source, COALESCE(refreshed_at, created_at) AS written_at FROM answer_cache ORDER BY ask_count DESC, question LIMIT ?")
-    .all(limit);
+    .all(limit) as CacheRow[];
 }
 
 function clearCache() {

@@ -1,7 +1,8 @@
 // Behavior settings bridge persisted hosted values and legacy flags. Stored values
 // win per field, while absent fields retain the old deployment behavior.
 type ConfigValue = boolean | number | string | null | undefined;
-type Settings = Record<string, boolean>;
+type BehaviorSettings = Record<string, boolean>;
+type ProgramBehavior = { main: BehaviorSettings; help: BehaviorSettings };
 interface BehaviorObject { main?: Record<string, unknown>; help?: Record<string, unknown>; [key: string]: unknown }
 interface ProgramModelInput {
   posture?: string;
@@ -57,7 +58,7 @@ function bool(value: ConfigValue, fallback: boolean | undefined): boolean | unde
 }
 
 
-function legacyMain(p: ProgramModelInput): Settings {
+function legacyMain(p: ProgramModelInput): BehaviorSettings {
   const posture = p.posture || "active";
   return {
     enabled: posture !== "muted" && p.supportActive !== false,
@@ -66,7 +67,7 @@ function legacyMain(p: ProgramModelInput): Settings {
   };
 }
 
-function legacyHelp(p: ProgramModelInput): Settings {
+function legacyHelp(p: ProgramModelInput): BehaviorSettings {
   const posture = p.posture || "active";
   return {
     enabled: posture !== "muted" && p.supportActive !== false,
@@ -86,8 +87,8 @@ function pick(obj: unknown, keys: string[]): Record<string, unknown> {
   return out;
 }
 
-function resolveSection(defaults: Settings, legacy: Settings, stored: Record<string, unknown> | null, keys: string[]): Settings {
-  const out: Settings = {};
+function resolveSection(defaults: BehaviorSettings, legacy: BehaviorSettings, stored: Record<string, unknown> | null, keys: string[]): BehaviorSettings {
+  const out: BehaviorSettings = {};
   for (const k of keys) {
     const fromStored = stored && Object.hasOwn(stored, k) ? bool(stored[k] as ConfigValue, undefined) : undefined;
     const fromLegacy = legacy && Object.hasOwn(legacy, k) ? legacy[k] : undefined;
@@ -109,7 +110,7 @@ function parseStoredBehavior(raw: unknown): BehaviorObject | null {
 }
 
 
-function behaviorFor(p: ProgramModelInput = {}): { main: Settings; help: Settings } {
+function behaviorFor(p: ProgramModelInput = {}): ProgramBehavior {
   const stored = parseStoredBehavior(p.behavior);
   return Object.freeze({
     main: resolveSection(MAIN_DEFAULTS, legacyMain(p), pick(stored?.main, MAIN_KEYS), MAIN_KEYS),

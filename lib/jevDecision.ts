@@ -59,7 +59,15 @@ interface EvaluationDeps {
   timeoutMs?: number;
 }
 interface SupportInput extends JevStateInput {}
-interface SupportOutcome { action: string; intent: string | null; shouldEngageP: number | null; reason: string; latencyMs: number; errorKind: string | null; cached?: boolean }
+interface SupportOutcome {
+  action: string;
+  intent: string | null;
+  shouldEngageP: number | null;
+  reason: string;
+  latencyMs: number;
+  errorKind: string | null;
+  cached?: boolean;
+}
 
 const JEV_MODEL_DEFAULT = "jev-latest:free";
 const JEV_BASE_URL_DEFAULT = "https://api.experientiallabs.ai/v1/systemone";

@@ -5,21 +5,35 @@ import db = require("./db");
 const WINDOW_MS = 60 * 1000;
 const MAX_PER_WINDOW = Number(process.env.PIXIE_RATE_LIMIT_MAX) || 8;
 
-interface RateLimitIdentity { userId?: string | null; user_id?: string | null; id?: string | null; scope?: string | null; channelId?: string | null; channel_id?: string | null }
-interface RateLimitOptions { windowMs?: number; max?: number; scope?: string | null; dm?: boolean; isDm?: boolean; requireIdentity?: boolean }
+interface RateLimitIdentity {
+  userId?: string | null;
+  user_id?: string | null;
+  id?: string | null;
+  scope?: string | null;
+  channelId?: string | null;
+  channel_id?: string | null;
+}
+interface RateLimitOptions {
+  windowMs?: number;
+  max?: number;
+  scope?: string | null;
+  dm?: boolean;
+  isDm?: boolean;
+  requireIdentity?: boolean;
+}
 
 function decision(allowed: boolean, retryInMs: number, reason: string) {
   return { allowed, retryInMs, reason };
 }
 
 
-function resolveIdentity(identity: string | RateLimitIdentity | null, { scope = null }: { scope?: string | null } = {}) {
+function resolveIdentity(identity: string | RateLimitIdentity | null, { scope = null }: { scope?: string | null } = {}): { userId: string | null; scope: string } {
   if (identity && typeof identity === "object") {
-    const userId = identity.userId || identity.user_id || identity.id || null;
+    const userId: string | null = identity.userId || identity.user_id || identity.id || null;
     const identityScope = identity.scope || identity.channelId || identity.channel_id || scope;
     return { userId, scope: identityScope || "global" };
   }
-  return { userId: identity || null, scope: scope || "global" };
+  return { userId: typeof identity === "string" ? identity : null, scope: scope || "global" };
 }
 
 function reservationKey(identity: string | RateLimitIdentity | null, resolved: { userId: string | null; scope: string }, scope: string | null) {

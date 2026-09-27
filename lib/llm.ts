@@ -4,6 +4,7 @@ const https = require("https");
 const log = require("./log");
 const db = require("./db");
 const crypto = require("crypto");
+import type { ProviderTier } from "./types";
 
 interface ChatMessage { role: string; content: unknown }
 interface Usage {
@@ -21,16 +22,16 @@ interface Telemetry {
 }
 interface CompletionOptions {
   baseUrl: string;
-  apiKey: string | (() => string);
+  apiKey: string | (() => string | undefined);
   model: string;
   messages: ChatMessage[];
   maxTokens: number;
   temperature?: number;
   thinking?: unknown;
   timeout?: number;
-  fallback?: CompletionOptions;
+  fallback?: ProviderTier | null;
   telemetry?: Telemetry;
-  onRateLimited?: (key: string) => void;
+  onRateLimited?: (key: string | undefined, ms?: number) => void;
 }
 interface LlmError extends Error { response?: { status?: number }; usedKey?: string; code?: string; cause?: { code?: string } }
 interface CompletionResult {
@@ -43,7 +44,12 @@ interface CompletionResult {
   retryCount?: number;
   latencyMs?: number;
 }
-interface ResultMeta extends Partial<CompletionResult> { status?: string; httpStatus?: number; errorKind?: string; eventId?: string; }
+interface ResultMeta extends Partial<CompletionResult> {
+  status?: string;
+  httpStatus?: number;
+  errorKind?: string;
+  eventId?: string;
+}
 interface Price { input: number; output: number }
 interface JsonRecord { [key: string]: unknown }
 

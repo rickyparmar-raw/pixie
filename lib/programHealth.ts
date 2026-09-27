@@ -6,12 +6,27 @@ const SCORE_VERSION = 1;
 const MIN_QUESTIONS_FOR_SCORE = 5;
 const OPEN_STATUSES = ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"];
 
-type Analytics = { byStatus: Record<string, number>; stale48h: number; created: number; reopenRate: number; windowDays: number };
+type Analytics = {
+  byStatus: Record<string, number>;
+  stale48h: number;
+  created: number;
+  reopenRate: number;
+  windowDays: number;
+};
 type SourceHealth = { name: string; fail_count: number };
 interface SourceRef { name: string; type?: string; url?: string }
 interface GapCluster { covered: boolean }
 interface HealthComponents { ticketBacklog: number; sourceHealth: number; knowledgeCoverage: number; resolutionQuality: number }
-interface HealthScore { error?: string; programId?: string; version?: number; score?: number | null; label?: string | null; components?: HealthComponents | null; windowDays?: number; questionsInWindow?: number }
+interface HealthScore {
+  error?: string;
+  programId?: string;
+  version?: number;
+  score?: number | null;
+  label?: string | null;
+  components?: HealthComponents | null;
+  windowDays?: number;
+  questionsInWindow?: number;
+}
 
 function clamp(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));

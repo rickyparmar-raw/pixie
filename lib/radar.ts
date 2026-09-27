@@ -49,13 +49,32 @@ interface RadarSignal {
   resolved_at?: number | null;
   suppressed_until?: number | null;
 }
-interface TicketAgeRow { id: number; status: string; created_at: number; reopen_count?: number; }
+interface TicketAgeRow {
+  id: number;
+  status: string;
+  created_at: number;
+  reopen_count?: number;
+}
 interface ConfidenceRow { category: string; ai_confidence: number; status: string }
 interface SourceHealthRow { name: string; fail_count: number; last_error: string | null; last_success_at: number | null }
 interface IncidentCandidate { title: string; linked: number; incidentId: number }
 interface IncidentRow { id: number; title: string; started_at: number }
-interface RadarFinding { type: string; severity: string; title: string; summary: string; evidence: RadarEvidence; fingerprint: string }
-interface RadarResult { error?: string; signal?: RadarSignal | null; signals?: Array<RadarSignal | null>; baselinePerWindow?: number; severity?: string; ok?: boolean }
+interface RadarFinding {
+  type: string;
+  severity: string;
+  title: string;
+  summary: string;
+  evidence: RadarEvidence;
+  fingerprint: string;
+}
+interface RadarResult {
+  error?: string;
+  signal?: RadarSignal | null;
+  signals?: Array<RadarSignal | null>;
+  baselinePerWindow?: number;
+  severity?: string;
+  ok?: boolean;
+}
 
 const TYPES = [
   "STALE_TICKETS",

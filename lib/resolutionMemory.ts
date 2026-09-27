@@ -111,7 +111,7 @@ async function proposeFromTicket({ ticketId, actorId }: { ticketId: number; acto
   const answer = extraction
     ? [extraction.solution, extraction.cause ? `Cause: ${extraction.cause}` : null].filter(Boolean).join("\n")
     : (ticket.resolution || ticket.summary || ticket.question);
-  const addLearnedFact = db.addLearnedFact as unknown as (row: Record<string, unknown>) => number | null;
+  const addLearnedFact = db.addLearnedFact as (row: Record<string, unknown>) => number | null;
   const id = addLearnedFact({
     question,
     answer,
@@ -125,7 +125,7 @@ async function proposeFromTicket({ ticketId, actorId }: { ticketId: number; acto
   });
   if (!id) return { error: "could not store candidate" };
   const candidate = db.getLearnedFactById(id);
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: ticket.program_id, actorId, action: "knowledge.candidate_proposed", entityType: "learned_fact", entityId: id, metadata: { ticketId } });
   return { ok: true, candidate, aiExtracted: !!extraction };
 }
@@ -135,11 +135,11 @@ function approveCandidate({ id, actorId, edits = {} }: { id: number; actorId: st
   if (!row) return { error: "candidate not found" };
   if (row.status !== CANDIDATE && row.status !== "pending") return { error: "only candidates can be approved here" };
   if (edits.question || edits.answer || edits.category) {
-    const updateLearnedFact = db.updateLearnedFact as unknown as (factId: number, patch: Record<string, unknown>) => unknown;
+    const updateLearnedFact = db.updateLearnedFact as (factId: number, patch: Record<string, unknown>) => unknown;
     updateLearnedFact(id, { question: edits.question || null, answer: edits.answer || null, category: edits.category || null });
   }
   if (!learn.approve(id)) return { error: "approval failed" };
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: row.program_id, actorId, action: "knowledge.candidate_approved", entityType: "learned_fact", entityId: id, metadata: { ticketId: row.ticket_id } });
   return { ok: true, fact: db.getLearnedFactById(id) };
 }
@@ -152,14 +152,14 @@ function rejectCandidate({ id, actorId }: { id: number; actorId: string | null }
   }
   if (!db.setLearnedStatus(id, REJECTED)) return { error: "rejection failed" };
   require("./learn").invalidateCorpus();
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: row.program_id, actorId, action: "knowledge.candidate_rejected", entityType: "learned_fact", entityId: id, metadata: { ticketId: row.ticket_id } });
   return { ok: true };
 }
 
 function listCandidates(programId: string, status = CANDIDATE, limit = 50): DbRow[] {
   if (status === CANDIDATE) return db.listReviewableLearnedFacts(programId, limit);
-  const listLearnedFacts = db.listLearnedFacts as unknown as (factStatus: string, factLimit: number, factProgramId: string) => DbRow[];
+  const listLearnedFacts = db.listLearnedFacts as (factStatus: string, factLimit: number, factProgramId: string) => DbRow[];
   return listLearnedFacts(status, limit, programId);
 }
 

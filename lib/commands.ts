@@ -15,6 +15,7 @@ import capabilities = require("./capabilities");
 import configModule = require("./config");
 import stats = require("./stats");
 import type { Program, SlackClient } from "./types";
+import type { LearnedRow } from "./db.types";
 
 const { config, isAdmin } = configModule;
 const { relativeTime, statsText } = stats;
@@ -62,13 +63,6 @@ interface AppLike {
   shortcut(name: string, handler: unknown): void;
   event(name: string, handler: unknown): void;
 }
-interface LearnedRow {
-  id: number;
-  question: string;
-  answer: string;
-  author_id?: string | null;
-  created_at?: number | string | null;
-}
 interface ForgetAll { type: "all" }
 interface ForgetPending { type: "pending" }
 interface ForgetRange { type: "range"; from: number; to: number }
@@ -81,12 +75,12 @@ interface GuideResult {
   guideName?: string | null;
   [key: string]: unknown;
 }
-const formatHelp = (args: { actorId?: string | null; program?: Program | null }): string => (capabilities.formatHelp as unknown as (input: { actorId?: string | null; program?: Program | null }) => string)(args);
-const lookupAnswer = (question: string, context: string, program: Program | null, channel?: string | null): Promise<{ answer: string; source?: string } | null> => (respond.lookupAnswer as unknown as (q: string, c: string, p: Program | null, ch?: string | null) => Promise<{ answer: string; source?: string } | null>)(question, context, program, channel);
-const recordGap = (question: string, userId?: string | null, channel?: string | null, messageTs?: string | null, programId?: string | null): unknown => (db.recordGap as unknown as (q: string, u?: string | null, c?: string | null, ts?: string | null, p?: string | null) => unknown)(question, userId, channel, messageTs, programId);
-const topGaps = (limit?: number, sinceMs?: number, options?: { kind?: string }): Array<{ ask_count: number; question: string }> => (db.topGaps as unknown as (n?: number, since?: number, opts?: { kind?: string }) => Array<{ ask_count: number; question: string }>)(limit, sinceMs, options);
-const teach = (input: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }): number | null => (learn.teach as unknown as (value: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }) => number | null)(input);
-const addToThread = (threadTs: string, role: string, content: string, userId?: string | null, channel?: string | null): unknown => (context.addToThread as unknown as (ts: string, r: string, text: string, u?: string | null, c?: string | null) => unknown)(threadTs, role, content, userId, channel);
+const formatHelp = (args: { actorId?: string | null; program?: Program | null }): string => (capabilities.formatHelp as (input: { actorId?: string | null; program?: Program | null }) => string)(args);
+const lookupAnswer = (question: string, context: string, program: Program | null, channel?: string | null): Promise<{ answer: string; source?: string } | null> => (respond.lookupAnswer as (q: string, c: string, p: Program | null, ch?: string | null) => Promise<{ answer: string; source?: string } | null>)(question, context, program, channel);
+const recordGap = (question: string, userId?: string | null, channel?: string | null, messageTs?: string | null, programId?: string | null): unknown => (db.recordGap as (q: string, u?: string | null, c?: string | null, ts?: string | null, p?: string | null) => unknown)(question, userId, channel, messageTs, programId);
+const topGaps = (limit?: number, sinceMs?: number, options?: { kind?: string }): Array<{ ask_count: number; question: string }> => (db.topGaps as (n?: number, since?: number, opts?: { kind?: string }) => Array<{ ask_count: number; question: string }>)(limit, sinceMs, options);
+const teach = (input: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }): number | null => (learn.teach as (value: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }) => number | null)(input);
+const addToThread = (threadTs: string, role: string, content: string, userId?: string | null, channel?: string | null): unknown => (context.addToThread as (ts: string, r: string, text: string, u?: string | null, c?: string | null) => unknown)(threadTs, role, content, userId, channel);
 
 function errorMessage(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("message" in error)) return undefined;
@@ -122,7 +116,7 @@ function plainSpoken(handler: (args: CommandArgs) => Promise<unknown>) {
               ...(payload.blocks ? { blocks: reply.plainDashesInBlocks(payload.blocks) } : {}),
             });
           }
-          return original(reply.plainDashes(payload));
+          return original(typeof payload === "string" ? reply.plainDashes(payload) : payload);
         }
       : original;
     return handler({ ...args, respond });
@@ -430,7 +424,7 @@ async function pendingCommand({ ack, respond: sendEphemeral }: CommandArgs): Pro
     (r: LearnedRow) =>
       `*#${r.id}* — asked: _${r.question.slice(0, 100)}_\n` +
       `> ${r.answer.slice(0, 240)}\n` +
-      `> _from <@${r.author_id}>, ${relativeTime(r.created_at)}_`,
+      `> _from <@${r.author_id}>, ${relativeTime(Number(r.created_at))}_`,
   );
 
   await sendEphemeral({

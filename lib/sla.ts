@@ -59,7 +59,7 @@ function errorMessage(error: unknown): string {
 function programThresholds(programId: string): Thresholds {
   const row = db.handle().query(
     "SELECT sla_unassigned_ms, sla_assigned_ms, sla_waiting_ms, sla_target_ms, sla_notify_channel FROM programs WHERE id = ?",
-  ).get(programId);
+  ).get(programId) as Thresholds | null;
   return row || {};
 }
 
@@ -67,7 +67,7 @@ function openTickets(programId: string): SlaTicket[] {
   return db.handle().query(
     `SELECT id, status, assignee_id, created_at, updated_at, COALESCE(assigned_at, created_at) AS assigned_since
      FROM tickets WHERE program_id = ? AND status IN (${SLA_OPEN_STATUSES.map(() => "?").join(",")})`,
-  ).all(programId, ...SLA_OPEN_STATUSES);
+  ).all(programId, ...SLA_OPEN_STATUSES) as SlaTicket[];
 }
 
 function violationForTicket(ticket: SlaTicket, t: Thresholds, now: number): Violation | null {
@@ -99,7 +99,7 @@ function dueNotifications({ programId, violations, now = Date.now(), cooldownMs 
   const due = [];
   for (const v of violations || []) {
     const last = db.handle().query("SELECT sent_at FROM sla_notifications WHERE program_id = ? AND ticket_id = ? AND rule = ?")
-      .get(programId, v.ticketId, v.rule);
+      .get(programId, v.ticketId, v.rule) as { sent_at: number } | null;
     if (!last || now - last.sent_at > cooldownMs) due.push(v);
   }
   return due;
@@ -109,7 +109,7 @@ function markNotified({ programId, ticketId, rule, now = Date.now() }: { program
   db.handle().query(
     "INSERT OR REPLACE INTO sla_notifications (program_id, ticket_id, rule, sent_at) VALUES (?, ?, ?, ?)",
   ).run(programId, ticketId, rule, now);
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId, actorId: null, action: "sla.notified", entityType: "ticket", entityId: ticketId, metadata: { rule } });
 }
 

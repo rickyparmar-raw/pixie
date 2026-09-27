@@ -43,7 +43,7 @@ interface ReactionEvent extends HandlerEvent { item: ReactionItem }
 interface HandlerArgs { event: HandlerEvent; client: SlackClient }
 interface ImageArgs extends HandlerArgs { imageFile: SlackFile; program?: Program | null }
 interface ProgramPolicy { role: string; program: Program; settings?: { enabled?: boolean; commandsEnabled?: boolean } }
-interface MacroRow { id: number; trigger: string; enabled: boolean }
+interface MacroRow { id?: number; trigger?: string; enabled?: number }
 interface TicketTarget { ticket: { id: number } | null; program: Program | null }
 interface MacroTrigger { trigger: string }
 interface ThreadCrowd { othersPresent: boolean; pixieIn: boolean }
@@ -85,13 +85,23 @@ interface HandlerPrograms { forChannel(channel: string | null | undefined, works
 interface HandlerMacros {
   list(programId: string, options?: { enabledOnly?: boolean }): MacroRow[];
   normalizeTrigger(value: string): string;
-  send(args: object): Promise<{ ok: boolean; error?: string }>;
-  sendToThread(args: object): Promise<{ ok: boolean; error?: string }>;
+  send(args: object): Promise<{ ok?: boolean; error?: string }>;
+  sendToThread(args: object): Promise<{ ok?: boolean; error?: string }>;
 }
 interface HandlerPolicy { resolve(channel: string, workspaceId?: string | null, options?: { isDm?: boolean }): ProgramPolicy }
 interface HandlerWorkspace { workspaceOf(event: HandlerEvent): string | null }
 interface HandlerVision { analyzeImage(url?: string, question?: string, context?: string, token?: string): Promise<string | null> }
-interface HandlerLearn { parseTeach(text: string): { question: string; answer: string } | null; teach(input: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }): number | null; }
+interface HandlerLearn {
+  parseTeach(text: string): { question: string; answer: string } | null;
+  teach(input: {
+    question: string;
+    answer: string;
+    authorId: string;
+    threadTs?: string | null;
+    channel?: string | null;
+    programId?: string | null;
+  }): number | null;
+}
 interface HandlerTeachThread { summarizeThread(input: { client: SlackClient; channel: string; threadTs: string }): Promise<{ question: string; answer: string } | null> }
 interface HandlerSumThread { summarizeThreadForHelper(input: { client: SlackClient; channel: string; threadTs: string }): Promise<string | null> }
 interface HandlerRateLimit { check(input: object, options: object): { allowed: boolean; reason?: string } }
@@ -107,19 +117,19 @@ function errorData(error: unknown): Record<string, unknown> | undefined {
   const data = (error as { data?: unknown }).data;
   return typeof data === "object" && data !== null ? data as Record<string, unknown> : undefined;
 }
-const context = contextModule as unknown as HandlerContext;
-const vision = visionModule as unknown as HandlerVision;
+const context = contextModule as HandlerContext;
+const vision = visionModule as HandlerVision;
 const respond = respondModule as HandlerRespond;
 const guides = guidesModule as HandlerGuides;
-const learn = learnModule as unknown as HandlerLearn;
-const teachThread = teachThreadModule as unknown as HandlerTeachThread;
-const sumThread = sumThreadModule as unknown as HandlerSumThread;
-const db = dbModule as unknown as HandlerDb;
-const rateLimit = rateLimitModule as unknown as HandlerRateLimit;
-const programs = programsModule as unknown as HandlerPrograms;
-const macros = macrosModule as unknown as HandlerMacros;
-const channelPolicy = channelPolicyModule as unknown as HandlerPolicy;
-const workspace = workspaceModule as unknown as HandlerWorkspace;
+const learn = learnModule as HandlerLearn;
+const teachThread = teachThreadModule as HandlerTeachThread;
+const sumThread = sumThreadModule as HandlerSumThread;
+const db = dbModule as HandlerDb;
+const rateLimit = rateLimitModule as HandlerRateLimit;
+const programs = programsModule as HandlerPrograms;
+const macros: HandlerMacros = macrosModule as HandlerMacros;
+const channelPolicy = channelPolicyModule as HandlerPolicy;
+const workspace = workspaceModule as HandlerWorkspace;
 
 const DELETE_REACTIONS = new Set(["pixl-delete", "x", "heavy_multiplication_x"]);
 const UP_REACTIONS = new Set(["yay", "thumbs-up", "+1", "yesyes", "white_check_mark", "heavy_check_mark", "upvote", "sparkling_heart", "heart", "heart_eyes"]);
@@ -245,7 +255,7 @@ async function untaggedThreadTurn({ event, client }: HandlerArgs): Promise<strin
     threadTs: event.thread_ts,
     messageTs: event.ts,
     userId: event.user,
-    botUserId: config.slack.botUserId as unknown as string,
+    botUserId: String(config.slack.botUserId),
     parentUserId: event.parent_user_id || null,
   });
   if (crowd.othersPresent) return "humans_talking";

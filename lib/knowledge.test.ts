@@ -10,8 +10,22 @@ const {
   dropSharedLines,
 } = require("./knowledge");
 
-type SourceLike = { name: string; url?: string; type?: string; content?: unknown; siteUrl?: string };
-type SourceStatus = { name: string; status: string; type: string | null; url: string | null; error: string | null; lastSuccessAt: number | null; chunks: number };
+type SourceLike = {
+  name: string;
+  url?: string;
+  type?: string;
+  content?: unknown;
+  siteUrl?: string;
+};
+type SourceStatus = {
+  name: string;
+  status: string;
+  type: string | null;
+  url: string | null;
+  error: string | null;
+  lastSuccessAt: number | null;
+  chunks: number;
+};
 
 test("textFromJsonFaq extracts question/answer pairs", () => {
   const data = {

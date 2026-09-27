@@ -153,7 +153,7 @@ function create({ programId, trigger, name, description = null, content, enabled
     ).run(programId, normalizeTrigger(trigger), String(name).trim(), description, String(content).trim(),
       enabled ? 1 : 0, allowedRoles ? JSON.stringify(allowedRoles) : null, onSendTransition || null, createdBy, t, t);
     const row = get(Number(res.lastInsertRowid)) as Row;
-    const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+    const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
     recordAudit({ programId, actorId: createdBy, action: "macro.created", entityType: "macro", entityId: row.id });
     return { ok: true, macro: row };
   } catch (e: any) {
@@ -163,7 +163,7 @@ function create({ programId, trigger, name, description = null, content, enabled
 }
 
 function get(id: number): Row | null {
-  return db.handle().query("SELECT * FROM program_macros WHERE id = ?").get(id) || null;
+  return db.handle().query("SELECT * FROM program_macros WHERE id = ?").get(id) as Row | null;
 }
 
 function matchesQuery(row: Row, needle: string): boolean {
@@ -208,7 +208,7 @@ function update(id: number, patch: Row = {}, actorId: string | null = null): Row
     if (isUniqueConflict(e)) return { error: "that trigger already exists for this program" };
     return { error: e.message };
   }
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+    const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: row.program_id, actorId, action: "macro.updated", entityType: "macro", entityId: id });
   return { ok: true, macro: get(id) };
 }
@@ -217,7 +217,7 @@ function remove(id: number, actorId: string | null = null): Row {
   const row = get(id);
   if (!row) return { error: "macro not found" };
   db.handle().query("DELETE FROM program_macros WHERE id = ?").run(id);
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+    const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: row.program_id, actorId, action: "macro.deleted", entityType: "macro", entityId: id });
   return { ok: true };
 }
@@ -283,9 +283,9 @@ async function send({ id, ticketId, actorId, client, requireOpen = false }: { id
   if (sent.error) return sent;
   const transition = applySendTransition(macro, ticketId, actorId, client);
   if (transition?.error) return transition;
-  const addTicketEvent = db.addTicketEvent as unknown as (event: Record<string, unknown>) => unknown;
+  const addTicketEvent = db.addTicketEvent as (event: Record<string, unknown>) => unknown;
   addTicketEvent({ ticketId, programId: ticket.program_id, actorId, eventType: "macro_sent", detail: { macroId: id, trigger: macro.trigger } });
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: ticket.program_id, actorId, action: "macro.sent", entityType: "macro", entityId: id, metadata: { ticketId } });
   return { ok: true, ts: sent.ts, ticket: db.getTicket(ticketId) };
 }
@@ -305,7 +305,7 @@ async function sendToThread({ id, program, channel, threadTs, actorId, client }:
   const macro = get(id);
   if (!macro) return { error: "macro not found" };
   if (!macro.enabled) return { error: "macro is disabled" };
-  if (!program || (program.id as unknown as string) !== macro.program_id) return { error: "program mismatch" };
+  if (!program || String(program.id) !== String(macro.program_id)) return { error: "program mismatch" };
   const allowed = macro.allowed_roles ? JSON.parse(macro.allowed_roles) : null;
   const role = actorRole(String(program.id), actorId);
   if (!role) return { error: "actor is not a helper of this program" };
@@ -326,13 +326,13 @@ async function sendToThread({ id, program, channel, threadTs, actorId, client }:
   } catch (e: any) {
     return { error: e.message };
   }
-  const recordAudit = audit.record as unknown as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: program.id, actorId, action: "macro.sent", entityType: "macro", entityId: id, metadata: { channel, threadTs } });
   return { ok: true, ts: res?.ts || null };
 }
 
 function waitingTicketIds({ programId, category = null }: { programId: string; category?: string | null } = {} as { programId: string; category?: string | null }): number[] {
-  return (db.getTicketsForProgram as unknown as (id: string, status: string) => Row[])(programId, "waiting_for_helper")
+  return (db.getTicketsForProgram as (id: string, status: string) => Row[])(programId, "waiting_for_helper")
     .filter((ticket: Row) => !category || ticket.category === category)
     .sort((a: Row, b: Row) => Number(b.created_at) - Number(a.created_at) || Number(b.id) - Number(a.id))
     .map((ticket: Row) => Number(ticket.id));

@@ -32,7 +32,7 @@ function events(programId: string, ticketId: number): string[] {
   return db.listTicketEvents(ticketId).filter((e: { program_id: string }) => e.program_id === programId).map((e: { event_type: string }) => e.event_type);
 }
 function metricCount(kind: string): number {
-  return db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = ?").get(kind).c;
+  return (db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = ?").get(kind) as { c: number }).c;
 }
 
 
@@ -261,7 +261,7 @@ test("shadow routing and the lifecycle offer coexist on the same escalation", ()
 
 test("autoAssign stays off by default — no ticket is auto-assigned by the offer path", () => {
   prog("al-noauto", ["U-h"]);
-  assert.equal(db.handle().query("SELECT auto_assign FROM programs WHERE id = ?").get("al-noauto").auto_assign, 0);
+  assert.equal((db.handle().query("SELECT auto_assign FROM programs WHERE id = ?").get("al-noauto") as { auto_assign: number }).auto_assign, 0);
   const id = newTicket("al-noauto");
   tickets.markWaitingForHelper({ ticketId: id });
   assert.equal(db.getTicket(id).assignee_id, null, "offer to the pool does not assign anyone");
