@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Hermetic per-file test runner: every lib/**/*.test.js runs in its own
+// Hermetic per-file test runner: every lib/**/*.test.{js,ts} runs in its own
 // `bun test <file>` process so bun:test module state (and the shared DB
 // handle) can never leak between files. A bare `bun test` at the repo root
 // also discovers pixie-wizard/ tests (see bunfig.toml), so `bun test` (the
@@ -21,13 +21,13 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const LIB = path.join(ROOT, "lib");
 const WIZARD = path.join(ROOT, "pixie-wizard");
 
-function collectTests(dir, suffix = ".test.js") {
+function collectTests(dir, suffixes = [".test.js", ".test.ts"]) {
   const out = [];
   for (const entry of readdirSync(dir, { withFileTypes: true })) {
     if (entry.name === "node_modules" || entry.name === ".next") continue;
     const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...collectTests(full, suffix));
-    else if (entry.isFile() && entry.name.endsWith(suffix)) out.push(full);
+    if (entry.isDirectory()) out.push(...collectTests(full, suffixes));
+    else if (entry.isFile() && suffixes.some((suffix) => entry.name.endsWith(suffix))) out.push(full);
   }
   return out.sort();
 }
@@ -96,7 +96,7 @@ function parseArgs(argv) {
 const opts = parseArgs(process.argv.slice(2));
 let files = [
   ...(opts.lib ? collectTests(LIB) : []),
-  ...(opts.wizard ? [...collectTests(path.join(WIZARD, "lib"), ".test.ts"), ...collectTests(path.join(WIZARD, "app"), ".test.ts")] : []),
+  ...(opts.wizard ? [...collectTests(path.join(WIZARD, "lib"), [".test.ts"]), ...collectTests(path.join(WIZARD, "app"), [".test.ts"])] : []),
 ];
 if (opts.filter) {
   // Match against the repo-relative path: the absolute worktree path itself
