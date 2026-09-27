@@ -1,4 +1,3 @@
-// The weekly report separates actionable documentation gaps from transient noise.
 const db = require("./db");
 const reply = require("./reply");
 const learn = require("./learn");
@@ -6,7 +5,7 @@ const knowledge = require("./knowledge");
 const answer = require("./answer");
 const teachThread = require("./teachThread");
 const { config } = require("./config");
-// Keep the module object so tests and callers can replace the judge seam.
+
 const llm = require("./llm");
 const log = require("./log");
 const brand = require("./brand");
@@ -69,8 +68,6 @@ const PENDING_CAP = 100;
 const REPORT_DAY = 1;
 const REPORT_HOUR = 9;
 
-// Monday morning makes the report a useful weekly to-do list and keeps the check idempotent.
-
 const SENT_METRIC = "weekly_report";
 
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -122,7 +119,6 @@ function judgePrompt() {
 }
 
 async function judgeGap(question: string): Promise<string | null> {
-  // An unreadable or failed verdict stays out of the review queue.
   try {
     const { text } = await llm.complete(
       {
@@ -208,7 +204,6 @@ function draftPrompt(corpus: string): string {
 }
 
 async function draftDoc(question: string, corpus = "", threadContext = ""): Promise<string | null> {
-  // Drafts use the answer model because they are generative, not classification.
   try {
     const userContent = threadContext ? `${question}\n\n=== SLACK THREAD(S) ===\n${threadContext}` : question;
     const { text } = await llm.complete(
@@ -243,7 +238,6 @@ function draftSourceTs(gapId: number): string {
 }
 
 async function gatherThreadContext(client: SlackClient | null, question: string): Promise<string> {
-  // No client is normal in tests and degraded operation; it means no transcript.
   if (!client) return "";
 
   const refs = db.gapThreads(question, THREAD_REFS_PER_GAP, THREAD_LOOKBACK_MS);

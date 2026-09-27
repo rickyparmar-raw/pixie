@@ -62,7 +62,6 @@ function cacheScope(program: ProgramLike | string | null | undefined) {
 }
 
 function programSources(record: ProgramLike | string | null | undefined): SourceLike[] {
-  // Resolve program references before selecting sources so cross-program knowledge cannot leak.
   const resolved: ProgramLike | null =
     (typeof record === "string" ? (programs.get(record) as ProgramLike) : record) || null;
   const shared = resolved && resolved.sharedSources === false ? [] : programs.shared().sources || [];
@@ -70,7 +69,6 @@ function programSources(record: ProgramLike | string | null | undefined): Source
 }
 
 function cacheHit(question: string, contextPrompt: string, programId: string | null = null, skipCache = false) {
-  // Cache hits require an empty context prompt; thread-specific context must never reuse a generic answer.
   if (contextPrompt || skipCache) return null;
   const hit = cache.get(question, programId);
   if (!hit) return null;
@@ -80,7 +78,6 @@ function cacheHit(question: string, contextPrompt: string, programId: string | n
 }
 
 function dateFallback(question: string, contextPrompt: string, prog: ProgramLike | string | null = null) {
-  // Deterministic dates can answer without a model, but thread context still disables caching.
   const record = typeof prog === "string" ? programs.get(prog) : prog;
   const programId = idOf(record || prog);
   const milestones = record
@@ -184,7 +181,6 @@ async function repoValidatorAnswer(question: string) {
 }
 
 async function runCodeStages(question: string, prog: ProgramLike | string | null, history = "") {
-  // Code and shop stages run before retrieval because their answers are deterministic and authoritative.
   const arithmeticResult = arithmeticAnswer(question);
   if (arithmeticResult) return arithmeticResult;
 
@@ -300,7 +296,6 @@ function applyGroundingBoundary(
   question = "",
   corpus = "",
 ) {
-  // Reject unsupported numeric and source claims before they become cacheable answers.
   if (!result) return result;
   const allowed = exactClaimAllowed(result, prog, question, corpus);
   if (!allowed) {

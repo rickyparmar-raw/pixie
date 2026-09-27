@@ -1,5 +1,4 @@
-// Channel IDs are only unique inside a Slack workspace, so tenant keys always pair
-// workspace identity with channel/message identity.
+// Workspace-scoped IDs
 import configModule = require("./config");
 
 const { config } = configModule;
@@ -16,7 +15,6 @@ function configuredWorkspaceId() {
 }
 
 function teamOfBody(body: SlackBody = {}): string | null {
-  // Slack event bodies and interactive payloads place the team id in different fields.
   if (body.team_id) return body.team_id;
   if (body.team && body.team.id) return body.team.id;
   return null;

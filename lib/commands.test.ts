@@ -1,6 +1,5 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-// Command tests keep Bolt payloads local and assert the exact private response shape.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { config } = require("./config");
@@ -12,7 +11,6 @@ const { parseForgetInput, parseId, adminOnlyShortcut, teachThreadShortcut } = co
 const ADMIN = "U0ADMIN";
 config.slack.adminUserIds = [ADMIN];
 
-// Slash-command fixtures keep acknowledgement and private response payloads local to each test.
 test("parseForgetInput parses single ids, ranges, pending, and all", () => {
   assert.deepEqual(parseForgetInput("15"), { type: "id", id: 15 });
   assert.deepEqual(parseForgetInput("#15"), { type: "id", id: 15 });

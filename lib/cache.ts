@@ -1,5 +1,3 @@
-// Cache policy and storage stay together because freshness, staleness, and retention
-// are one contract: context-free answers may be reused, threaded answers may not.
 import crypto = require("node:crypto");
 import db = require("./db");
 import retrieve = require("./retrieve");
@@ -25,13 +23,12 @@ interface CacheOptions {
 const VOLATILE_SOURCE = "Program timeline";
 
 function isVolatile(source: string | null | undefined) {
-  // Timeline answers contain a countdown, so an old hit is incorrect rather than merely stale.
+  // Volatile timeline
   if (!source) return false;
   return String(source).trim().toLowerCase() === VOLATILE_SOURCE.toLowerCase();
 }
 
 function normalize(question: string) {
-  // Sorted meaningful terms make filler and word order irrelevant to the cache key.
   const terms = retrieve.tokenize((question || "").replace(/<@[^>]+>/g, " "));
   return [...new Set(terms)].sort().join(" ");
 }
@@ -39,7 +36,7 @@ function normalize(question: string) {
 function keyFor(question: string, programId: string | null = null) {
   const normalized = normalize(question);
   if (!normalized) return null;
-  // Program identity is part of the key; identical questions must not cross tenant boundaries.
+  // Tenant-scoped key
   const input = programId ? `${programId}:${normalized}` : normalized;
   return crypto.createHash("sha1").update(input).digest("hex");
 }
@@ -49,7 +46,6 @@ function get(question: string, programId: string | null = null) {
   if (!key) return null;
   const hit = getCachedAnswer(key);
   if (!hit) return null;
-  // Non-volatile entries can be served while a background refresh catches up.
   if (isVolatile(hit.source) && hit.ageMs > db.CACHE_FRESH_MS) return null;
   return { source: hit.source, answer: hit.answer };
 }
@@ -60,7 +56,7 @@ function put(
   options: CacheOptions | string = {},
   programId: string | null = null,
 ) {
-  // The legacy string overload is retained for callers that passed programId as the third argument.
+  // Legacy overload
   if (typeof options === "string") {
     programId = options;
     options = {};
@@ -80,7 +76,6 @@ function cacheRow(hash: string) {
 }
 
 function peekCachedAnswer(hash: string) {
-  // Peeking is read-only because dashboards must not change popularity statistics.
   const row = cacheRow(hash);
   if (!row) return null;
   return { source: row.source, answer: row.answer, askCount: row.ask_count, ageMs: db.now() - row.written_at };
@@ -89,7 +84,6 @@ function peekCachedAnswer(hash: string) {
 function getCachedAnswer(hash: string) {
   const hit = peekCachedAnswer(hash);
   if (!hit) return null;
-  // A read counts as an ask; inspection uses peekCachedAnswer and must not bump it.
   db.handle()
     .query("UPDATE answer_cache SET ask_count = ask_count + 1, last_asked_at = ? WHERE question_hash = ?")
     .run(db.now(), hash);
@@ -102,7 +96,6 @@ function putCachedAnswer(
   result: CacheResult,
   { refreshed = false }: CacheOptions = {},
 ) {
-  // Refreshes replace the answer without pretending that somebody asked again.
   const t = db.now();
   db.handle()
     .query(
@@ -115,7 +108,6 @@ function putCachedAnswer(
 }
 
 function staleCacheEntries(staleAfterMs: number, limit: number) {
-  // Warm popular stale rows first; idle cleanup is a separate retention decision.
   return db
     .handle()
     .query(

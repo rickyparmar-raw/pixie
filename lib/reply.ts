@@ -1,4 +1,3 @@
-// Owns the Slack placeholder, stream-edit, final-post, and suppression lifecycle.
 const knowledge = require("./knowledge");
 const log = require("./log");
 const { config } = require("./config");
@@ -58,7 +57,6 @@ function dedash(part: string) {
 }
 
 function plainDashes(text: string) {
-  // Normalize prose dashes without touching code spans, where punctuation can be meaningful.
   if (!text) return "";
   return String(text)
     .split(CODE_SPANS)
@@ -95,7 +93,6 @@ function plainDashesInBlocks(blocks: unknown[]): unknown[] {
 }
 
 function sourceLineFor(source: SourceLike | string, program: ProgramLike | string | null = null) {
-  // Only cite sources owned by the current program; hidden or unowned citations are omitted.
   if (!source) return "";
   const sourceName = typeof source === "object" ? source.name : source;
   let isHidden = typeof source === "object" ? !!source.hidden : false;
@@ -165,7 +162,6 @@ function postThinking(client: SlackClient, channel: string, threadTs: string, pr
 }
 
 function stripReasoning(text: string) {
-  // Remove hidden model reasoning before Slack receives either streamed or final text.
   if (!text) return "";
   let clean = String(text);
 
@@ -297,7 +293,6 @@ function silenceState(threadTs: string | null): SilenceState {
 }
 
 function newlySilenced(threadTs: string, before: SilenceState | null = null) {
-  // Recheck mute and takeover state before every edit and final post.
   if (!before) return silencedThread(threadTs);
   const now = silenceState(threadTs);
   return (now.muted && !before.muted) || (now.takeover && !before.takeover);
@@ -314,7 +309,6 @@ function decidePostSuppression({
   placeholderTs: string | null;
   silencedBefore?: SilenceState | null;
 }) {
-  // Preserve the silence baseline from before generation; a new mute or takeover suppresses the answer.
   if (program && program.shadowMode === true) return "shadow";
   if (placeholderTs && newlySilenced(threadTs, silencedBefore)) return "silenced";
   return null;
@@ -332,7 +326,6 @@ async function finalize(
     silencedBefore = null,
   }: { blocks?: ReplyBlock[] | null; program?: ProgramLike | null; silencedBefore?: SilenceState | null } = {},
 ) {
-  // Final posting rechecks suppression because mute or takeover can change while generation runs.
   const cleanText = stripReasoning(text);
   const cleanBlocks = blocks ? stripReasoningInBlocks(blocks) : null;
   const payload = {

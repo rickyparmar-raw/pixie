@@ -1,4 +1,3 @@
-// Coordinates engagement, retrieval, answer generation, ticketing, and the final Slack side effect.
 const lookup = require("./lookup");
 const reply = require("./reply");
 const context = require("./context");
@@ -116,7 +115,6 @@ const ERROR_FALLBACK = "having trouble thinking rn, try again in a sec :sob-pray
 const RATE_LIMITED = "woah slow down a sec — gimme a minute to catch up :sob-pray:";
 const UNCLEAR_MARKER = "UNCLEAR";
 
-// DOCS_ONLY requires evidence, HELP_ONLY may escalate or answer supported asks, and ALWAYS is for addressed messages.
 const DOCS_ONLY: AnswerMode = "docs-only";
 const HELP_ONLY: AnswerMode = "help-only";
 const ALWAYS: AnswerMode = "always";
@@ -158,7 +156,6 @@ function stripChannelMentions(text: string) {
 }
 
 function isGroundedAnswer(result: AnswerResult | null) {
-  // Grounded actions require a real source and a publishable answer.
   if (!result || !result.source || !result.answer) return false;
   const source = result.source.trim().toUpperCase();
   if (!source || source === "NONE") return false;
@@ -229,7 +226,6 @@ async function replyFromCache({
   startedAt,
   program = null,
 }: CacheReplyArgs) {
-  // Cache replies are safe only when there is no thread-specific context.
   const requireGrounded = process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || program?.requireGroundedAnswer;
   if (requireGrounded) {
     if (!isGroundedAnswer(result)) return false;
@@ -278,7 +274,6 @@ async function postGuideStep({
   program = null,
   workspaceId = null,
 }: TextPostArgs & { result: GuideResult; isFirstStep?: boolean }) {
-  // Guide message_ts links the rendered step to later reaction advancement.
   const text = formatGuideText(result);
   const blocks = guides.buildGuideBlocks(result, config.web.baseUrl, { showReactionHint: isFirstStep });
   const prog = program || programs.forChannel(channel, workspaceId);
@@ -440,7 +435,6 @@ async function handleSensitiveMatch({
   workspaceId,
   startedAt,
 }: SensitiveArgs) {
-  // Run sensitive-category checks before model calls so these questions always reach human review.
   if (!require("./eligibility").sensitiveHit(trimmed, prog)) return false;
   log.debug("respond", `sensitive-category match, escalating without answering`);
   db.recordMetric("silent", Date.now() - startedAt, "sensitive", programId);
@@ -482,7 +476,6 @@ async function publishReply({
   seed?: boolean;
   silencedBefore?: { muted: boolean; takeover: boolean } | null;
 }) {
-  // Finalize and seed feedback only after the reply lifecycle confirms it was posted.
   const postedTs = await reply.finalize(client, channel, threadTs, placeholder, text, {
     program,
     blocks,
@@ -609,7 +602,6 @@ async function recentChannelContext({
   messageTs: string | null;
   threadTs: string;
 }) {
-  // Recent channel context is bounded so ambient classification cannot grow with channel traffic.
   if (!seedClient || messageTs !== threadTs) return [];
   try {
     return await context.recentChannelMessages(

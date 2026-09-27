@@ -8,8 +8,6 @@ const jev = require("./jevDecision");
 const log = require("./log");
 const { readSource } = require("./test-source");
 
-// The decision layer is tested with provider-shaped responses, without invoking the provider.
-// Cache tests clear the module state between cases so metrics and in-flight promises cannot leak.
 const CFG = {
   enabled: true,
   experientialApiKeyPresent: true,

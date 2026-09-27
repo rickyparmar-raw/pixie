@@ -1,5 +1,3 @@
-// Shapes shared across modules. Anything used by one module only lives next
-// to that module instead.
 import type { WebClient } from "@slack/web-api";
 
 export type SlackClient = WebClient;
@@ -17,7 +15,6 @@ export interface ProviderTier {
   onRateLimited?: (key: string | undefined, ms?: number) => void;
 }
 
-// A program record after lib/programs.js has normalized it.
 export interface Program {
   id: string;
   name: string;
@@ -76,8 +73,6 @@ export interface ProgramSource {
 export type TicketStatus =
   "open" | "claimed" | "waiting_for_helper" | "waiting_for_user" | "resolved" | "closed" | (string & {});
 
-// A row of the tickets table. Columns added by later migrations are optional
-// because old rows and test fixtures may not carry them.
 export interface Ticket {
   id: number;
   program_id: string;

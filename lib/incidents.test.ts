@@ -166,8 +166,6 @@ test("notifyAffectedUsers never touches another program's reports", async () => 
   assert.equal(incidents.affectedReports(id2)[0].notified_at, null);
 });
 
-// Similarity is the rounded pairOverlap, gated at 0.35 — pins the exact
-// scoring contract suggestDuplicates, detectBursts and matchActiveIncident share.
 test("suggestDuplicates reports exact rounded overlap, filters <0.35, excludes self, sorts desc", () => {
   const gapClusters = require("./gapClusters");
   const prog = "char-sug-exact";
@@ -213,8 +211,6 @@ test("suggestDuplicates reports exact rounded overlap, filters <0.35, excludes s
   assert.equal(incidents.suggestDuplicates({ programId: prog }).error, "programId and question required");
 });
 
-// Duplicates are same-program and same-30d only — cross-program wording
-// matches and stale tickets must never surface.
 test("suggestDuplicates is program-scoped and drops tickets older than 30d", () => {
   const prog = "char-sug-scope";
   const other = "char-sug-other";
@@ -249,8 +245,6 @@ test("suggestDuplicates is program-scoped and drops tickets older than 30d", () 
   assert.ok(!ids.some((id) => otherRes.candidates.some((c) => c.ticketId === id && c.ticketId !== freshId)));
 });
 
-// Closed/spam/duplicate tickets are not "similar open work" — duplicates
-// must not suggest corpses.
 test("suggestDuplicates never suggests closed tickets", () => {
   const prog = "char-sug-closed";
   db.saveProgram({ id: prog, name: "Closed" });
@@ -267,8 +261,6 @@ test("suggestDuplicates never suggests closed tickets", () => {
   assert.ok(res.candidates.every((c) => c.ticketId !== closedId));
 });
 
-// Threshold=4 in a 1h window is the burst definition — fewer than 4
-// similar tickets is noise, 4 is a candidate with the exact reason/confidence shape.
 test("detectBursts needs 4 similar tickets in window; candidate shape is exact", () => {
   const prog = "char-burst-threshold";
   db.saveProgram({ id: prog, name: "BurstT" });
@@ -294,8 +286,6 @@ test("detectBursts needs 4 similar tickets in window; candidate shape is exact",
   assert.equal(incidents.incidentTickets(c.incidentId).length, 4);
 });
 
-// Custom threshold/window params are honored — callers (and tests) can
-// shrink the burst definition without touching globals.
 test("detectBursts honors explicit threshold and windowMs", () => {
   const prog = "char-burst-params";
   db.saveProgram({ id: prog, name: "BurstP" });
@@ -309,8 +299,6 @@ test("detectBursts honors explicit threshold and windowMs", () => {
   assert.equal(incidents.getIncident(out.candidates[0].incidentId).reason, "2 similar tickets in 60m");
 });
 
-// The 1h window is a recency gate — yesterday's outage must not re-fire
-// today's burst detector.
 test("detectBursts ignores tickets older than the window", () => {
   const prog = "char-burst-window";
   db.saveProgram({ id: prog, name: "BurstW" });
@@ -330,8 +318,6 @@ test("detectBursts ignores tickets older than the window", () => {
   assert.deepEqual(incidents.detectBursts({ programId: prog }).candidates, []);
 });
 
-// The 6h cooldown links into the live candidate instead of spawning a
-// second incident for the same burst — one outage, one incident.
 test("detectBursts cooldown links into the live incident instead of opening a second", () => {
   const prog = "char-burst-cooldown";
   db.saveProgram({ id: prog, name: "BurstC" });
@@ -350,8 +336,6 @@ test("detectBursts cooldown links into the live incident instead of opening a se
   assert.equal(incidents.listIncidents(prog).length, 1);
 });
 
-// Bursts never cross programs — identical wording in another tenant is a
-// different outage until a human says otherwise.
 test("detectBursts is program-isolated", () => {
   const progA = "char-burst-iso-a";
   const progB = "char-burst-iso-b";
@@ -368,8 +352,6 @@ test("detectBursts is program-isolated", () => {
   assert.equal(incidents.listIncidents(progB).length, 0);
 });
 
-// The full lifecycle is candidate→confirmed→resolved/dismissed with one
-// audit row per step — pins error strings callers match on.
 test("lifecycle transitions, error shapes, link/unlink, and audit writes", () => {
   const prog = "char-lifecycle";
   db.saveProgram({ id: prog, name: "Life" });
@@ -428,8 +410,6 @@ test("lifecycle transitions, error shapes, link/unlink, and audit writes", () =>
   assert.equal(incidents.listIncidents("char-life-other").length, 1);
 });
 
-// 0.35 is the shared "same incident" line — 1/3 overlap (0.333) misses,
-// 2/3 (0.667) hits, best overlap wins, and other programs never match.
 test("matchActiveIncident honors the 0.35 boundary, best-match, and program scope", () => {
   const prog = "char-match-bound";
   db.saveProgram({ id: prog, name: "Match" });
@@ -442,9 +422,6 @@ test("matchActiveIncident honors the 0.35 boundary, best-match, and program scop
   assert.equal(incidents.matchActiveIncident({ programId: prog, question: "" }), null);
   const partialId = makeCandidate(prog, "alpha beta outage zeta eta theta iota");
   incidents.declareIncident({ incidentId: partialId, actorId: "U1" });
-  // Both titles overlap the question equally, so the tie goes to the most
-  // recent incident. Pin the timestamps: created in the same millisecond, the
-  // order would be up to SQLite.
   db.handle().query("UPDATE program_incidents SET created_at = ? WHERE id = ?").run(1_000, partialId);
   db.handle().query("UPDATE program_incidents SET created_at = ? WHERE id = ?").run(2_000, id);
   assert.equal(incidents.matchActiveIncident({ programId: prog, question: "alpha beta offline" })?.id, id);
@@ -452,9 +429,6 @@ test("matchActiveIncident honors the 0.35 boundary, best-match, and program scop
   assert.equal(incidents.matchActiveIncident({ programId: "char-match-other", question: "alpha beta offline" }), null);
 });
 
-// The affected-report dedupe key is exactly (incident, channel, thread) —
-// program and ticket are payload, not identity. Pins the current key so any
-// future widening is a deliberate, reviewed change.
 test("recordAffectedReport dedupes on (incident, channel, thread) only", () => {
   const prog = "char-aff-dedupe";
   db.saveProgram({ id: prog, name: "Aff" });
@@ -516,9 +490,6 @@ test("recordAffectedReport dedupes on (incident, channel, thread) only", () => {
   );
 });
 
-// Notify is explicit-only and idempotent — error strings, default vs
-// custom message, onlyUnnotified filter, and the audit row are the contract
-// frozen callers (serve.js incidentNotifyRoute) depend on.
 test("notifyAffectedUsers contract — errors, messages, filter, audit", async () => {
   const prog = "char-notify-contract";
   db.saveProgram({ id: prog, name: "Notify" });

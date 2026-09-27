@@ -75,7 +75,7 @@ test("internalUserInfoBatch dedupes, resolves the name variants, and never throw
   assert.equal(res.users["U-A"]!.slackId, "U-A");
   assert.equal(res.users["U-NONICK"]!.displayName, "handle");
   assert.equal(res.users["U-NONICK"]!.username, "handle");
-  assert.equal(res.users["U-DELETED"], null); // deleted/unknown user resolves to null, not an error
+  assert.equal(res.users["U-DELETED"], null);
 });
 
 test("internalUserInfoBatch degrades to all-null when Slack is not connected", async () => {
@@ -121,10 +121,10 @@ test("a Slack-side resolve is identical in domain state, only the source metadat
   const tickets = require("./tickets");
   program("dr-slack", ["U-h"]);
   const id = ticket("dr-slack");
-  const res = tickets.resolveTicket({ ticketId: id, actorId: "U-h" }); // no source → Slack
+  const res = tickets.resolveTicket({ ticketId: id, actorId: "U-h" });
   assert.equal(res.ok, true);
   const resolved = db.listTicketEvents(id).find((e: { event_type: string }) => e.event_type === "resolved");
-  assert.equal(resolved.detail, null); // Slack path carries no source
+  assert.equal(resolved.detail, null);
   assert.equal(db.getTicket(id).status, "resolved");
 });
 
@@ -159,7 +159,7 @@ test("resolving an already-resolved ticket follows the existing idempotency rule
   const id = ticket("dr-idem");
   assert.equal(api.internalTicketAction(id, "resolve", { programId: "dr-idem", actorId: "U-h" }).ok, true);
   const second = api.internalTicketAction(id, "resolve", { programId: "dr-idem", actorId: "U-h" });
-  assert.ok(second.error); // db.resolveTicket's guard rejects a second transition
+  assert.ok(second.error);
   assert.equal(db.listTicketEvents(id).filter((e: { event_type: string }) => e.event_type === "resolved").length, 1);
 });
 

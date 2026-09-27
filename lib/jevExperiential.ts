@@ -1,4 +1,3 @@
-// Native Experiential Labs adapter; provider-specific wire shapes stay inside this module.
 import axios = require("axios");
 
 type QuestionType = "boolean" | "choice" | "score";
@@ -66,7 +65,7 @@ function finiteNumber(value: unknown): number | null {
 
 function toWireQuestions(questions: Questions = {}): Record<string, WireQuestion> {
   const wire: Record<string, WireQuestion> = {};
-  // Convert internal boolean questions to the provider's "noul" wire type.
+  // provider wire type
   for (const [id, q] of Object.entries(questions || {})) {
     if (!q || typeof q !== "object") throw fail("bad_response", `question ${id} is not an object`);
     if (q.type === "boolean") {
@@ -155,7 +154,6 @@ function toInternalAnswers(
   questions: Questions = {},
   answers: Record<string, Answer> | null | undefined,
 ): Record<string, unknown> {
-  // Validate every declared question so missing provider fields fail closed instead of becoming partial decisions.
   if (!answers || typeof answers !== "object" || Array.isArray(answers))
     throw fail("bad_response", "response has no answers map");
   const out: Record<string, unknown> = {};
@@ -172,7 +170,6 @@ function toInternalAnswers(
 }
 
 function classifyHttpStatus(status: number, data: unknown): ClassifiedError {
-  // Map provider statuses to stable error kinds so callers can choose retry or fallback behavior.
   const bodyText = JSON.stringify(data || {}).slice(0, 300);
   if (status === 401 || status === 403)
     return fail("auth", `experiential rejected credentials (http ${status})`, status);
@@ -190,7 +187,6 @@ async function defaultHttpPost(
   body: unknown,
   { headers, timeoutMs, apiKey }: { headers: Record<string, string>; timeoutMs: number; apiKey: string | null },
 ): Promise<HttpResponse> {
-  // The adapter owns the single JSON POST, including its bearer header and timeout.
   if (!apiKey) throw fail("auth", "experiential api key missing");
   const res = await axios.post(url, body, {
     headers: { ...headers, Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -225,7 +221,6 @@ async function experientialEvaluate(
   const wireQuestions = toWireQuestions(questions || {});
   const httpPost = deps.httpPost || defaultHttpPost;
   let res;
-  // A malformed response is an error result, never an exception loop in the caller.
   try {
     res = await httpPost(
       url,

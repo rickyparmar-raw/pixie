@@ -1,6 +1,3 @@
-// Ticket safety invariants (§36) + the full lifecycle traversal. Each is a
-// real test against :memory: DB with stubbed Slack: no network, no LLM, no
-// production DB. Module-object seams only (config.slack.botUserId pin).
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before } = require("node:test");

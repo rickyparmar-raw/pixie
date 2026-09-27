@@ -1,4 +1,3 @@
-// Analyzes screenshots and mockups, fetching Slack-hosted bytes into model-readable data URIs.
 const axios = require("axios");
 const { config } = require("./config");
 const { complete } = require("./llm");
@@ -12,7 +11,6 @@ const SLACK_FETCH_TIMEOUT_MS = 10000;
 const DEFAULT_QUESTION = "what am i looking at here?";
 
 async function fetchSlackImageAsDataUri(imageUrl: string, slackToken: string | null) {
-  // Slack-hosted images need authenticated bytes before the vision provider can read them.
   const res = await axios.get(imageUrl, {
     headers: { Authorization: `Bearer ${slackToken}` },
     responseType: "arraybuffer",
@@ -24,7 +22,6 @@ async function fetchSlackImageAsDataUri(imageUrl: string, slackToken: string | n
 }
 
 function needsSlackFetch(imageUrl: string, slackToken: string | null | undefined) {
-  // Only Slack's private file host receives the bot token; public URLs pass through untouched.
   return imageUrl.startsWith(SLACK_FILE_HOST) && !!slackToken;
 }
 
@@ -47,7 +44,6 @@ function visionSystemPrompt(context: string) {
 }
 
 async function analyzeImage(imageUrl: string, question: string, context = "", slackToken: string | null = null) {
-  // Keep image failures isolated from the text-answer pipeline.
   let finalImageUrl = imageUrl;
   if (needsSlackFetch(imageUrl, slackToken)) {
     try {

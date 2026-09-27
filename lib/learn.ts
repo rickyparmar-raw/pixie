@@ -1,4 +1,3 @@
-// Helpers can teach Pixie, but every new fact is guarded before it reaches the corpus.
 const db = require("./db");
 const cache = require("./cache");
 const log = require("./log");
@@ -6,7 +5,6 @@ const programs = require("./programs");
 const retrieve = require("./retrieve");
 const { config } = require("./config");
 const llm = require("./llm");
-// Keep the module object so tests can replace complete without binding it at load time.
 
 interface Fact {
   id: number;
@@ -135,7 +133,6 @@ function judgeMessages(question: string, replyText: string): Array<{ role: strin
   ];
 }
 
-// Fail closed on a timeout or malformed verdict: a missed fact is safer than a false one.
 async function judgeAnswer(question: string, replyText: string): Promise<boolean> {
   try {
     const { text } = await llm.complete(
@@ -211,7 +208,6 @@ function relevantFacts(
     maxChars = retrieve.LEARNED_BUDGET,
   }: { maxFacts?: number; maxChars?: number } = {},
 ): Fact[] {
-  // Only relevant facts enter the prompt; the full taught section would crowd out retrieval evidence.
   const questionTokens = retrieve.tokenize(question);
   if (questionTokens.length === 0) return [];
   const scored = [];

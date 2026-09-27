@@ -1,5 +1,3 @@
-// Logging also broadcasts structured events to subscribers; subscriber failures must
-// never prevent the visible log line from being emitted.
 import configModule = require("./config");
 
 const { config } = configModule;
@@ -15,7 +13,7 @@ function subscribe(fn: (kind: string, scope: string, args: unknown[]) => void) {
 }
 
 function notify(kind: string, scope: string, args: unknown[]) {
-  // Observers are optional diagnostics and cannot become an application failure path.
+  // Best-effort observers
   if (subscribers.length === 0) return;
   for (const fn of subscribers) {
     try {

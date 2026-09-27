@@ -1,5 +1,3 @@
-// Rate limits are atomic reservations in SQLite, with scoped keys kept distinct
-// from legacy user-only rows so a DM cannot borrow another channel's allowance.
 import db = require("./db");
 
 const WINDOW_MS = 60 * 1000;
@@ -43,7 +41,7 @@ function reservationKey(
   resolved: { userId: string | null; scope: string },
   scope: string | null,
 ) {
-  // Preserve the old user-only key when no scope was supplied for compatibility.
+  // Legacy user key
   const hasScope = Boolean(
     scope ||
     (identity && typeof identity === "object" && (identity.scope || identity.channelId || identity.channel_id)),

@@ -193,9 +193,9 @@ test("pending offers are excluded from the accept-rate denominator", () => {
   lifecycle.recordOffer({ ticket: db.getTicket(pendingId), to: "U-p", source: "reassign" });
   const stats = lifecycle.helperAcceptStats("al-pending", "U-p");
   assert.equal(stats.acceptedAssignments, 1);
-  assert.equal(stats.completedOffers, 1); // the pending targeted offer is not counted
-  assert.equal(stats.offered, 1); // but it is visible as an offer made
-  assert.equal(stats.acceptRate, null); // below the minimum sample
+  assert.equal(stats.completedOffers, 1);
+  assert.equal(stats.offered, 1);
+  assert.equal(stats.acceptRate, null);
 });
 
 test("pre-lifecycle tickets never fabricate an accept rate", () => {
@@ -223,7 +223,7 @@ test("manually resolving a ticket with no offer records no lifecycle and no acce
   prog("al-manual", ["U-m"]);
   const id = newTicket("al-manual");
   db.markTicketWaitingForHelper(id);
-  tickets.claimTicket({ ticketId: id, actorId: "U-m" }); // no recordOffer was called
+  tickets.claimTicket({ ticketId: id, actorId: "U-m" });
   tickets.resolveTicket({ ticketId: id, actorId: "U-m" });
   const stats = lifecycle.helperAcceptStats("al-manual", "U-m");
   assert.equal(stats.acceptedAssignments, 0);

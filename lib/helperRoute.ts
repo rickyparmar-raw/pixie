@@ -41,36 +41,18 @@ interface ScoringContext {
   now?: number;
 }
 
-// A member with no other signal still outranks nobody — empty rosters
-// return [] and every listed helper starts from the same floor.
 const BASE_SCORE = 1;
-// Self-declared tags alone prove nothing, so the match bonus must clear
-// the noise floor of load/recency/role swings combined.
 const CATEGORY_MATCH_BASE = 2;
-// One prolific helper must not starve every newcomer forever.
 const CATEGORY_SOLVED_CAP = 10;
 const CATEGORY_REPLY_WEIGHT = 0.2;
 const CATEGORY_REPLY_CAP = 15;
-// Breadth across categories is weaker evidence than depth in the ticket's
-// own category, so it accrues at a fraction of the match rate.
 const TOTAL_SOLVED_WEIGHT = 0.2;
-// Same anti-monopoly reasoning as the per-category cap.
 const TOTAL_SOLVED_CAP = 5;
-// An overloaded helper answers slowly; the penalty must outweigh recency
-// and role bonuses combined so load actually reroutes.
 const LOAD_WEIGHT = 0.5;
-// Beyond a full plate, extra tickets add no new information about slowness.
 const LOAD_CAP = 5;
-// Recent presence predicts availability, but weakly — it must never beat
-// real category experience.
 const RECENT_BONUS = 0.5;
-// 7 days separates currently-around helpers from drive-bys without
-// punishing a normal week offline.
 const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-// Organizers/owners can unblock process issues a helper cannot, worth a
-// nudge but never worth overriding verified expertise.
 const ROLE_BONUS = 0.5;
-// The card select the recommendation feeds has no room for a phone book.
 const MAX_RECOMMENDATIONS = 10;
 
 const PING_FATIGUE_WINDOW_MS = 24 * 60 * 60 * 1000;

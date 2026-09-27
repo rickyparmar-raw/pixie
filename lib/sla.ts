@@ -32,23 +32,12 @@ interface Violation {
   thresholdMs: number;
 }
 
-// Organizers hear once per day per ticket-rule — faster than that is
-// nagging, slower lets breaches sit unnoticed over a weekend.
 const NOTIFY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-// A ticket with no owner, a parked ticket, and a ticket whose helper
-// went quiet are all waiting on someone, so every not-yet-closed state is
-// in scope for at least one rule below.
 const SLA_OPEN_STATUSES = ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"];
-// Claimed tickets already have a helper on point, so they share the
-// assigned-no-response rule instead of the unassigned one.
 const SLA_ASSIGNED_STATUSES = ["assigned", "claimed", "escalated", "reopened"];
-// 15m catches breaches promptly while staying far below the 24h
-// notification cooldown, so a breach pages once, not every check.
 const SLA_LOOP_DEFAULT_MIN = 15;
 const SLA_LEASE_NAME = "sla-check";
-// The platform-wide program has no owning organizers to notify.
 const SKIPPED_PROGRAM_ID = "ysws-global";
-// The digest stays readable on a phone screen — 5 lines plus a count.
 const SLA_DIGEST_PREVIEW_LINES = 5;
 
 function errorMessage(error: unknown): string {

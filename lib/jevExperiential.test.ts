@@ -5,8 +5,6 @@ const assert = require("node:assert/strict");
 const jev = require("./jevDecision");
 const exo = require("./jevExperiential");
 
-// Adapter tests use fake HTTP responses to pin wire conversion and error classification.
-// The fake transport records the exact request boundary while keeping provider failures deterministic.
 const CFG = {
   enabled: true,
   experientialApiKeyPresent: true,

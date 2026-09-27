@@ -1,6 +1,5 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-// Home tests exercise rendered Slack blocks and the authorization check on button actions.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -13,8 +12,6 @@ db.open(":memory:");
 const ADMIN = "U-admin";
 const OUTSIDER = "U-nobody";
 config.slack.adminUserIds = [ADMIN];
-
-// Home fixtures focus on block shape and stale-action authorization, not Slack rendering internals.
 
 function seedPending(question: string, answer: string) {
   return db.addLearnedFact({ question, answer, authorId: "U2", status: learn.PENDING });

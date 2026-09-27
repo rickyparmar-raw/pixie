@@ -1,5 +1,5 @@
 const supportAnalytics = require("./supportAnalytics");
-// Deterministic support health from stored counts; no model-generated precision.
+
 const db = require("./db");
 
 const SCORE_VERSION = 1;
@@ -83,7 +83,6 @@ function computeHealthScore(
   programId: string,
   { sinceMs = 30 * 24 * 60 * 60 * 1000 }: { sinceMs?: number } = {},
 ): HealthScore {
-  // Quiet programs report insufficient data instead of a misleading perfect score.
   if (!programId) return { error: "programId required" };
   const analytics = supportAnalytics.overview(programId, sinceMs);
   if (analytics.created < MIN_QUESTIONS_FOR_SCORE) {

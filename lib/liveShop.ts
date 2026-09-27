@@ -2,7 +2,7 @@ import axios = require("axios");
 
 type ShopItem = { name: string; hours: number };
 
-// Keep the last valid catalogue when refresh fails; an empty live response is not useful data.
+// Retain last good catalogue
 let items: ShopItem[] = [];
 
 function parseCatalogue(html: string | null | undefined): ShopItem[] {

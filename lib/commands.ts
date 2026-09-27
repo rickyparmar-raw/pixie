@@ -1,4 +1,3 @@
-// Slash commands are private by default; this module owns their Bolt adapters.
 import knowledge = require("./knowledge");
 import answer = require("./answer");
 import respond = require("./respond");
@@ -183,7 +182,7 @@ function adminOnly(handler: (args: CommandArgs) => Promise<unknown>) {
 }
 
 function plainSpoken(handler: (args: CommandArgs) => Promise<unknown>) {
-  // Bolt's respond helper bypasses the normal reply formatter, so normalize both text and blocks here.
+  // Bolt respond
   return async (args: CommandArgs): Promise<unknown> => {
     const original = args.respond;
     const respond =
@@ -226,7 +225,6 @@ async function reportCommand({ command, ack, respond: sendEphemeral }: CommandAr
 }
 
 async function askCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
-  // Private slash answers resolve documentation from the command channel's program binding.
   await ack();
 
   const question = (command.text || "").trim();
@@ -246,7 +244,6 @@ async function askCommand({ command, ack, respond: sendEphemeral }: CommandArgs)
     return;
   }
 
-  // Resolve knowledge from the channel's program; unclaimed channels must not see another program's docs.
   const askPolicy = require("./channelPolicy").resolve(command.channel_id, command.team_id || null);
   const askProgram = askPolicy.role === "none" ? null : askPolicy.program;
   try {
@@ -355,7 +352,6 @@ async function sourcesCommand({ command, ack, respond: sendEphemeral }: CommandA
 async function reloadCommand({ ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
   try {
-    // An explicit reload bypasses the cached corpus.
     await knowledge.refreshCorpus(true);
     (db as typeof db & { clearCache: () => void }).clearCache();
     await sendEphemeral({
@@ -392,7 +388,6 @@ async function statsCommand({ ack, respond: sendEphemeral }: CommandArgs): Promi
 }
 
 async function teachCommand({ command, ack, respond: sendEphemeral, client }: CommandArgs): Promise<void> {
-  // Learned facts are scoped to the channel's program; an unclaimed channel cannot choose one implicitly.
   await ack();
 
   const text = (command.text || "").trim();
@@ -466,7 +461,6 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Co
 }
 
 async function teachThreadShortcut({ shortcut, ack, client }: ShortcutArgs): Promise<void> {
-  // The message shortcut carries thread context directly, unlike the slash command's channel fallback.
   await ack();
 
   const channel = shortcut.channel.id;
@@ -652,7 +646,6 @@ const programs = require("./programs") as {
 };
 
 async function programCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
-  // Ticket toggles are helper-level; program creation and maintenance remain organizer-only.
   await ack();
   const raw = (command.text || "").trim();
   const parts = raw.split(/\s+/);
@@ -877,7 +870,6 @@ async function guideCommand({ command, ack, respond: sendEphemeral, client }: Co
 const tickets = require("./tickets");
 
 function register(app: AppLike): void {
-  // Keep the registered surface derived from the active brand, with the legacy guide alias only by default.
   const cmd = brand.cmd;
 
   app.command(cmd(), plainSpoken(askCommand));

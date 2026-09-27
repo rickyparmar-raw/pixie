@@ -1,6 +1,5 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-// Thread extraction is driven by a stubbed completion result and a small Slack history fake.
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const llm = require("./llm");
@@ -17,7 +16,6 @@ after(() => {
   llm.complete = realComplete;
 });
 
-// History fakes preserve the model-facing transcript while avoiding a real Slack client.
 function stubClient(messages: any[]) {
   return { conversations: { replies: async () => ({ messages }) } };
 }

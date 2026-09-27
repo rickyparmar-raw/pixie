@@ -1,5 +1,4 @@
-// Append-only audit records for tenant-scoped actions; callers never pass secrets.
-// Audit failure is intentionally non-fatal so the action being recorded still completes.
+// Append-only audit
 import db = require("./db");
 import log = require("./log");
 
@@ -8,7 +7,6 @@ function errorMessage(error: unknown): string {
 }
 
 function packMetadata(metadata: unknown) {
-  // Store one predictable TEXT shape so every caller gets the same serialization behavior.
   if (metadata === null || metadata === undefined) return null;
   if (typeof metadata === "string") return metadata;
   try {

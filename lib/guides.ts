@@ -1,4 +1,3 @@
-// Interactive walkthrough state and step classification for Slack threads.
 import configModule = require("./config");
 import llm = require("./llm");
 import answer = require("./answer");
@@ -73,7 +72,6 @@ interface GuideTrigger {
 const EXIT_PATTERN =
   /^\s*(?:stop|quit|exit|cancel|nvm|nevermind|never mind|forget it|no thanks|nah im good|nah i'm good)\b/i;
 
-// Guide text is user-facing content; detection and state transitions stay below it.
 const GUIDES: Record<string, Guide> = {
   "create-hackpad": {
     name: "How to Build Your Own Hackpad (Macropad)",
@@ -1321,7 +1319,7 @@ function intentTierRequest({
 }
 
 function guideMenuBlocks({ heading, entries }: GuideMenuEntry): KnownBlock[] {
-  // Slack actions blocks allow five buttons here, so larger guide menus are chunked into separate blocks.
+  // Slack action limit
   const blocks: KnownBlock[] = [{ type: "section", text: { type: "mrkdwn", text: heading } }];
   const buttons: ActionsBlockElement[] = entries.map(([id, g]: [string, Guide]) => ({
     type: "button",
@@ -1381,7 +1379,6 @@ function detectGuideBySubject(question: string): string | null {
 }
 
 async function detectGuideIntent(question: string): Promise<string | null> {
-  // Explicit walkthrough requests take precedence over keyword and model guesses.
   if (isExplicitGuideRequest(question)) {
     const bySubject = detectGuideBySubject(question);
     if (bySubject) return bySubject;
@@ -1410,7 +1407,6 @@ function startGuide(guideId: string, threadTs: string, userId: string): GuideRes
   const guide = GUIDES[guideId];
   if (!guide) return null;
 
-  // Only the starter may advance a guide; another participant gets normal routing.
   const existing = db.getGuide(threadTs) as GuideState | null;
   if (existing && existing.user_id && userId && existing.user_id !== userId) return null;
 
@@ -1478,7 +1474,6 @@ async function classifyStepReply(
       return { kind: STUCK, alternateKey: "question or troubleshooting for this step" };
     }
     return { kind: ADVANCE };
-    // A classifier failure advances conservatively so a transient model outage cannot strand a thread.
   } catch (e: unknown) {
     log.debug("guides", `step classification failed (${errorMessage(e)}), advancing`);
     return { kind: ADVANCE };
@@ -1549,7 +1544,6 @@ async function answerStuckQuestion(
 }
 
 function advanceToNextStep(threadTs: string, state: GuideState, guide: Guide): GuideResult {
-  // Completion deletes the guide state; every intermediate advance stores the same starter ownership.
   const nextIndex = state.current_step + 1;
   if (nextIndex >= guide.steps.length) {
     db.deleteGuide(threadTs);
@@ -1596,7 +1590,6 @@ async function continueGuide(
   userId: string | null = null,
   inHelpChannel = false,
 ): Promise<GuideResult | null> {
-  // Only the starter advances a guide; off-topic replies return to ordinary message routing.
   const state = db.getGuide(threadTs) as GuideState | null;
   if (!state) return null;
 
@@ -1644,7 +1637,6 @@ function buildGuideBlocks(
   baseUrl: string,
   { showReactionHint = false }: { showReactionHint?: boolean } = {},
 ): KnownBlock[] {
-  // Guide text is rendered into blocks separately from the plain fallback Slack also requires.
   const blocks: KnownBlock[] = [];
 
   if (result.screenshot) {

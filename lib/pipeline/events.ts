@@ -30,7 +30,6 @@ interface EventOptions {
 }
 
 function clean(value: unknown) {
-  // Keep event values bounded to safe log tokens so telemetry cannot emit arbitrary multiline content.
   if (value === null || value === undefined) return null;
   if (typeof value === "boolean" || typeof value === "number") return value;
   const s = String(value);
@@ -42,7 +41,6 @@ function format(event: EventFields) {
 }
 
 function start({ programId = null, role = null, addressed = false }: EventOptions = {}) {
-  // One trace owns the complete decision path, including silent outcomes.
   const startedAt = Date.now();
   const event: EventFields = { program_id: programId, channel_role: role, addressed: Boolean(addressed) };
   let done = false;

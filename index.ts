@@ -1,4 +1,3 @@
-// Bootstrap: wire Slack handlers, background workers, and the web console.
 const { App } = require("@slack/bolt");
 const { config, validate, resolveBotUserId } = require("./lib/config");
 const knowledge = require("./lib/knowledge");
@@ -30,7 +29,6 @@ function startKeepAlive() {
 }
 
 async function startBot() {
-  // Conflicting channel roles make routing depend on load order, so startup fails closed.
   validate({ needsSlack: true });
   db.open();
   require("./lib/draftSandbox").loadPersisted();
@@ -80,7 +78,6 @@ async function startBot() {
     log.error("bolt", error.message);
   });
 
-  // Warm only after the corpus is loaded; otherwise the first answer sees an empty index.
   knowledge
     .refreshCorpus()
     .then(() => warm.start())
@@ -99,7 +96,6 @@ async function startBot() {
     log.error("radar", "loop failed to start:", errorText(e));
   }
 
-  // The console is optional and starts only when OAuth configuration is present.
   const webServer = web.start();
   if (webServer) {
     const api = require("./lib/web/api");

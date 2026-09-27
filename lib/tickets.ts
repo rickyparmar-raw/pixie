@@ -194,8 +194,6 @@ const STATUS_EMOJI: Record<string, string> = {
   closed: ":x:",
 };
 
-// Slack stays usable before any helper syncs, while the dashboard must
-// deny strangers even then — one check, explicit empty-table policy.
 function isActorAllowed(programId: string, actorId: string | null, allowEmpty = true): boolean {
   if (!actorId) return false;
   try {
@@ -350,8 +348,6 @@ function buildTicketCardBlocks(
       ],
     });
   } else if (WORKABLE.includes(ticket.status)) {
-    // Auto-assign lands here without a Claim click — same actions as
-    // claimed, since the assignee still needs to work, hand off, or close.
     blocks.push({
       type: "actions",
       elements: [
@@ -395,8 +391,6 @@ function buildTicketCardBlocks(
       ],
     });
   }
-  // A static select right on the card, not a modal — recommend() is a
-  // pure DB read, so options can be built synchronously at render time.
   if (ticket.status === CLAIMABLE[0] || WORKABLE.includes(ticket.status)) {
     let list = candidates;
     if (!list) {
@@ -1358,8 +1352,6 @@ async function postCard({
   requesterId: string;
   question: string;
 }): Promise<Ticket> {
-  // Cards route strictly to the organizer channel — never the public
-  // help channel, and no fallback on error.
   const organizerChannel = getOrganizerChannel(prog, resolvedWorkspaceId);
   if (!organizerChannel) {
     log.error(
@@ -1522,11 +1514,6 @@ function getOrCreateOpenTicket({
   return db.getTicket(id) || ticket;
 }
 
-// "still broken" from the requester is a reopen, never a new ticket —
-// helper chatter must not reopen. Same lifecycle as the Reopen button: the
-// thread UI flips back to "someone will be here soon", the organizer card
-// updates, and the reopen is announced in the thread.
-// Credit a thread answer, once per helper.
 function creditThreadReply(ticket: Ticket, userId: string): void {
   try {
     const already = db
@@ -1771,10 +1758,6 @@ function resolveTicketWorker(ticket: Ticket | null, resolvingActorId: string | n
   return resolvingActorId && activeHelpers.has(resolvingActorId) ? resolvingActorId : null;
 }
 
-// The decision is pure data so Slack and dashboard share one outcome —
-// the caller owns all I/O. `source` is the only thing that distinguishes a
-// dashboard resolve from a Slack one; it lands in the audit metadata and
-// nowhere in the ticket's domain state.
 function finishResolve(options: FinishResolveOptions): FinishResult {
   const {
     ticket,
@@ -1926,7 +1909,6 @@ function assignTicket({
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
   if (!assigneeId) return { error: "assigneeId required" };
-  // Single membership fetch — actor and assignee checks share one read.
   let helpers: HelperRecord[] = [];
   try {
     helpers = db.listHelpers(ticket.program_id);
@@ -2115,12 +2097,6 @@ function closeTicket({
   return { ok: true, ticket: updated };
 }
 
-// Dashboard replies post as the program identity, never as the human —
-// internal notes must never leak into this path. `source: "dashboard"` adds a
-// visible "sent by @helper" line so a requester (and other helpers reading the
-// thread) can tell who's actually behind the branded identity; replies coming
-// from Slack itself (the reply modal, macros) skip it since the human is
-// already the one typing in the thread.
 async function replyToTicket({
   ticketId,
   authorId,
@@ -2205,7 +2181,6 @@ function addInternalNote({
   if (err) return { error: err };
   const clean = String(body || "").trim();
   if (!clean) return { error: "note body required" };
-  // Notes stay helper-side — never posted, never fed to answers.
   const id = db.addTicketNote({ ticketId, programId: ticket.program_id, authorId, body: clean });
   if (!id) return { error: "could not save note" };
   recordTransition(ticket, authorId, "note_added", { noteId: id });

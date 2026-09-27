@@ -61,13 +61,11 @@ interface SelectContextOptions {
   generatedLast?: boolean;
 }
 
-// Ranks only the corpus chunks needed for a question and enforces section budgets.
 const MIN_CHUNK = 100;
 const MAX_CHUNK = 900;
 
 const DEFAULT_BUDGET = 2500;
 
-// Separate identity, timeline, learned, and evidence budgets keep boilerplate from starving evidence.
 const IDENTITY_BUDGET = 2500;
 const TIMELINE_BUDGET = 1200;
 const LEARNED_BUDGET = 1500;
@@ -581,7 +579,6 @@ function boostedValue(base: number, doc: IndexedDoc, flags: ScoreFlags) {
 }
 
 function score(index: SearchIndex, queryTerms: string[]): ScoredChunk[] {
-  // Specific policy rules outrank generic lexical matches so prohibitions cannot lose to repeated allowance words.
   const { docs, docFreq, avgLength } = index;
   const total = docs.length;
   const flags = classifyQuery(queryTerms);
@@ -596,7 +593,6 @@ function score(index: SearchIndex, queryTerms: string[]): ScoredChunk[] {
 }
 
 function selectChunks(index: SearchIndex, question: string, budget = DEFAULT_BUDGET): Chunk[] {
-  // Stop at the section budget so retrieval stays bounded even for broad questions.
   const queryTerms = tokenize(question);
   if (queryTerms.length === 0) return [];
 
@@ -620,8 +616,6 @@ function selectContext({
   exclude = null,
   generatedLast = false,
 }: SelectContextOptions) {
-  // Stop when the next ranked chunk does not fit; skipping it would replace relevant evidence with filler.
-  // Put evidence first when downstream prompt truncation is possible.
   const dropped = exclude instanceof Set ? exclude : new Set(exclude || []);
   const kept = ([name]: Section) => !dropped.has(name);
 

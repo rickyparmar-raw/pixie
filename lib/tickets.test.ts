@@ -599,7 +599,7 @@ test("incident-aware answering: a question matching an ACTIVE incident gets the 
   const incidents = require("./incidents");
   db.saveProgram({ id: "inc-a", name: "IncA", helpChannel: "C-inc-a", channels: ["C-inc-a"] });
   const detected = incidents.detectBursts({ programId: "inc-a" });
-  assert.deepEqual(detected.candidates, []); // no bursts yet — build the incident directly for a controlled test
+  assert.deepEqual(detected.candidates, []);
   db.handle()
     .query(
       "INSERT INTO program_incidents (program_id, title, status, started_at, created_at) VALUES (?, ?, 'confirmed', ?, ?)",
@@ -632,7 +632,7 @@ test("incident-aware answering: a question matching an ACTIVE incident gets the 
     client,
   });
 
-  assert.equal(result, null); // no ticket opened
+  assert.equal(result, null);
   assert.equal(posted.length, 1);
   assert.match(posted[0].text, /aware of an issue/);
   assert.equal(db.getTicketByThreadTs("thread-inc-1"), null);
@@ -671,7 +671,7 @@ test("incident-aware answering never applies to bypassIncidentMatch (sensitive) 
     bypassIncidentMatch: true,
   });
 
-  assert.ok(ticket); // a real ticket was opened despite the matching incident title
+  assert.ok(ticket);
   assert.equal(ticket.program_id, "inc-b");
 });
 
@@ -902,8 +902,6 @@ test("ticket cards offer every active program helper when expertise ranking has 
   );
 });
 
-// Unclaim is a demotion back to the queue, not back to waiting — the
-// helper's claim is fully relinquished.
 test("unclaim demotes to open (not waiting_for_helper)", async () => {
   const id = db.createTicket({
     programId: "char-unclaim",
@@ -924,8 +922,6 @@ test("unclaim demotes to open (not waiting_for_helper)", async () => {
   assert.equal(db.getTicket(id).assignee_id, null);
 });
 
-// Reopen is unconditional outside the guarded set — even an open ticket
-// moves, so the count is the source of truth for how often it bounced.
 test("reopen from open succeeds and bumps reopen_count", async () => {
   db.syncHelper({ programId: "char-reopen", userId: "U-char-h", source: "manual" });
   const id = db.createTicket({
@@ -975,8 +971,6 @@ test("close from open succeeds", async () => {
   assert.equal(db.getTicket(id).status, "closed");
 });
 
-// The conditional UPDATE is the race guard — exactly one claim can
-// leave the assignable state.
 test("concurrent claim race has exactly one winner", async () => {
   db.syncHelper({ programId: "char-race", userId: "U-race-1", source: "manual" });
   db.syncHelper({ programId: "char-race", userId: "U-race-2", source: "manual" });
@@ -1027,7 +1021,6 @@ test("getOrCreate sequential race returns one row, no throw", () => {
   assert.equal(n, 1);
 });
 
-// "still broken" from the requester is a reopen, not a new ticket.
 test("requester chatter on resolved reopens and bumps reopen_count", () => {
   const id = db.createTicket({
     programId: "char-req-re",
@@ -1069,8 +1062,6 @@ test("helper chatter never reopens", () => {
   assert.equal(db.getTicket(id).reopen_count, 0);
 });
 
-// Per-question record vs human-escalation intentionally disagree on
-// passive and non-help — one is the canonical log, the other is a paging decision.
 test("ticketCreationAllowed (via getOrCreate) vs escalateTicket combos", async () => {
   db.saveProgram({ id: "char-combo", name: "Combo", helpChannel: "C-char-help", channels: ["C-char-help"] });
   require("./programs").invalidate();
@@ -1154,7 +1145,6 @@ test("ticketCreationAllowed (via getOrCreate) vs escalateTicket combos", async (
   }
 });
 
-// Snooze has no wake path and no card param — the pin is the absence.
 test("snooze performs no card sync (currently none)", () => {
   const id = db.createTicket({
     programId: "char-snoozecard",
@@ -1221,8 +1211,6 @@ test("resolve records helperRoute resolution", async () => {
   assert.ok(exp.some((e) => e.tag === "pcb" || e.tag === "general"));
 });
 
-// Slack must stay usable before any helper syncs; Wizard must deny
-// strangers even then — same check, opposite empty-table policy.
 test("Slack fail-open vs Wizard fail-closed on empty helper list", async () => {
   const api = require("./web/api");
   const id1 = db.createTicket({
@@ -1249,7 +1237,6 @@ test("Slack fail-open vs Wizard fail-closed on empty helper list", async () => {
   assert.match(wizRes.error, /not a helper/);
 });
 
-// Snoozed has no wake path — escalation must not promote it.
 test("escalate on snoozed returns early with no wake", async () => {
   const prog = {
     id: "char-snooze-early",
@@ -1280,7 +1267,6 @@ test("escalate on snoozed returns early with no wake", async () => {
   assert.equal(out.status, "snoozed");
 });
 
-// Organizer cards must never route to a public help channel.
 test("fix(a): getOrganizerChannel never falls back to helperChannel", () => {
   assert.equal(tickets.getOrganizerChannel({ id: "fix-a", helperChannel: "C-public-help" }), null);
   assert.equal(
@@ -1289,7 +1275,6 @@ test("fix(a): getOrganizerChannel never falls back to helperChannel", () => {
   );
 });
 
-// Workspace-scoped lookup must not see null-workspace rows.
 test("fix(b): getTicketByThreadTs strict scoped lookup drops IS NULL fallback", () => {
   const id = db.createTicket({
     programId: "fix-b",
@@ -1330,7 +1315,6 @@ test("fix(b): get-or-create never falls back across workspace or program", () =>
   assert.equal(local.workspace_id, "WS-LOCAL");
 });
 
-// UNIQUE means a concurrent winner already created — re-read, never throw.
 test("fix(c): createTicket returns existing on conflict, never throws", () => {
   const id1 = db.createTicket({
     programId: "fix-c",
@@ -1389,7 +1373,6 @@ test("fix(c): getOrCreate race returns one row, no throw", () => {
   assert.equal(a.id, b.id);
 });
 
-// A promotion that no-ops (already past open) must not bump updated_at.
 test("fix(d): markTicketWaitingForHelper is a no-op once past open", () => {
   const id = db.createTicket({
     programId: "fix-d",
@@ -1406,7 +1389,6 @@ test("fix(d): markTicketWaitingForHelper is a no-op once past open", () => {
   assert.equal(db.getTicket(id).updated_at, 1000);
 });
 
-// Refreshed row must exist before the timeline write.
 test("fix(e): replyToTicket records helper_reply against refreshed row", async () => {
   db.saveProgram({ id: "fix-e", name: "E", helpChannel: "C-fix-e", channels: ["C-fix-e"] });
   require("./programs").invalidate();
@@ -1491,7 +1473,6 @@ test("fix(f): internalTicketAction syncs card via canonical", () => {
   }
 });
 
-// Legacy dashboard must share the control-plane outcome, never silent ok.
 test("fix(g): ticketUpdate routes through internalTicketAction, no silent ok", () => {
   const api = require("./web/api");
   db.syncHelper({ programId: "fix-g", userId: "U-h", source: "manual" });
@@ -1511,7 +1492,6 @@ test("fix(g): ticketUpdate routes through internalTicketAction, no silent ok", (
   assert.equal(ok.ok, true);
 });
 
-// Malformed metadata must ack an error, never throw.
 test("fix(h): registerActions guards private_metadata JSON.parse", async () => {
   const handlers = {};
   const fakeApp = {
@@ -1570,7 +1550,6 @@ test("fix(i): recordTransition logs audit failure instead of swallowing silently
   );
 });
 
-// Second bot touch must not bump updated_at.
 test("fix(j): recordFirstResponse no-op touches nothing when already set", () => {
   const id = db.createTicket({
     programId: "fix-j",
@@ -1592,8 +1571,6 @@ test("fix(j): recordFirstResponse no-op touches nothing when already set", () =>
   assert.equal(after.updated_at, 1000);
 });
 
-// A failed Slack card/thread update is non-fatal (DB is already written,
-// the next render self-heals) but must not be silent.
 test("a failed Slack card sync records ticket_slack_sync_failure and never blocks the transition", async () => {
   const client = {
     chat: {
@@ -2217,7 +2194,7 @@ test("[epoch] the Slack handler firing twice for one event still yields one ping
   };
 
   await runHandlerOnce();
-  await runHandlerOnce(); // the retried delivery
+  await runHandlerOnce();
 
   assert.equal(posts.filter((p) => /could you take a look/.test(p.text)).length, 1);
 });

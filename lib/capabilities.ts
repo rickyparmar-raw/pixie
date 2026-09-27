@@ -5,7 +5,6 @@ import type { Program } from "./types";
 
 const { isAdmin } = configModule;
 
-// This table is the help surface; entries must stay aligned with registered commands.
 interface Capability {
   suffix: string;
   label: string;

@@ -1,7 +1,5 @@
 import type { ChannelRole } from "../types";
 
-// Policy decides whether to proceed before any answer or ticket I/O.
-// Final actions keep grounding, addressed status, and escalation precedence in one place.
 const PROGRAM_INTENTS = new Set(["support_question", "direct_program_question", "ambiguous_followup"]);
 const GENERAL_INTENTS = new Set(["addressed_general_request", "addressed_smalltalk"]);
 const CHAT_INTENTS = new Set([...GENERAL_INTENTS, "human_conversation", "unrelated_chatter"]);
@@ -98,7 +96,6 @@ function finalAction({
   noEscalate = false,
   requireGrounded = false,
 }: FinalActionOptions): FinalAction {
-  // Grounded answers take precedence over escalation because they already have publishable evidence.
   if (grounded) return "reply";
   if (noEscalate && !addressed && role !== "help") return "silence";
 

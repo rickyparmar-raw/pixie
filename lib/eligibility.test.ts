@@ -7,8 +7,6 @@ const NAMES = ["pixie"];
 const U1 = "<@U111>";
 const U2 = "<@U222>";
 
-// Fixtures describe routing roles rather than real member identities.
-// The table keeps reason strings visible because callers record them as routing metrics.
 function run(f: any) {
   return elig.shouldPixieRespond({
     text: f.text,

@@ -1,4 +1,3 @@
-// Produces a concise helper handoff from a Slack support thread.
 import configModule = require("./config");
 import llm = require("./llm");
 import log = require("./log");
@@ -33,8 +32,6 @@ const HELPER_SUMMARY_SYSTEM_PROMPT = [
 ].join("\n");
 
 function buildTranscript(messages: ThreadMessage[]): string {
-  // Preserve bot versus member labels because the summarizer must not attribute Pixie's guidance to the asker.
-  // Keep speaker identity in the transcript so helper summaries distinguish bot and human replies.
   return messages
     .filter((m) => m && m.text)
     .map((m) => `${m.bot_id ? "assistant (bot)" : m.user ? `<@${m.user}>` : "user"}: ${m.text}`)

@@ -11,9 +11,6 @@ try {
   db.open(":memory:");
 } catch (_) {}
 
-// Classifier calls are stubbed; these tests pin the fail-soft and context-shaping contract.
-// No test depends on provider wording: only the normalized labels and prompt boundaries matter.
-
 test("worthClassifying sends anything with words in it to the model", () => {
   assert.equal(worthClassifying("how do i submit my project?"), true);
   assert.equal(worthClassifying("my build broke"), true);

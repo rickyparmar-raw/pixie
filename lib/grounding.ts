@@ -1,4 +1,3 @@
-// Grounding accepts model claims, but only retrieved records or explicit fixtures can support them.
 const VERDICTS = new Set(["supported", "unsupported", "needs_review"]);
 type JsonRecord = Record<string, unknown>;
 interface GroundingClaim {
@@ -36,7 +35,6 @@ function asString(value: unknown) {
 }
 
 function decodeJson(text: unknown): JsonRecord | null {
-  // Parse fenced and balanced JSON candidates fail-closed; malformed model output is not an application error.
   const input = asString(text);
   if (!input) return null;
 
@@ -124,7 +122,6 @@ function validateClaimSupport({
   fixtureClaims = [],
   parse = parseGroundingVerdict,
 }: ValidateOptions = {}) {
-  // Callers inject the parser so validation stays independent of model transport.
   if (typeof parse !== "function")
     return { ok: false, supported: false, claims: [], errors: ["parse must be a function"] };
   const parsed: ParsedVerdict =
@@ -157,7 +154,6 @@ function validateClaimSupport({
 }
 
 function createGroundingValidator({ parse = parseGroundingVerdict }: { parse?: (raw: unknown) => ParsedVerdict } = {}) {
-  // Keep the parser boundary replaceable for deterministic tests and provider-specific formats.
   if (typeof parse !== "function") throw new TypeError("parse must be a function");
   return {
     parse,

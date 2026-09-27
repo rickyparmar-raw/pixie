@@ -1,4 +1,3 @@
-// Web handlers assemble existing modules; authorization and tenant checks stay at this boundary.
 const db = require("../db");
 const cache = require("../cache");
 const learn = require("../learn");
@@ -429,7 +428,6 @@ function queueDrop(id: number): void {
 }
 
 function queueEdit(id: number, question: string, answer: string): void {
-  // Editing preserves the original program and Slack provenance; it cannot move a fact across tenants.
   if (!question || !answer) return;
   const original = db.getLearnedFactById(id);
   if (!original) return;
@@ -538,7 +536,6 @@ function sourceHealthMetrics(): Record<string, number> {
 }
 
 function sourceHealthShape(source: SourceRow): ApiResponse {
-  // Keep cache keys and fetch errors out of dashboard responses; knowledge owns those details.
   const health = knowledge.sourceEligibility(source);
   return {
     authority: health.authority,
@@ -579,7 +576,6 @@ function scopedSources(programId: string): ProgramSource[] | null {
 }
 
 function internalKnowledgeHealth(programId: string): ApiResponse {
-  // This view is program-scoped; the global refresh set must not cross tenant boundaries.
   const sources = scopedSources(programId);
   if (!sources) return { error: "unknown program" };
   return {
@@ -819,7 +815,6 @@ function channelRemove(programId: string, channelId: string): ApiResponse {
 }
 
 function internalAuth(req: Request): ApiResponse {
-  // The control plane uses its server-side token, never a browser session.
   const token = process.env.PIXIE_INTERNAL_TOKEN;
   if (!token) return { ok: false, status: 404, body: { error: "internal api disabled" } };
   const header = req.headers.get("authorization") || "";
@@ -860,7 +855,6 @@ function needProgram(programId: string): ApiResponse | null {
 }
 
 function needProgramActor(programId: string | null, actorId: string | null): ApiResponse | null {
-  // Every write re-resolves both tenant and actor instead of trusting request identifiers.
   if (!programs.get(programId)) return { error: "unknown program" };
   if (!ticketActorAllowed(programId as string, actorId)) return { error: "actor is not a helper of this program" };
   return null;
@@ -887,7 +881,6 @@ function ticketDetail(id: number): ApiResponse | null {
 const CHANNEL_KINDS = new Set(["help", "organizer", "discussion", "announcement"]);
 
 function internalProgramSync(id: string, body: ProgramSyncBody = {}): ApiResponse {
-  // Channel-role validation runs before persistence so a conflict cannot create a partial sync.
   if (!id || !/^[a-z0-9][a-z0-9-]{1,60}[a-z0-9]$/.test(id)) {
     return { error: "invalid program id (lowercase slug, 3-62 chars)" };
   }
@@ -986,7 +979,6 @@ function validateSyncChannelRoles(
   channels: Array<string | ChannelRoleBody>,
   workspaceId: string | null,
 ): ApiResponse | null {
-  // Validate all channel roles before saving so conflicts cannot leave a partial program sync.
   const programModel = require("../programModel");
   const releases = new Set<string>();
   const toClaim = [];
@@ -1069,7 +1061,6 @@ function testQuestionExpectedAction({
   grounded: boolean;
   hasAnswer?: boolean;
 }): ApiResponse {
-  // The onboarding probe delegates to the same policy functions as the live message path.
   const messagePolicy = require("../pipeline/messagePolicy");
   const plan = messagePolicy.planEngagement({ role, settings, addressed, engagement });
   if (!plan.proceed) return { expectedAction: "silence", reason: plan.reason };

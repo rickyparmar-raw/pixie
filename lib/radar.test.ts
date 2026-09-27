@@ -88,7 +88,7 @@ test("a suppressed signal stays suppressed through re-detection until it expires
     now: suppressed.suppressed_until - 1,
   });
   assert.equal(stillSuppressed.status, "suppressed");
-  assert.equal(stillSuppressed.severity, "CRITICAL"); // evidence still updates
+  assert.equal(stillSuppressed.severity, "CRITICAL");
 
   const reactivated = radar.upsertSignal({
     programId: "radar-b",
@@ -303,7 +303,7 @@ test("FAQ pins 24h window, min-5 askers, sha1 fingerprint", () => {
   const found = radar.detectFaqClusters("char-faq-fire");
   assert.equal(found.length, 1);
   assert.equal(found[0].type, "FAQ_CLUSTER");
-  assert.equal(found[0].severity, "MEDIUM"); // 5 askers < 15 HIGH bar
+  assert.equal(found[0].severity, "MEDIUM");
   const expected = crypto.createHash("sha1").update(q.toLowerCase()).digest("hex").slice(0, 16);
   assert.equal(found[0].fingerprint, expected);
   for (let i = 1; i <= 4; i++) db.recordGap(q, `U${i}`, "C-char-faq-few", `char-few-ts-${i}`, "char-faq-few");
@@ -362,7 +362,7 @@ test("REOPEN pins n>=3, rate>=0.2, HIGH at 0.4, 'reopen' fingerprint", () => {
   for (let i = 0; i < 3; i++) db.reopenTicket(idsHigh[i]);
   const high = radar.detectReopenSpike("char-re-high", Date.now());
   assert.ok(high);
-  assert.equal(high.severity, "HIGH"); // 3/5 = 0.6 >= 0.4
+  assert.equal(high.severity, "HIGH");
   assert.equal(high.fingerprint, "reopen");
   assert.equal(high.evidence.rate, 0.6);
   const idsRate = [];
@@ -377,7 +377,7 @@ test("REOPEN pins n>=3, rate>=0.2, HIGH at 0.4, 'reopen' fingerprint", () => {
       }),
     );
   for (let i = 0; i < 3; i++) db.reopenTicket(idsRate[i]);
-  assert.equal(radar.detectReopenSpike("char-re-rate", Date.now()), null); // 3/20 = 0.15 < 0.2
+  assert.equal(radar.detectReopenSpike("char-re-rate", Date.now()), null);
 });
 
 test("fingerprints dedup by (program,type,fingerprint) only", () => {
@@ -414,7 +414,7 @@ test("fingerprints dedup by (program,type,fingerprint) only", () => {
     fingerprint: "backlog",
     now: 1000,
   });
-  assert.notEqual(b.id, a1.id); // same fingerprint, other program -> separate row
+  assert.notEqual(b.id, a1.id);
   const otherType = radar.upsertSignal({
     programId: "char-dd-a",
     type: "REOPEN_SPIKE",
@@ -425,7 +425,7 @@ test("fingerprints dedup by (program,type,fingerprint) only", () => {
     fingerprint: "backlog",
     now: 1000,
   });
-  assert.notEqual(otherType.id, a1.id); // same program+fingerprint, other type -> separate row
+  assert.notEqual(otherType.id, a1.id);
 });
 
 test("acknowledged re-fire stays acknowledged; resolved re-fires fresh", () => {

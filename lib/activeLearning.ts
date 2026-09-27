@@ -101,7 +101,6 @@ function canSupersede(existingQuestion: string, nextQuestion: string): boolean {
 }
 
 function helperAnswered(ticket: ActiveTicket): boolean {
-  // A learned answer must come from a helper reply, not from the requester or bot.
   const events = db.listTicketEvents(ticket.id, 100);
   if (events.some((event: TicketEvent) => event.event_type === "helper_reply")) return true;
   const requester = ticket.requester_id;

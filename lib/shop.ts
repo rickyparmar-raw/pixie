@@ -1,5 +1,3 @@
-// Shop prices are deterministic answers: economy math and item matching stay in code
-// so the model does not guess a payout tier or a catalogue price.
 import axios = require("axios");
 import log = require("./log");
 
@@ -56,7 +54,6 @@ const DEFAULT_ECONOMY: ShopEconomy = {
 const TIER_NAMES = ["Spark", "Signal", "Grid", "Nexus"];
 
 function rePerHour(tier: number, economy: ShopEconomy = DEFAULT_ECONOMY) {
-  // Clamp unknown tiers to the supported table instead of throwing or inventing a rate.
   const table = economy.tierRePerHour || DEFAULT_ECONOMY.tierRePerHour;
   const t = Math.min(Math.max(Math.trunc(tier) || 1, 1), table.length);
   return table[t - 1];
@@ -97,7 +94,7 @@ function hoursForPixels(
     economy = DEFAULT_ECONOMY,
   }: { tier?: number; startingRe?: number; economy?: ShopEconomy } = {},
 ) {
-  // Walk payout steps segment by segment because each shipped hour can raise the rate.
+  // Progressive payout
   const target = Math.max(Number(px) || 0, 0);
   if (target === 0) return 0;
 
@@ -273,7 +270,7 @@ function tokenFrequencies(items: ShopItem[]) {
 }
 
 function findItems(text: string, items: ShopItem[]) {
-  // Return ties rather than guessing; ambiguity is the case worth asking about.
+  // Preserve ties
   const haystack = ` ${applyAliases(normalize(text))} `;
   if (haystack.trim() === "" || !Array.isArray(items) || items.length === 0) return [];
 
@@ -297,7 +294,6 @@ const TIER_REPLY_FILLER =
   /\b(?:at|on|in|im|i|m|its|it|is|are|the|a|an|for|to|do|doing|ship|shipping|shipped|my|our|project|projects|would|be|say|maybe|probably|guess|think|reckon|prob|all|mostly|usually|mine|yeah|yea|ok|okay)\b/g;
 
 function isBareTierReply(text: string) {
-  // A bare tier can continue a shop follow-up, but filler is not an item name.
   const stripped = normalize(text)
     .replace(/\b(?:t|tier)\s*-?\s*[1-4]\b/g, " ")
     .replace(new RegExp(`\\b(?:${TIER_NAMES.join("|").toLowerCase()})\\b`, "g"), " ")
@@ -306,7 +302,6 @@ function isBareTierReply(text: string) {
 }
 
 function lastMentionedItems(history: string, items: ShopItem[]) {
-  // Walk backward because the latest priced item is the only safe thread referent.
   const lines = String(history || "").split("\n");
   if (!lines.some((l) => asksAboutPrice(l) || /\bpx\b/i.test(l))) return [];
 
@@ -426,7 +421,6 @@ function amountAnswer(px: number, tier: number | null, economy: ShopEconomy, eve
 }
 
 function directAnswer(question: string, data: ShopData, { history = "" }: AnswerContext = {}) {
-  // Matching decides whether this is a shop ask; formatting below only writes the answer.
   const items = data?.items || [];
   const economy = data?.economy || DEFAULT_ECONOMY;
   if (items.length === 0) return null;
@@ -595,7 +589,6 @@ function restoreFromDisk() {
 }
 
 async function refresh() {
-  // Keep the last good economy until the live fetch supplies a valid replacement.
   let economy = snapshot.economy || DEFAULT_ECONOMY;
   try {
     const res = await require("./sourceGuard").fetchSourceUrl(ECONOMY_URL, { timeout: 10000 });

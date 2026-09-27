@@ -7,8 +7,6 @@ const handlers = require("../handlers");
 const respond = require("../respond");
 const sumThread = require("../sumThread");
 
-// Each test restores these module seams so command-gate behavior remains isolated.
-// The saved seams are the production collaborators that would otherwise send duplicate replies.
 let savedEnv: any;
 let savedRespond: any;
 let savedSum: any;

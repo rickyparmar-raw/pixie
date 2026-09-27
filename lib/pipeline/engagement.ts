@@ -25,7 +25,6 @@ interface JEVResult {
 }
 
 function isIdentityOrSmalltalk(text: string) {
-  // Identity and short small-talk messages are safe to classify without documentation.
   const t = String(text || "")
     .replace(/^<@[^>]+>\s*/, "")
     .trim()
@@ -66,7 +65,6 @@ async function fromLegacyIntent({
   threadMessages,
   recentMessages,
 }: EngagementContext) {
-  // The legacy classifier remains the fallback when structured engagement is unavailable.
   const result = await intent
     .classifyIntentContext(message, program, { userId, channel, addressed, threadMessages, recentMessages })
     .catch(() => null);
@@ -127,7 +125,6 @@ async function classify({
   threadMessages = [],
   recentMessages = [],
 }: ClassifyOptions) {
-  // Use the structured classifier when enabled and fall back on unavailable decisions.
   if (addressed && isIdentityOrSmalltalk(message)) {
     return { engage: true, intent: "addressed_smalltalk", error: null, source: "heuristic" };
   }

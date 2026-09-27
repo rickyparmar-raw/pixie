@@ -1,4 +1,3 @@
-// Provider decision layer: classify engagement, never generate the support answer itself.
 import configModule = require("./config");
 import log = require("./log");
 
@@ -150,7 +149,6 @@ const INTENT_CHOICES = {
 };
 
 function buildJevQuestions() {
-  // Keep one bounded provider request with stable keys so parsing and metrics share the same contract.
   return {
     intent: {
       type: "choice",
@@ -268,7 +266,6 @@ const ERROR_KINDS = new Set([
 ]);
 
 function classifyError(err: JevError | null | undefined): string {
-  // Provider failures collapse into stable metric labels instead of leaking transport-specific details.
   if (!err) return "unknown";
   if (err.jevErrorKind && ERROR_KINDS.has(err.jevErrorKind)) return err.jevErrorKind;
   if (err.jevErrorKind === "provider") return "unavailable";
@@ -303,7 +300,6 @@ function experientialApiKey() {
 }
 
 function cacheKeyFor({ model, state }: { model: string; state: JevState }): string {
-  // Only context that can change the gate decision belongs in the cache fingerprint.
   const fingerprint = JSON.stringify({
     model,
     message: state.message,
@@ -371,7 +367,7 @@ async function evaluateSupportDecision(
     };
   }
   const model = deps.model || cfg.model || JEV_MODEL_DEFAULT;
-  // Billing is fail-closed: paid models are never reached through this adapter.
+  // fail-closed billing
   if (!isFreeModel(model)) {
     const latencyMs = Date.now() - startedAt;
     logDecision({
@@ -414,7 +410,7 @@ async function evaluateSupportDecision(
   const keyHash = key ? key.slice(0, 12) : null;
   if (key) {
     const hit = decisionCache.get(key);
-    // Cache hits must avoid both the provider call and context-dependent side effects.
+    // cache side effects
     if (hit && hit.expiresAt > Date.now()) {
       jevStats.cacheHits += 1;
       try {
@@ -426,7 +422,7 @@ async function evaluateSupportDecision(
       );
       return { ...hit.result, latencyMs: 0, cached: true };
     }
-    // Identical concurrent evaluations share one provider promise and one cached side-effect path.
+    // shared in-flight promise
     if (inflightEvaluations.has(key)) return inflightEvaluations.get(key);
   }
   const run = (async () => {

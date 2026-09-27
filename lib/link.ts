@@ -1,4 +1,3 @@
-// Fetches public HTTP(S) links while enforcing redirect, size, timeout, and private-network limits.
 const http = require("http");
 const https = require("https");
 const dns = require("dns").promises;
@@ -35,7 +34,6 @@ function extractUrl(text: string) {
 }
 
 function isPrivateOrLoopbackIp(ip: string) {
-  // Treat malformed and private address ranges as blocked before opening a socket.
   if (!ip) return false;
 
   if (ip.startsWith("::ffff:")) {
@@ -68,7 +66,6 @@ function isPrivateOrLoopbackIp(ip: string) {
 }
 
 async function resolveAndValidateHost(urlStr: string) {
-  // Resolve once and reuse the validated address so DNS rebinding cannot redirect the request.
   let parsed: URL;
   try {
     parsed = new URL(urlStr);
@@ -114,7 +111,6 @@ async function isBlockedHost(urlStr: string) {
 }
 
 function requestOptions(parsed: URL, validatedIp: string): RequestOptions {
-  // Connect to the validated address while preserving the original host for HTTP routing.
   const isHttps = parsed.protocol === "https:";
   const options: RequestOptions = {
     hostname: validatedIp,
@@ -132,7 +128,6 @@ function requestOptions(parsed: URL, validatedIp: string): RequestOptions {
 }
 
 function requestResolved(parsed: URL, validatedIp: string) {
-  // Bound response bytes and abort slow sockets so link lookup cannot monopolize the worker.
   return new Promise<IncomingMessage>((resolve, reject) => {
     const transport = parsed.protocol === "https:" ? https : http;
     const req = transport.request(requestOptions(parsed, validatedIp), (res: IncomingMessage) => {
@@ -148,7 +143,6 @@ function requestResolved(parsed: URL, validatedIp: string) {
 }
 
 async function fetchUrlContent(urlStr: string) {
-  // Revalidate each redirect target before following it.
   let currentUrl = urlStr;
   let redirectCount = 0;
 

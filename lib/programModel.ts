@@ -1,5 +1,3 @@
-// Behavior settings bridge persisted hosted values and legacy flags. Stored values
-// win per field, while absent fields retain the old deployment behavior.
 type ConfigValue = boolean | number | string | null | undefined;
 type BehaviorSettings = Record<string, boolean>;
 type ProgramBehavior = { main: BehaviorSettings; help: BehaviorSettings };
@@ -64,7 +62,7 @@ const MAIN_KEYS = Object.keys(MAIN_DEFAULTS);
 const HELP_KEYS = Object.keys(HELP_DEFAULTS);
 
 function bool(value: ConfigValue, fallback: boolean | undefined): boolean | undefined {
-  // Configuration arrives from JSON, SQLite, and env, so accept their boolean forms.
+  // Flexible booleans
   if (value === true || value === 1 || value === "1" || value === "true") return true;
   if (value === false || value === 0 || value === "0" || value === "false") return false;
   return fallback;
@@ -115,7 +113,6 @@ function resolveSection(
 }
 
 function parseStoredBehavior(raw: unknown): BehaviorObject | null {
-  // Malformed persisted settings are ignored so one bad row does not disable routing.
   if (!raw) return null;
   if (typeof raw === "object") return raw as BehaviorObject;
   try {
@@ -179,7 +176,6 @@ function validateChannelRoles({
   legacyMain = [],
   claims = [],
 }: { programs?: ChannelProgram[]; legacyHelp?: string | null; legacyMain?: string[]; claims?: ChannelClaim[] } = {}) {
-  // Compare configured and hosted ownership in the same workspace/channel namespace.
   const errors = [];
   const owners = new Map<string, ChannelOwner>();
   const key = (ws: string | null, ch: string) => `${ws || "*"}::${ch}`;

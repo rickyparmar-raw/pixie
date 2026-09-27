@@ -1,5 +1,3 @@
-// Identity answers are generated from the deployment brand and program, not hardcoded
-// to Pixie, so hosted deployments can explain who they serve without leaking scope.
 import brand = require("./brand");
 
 interface IdentityProgram {
@@ -14,7 +12,6 @@ function botName() {
 }
 
 function isDefaultBot() {
-  // The default bot keeps the historical Pixorpheus wording; named deployments do not.
   return brand.slug() === brand.DEFAULT_SLUG;
 }
 
@@ -79,7 +76,6 @@ function otherProgramNames(currentId: string) {
 }
 
 function corpusSection(program: IdentityProgram | null = null) {
-  // An explicit override is authoritative for operators who supply their own identity copy.
   if (process.env.PIXIE_IDENTITY_OVERRIDE) {
     return process.env.PIXIE_IDENTITY_OVERRIDE;
   }

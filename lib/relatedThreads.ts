@@ -19,7 +19,6 @@ interface RelatedOptions {
   threshold?: number;
 }
 
-// Finds related Slack threads using lightweight token overlap and preserves stable permalinks.
 const STOP_WORDS = new Set([
   "a",
   "about",
@@ -223,7 +222,6 @@ const CANDIDATE_LIMIT = 200;
 const SLACK_ARCHIVE_HOST = "https://hackclub.slack.com/archives";
 
 function isSimpleLookupQuestion(question: string, answerResult: { direct?: boolean } | null = null) {
-  // Direct lookups are not useful related-thread candidates because their wording repeats widely.
   const q = (question || "").trim().toLowerCase();
   if (!q) return true;
 

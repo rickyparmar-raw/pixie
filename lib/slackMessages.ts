@@ -1,4 +1,3 @@
-// Centralizes program branding and retry behavior for outbound Slack messages.
 import log = require("./log");
 import type { Program, SlackClient } from "./types";
 import type { ChatPostMessageArguments } from "@slack/web-api";
@@ -41,7 +40,7 @@ function recordSendFailure(program: Program | null | undefined, err: SlackError)
 }
 
 function brandingFor(program: Program | null | undefined): Record<string, string> {
-  // Branding is optional and bounded because Slack rejects invalid icons or oversized usernames.
+  // Slack branding limits
   if (!program) return {};
   const out: Record<string, string> = {};
   const raw = program.supportName || (program.name ? `${program.name} Help` : null);
@@ -63,7 +62,6 @@ function headerCaseInsensitive(headers: Record<string, unknown>, name: string): 
 }
 
 function retryAfterMs(err: SlackError | null | undefined): number | null {
-  // Slack may provide retry_after in seconds or Retry-After in headers; cap both to a short user-facing wait.
   if (!err) return null;
   let header;
   if (err.retryAfter !== undefined) header = err.retryAfter;
@@ -76,9 +74,7 @@ function retryAfterMs(err: SlackError | null | undefined): number | null {
   return Math.min(secs * 1000, MAX_RETRY_AFTER_MS);
 }
 
-// Slack can return permanent auth/channel errors; only transient failures consume retry attempts.
 function isPermanentError(err: SlackError | null | undefined): boolean {
-  // Permission and malformed-request errors are permanent; transport failures may still succeed on retry.
   const code = err && (err.code || (err.data && err.data.error));
   return (
     code === "channel_not_found" ||
@@ -109,7 +105,6 @@ async function sendProgramMessage({
   text?: string;
   blocks?: unknown[] | null;
 }): Promise<SendResult> {
-  // Try customized identity first, then resend without it when Slack rejects the extra fields.
   if (!client || !client.chat || typeof client.chat.postMessage !== "function") {
     throw new Error("slack client unavailable");
   }
@@ -122,7 +117,6 @@ async function sendProgramMessage({
   }
 
   const brand = brandingFor(program);
-  // Customize the message first; a rejected customization is retried once without branding.
   const base = {
     channel,
     ...(threadTs ? { thread_ts: threadTs } : {}),

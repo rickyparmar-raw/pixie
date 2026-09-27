@@ -53,17 +53,10 @@ interface SupportOverview {
   activityKinds: Record<string, number>;
 }
 
-// 30d is a full operating cycle — long enough to smooth weekly rhythm,
-// short enough that old regimes don't mask this week's reality.
 const DEFAULT_SINCE_MS = 30 * 24 * 60 * 60 * 1000;
-// 48h without movement means the requester waited two full workdays;
-// assigned/claimed tickets have an owner on point, so only ownerless states
-// count here (narrower than the SLA/radar open set by design).
 const STALE48H_MS = 48 * 60 * 60 * 1000;
 const STALE48H_STATUSES = ["open", "waiting_for_helper", "escalated", "reopened"];
 const OPEN_STATUSES = Object.freeze(["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"]);
-// Gap trends only matter while fresh — a week of misses is a backlog,
-// a month of misses is history already covered by the radar's FAQ detector.
 const GAP_COUNTS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
 function median(values: number[]): number | null {
@@ -76,8 +69,6 @@ function lags(rows: AnalyticsRow[], from: string, to: string): number[] {
   return rows.map((r) => Number(r[to]) - Number(r[from])).filter((n) => Number.isFinite(n) && n >= 0);
 }
 
-// Rates round to 3 decimals — precise enough to graph, too coarse to
-// invite fake-precision arguments about a 0.0004 wobble.
 function rate(n: number, d: number): number {
   return d > 0 ? Number((n / d).toFixed(3)) : 0;
 }

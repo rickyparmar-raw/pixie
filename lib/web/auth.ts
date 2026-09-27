@@ -1,4 +1,3 @@
-// Slack OAuth creates the session used by both browser views and API guards.
 const crypto = require("crypto");
 const { isAdmin } = require("../config");
 const log = require("../log");
@@ -26,7 +25,6 @@ interface SlackUserInfoResponse {
 let ephemeralSecret: string | null = null;
 
 function sessionSecret() {
-  // Development stays usable without a configured secret; sessions expire on restart.
   if (process.env.PIXIE_SESSION_SECRET) return process.env.PIXIE_SESSION_SECRET;
   if (!ephemeralSecret) ephemeralSecret = crypto.randomBytes(32).toString("hex");
   return ephemeralSecret;
@@ -90,7 +88,6 @@ function requireAdmin(req: AuthRequest): AuthResult | { session: Session } {
 }
 
 function isAdminSession(session: Session | null): boolean {
-  // The dev bypass is restricted to the explicit test client id.
   if (!session) return false;
   if (session.role === "admin" || session.userId === "admin") return true;
   if (process.env.SLACK_CLIENT_ID === "dev-testing" && session.userId === "dev-user") return true;

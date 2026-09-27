@@ -1,4 +1,3 @@
-// Read-only diagnostics for the web console; probes do not write cache, gaps, or metrics.
 const answer = require("./answer");
 const knowledge = require("./knowledge");
 const retrieve = require("./retrieve");
@@ -45,12 +44,10 @@ interface ProbeResult {
 }
 
 function elapsedMs(since: number): number {
-  // performance.now avoids reporting a valid sub-millisecond probe as zero.
   return Math.round((performance.now() - since) * 1000) / 1000;
 }
 
 function cacheVerdict(question: string): CacheVerdict {
-  // A stale cache entry is reported as present and unusable without changing cache state.
   const cacheKey = cache.keyFor(question);
   const cacheHit = cacheKey ? cache.peekCachedAnswer(cacheKey) : null;
   if (!cacheHit) return { cacheKey, cacheHit: null, wouldHit: false, wouldMiss: true };

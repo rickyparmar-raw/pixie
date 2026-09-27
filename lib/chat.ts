@@ -1,4 +1,3 @@
-// This path is deliberately ungrounded, but it must not invent program-specific facts.
 const { config } = require("./config");
 const { complete } = require("./llm");
 const { VOICE, pixlGuardrail, normalizeEmoji, looksLikeCode, MAX_TOKENS, DEBUG_MAX_TOKENS } = require("./answer");
@@ -9,14 +8,12 @@ const QUESTION_WORD =
 const GREETING = /\b(?:hi|hey|hello|yo|sup|hiya|howdy|morning|gm|gn|thanks|thx|ty)\b/i;
 
 function looksLikeQuestion(text: string) {
-  // Short greetings stay in the conversational path; question-shaped text is sent to grounded answering.
   const t = (text || "").trim();
   if (!t) return false;
   return QUESTION_MARK.test(t) || QUESTION_WORD.test(t) || GREETING.test(t) || looksLikeCode(t);
 }
 
 function chatSystemPrompt(additionalContext = "", inHelpChannel = false) {
-  // Keep casual chat separate from the documentation prompt so it cannot imply source-backed facts.
   const parts = [
     "You are pixie, a helper bot for Hack Club YSWSs and guides on how to build stuff. You're helpful and you talk like a person.",
     ...VOICE,

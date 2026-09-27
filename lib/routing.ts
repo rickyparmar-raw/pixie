@@ -1,5 +1,3 @@
-// Hosted channel claims are authoritative when present; configuration is the
-// compatibility fallback for dedicated legacy deployments.
 import db = require("./db");
 import programs = require("./programs");
 import log = require("./log");
@@ -43,7 +41,7 @@ function resolveChannelProgram({ workspaceId = null, channelId }: ResolveOptions
 }
 
 function claimChannelsForProgram({ workspaceId = null, programId, channels = [], claimedBy = null }: ClaimOptions) {
-  // Claim the batch one channel at a time and roll back earlier claims on conflict.
+  // Rollback on conflict
   const claimed = [];
   for (const ch of channels) {
     const channelId = typeof ch === "string" ? ch : ch.id;

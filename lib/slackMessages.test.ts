@@ -3,7 +3,6 @@ const assert = require("node:assert/strict");
 const { sendProgramMessage, brandingFor } = require("./slackMessages");
 const { readSource } = require("./test-source");
 
-// Slack error fields are optional runtime properties, so the fake preserves those wire shapes.
 interface SlackTestError extends Error {
   code?: string;
   retryAfter?: number | string | null;
@@ -11,7 +10,6 @@ interface SlackTestError extends Error {
   headers?: Record<string, string>;
 }
 
-// The retry tests use native Error objects with only the Slack fields each case needs.
 test("branding uses the program support identity, never a human", () => {
   const brand = brandingFor({ name: "Highway", supportName: "Highway Help", iconUrl: "https://example.com/i.png" });
   assert.equal(brand.username, "Highway Help");

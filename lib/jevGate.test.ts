@@ -4,8 +4,6 @@ const { test, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const jev = require("./jevDecision");
 
-// These cases exercise the flat gate contract consumed by the response orchestrator.
-// Inputs deliberately omit documentation and evidence because the gate only judges engagement intent.
 const CFG = {
   enabled: true,
   experientialApiKeyPresent: true,

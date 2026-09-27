@@ -358,7 +358,7 @@ test("analytics stale48h uses a narrower status set than the SLA/radar open set"
   programs.invalidate();
   charSlaTicket("can-stale", "can-stale-assigned", 50 * 60 * 60 * 1000, "assigned");
   let a = analytics.overview("can-stale");
-  assert.equal(a.stale48h, 0); // assigned is open for SLA/radar but not stale48h
+  assert.equal(a.stale48h, 0);
   charSlaTicket("can-stale", "can-stale-open", 50 * 60 * 60 * 1000, "open");
   a = analytics.overview("can-stale");
   assert.equal(a.stale48h, 1);

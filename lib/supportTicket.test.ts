@@ -1,7 +1,3 @@
-// The support-ticket lifecycle: a ticket for every eligible root question in an
-// active help channel, opened before and independent of whether Pixie answers,
-// resolved and reopened from the thread, and idempotent against Slack's event
-// and interaction retries.
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, beforeEach, afterEach } = require("node:test");
@@ -169,7 +165,7 @@ test("the same root event delivered twice yields exactly one ticket and one tick
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
   const client = clientSpy();
   await ask(client, "t-dupe", "how are journals graded?");
-  await ask(client, "t-dupe", "how are journals graded?"); // retry
+  await ask(client, "t-dupe", "how are journals graded?");
 
   const rows = db.handle().query("SELECT id FROM tickets WHERE thread_ts = ?").all("t-dupe");
   assert.equal(rows.length, 1);
@@ -223,7 +219,7 @@ test("resolve -> reopen -> resolve repeats without corrupting state", async () =
   await tickets.publicReopenTicket({ ticketId: id, actorId: "U-cyc", client });
   assert.equal(db.getTicket(id).status, "reopened");
   assert.equal(db.getTicket(id).reopen_count, 1);
-  await tickets.publicReopenTicket({ ticketId: id, actorId: "U-cyc", client }); // double click
+  await tickets.publicReopenTicket({ ticketId: id, actorId: "U-cyc", client });
   assert.equal(db.getTicket(id).reopen_count, 1, "double reopen click doesn't bump the count");
   await tickets.publicResolveTicket({ ticketId: id, actorId: "U-cyc", client });
   assert.equal(db.getTicket(id).status, "resolved");
@@ -242,7 +238,7 @@ test("a ticket puts a marker reaction on the requester's message, swapped for a 
   assert.equal(opened.name, "ticket");
 
   await tickets.publicResolveTicket({ ticketId: db.getTicketByThreadTs("t-react").id, actorId: "U-react", client });
-  await new Promise((r) => setImmediate(r)); // the reaction swap is fire-and-forget off syncSupportTicketUI
+  await new Promise((r) => setImmediate(r));
   assert.ok(
     client.reactionsAdded.some((r) => r.timestamp === "t-react" && r.name === "white_check_mark"),
     "resolve adds the check",
@@ -344,7 +340,7 @@ test("the requester writing back in a resolved thread reopens it and re-shows th
 
   const c2 = clientSpy();
   const out = tickets.noteThreadActivity({ channel: HELP, threadTs: "t-reopen-chat", userId: "U-rc", client: c2 });
-  await new Promise((r) => setImmediate(r)); // let the fire-and-forget Slack calls settle
+  await new Promise((r) => setImmediate(r));
 
   assert.equal(out.status, "reopened");
   assert.equal(db.getTicket(id).reopen_count, 1);

@@ -28,10 +28,10 @@ function newTicket(programId: string, overrides: { category?: string | null } = 
 test("pingFatigue counts only offers targeting this helper, ignoring pool offers and other helpers", () => {
   prog("fatigue-a", ["U-A", "U-B"]);
   const ticket = newTicket("fatigue-a");
-  assignmentLifecycle.recordOffer({ ticket, to: null, source: "queue" }); // pool offer — must not count
+  assignmentLifecycle.recordOffer({ ticket, to: null, source: "queue" });
   assignmentLifecycle.recordOffer({ ticket, to: "U-A", source: "ping" });
   const ticket2 = newTicket("fatigue-a");
-  assignmentLifecycle.recordOffer({ ticket: ticket2, to: "U-B", source: "ping" }); // a different helper
+  assignmentLifecycle.recordOffer({ ticket: ticket2, to: "U-B", source: "ping" });
 
   const fatigue = helperRoute.pingFatigue("fatigue-a", "U-A");
   assert.equal(fatigue.count, 1);
@@ -45,7 +45,7 @@ test("pingFatigue counts only offers targeting this helper, ignoring pool offers
 test("pingFatigue only counts offers within the trailing 24h window", () => {
   prog("fatigue-b", ["U-A"]);
   const ticket = newTicket("fatigue-b");
-  const old = Date.now() - 30 * 60 * 60 * 1000; // 30h ago
+  const old = Date.now() - 30 * 60 * 60 * 1000;
   db.addTicketEvent({
     ticketId: ticket.id,
     programId: "fatigue-b",

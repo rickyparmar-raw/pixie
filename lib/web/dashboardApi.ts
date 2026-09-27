@@ -1,5 +1,3 @@
-// Organizer-dashboard operations are program-scoped assembly around existing modules.
-// Cross-program rows return not-found so callers cannot enumerate tenants with 403s.
 const db = require("../db");
 const programs = require("../programs");
 const log = require("../log");
@@ -77,7 +75,6 @@ interface HelperStat {
 }
 
 function needProgram(programId: string): { error: string } | null {
-  // An empty helper roster denies access, matching the Slack path's fail-closed policy.
   if (!programId || !programs.get(programId)) return { error: "unknown program" };
   return null;
 }
@@ -98,8 +95,6 @@ const SORTS: Record<string, { column: string; dir: string }> = {
   updated: { column: "updated_at", dir: "DESC" },
   waiting: { column: "created_at", dir: "ASC" },
 };
-
-// The whitelist keeps dashboard sorting data-only; “waiting” is oldest-first for triage.
 
 function escapeLike(value: unknown): string {
   return String(value).replace(/[\\%_]/g, (c) => `\\${c}`);
@@ -242,7 +237,6 @@ const BLOCKED_DETAILS = new Set(["ungrounded", "gap_escalated", "unclear_escalat
 const ANSWERED_KINDS = new Set(["answer_docs", "answer_chat", "answer_link"]);
 
 function metricsOverview(programId: string, query: DashboardParams = {}) {
-  // Metrics are assembled from stored ticket, event, and metric rows; no estimates are added.
   const missing = needProgram(programId);
   if (missing) return missing;
   const days = Math.min(Math.max(Number(query.days) || 30, 1), 365);

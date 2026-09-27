@@ -1,5 +1,3 @@
-// SQLite-backed state survives restarts; transient prompt context remains in memory.
-// Schema creation and migrations are deliberately idempotent for local and hosted files.
 import path = require("node:path");
 import sqlite = require("bun:sqlite");
 import type { Database as DatabaseType, SQLQueryBindings } from "bun:sqlite";
@@ -240,7 +238,6 @@ function errorMessage(error: unknown): string {
 }
 
 function migrate(database: DatabaseType) {
-  // Each migration checks its own table or column before executing, so startup is repeatable.
   for (const [table, column, sql] of MIGRATIONS) {
     if (sql.startsWith("CREATE TABLE")) {
       const exists = database.query("SELECT name FROM sqlite_master WHERE type = ? AND name = ?").get("table", table);
@@ -275,7 +272,7 @@ function backfillResolvedCredits(database: DatabaseType) {
 function open(filename = process.env.PIXIE_DB_PATH || DEFAULT_PATH) {
   if (db) return db;
   db = new Database(filename, { create: true });
-  // WAL keeps reads from blocking while sweeps and event handlers write.
+  // SQLite WAL
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA busy_timeout = 5000");
   db.exec(SCHEMA);
@@ -287,7 +284,6 @@ function open(filename = process.env.PIXIE_DB_PATH || DEFAULT_PATH) {
 }
 
 function ensureSchema(filename: string | null = null) {
-  // Tooling can migrate an arbitrary file without opening the live singleton or starting a sweeper.
   const file = filename || process.env.PIXIE_DB_PATH || DEFAULT_PATH;
   const database = new Database(file, { create: true });
   database.exec("PRAGMA journal_mode = WAL");
@@ -309,7 +305,7 @@ function now() {
 }
 
 function claimMessage(ts: DbValue, channel = null) {
-  // INSERT OR IGNORE makes the check and claim one atomic operation across replicas.
+  // Atomic claim
   const changes = query("INSERT OR IGNORE INTO answered_messages (ts, channel, answered_at) VALUES (?, ?, ?)").run(
     ts,
     channel,
@@ -336,12 +332,10 @@ function touchThread(threadTs: string, channel: string | null = null, fields: Re
 }
 
 function getThread(threadTs: string) {
-  // Durable thread flags survive restart; message content itself stays ephemeral.
   return query("SELECT * FROM threads WHERE thread_ts = ?").get(threadTs) || null;
 }
 
 function addThreadMessage(threadTs: string, role: string, content: string, userId = null) {
-  // Prompt context is intentionally ephemeral: it is useful for the next answer, not disk state.
   const list = ephemeralThreadMessages.get(threadTs) || [];
   list.push({ role, content, user_id: userId, created_at: now() });
   if (list.length > MAX_THREAD_MESSAGES) list.splice(0, list.length - MAX_THREAD_MESSAGES);
@@ -366,7 +360,6 @@ function recordUserMessage({
   threadTs?: string | null;
   text: string;
 }) {
-  // Keep only a bounded recent window; this buffer is not a user-history archive.
   const body = text.trim();
   if (!userId || !body) return;
 
@@ -382,7 +375,6 @@ function recentUserMessages(
   userId: string,
   { channel = null, limit = 3 }: { channel?: string | null; limit?: number } = {},
 ) {
-  // The short window distinguishes an active debugging thread from unrelated older chat.
   if (!userId) return [];
   const cutoff = now() - USER_MESSAGE_WINDOW_MS;
   const list = (ephemeralUserMessages.get(userId) || []).filter(
@@ -407,7 +399,6 @@ function recordTopic(userId: string, topic: string, wasHelpful = true) {
 }
 
 function getTopics(userId: string): TopicRow[] {
-  // Topics are bounded by the same history window used by other user context.
   if (!userId) return [];
   const cutoff = now() - HISTORY_TTL_MS;
   return query<TopicRow>(
@@ -416,7 +407,6 @@ function getTopics(userId: string): TopicRow[] {
 }
 
 function recordGap(question: string, userId = null, channel = null, messageTs = null, programId = null) {
-  // Normalize only whitespace/case here; topGaps performs the grouping used for ranking.
   query(
     "INSERT INTO doc_gaps (question, user_id, channel, message_ts, program_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
   ).run(normalizeQuestion(question), userId, channel, messageTs, programId, now());
@@ -454,7 +444,7 @@ function topGaps(
   limit = 20,
   sinceMs = 30 * 24 * 60 * 60 * 1000,
   {
-    // Gap ranking counts distinct askers so one noisy user cannot manufacture demand.
+    // Distinct askers
     kind = null,
     untilMs = null,
     programId = null,
@@ -535,7 +525,6 @@ function gapCountsByKind(sinceMs = 7 * 24 * 60 * 60 * 1000, untilMs = null, prog
 }
 
 function recordFeedback(messageTs: string, userId: string, vote: number) {
-  // One user's latest vote replaces the earlier vote for the same answer message.
   query(
     `INSERT INTO feedback (message_ts, user_id, vote, created_at) VALUES (?, ?, ?, ?)
        ON CONFLICT(message_ts, user_id) DO UPDATE SET vote = excluded.vote, created_at = excluded.created_at`,
@@ -563,7 +552,6 @@ function addLearnedFact({
   resolverId = null,
   autoLearned = false,
 }: Record<string, unknown>) {
-  // Program ownership is stored with the fact; approved knowledge must not cross tenants.
   const result = query(
     `INSERT OR IGNORE INTO learned_facts (question, answer, author_id, status, source_ts, channel, program_id, category, ticket_id, resolver_id, verified_at, support_count, last_supported_at, auto_learned, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
@@ -632,7 +620,6 @@ function learnedFactForTicket(ticketId: number) {
 }
 
 function refreshLearnedFact(id: number) {
-  // Support updates recency and count without reviving rejected or superseded facts.
   const t = now();
   return (
     query(
@@ -654,7 +641,6 @@ function getLearnedFactById(id: number): LearnedFactRow | null {
 }
 
 function approvedFacts(limit = 50, programId = null) {
-  // Approved facts are returned oldest-first for stable corpus assembly.
   if (programId) {
     return query(
       "SELECT question, answer, category, created_at, last_supported_at, support_count FROM learned_facts WHERE status = 'approved' AND superseded_by IS NULL AND program_id = ? ORDER BY COALESCE(last_supported_at, created_at) DESC LIMIT ?",
@@ -670,7 +656,6 @@ function approvedFacts(limit = 50, programId = null) {
 }
 
 function setLearnedStatus(id: number, status: string) {
-  // Verification time is recorded only when a fact becomes approved.
   const result =
     status === "approved"
       ? query("UPDATE learned_facts SET status = ?, verified_at = ? WHERE id = ?").run(status, now(), id)
@@ -724,7 +709,6 @@ function hasCapturedSource(sourceTs: string) {
 }
 
 function saveGuide(threadTs: string, guideId: string, currentStep: number, userId: string) {
-  // One active guide per thread makes repeated guide steps idempotent.
   query(
     `INSERT INTO active_guides (thread_ts, guide_id, current_step, user_id, started_at) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(thread_ts) DO UPDATE SET guide_id = excluded.guide_id, current_step = excluded.current_step`,
@@ -732,7 +716,6 @@ function saveGuide(threadTs: string, guideId: string, currentStep: number, userI
 }
 
 function getGuide(threadTs: string): ActiveGuideRow | null {
-  // Expired guides are invisible so a stale interactive prompt cannot advance.
   const cutoff = now() - GUIDE_TTL_MS;
   return (
     query<ActiveGuideRow>("SELECT * FROM active_guides WHERE thread_ts = ? AND started_at > ?").get(threadTs, cutoff) ||
@@ -778,7 +761,6 @@ function unmuteThread(threadTs: string) {
 }
 
 function markTakeover(threadTs: string, channel = null, byUser = null) {
-  // Takeover is sticky until explicitly cleared; the normal context sweeper does not expire it.
   if (!threadTs) return;
   query("INSERT OR REPLACE INTO thread_takeover (thread_ts, channel, by_user, created_at) VALUES (?, ?, ?, ?)").run(
     threadTs,
@@ -794,7 +776,6 @@ function isTakeover(threadTs: string) {
 }
 
 function clearTakeover(threadTs: string) {
-  // Human takeover ends only through an explicit clear action.
   if (!threadTs) return;
   query("DELETE FROM thread_takeover WHERE thread_ts = ?").run(threadTs);
 }
@@ -1319,7 +1300,7 @@ function createTicket({
   createdAt = null,
   visibility = null,
 }: CreateTicketOptions): number | null {
-  // The unique thread key makes duplicate event delivery idempotent; the lookup handles conflicts.
+  // Idempotent events
   const t = createdAt === null || createdAt === undefined ? now() : Number(createdAt);
   try {
     const result = query(
@@ -1641,7 +1622,7 @@ function claimProgramChannel({
   kind = "help",
   claimedBy = null,
 }: Record<string, unknown>) {
-  // The database uniqueness constraint is the authority when two activations race.
+  // Database authority
   const ws = workspaceId || "default";
   const res = query(
     "INSERT OR IGNORE INTO program_channels (workspace_id, channel_id, program_id, kind, claimed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",

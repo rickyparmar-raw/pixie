@@ -1,4 +1,3 @@
-// Caches public pages and pauses exhausted credentials so refresh jobs stay within provider limits.
 const axios = require("axios");
 const { config } = require("./config");
 const log = require("./log");
@@ -60,19 +59,16 @@ function isCreditsExhausted() {
 }
 
 function markCreditsExhausted() {
-  // A credit-exhaustion response pauses the key for an hour; retrying only burns the allowance.
   creditsExhaustedUntil = Date.now() + CREDITS_PAUSE_MS;
 }
 
 async function scrapeUrl(url: string, { skipCache = false }: { skipCache?: boolean } = {}) {
-  // Reuse recent pages to keep scheduled corpus refreshes below Firecrawl's rate limit.
   const cached = scrapeCache.get(url);
   if (!skipCache && cached && Date.now() - cached.fetchedAt < SCRAPE_CACHE_TTL_MS) {
     return cached.markdown;
   }
 
   if (isCreditsExhausted()) {
-    // A stale cached page keeps the corpus useful when a refresh is paused or fails.
     return cached ? cached.markdown : null;
   }
 
@@ -111,7 +107,6 @@ function clearScrapeCache() {
 }
 
 async function searchWeb(query: string, limit = 3): Promise<FirecrawlSearchResult[] | null> {
-  // Search is best-effort and never turns provider failure into a user-facing exception.
   if (isCreditsExhausted()) return null;
   const apiKey = getApiKey();
   if (!apiKey) return null;

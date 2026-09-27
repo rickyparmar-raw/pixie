@@ -5,7 +5,6 @@ const handlers = require("./handlers");
 const { config } = require("./config");
 const { readSource } = require("./test-source");
 
-// Summary tests keep speaker labels because helpers rely on bot-versus-human attribution.
 test("buildTranscript formats messages with proper sender tags", () => {
   const messages = [
     { user: "U123", text: "how do I flash the firmware?" },

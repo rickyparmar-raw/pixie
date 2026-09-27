@@ -40,8 +40,6 @@ const RELEASED = "helper_assignment_released";
 const TIMED_OUT = "helper_assignment_timed_out";
 const EVENT_TYPES = [OFFERED, CLAIMED, DECLINED, RELEASED, TIMED_OUT];
 
-// An accept rate over one or two offers is noise, not a signal. Below this
-// the helper's rate is null and the lifecycle is reported "insufficient".
 const MIN_COMPLETED_OFFERS_FOR_RATE = 3;
 
 const DEFAULT_OFFER_TIMEOUT_MS = 30 * 60 * 1000;

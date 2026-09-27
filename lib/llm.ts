@@ -1,4 +1,3 @@
-// Provides completion and streaming transport with retry and fallback handling.
 const axios = require("axios");
 const https = require("https");
 const log = require("./log");
@@ -116,7 +115,6 @@ const KNOWN_PRICING = Object.freeze({
 });
 
 function costFor(model: string, usage: Usage) {
-  // Missing usage stays unknown; fabricated costs would corrupt provider telemetry.
   let prices: Record<string, Price> = { ...KNOWN_PRICING };
   try {
     const configured = JSON.parse(process.env.PIXIE_LLM_PRICING_JSON || "{}");
@@ -281,7 +279,6 @@ async function requestCompletion({
 }
 
 async function completeAttempts(options: CompletionOptions, scope: string): Promise<CompletionResult> {
-  // Retry only before visible text is emitted; fallback after partial output would rewrite the answer.
   let lastError: LlmError | null = null;
   const requestId = options.telemetry?.requestId || crypto.randomUUID();
   const instrumented = {
@@ -331,7 +328,6 @@ function describeError(err: LlmError) {
 }
 
 async function complete(options: CompletionOptions, scope = "llm") {
-  // Resolve key functions per attempt so rate-limit rotation can take effect immediately.
   const { fallback, ...primary } = options;
 
   try {
@@ -348,7 +344,6 @@ async function complete(options: CompletionOptions, scope = "llm") {
 }
 
 function parseSseChunk(buffer: string, { flush = false }: { flush?: boolean } = {}) {
-  // Keep partial SSE lines until the next chunk so terminal frames without a newline are parsed.
   const deltas: string[] = [];
   const lines = buffer.split("\n");
   let rest = lines.pop();
@@ -487,7 +482,6 @@ async function streamAttempts(
   onDelta: (delta: string, text: string) => boolean | void,
   scope: string,
 ) {
-  // Streaming retries preserve the same no-duplicate-text invariant as completion retries.
   let lastError: LlmError | null = null;
 
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {

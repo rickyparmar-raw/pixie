@@ -25,38 +25,24 @@ interface Row {
   [key: string]: unknown;
 }
 
-// One shared "same report" line so duplicates, bursts, and live matching
-// agree — three thresholds would let a pair count as duplicate but not incident.
 const SIMILARITY_THRESHOLD = 0.35;
-// Duplicates triage recent work, not archaeology — a month bounds the
-// scan to tickets a helper could still act on.
 const DUPLICATE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-// An outage is a tight spike in time — one hour catches it without
-// sweeping the whole day's unrelated questions into one candidate.
 const INCIDENT_WINDOW_MS = 60 * 60 * 1000;
-// Four similar tickets in an hour is the smallest spike worth a human
-// look; fewer is routine coincidence.
 const INCIDENT_THRESHOLD = 4;
-// One outage must stay one incident — later tickets in the same burst
-// link to the live candidate instead of opening a second row for the same shape.
 const INCIDENT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
 function similarityScore(a: string, b: string): number {
   return gapClusters.pairOverlap(a, b);
 }
 
-// Threshold lives in one place so the three call sites cannot drift apart.
 function isSimilar(a: string, b: string, threshold = SIMILARITY_THRESHOLD): boolean {
   return similarityScore(a, b) >= threshold;
 }
 
-// Unbounded limits let one question dump the whole table into a response.
 function clampLimit(limit: number): number {
   return Math.min(Math.max(limit, 1), 10);
 }
 
-// Rounding is part of the contract — callers display this number, so it
-// must equal the scored value rather than a longer float.
 function scoreDuplicate(question: string, row: Row): number {
   return Number(similarityScore(question, String(row.question || "")).toFixed(3));
 }
@@ -145,7 +131,6 @@ function incidentSimilarity(question: string, incident: Row): number {
   return score;
 }
 
-// Confidence grows with corroboration but never claims certainty from wording alone.
 function burstConfidence(count: number): number {
   return Math.min(0.5 + count * 0.05, 0.95);
 }
@@ -197,8 +182,6 @@ function findCooldownIncident(live: Row[], representative: string): Row | undefi
   return live.find((inc) => isSimilar(String(inc.title || ""), representative));
 }
 
-// Position-keyed so identical questions from different tickets never
-// collapse onto the first row sharing that text.
 function buildQuestionIndex(rows: Row[]): Map<string, number[]> {
   const index = new Map<string, number[]>();
   rows.forEach((r, i) => {

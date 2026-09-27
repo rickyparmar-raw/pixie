@@ -1,5 +1,3 @@
-// Helper drafts are read-only: a human decides whether anything is sent or taught.
-// Grounding uses the requester pipeline so helper citations and silence rules match.
 const lookup = require("./lookup");
 const retrieve = require("./retrieve");
 const knowledge = require("./knowledge");
@@ -90,8 +88,6 @@ const OPPOSITION = [
 const SIMILAR_SCAN_LIMIT = 200;
 const SIMILAR_RETURN_MAX = 10;
 
-// Draft bursts are bounded per helper so retries cannot exhaust the model budget.
-
 function checkBudget(actorId: string): { error: string } | null {
   const res = rateLimit.check(`copilot:${actorId}`, { windowMs: COPILOT_WINDOW_MS, max: COPILOT_MAX_PER_WINDOW });
   if (res.allowed) return null;
@@ -139,7 +135,6 @@ async function draftReply({
   question: string;
   threadTs?: string | null;
 }): Promise<CopilotResponse> {
-  // A null grounded answer is a signal to escalate, not an invitation to improvise.
   const programId = program ? program.id : null;
   const result = await lookup.answerOrChat(question, threadContextFor(threadTs), { program });
   return { ...draftVerdict(result), programId };

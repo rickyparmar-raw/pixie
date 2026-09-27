@@ -1,6 +1,3 @@
-// Decision table for lib/tickets/policy.js: every settings combination that
-// materially changes ticket/helper behavior gets one row. Pure — no Slack,
-// no network, no DB writes (behaviorFor reads the passed object only).
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
@@ -161,8 +158,8 @@ test("stored behavior overrides legacy flags", () => {
     posture: "active",
     helpChannel: "C-o",
     channels: ["C-o"],
-    ticketsEnabled: false, // legacy says off...
-    behavior: { help: { ticketsEnabled: true } }, // ...settings say on
+    ticketsEnabled: false,
+    behavior: { help: { ticketsEnabled: true } },
   };
   assert.equal(ticketPolicy({ program: prog, role: "help" }).recordTicket, true);
 });

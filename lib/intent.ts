@@ -1,4 +1,3 @@
-// Classifies whether a message needs an answer, using recent context only as supporting evidence.
 import configModule = require("./config");
 import llm = require("./llm");
 import answer = require("./answer");
@@ -133,7 +132,6 @@ function buildUserPrompt(
     recentMessages = null,
   }: { threadMessages?: unknown[]; recentMessages?: unknown[] | null } = {},
 ): string {
-  // Put the message under judgement last so the model does not grade the surrounding context.
   const lines = [];
 
   const recent = boundedContext(recentMessages || history);
@@ -174,7 +172,6 @@ function extractJsonObject(text: unknown): string | null {
 }
 
 function parseContextResult(text: unknown, { scoped = false }: { scoped?: boolean } = {}): ContextResult | null {
-  // Strict shape validation keeps malformed model output from becoming an accidental reply.
   const json = extractJsonObject(text);
   if (json === null) return null;
   let value: unknown;
@@ -245,7 +242,6 @@ function normalizeIntentResult(
 }
 
 function historyFor(userId: string | null, channel: string | null, current: string): string[] {
-  // The current row may already have been recorded by a handler, so remove it before building context.
   if (!userId) return [];
   try {
     const rows = recentUserMessages(userId, { channel: channel || undefined, limit: HISTORY_LIMIT + 1 })
@@ -281,7 +277,6 @@ async function classifyIntent(
     returnContext = false,
   }: IntentOptions = {},
 ): Promise<string | ContextResult | null> {
-  // Short inputs fail soft: callers treat null as silence rather than paying for a weak classification.
   if (!message || message.length < MIN_LENGTH) return null;
 
   const scoped = scopedFor(program, addressed);
@@ -355,7 +350,6 @@ function stripDecoration(text: string): string {
 }
 
 function normalizeReaction(text: string): string {
-  // Normalize reaction-only decoration before the cheap classifier gate, but retain ordinary words verbatim.
   return stripDecoration(text)
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
@@ -364,7 +358,6 @@ function normalizeReaction(text: string): string {
 }
 
 function worthClassifying(text: string): boolean {
-  // This cheap gate excludes empty decoration and reactions; real words still reach the classifier.
   const raw = (text || "").trim();
   if (!raw) return false;
   if (looksLikeCode(raw)) return true;
@@ -397,7 +390,6 @@ function wordCount(text: string): number {
 }
 
 function looksLikeHelpRequest(text: string): boolean {
-  // Very short fragments are accepted only when their wording clearly signals a problem or request.
   const t = (text || "").trim();
   if (!t) return false;
   if (looksLikeCode(t)) return true;

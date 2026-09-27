@@ -1,6 +1,5 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-// The model is stubbed so guide state transitions are tested without network variance.
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -19,7 +18,6 @@ after(() => {
   llm.complete = realComplete;
 });
 
-// Model labels are controlled per test so guide ownership and step transitions remain reproducible.
 test("detectGuideIntent matches each guide's trigger phrasing", async () => {
   modelChoice = "submit-ysws-guidelines";
   assert.equal(await guides.detectGuideIntent("how do i submit my ysws guidelines"), "submit-ysws-guidelines");

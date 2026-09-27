@@ -19,7 +19,6 @@ const intent = require("./intent");
 db.open(":memory:");
 config.slack.botUserId = "U0PIXIE";
 
-// Handler tests replace downstream clients with recorders so routing decisions stay deterministic.
 test("mentionsPixieByName matches the name and its suffixes", () => {
   assert.equal(handlers.mentionsPixieByName("pixie help"), true);
   assert.equal(handlers.mentionsPixieByName("hey Pixie!"), true);

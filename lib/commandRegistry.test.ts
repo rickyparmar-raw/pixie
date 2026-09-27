@@ -1,6 +1,5 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-// Registry tests pin parity between command definitions, matching, and authorization.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const registry = require("./commandRegistry");
@@ -10,8 +9,6 @@ const BOT = "UBOT123";
 const ADMIN = "U0ADMIN";
 const HELPER = "U0HELPER";
 const NORMAL = "U0NORMAL";
-
-// Registry tests also protect the matching surface used by event handlers, not just the exported list.
 
 test("every definition carries the full contract shape with valid enums", () => {
   assert.ok(COMMANDS.length >= 10, "registry must cover the whole inventory");

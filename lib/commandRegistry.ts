@@ -1,4 +1,3 @@
-// One registry feeds both text-command matching and slash-command authorization.
 import brand = require("./brand");
 
 type Surface = "text" | "slash" | "both";
@@ -285,7 +284,7 @@ function match(
   const guideArgs = tryGuideMatch(raw, names);
   if (guideArgs !== null) return { command: byName("guide"), args: guideArgs };
 
-  // Mention forms are checked only after bare command forms so ordinary text is never claimed.
+  // bare forms first
   const stripped = stripMention(raw, botUserId);
   const mentioned = stripped !== raw.trim();
   if (!mentioned) return null;
@@ -333,7 +332,6 @@ function authorize(
   if (role && !def.channelRoles.includes(role)) {
     return { ok: false, reason: "wrong_channel" };
   }
-  // Organizers retain command access when a program disables ordinary commands.
   if (role === "main" && commandsEnabled === false && def.permission !== "organizer") {
     return { ok: false, reason: "commands_disabled" };
   }

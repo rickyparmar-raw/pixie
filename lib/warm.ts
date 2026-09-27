@@ -1,4 +1,3 @@
-// Prewarms useful answers in the background without sitting on a user reply path.
 const knowledge = require("./knowledge");
 const cache = require("./cache");
 const db = require("./db");
@@ -16,7 +15,6 @@ function sleep(ms: number) {
 }
 
 async function warmOne(question: string, { refreshed = false }: { refreshed?: boolean } = {}) {
-  // Keep warm lookups context-free so lookup can populate the shared answer cache.
   const result = await lookup.answerOrChat(question, "");
   if (!result?.source) return false;
 
@@ -32,7 +30,6 @@ function faqQuestions(): string[] {
 }
 
 async function warmFaq({ limit = 2, spacingMs = 15000 }: { limit?: number; spacingMs?: number } = {}) {
-  // Pace warm questions so background work cannot consume the provider budget needed by live questions.
   const questions = faqQuestions()
     .filter((q) => !cache.get(q))
     .slice(0, limit);
@@ -63,7 +60,6 @@ async function refreshStale({
   limit = PER_CYCLE,
   spacingMs = SPACING_MS,
 }: { limit?: number; spacingMs?: number } = {}) {
-  // Refresh one source at a time to keep housekeeping predictable under load.
   const stale = cache.staleCacheEntries(db.CACHE_FRESH_MS, limit);
   if (stale.length === 0) return 0;
 
@@ -88,7 +84,6 @@ async function refreshStale({
 }
 
 function start({ cycleMs = CYCLE_MS }: { cycleMs?: number } = {}) {
-  // Background warming starts after the current tick so startup does not delay Slack readiness.
   if (timer) return timer;
 
   warmFaq().catch((error: unknown) =>
