@@ -141,6 +141,11 @@ async function startBot() {
   } catch (e) {
     log.error("resolution", "watcher failed to start:", e.message);
   }
+  try {
+    require("./lib/ticketBackfill").start(app.client);
+  } catch (e) {
+    log.error("ticketBackfill", "history import failed to start:", e.message);
+  }
 }
 
 // Offline test mode: `bun index.js --ask "how do i join pixl?"` builds the
