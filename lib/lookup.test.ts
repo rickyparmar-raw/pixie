@@ -55,18 +55,6 @@ test("retrievalQuery leaves standalone non-follow-up questions intact", () => {
   assert.equal(result, standalone);
 });
 
-test("arithmeticAnswer evaluates a supported percentage before the model", () => {
-  assert.deepEqual(lookup.arithmeticAnswer("what is 18% of $50?"), {
-    source: "Arithmetic",
-    direct: true,
-    answer: "18% of $50 = 9.00",
-  });
-});
-
-test("arithmeticAnswer leaves unsupported related expressions for the model", () => {
-  assert.equal(lookup.arithmeticAnswer("what percentage of the policy is allowed?"), null);
-});
-
 test("stale dynamic sources cannot authorize an exact answer", () => {
   const knowledge = require("./knowledge");
   const original = knowledge.sourceEligibility;

@@ -72,16 +72,16 @@ test("active incident matching requires an affected service and outage language"
   programs.invalidate();
   const created = incidents.createIncident({
     programId,
-    title: "Pixl site is currently down",
+    title: "Acme site is currently down",
     description: "People cannot access the website",
-    publicMessage: "The Pixl site is currently down.",
+    publicMessage: "The Acme site is currently down.",
     actorId: "U-incident-helper",
   });
   assert.equal(created.ok, true);
   for (const question of [
     "Can I access the site to submit my project?",
     "Where do I submit my YSWS project?",
-    "How do I submit a project on Pixl?",
+    "How do I submit a project on Acme?",
     "Can I log in before submitting my project?",
     "Where is the login button for my YSWS account?",
     "How do I navigate to the submission page?",
@@ -93,7 +93,7 @@ test("active incident matching requires an affected service and outage language"
   ]) {
     assert.equal(incidents.matchActiveIncident({ programId, question }), null, question);
   }
-  for (const question of ["is the site down?", "pixl won't load", "cant open the website"]) {
+  for (const question of ["is the site down?", "acme won't load", "cant open the website"]) {
     assert.ok(incidents.matchActiveIncident({ programId, question }), question);
   }
 });

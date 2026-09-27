@@ -31,11 +31,6 @@ function localPool() {
     memory.public.none(readFileSync(join(process.cwd(), "db", "schema.sql"), "utf8"));
     const { Pool: MemoryPool } = memory.adapters.createPg();
     _localPool = new MemoryPool();
-    void _localPool.query(
-      `insert into hosted_programs (id, workspace_id, program_name, owner_hca_id)
-       values ('pixl', 'local', 'Pixl', 'dev-local')
-       on conflict (id) do nothing`,
-    );
   }
   return _localPool;
 }

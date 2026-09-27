@@ -65,16 +65,16 @@ test("manual incidents are confirmed immediately and outage paraphrases match wi
   programs.invalidate();
   const created = incidents.createIncident({
     programId: "dec-manual",
-    title: "Pixl site is currently down",
+    title: "Acme site is currently down",
     description: "People cannot access the website",
-    publicMessage: "Heads up — the Pixl site is currently down; the team is on it.",
+    publicMessage: "Heads up — the Acme site is currently down; the team is on it.",
     actorId: "U-organizer",
   });
   assert.equal(created.ok, true);
   assert.equal(created.incident.status, "confirmed");
   assert.equal(created.incident.declared_by, "U-organizer");
   assert.ok(incidents.matchActiveIncident({ programId: "dec-manual", question: "is the site down?" }));
-  assert.ok(incidents.matchActiveIncident({ programId: "dec-manual", question: "pixl won't load" }));
+  assert.ok(incidents.matchActiveIncident({ programId: "dec-manual", question: "acme won't load" }));
   assert.ok(incidents.matchActiveIncident({ programId: "dec-manual", question: "cant open the website" }));
   assert.equal(incidents.matchActiveIncident({ programId: "dec-manual", question: "when does review finish?" }), null);
 });

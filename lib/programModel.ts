@@ -198,7 +198,7 @@ function validateChannelRoles({
   }
 
   for (const p of programs) {
-    if (!p || !p.id || p.id === "ysws-global") continue;
+    if (!p || !p.id) continue;
     const ws = p.workspaceId || null;
     if (p.helpChannel) assign(ws, p.helpChannel, p.id, "help", "program.helpChannel");
     if (p.organizerChannel && p.organizerChannel !== p.helpChannel)

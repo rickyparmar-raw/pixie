@@ -43,8 +43,8 @@ test("program sync claims channels atomically and bootstraps the creator", () =>
   assert.equal(res.program.deploymentMode, "hosted_shared");
   assert.equal(db.isHelper("hwy", "U-org"), true);
 
-  const conflict = api.internalProgramSync("pixl", {
-    name: "Pixl",
+  const conflict = api.internalProgramSync("acme", {
+    name: "Acme",
     workspaceId: "TW",
     claimedBy: "U-other",
     programChannels: [{ id: "C-hwy-help", kind: "help" }],
@@ -63,7 +63,7 @@ test("ticket search is tenant-scoped and paginated", () => {
     question: "deadline?",
   });
   db.createTicket({
-    programId: "pixl",
+    programId: "acme",
     workspaceId: "TW",
     channel: "C2",
     threadTs: "t-p1",
@@ -86,7 +86,7 @@ test("ticket actions enforce actor membership and tenant match", () => {
   });
   const outsider = api.internalTicketAction(id, "claim", { programId: "hwy", actorId: "U-stranger" });
   assert.match(outsider.error, /not a helper/);
-  const crossTenant = api.internalTicketAction(id, "claim", { programId: "pixl", actorId: "U-org" });
+  const crossTenant = api.internalTicketAction(id, "claim", { programId: "acme", actorId: "U-org" });
   assert.match(crossTenant.error, /mismatch/);
   const ok = api.internalTicketAction(id, "claim", { programId: "hwy", actorId: "U-org" });
   assert.equal(ok.ok, true);
@@ -177,14 +177,14 @@ test("snooze and duplicate actions validate their targets", () => {
   assert.match(api.internalTicketAction(id, "snooze", { ...me, until: "yesterday" }).error, /valid future until/);
   assert.match(api.internalTicketAction(id, "duplicate", { ...me, canonicalId: id }).error, /must differ/);
   const other = db.createTicket({
-    programId: "pixl",
+    programId: "acme",
     workspaceId: "TW",
     channel: "C2",
     threadTs: "t-sec-2",
     requesterId: "U2",
     question: "q",
   });
-  db.syncHelper({ programId: "pixl", userId: "U-org", source: "manual" });
+  db.syncHelper({ programId: "acme", userId: "U-org", source: "manual" });
   assert.match(api.internalTicketAction(id, "duplicate", { ...me, canonicalId: other }).error, /same program/);
   const canon = db.createTicket({
     programId: "hwy",
@@ -226,7 +226,9 @@ test("knowledge propose + candidate action resolve tenant from stored rows", asy
     requesterId: "U1",
     question: "how do rebates work",
   });
-  const cross = await api.internalKnowledgePropose("pixl", { actorId: "U-org", ticketId: a });
+  db.saveProgram({ id: "acme", name: "Acme" });
+  programs.invalidate();
+  const cross = await api.internalKnowledgePropose("acme", { actorId: "U-org", ticketId: a });
   assert.match(cross.error, /not found in this program|not a helper/);
 
   assert.match(

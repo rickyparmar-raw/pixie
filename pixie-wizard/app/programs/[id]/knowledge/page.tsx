@@ -3,7 +3,7 @@ import { requireProgramMembership } from "@/lib/programAccess";
 import { coreKnowledgeCandidates, coreKnowledgeStatus, type KnowledgeSourceStatus } from "@/lib/pixieCore";
 import { resolveIdentities, labelFor } from "@/lib/identity";
 import { PageHeader, Section, CoreError, EmptyState, Notice, Chip } from "@/app/_components/DashboardShell";
-import { IconAlert, IconArrowRight, IconBook, IconCheck, IconClock, IconDoc, IconGrid } from "@/app/_components/icons";
+import { IconAlert, IconArrowRight, IconBook, IconCheck, IconClock, IconDoc } from "@/app/_components/icons";
 import {
   PixelIconNotion,
   PixelIconGitHub,
@@ -119,8 +119,6 @@ function sourceKind(source: DocSource): { mark: React.ReactNode; label: string }
       return { mark: <PixelIconMarkdown size={32} />, label: "Markdown" };
     case "json-faq":
       return { mark: <IconBook size={32} />, label: "FAQ file" };
-    case "pixl-shop":
-      return { mark: <IconGrid size={32} />, label: "Pixie shop" };
     default:
       return isNotion(source.url)
         ? { mark: <PixelIconNotion size={32} />, label: "Notion" }

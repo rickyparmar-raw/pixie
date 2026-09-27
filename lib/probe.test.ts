@@ -30,14 +30,14 @@ test("probe returns error for empty question", async () => {
 });
 
 test("probe returns query terms and answer for a real question", async () => {
-  answer.getAnswerOrChatStream = async () => ({ source: "Pixl FAQ", answer: "here is the answer" });
+  answer.getAnswerOrChatStream = async () => ({ source: "Acme FAQ", answer: "here is the answer" });
   intent.classifyIntent = async () => "HELP_NEEDED";
 
   const result = await probe("how do i submit");
   assert.equal(result.question, "how do i submit");
   assert.ok(result.queryTerms.length > 0);
   assert.ok(result.answer);
-  assert.equal(result.source, "Pixl FAQ");
+  assert.equal(result.source, "Acme FAQ");
   assert.ok(result.latencyMs > 0);
   assert.equal(typeof result.cacheWouldHit, "boolean");
 });
@@ -52,10 +52,10 @@ test("probe handles null source for conversational answer", async () => {
 });
 
 test("probe includes BM25 and retrieval trace", async () => {
-  answer.getAnswerOrChatStream = async () => ({ source: "Pixl FAQ", answer: "test" });
+  answer.getAnswerOrChatStream = async () => ({ source: "Acme FAQ", answer: "test" });
   intent.classifyIntent = async () => "HELP_NEEDED";
 
-  const result = await probe("what is pixl");
+  const result = await probe("what is acme");
   assert.ok(Array.isArray(result.bm25Trace));
   assert.ok(Array.isArray(result.retrievalTrace));
 });
@@ -109,7 +109,7 @@ test("probe is read-only — it never writes the answer cache", async () => {
     seen.push(args);
     return origPut(...args);
   };
-  answer.getAnswerOrChatStream = async () => ({ source: "Pixl FAQ", answer: "probe answer" });
+  answer.getAnswerOrChatStream = async () => ({ source: "Acme FAQ", answer: "probe answer" });
   intent.classifyIntent = async () => "HELP_NEEDED";
   try {
     await probe("char probe readonly");
@@ -120,7 +120,7 @@ test("probe is read-only — it never writes the answer cache", async () => {
 });
 
 test("probe reports citation membership against retrieved chunks", async () => {
-  answer.getAnswerOrChatStream = async () => ({ source: "Pixl FAQ", answer: "x" });
+  answer.getAnswerOrChatStream = async () => ({ source: "Acme FAQ", answer: "x" });
   intent.classifyIntent = async () => "HELP_NEEDED";
   const result = await probe("how do i submit");
   assert.equal(result.citationOk === null || typeof result.citationOk === "boolean", true);
@@ -131,7 +131,7 @@ test("probe reports citation membership against retrieved chunks", async () => {
 test("probe surfaces firstTokenMs only when streaming yields text", async () => {
   answer.getAnswerOrChatStream = async (q: string, corpus: string, ctx: unknown, opts: ProbeOptions) => {
     if (opts?.onText) opts.onText("partial");
-    return { source: "Pixl FAQ", answer: "partial" };
+    return { source: "Acme FAQ", answer: "partial" };
   };
   intent.classifyIntent = async () => "HELP_NEEDED";
   const result = await probe("streaming probe");

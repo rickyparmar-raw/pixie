@@ -15,7 +15,7 @@ const CFG = {
 const GATE_INPUT = {
   message: "what is restoration energy?",
   conversationContext: "",
-  program: { id: "pixl", name: "Pixl" },
+  program: { id: "acme", name: "Acme" },
   channelPosture: "main",
   addressed: false,
 };
@@ -59,7 +59,7 @@ test("gate input carries intent context only: no documentation, no evidence payl
   ]);
   assert.equal(received.state.channelPosture, "dm");
   assert.equal(received.state.addressed, true);
-  assert.deepEqual(received.state.program, { id: "pixl", name: "Pixl" });
+  assert.deepEqual(received.state.program, { id: "acme", name: "Acme" });
   assert.doesNotMatch(JSON.stringify(received.state), /document|evidence|corpus/i);
 });
 

@@ -131,7 +131,6 @@ const REOPEN_HIGH_RATE = 0.4;
 const ACTIVE_INCIDENT_LIST_LIMIT = 20;
 const RADAR_LOOP_DEFAULT_MIN = 10;
 const RADAR_LEASE_NAME = "radar-eval";
-const SKIPPED_PROGRAM_ID = "ysws-global";
 
 function assertValid(type: string, severity: string): void {
   if (!TYPES.includes(type)) throw new Error(`invalid radar signal type: ${type}`);
@@ -677,7 +676,7 @@ function startRadarLoop(
         .runOnce(RADAR_LEASE_NAME, intervalMin * 60 * 1000, async () => {
           const programs = require("./programs");
           for (const prog of programs.all()) {
-            if (!prog || prog.id === SKIPPED_PROGRAM_ID) continue;
+            if (!prog) continue;
             try {
               evaluateProgram(prog.id);
             } catch (e) {

@@ -61,7 +61,7 @@ test("permanent Slack errors are not retried forever", async () => {
   assert.equal(calls, 1);
 });
 
-test("Pixl's branding can never appear on a message sent for a different program", async () => {
+test("Acme's branding can never appear on a message sent for a different program", async () => {
   const sentPayloads: any[] = [];
   const client = {
     chat: {
@@ -72,7 +72,7 @@ test("Pixl's branding can never appear on a message sent for a different program
     },
   };
 
-  const pixl = { id: "pixl", name: "Pixl", supportName: "Pixl Help", iconUrl: "https://cdn.example.com/pixl.png" };
+  const acme = { id: "acme", name: "Acme", supportName: "Acme Help", iconUrl: "https://cdn.example.com/acme.png" };
   const sandbox = {
     id: "pixie-sandbox-e2e",
     name: "Sandbox",
@@ -80,15 +80,15 @@ test("Pixl's branding can never appear on a message sent for a different program
     iconUrl: "https://cdn.example.com/sandbox.png",
   };
 
-  await sendProgramMessage({ client, program: pixl, channel: "C-PIXL", text: "pixl answer" });
+  await sendProgramMessage({ client, program: acme, channel: "C-ACME", text: "acme answer" });
   await sendProgramMessage({ client, program: sandbox, channel: "C-SANDBOX", text: "sandbox answer" });
 
-  const [pixlPayload, sandboxPayload] = sentPayloads;
-  assert.equal(pixlPayload.username, "Pixl Help");
+  const [acmePayload, sandboxPayload] = sentPayloads;
+  assert.equal(acmePayload.username, "Acme Help");
   assert.equal(sandboxPayload.username, "Sandbox Help");
-  assert.notEqual(pixlPayload.username, sandboxPayload.username);
-  assert.notEqual(pixlPayload.icon_url, sandboxPayload.icon_url);
-  assert.equal(JSON.stringify(sandboxPayload).includes("Pixl"), false);
+  assert.notEqual(acmePayload.username, sandboxPayload.username);
+  assert.notEqual(acmePayload.icon_url, sandboxPayload.icon_url);
+  assert.equal(JSON.stringify(sandboxPayload).includes("Acme"), false);
 });
 
 test("429 with Retry-After is honored once, then the send succeeds", async () => {

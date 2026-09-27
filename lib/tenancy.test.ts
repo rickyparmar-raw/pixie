@@ -35,12 +35,12 @@ function seedPrograms() {
     ],
   });
   db.saveProgram({
-    id: "tnt-pixl",
-    name: "Pixl",
-    helpChannel: "C_PIXL",
-    channels: ["C_PIXL"],
+    id: "tnt-acme",
+    name: "Acme",
+    helpChannel: "C_ACME",
+    channels: ["C_ACME"],
     sources: [
-      { name: "TNT Pixl Docs", type: "text", content: "Pixl deadline is august 18. Ship before school starts." },
+      { name: "TNT Acme Docs", type: "text", content: "Acme deadline is august 18. Ship before school starts." },
     ],
   });
   programs.invalidate();
@@ -57,12 +57,12 @@ const TNT_BLOB = JSON.stringify([
     ],
   },
   {
-    id: "tnt-pixl",
-    name: "Pixl",
-    helpChannel: "C_PIXL",
-    channels: ["C_PIXL"],
+    id: "tnt-acme",
+    name: "Acme",
+    helpChannel: "C_ACME",
+    channels: ["C_ACME"],
     sources: [
-      { name: "TNT Pixl Docs", type: "text", content: "Pixl deadline is august 18. Ship before school starts." },
+      { name: "TNT Acme Docs", type: "text", content: "Acme deadline is august 18. Ship before school starts." },
     ],
   },
 ]);
@@ -90,39 +90,39 @@ test("two tenants: same question resolves to different programs and knowledge", 
   }
 
   assert.equal(programs.forChannel("C_HIGHWAY", WS).id, "tnt-hwy");
-  assert.equal(programs.forChannel("C_PIXL", WS).id, "tnt-pixl");
+  assert.equal(programs.forChannel("C_ACME", WS).id, "tnt-acme");
 
   const hwyCtx = knowledge.getContext(Q, "tnt-hwy");
-  const pixlCtx = knowledge.getContext(Q, "tnt-pixl");
+  const acmeCtx = knowledge.getContext(Q, "tnt-acme");
   assert.match(hwyCtx, /october 31/i);
   assert.doesNotMatch(hwyCtx, /august 18/i);
-  assert.match(pixlCtx, /august 18/i);
-  assert.doesNotMatch(pixlCtx, /october 31/i);
+  assert.match(acmeCtx, /august 18/i);
+  assert.doesNotMatch(acmeCtx, /october 31/i);
 });
 
 test("two tenants: answer caches never bleed", () => {
   cache.put(Q, { source: "TNT Highway Docs", answer: "october 31" }, "tnt-hwy");
   assert.equal(cache.get(Q, "tnt-hwy").answer, "october 31");
-  assert.equal(cache.get(Q, "tnt-pixl"), null);
+  assert.equal(cache.get(Q, "tnt-acme"), null);
   assert.equal(cache.get(Q, null), null);
 });
 
 test("two tenants: learned facts and doc gaps stay scoped", () => {
   db.addLearnedFact({ question: "hwy only", answer: "yes", status: "approved", programId: "tnt-hwy" });
-  const pixlFacts = db.approvedFacts(50, "tnt-pixl").map((f: TestAny) => f.question);
-  assert.ok(!pixlFacts.includes("hwy only"));
+  const acmeFacts = db.approvedFacts(50, "tnt-acme").map((f: TestAny) => f.question);
+  assert.ok(!acmeFacts.includes("hwy only"));
 
   db.recordGap("tnt shared wording", "U1", "C_HIGHWAY", "t-hwy-1", "tnt-hwy");
   db.recordGap("tnt shared wording", "U2", "C_HIGHWAY", "t-hwy-2", "tnt-hwy");
-  const pixlGaps = db.topGaps(20, 30 * 24 * 60 * 60 * 1000, { programId: "tnt-pixl", minAskers: 1 });
-  assert.ok(!pixlGaps.some((g: TestAny) => g.question.includes("tnt shared wording")));
+  const acmeGaps = db.topGaps(20, 30 * 24 * 60 * 60 * 1000, { programId: "tnt-acme", minAskers: 1 });
+  assert.ok(!acmeGaps.some((g: TestAny) => g.question.includes("tnt shared wording")));
   const hwyGaps = db.topGaps(20, 30 * 24 * 60 * 60 * 1000, { programId: "tnt-hwy", minAskers: 1 });
   assert.ok(hwyGaps.some((g: TestAny) => g.question.includes("tnt shared wording")));
 });
 
 test("two tenants: tickets, helpers, notes, audit are independent; cross-write denied", () => {
   db.syncHelper({ programId: "tnt-hwy", userId: "U-hwy-helper", source: "manual" });
-  db.syncHelper({ programId: "tnt-pixl", userId: "U-pixl-helper", source: "manual" });
+  db.syncHelper({ programId: "tnt-acme", userId: "U-acme-helper", source: "manual" });
 
   const hwyId = db.createTicket({
     programId: "tnt-hwy",
@@ -132,30 +132,30 @@ test("two tenants: tickets, helpers, notes, audit are independent; cross-write d
     requesterId: "U1",
     question: Q,
   });
-  const pixlId = db.createTicket({
-    programId: "tnt-pixl",
+  const acmeId = db.createTicket({
+    programId: "tnt-acme",
     workspaceId: WS,
-    channel: "C_PIXL",
-    threadTs: "t-pixl-9",
+    channel: "C_ACME",
+    threadTs: "t-acme-9",
     requesterId: "U2",
     question: Q,
   });
 
-  const denied = api.internalTicketAction(hwyId, "claim", { programId: "tnt-hwy", actorId: "U-pixl-helper" });
+  const denied = api.internalTicketAction(hwyId, "claim", { programId: "tnt-hwy", actorId: "U-acme-helper" });
   assert.match(denied.error, /not a helper/);
 
   const ok = api.internalTicketAction(hwyId, "claim", { programId: "tnt-hwy", actorId: "U-hwy-helper" });
   assert.equal(ok.ok, true);
-  assert.equal(db.getTicket(pixlId).status, "open");
+  assert.equal(db.getTicket(acmeId).status, "open");
 
   db.addTicketNote({ ticketId: hwyId, programId: "tnt-hwy", authorId: "U-hwy-helper", body: "hwy secret" });
-  assert.equal(db.listTicketNotes(pixlId).length, 0);
+  assert.equal(db.listTicketNotes(acmeId).length, 0);
 
-  const pixlAudit = db.listAuditEvents({ programId: "tnt-pixl" });
-  assert.ok(!pixlAudit.some((e: TestAny) => (e.metadata || "").includes("hwy secret")));
+  const acmeAudit = db.listAuditEvents({ programId: "tnt-acme" });
+  assert.ok(!acmeAudit.some((e: TestAny) => (e.metadata || "").includes("hwy secret")));
 
   db.resolveTicket(hwyId, "done");
-  assert.equal(db.getTicket(pixlId).status, "open");
+  assert.equal(db.getTicket(acmeId).status, "open");
   db.reopenTicket(hwyId);
   assert.equal(db.getTicket(hwyId).status, "reopened");
 });

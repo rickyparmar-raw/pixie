@@ -25,11 +25,11 @@ const COMMUNITIES: CommunityBrand[] = [
     ),
   },
   {
-    name: "Pixl",
+    name: "Acme",
     category: "Hardware Grants",
     customLogo: (
       <div className="flex items-center gap-1 font-black text-2xl tracking-tight text-[#0ae448]">
-        <span>pixl</span>
+        <span>acme</span>
         <span className="text-xs bg-[#0ae448]/20 border border-[#0ae448]/40 px-1.5 py-0.5 rounded font-mono text-[#0ae448]">
           v2
         </span>

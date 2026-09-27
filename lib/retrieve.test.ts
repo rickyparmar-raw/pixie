@@ -15,14 +15,14 @@ Restoration energy, or RE, is earned by shipping approved sidequests. Each regio
 
 Hackatime tracks coding time through the WakaTime extension. Point it at your Hackatime API key and dashboard URL.`;
 
-const FAQ = `Q: When does Pixl launch?
+const FAQ = `Q: When does Acme launch?
 A: The launch date has not been announced.
 
 Q: What do I win?
 A: Prizes ship to your door once your project is approved.`;
 
 test("chunkSection splits on headings and keeps the heading with the body", () => {
-  const chunks = retrieve.chunkSection("Pixl Docs", DOCS);
+  const chunks = retrieve.chunkSection("Acme Docs", DOCS);
 
   assert.equal(chunks.length, 3);
   assert.deepEqual(
@@ -31,7 +31,7 @@ test("chunkSection splits on headings and keeps the heading with the body", () =
   );
   assert.match(chunks[0].text, /Exporting sprites/);
   assert.match(chunks[0].text, /native size/);
-  assert.equal(chunks[0].source, "Pixl Docs");
+  assert.equal(chunks[0].source, "Acme Docs");
 });
 
 test("chunkSection returns nothing for empty input", () => {
@@ -56,16 +56,16 @@ test("chunkSection splits an oversized paragraph on sentence ends", () => {
 
 test("chunkSection keeps every chunk under the cap for real doc shapes", () => {
   for (const chunk of retrieve.chunkSections([
-    ["Pixl Docs", DOCS],
-    ["Pixl FAQ", FAQ],
+    ["Acme Docs", DOCS],
+    ["Acme FAQ", FAQ],
   ])) {
     assert.ok(chunk.text.length <= retrieve.MAX_CHUNK);
   }
 });
 
 const SOURCES = [
-  ["Pixl Docs", DOCS],
-  ["Pixl FAQ", FAQ],
+  ["Acme Docs", DOCS],
+  ["Acme FAQ", FAQ],
 ];
 const index = retrieve.buildIndex(retrieve.chunkSections(SOURCES));
 
@@ -114,7 +114,7 @@ test("selectChunks stops at the first chunk that doesn't fit, instead of skippin
 
 const GENERATED = [
   ["About pixie", "Q: Who are you?\nA: I'm pixie."],
-  ["Program timeline", "Pixl launches at some point."],
+  ["Program timeline", "Acme launches at some point."],
 ];
 
 test("selectContext always includes every generated section", () => {
@@ -147,10 +147,10 @@ test("selectContext labels passages with the source they came from", () => {
     generated: [],
     index,
     sources: SOURCES,
-    question: "when does pixl launch",
+    question: "when does acme launch",
   });
 
-  assert.match(context, /### Pixl FAQ/);
+  assert.match(context, /### Acme FAQ/);
 });
 
 test("selectContext falls back to the full corpus when nothing matches", () => {

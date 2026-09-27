@@ -5,7 +5,6 @@ import schema = require("./schema");
 import log = require("./log");
 import type {
   AuditEventRow,
-  ActiveGuideRow,
   ChannelClaimRow,
   LearnedFactRow,
   ProgramRow,
@@ -205,7 +204,6 @@ const DEFAULT_PATH = path.join(__dirname, "..", "pixie.db");
 const ANSWERED_TTL_MS = 24 * 60 * 60 * 1000;
 const THREAD_TTL_MS = 60 * 60 * 1000;
 const HISTORY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const GUIDE_TTL_MS = 30 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
 
 const CACHE_FRESH_MS = 6 * 60 * 60 * 1000;
@@ -708,39 +706,6 @@ function hasCapturedSource(sourceTs: string) {
   return Boolean(query("SELECT 1 FROM learned_facts WHERE source_ts = ? LIMIT 1").get(sourceTs));
 }
 
-function saveGuide(threadTs: string, guideId: string, currentStep: number, userId: string) {
-  query(
-    `INSERT INTO active_guides (thread_ts, guide_id, current_step, user_id, started_at) VALUES (?, ?, ?, ?, ?)
-       ON CONFLICT(thread_ts) DO UPDATE SET guide_id = excluded.guide_id, current_step = excluded.current_step`,
-  ).run(threadTs, guideId, currentStep, userId, now());
-}
-
-function getGuide(threadTs: string): ActiveGuideRow | null {
-  const cutoff = now() - GUIDE_TTL_MS;
-  return (
-    query<ActiveGuideRow>("SELECT * FROM active_guides WHERE thread_ts = ? AND started_at > ?").get(threadTs, cutoff) ||
-    null
-  );
-}
-
-function setGuideMessageTs(threadTs: string, messageTs: string) {
-  query("UPDATE active_guides SET message_ts = ? WHERE thread_ts = ?").run(messageTs, threadTs);
-}
-
-function getGuideByMessageTs(messageTs: string): ActiveGuideRow | null {
-  const cutoff = now() - GUIDE_TTL_MS;
-  return (
-    query<ActiveGuideRow>("SELECT * FROM active_guides WHERE message_ts = ? AND started_at > ?").get(
-      messageTs,
-      cutoff,
-    ) || null
-  );
-}
-
-function deleteGuide(threadTs: string) {
-  query("DELETE FROM active_guides WHERE thread_ts = ?").run(threadTs);
-}
-
 function muteThread(threadTs: string, channel = null) {
   query("INSERT OR REPLACE INTO muted_threads (thread_ts, channel, muted_at) VALUES (?, ?, ?)").run(
     threadTs,
@@ -1062,7 +1027,6 @@ function sweep() {
   query("DELETE FROM user_topics WHERE created_at < ?").run(t - HISTORY_TTL_MS);
   query("DELETE FROM user_messages WHERE created_at < ?").run(t - USER_MESSAGE_TTL_MS);
   query("DELETE FROM answer_cache WHERE COALESCE(last_asked_at, created_at) < ?").run(t - CACHE_IDLE_MS);
-  query("DELETE FROM active_guides WHERE started_at < ?").run(t - GUIDE_TTL_MS);
   query("DELETE FROM rate_limits WHERE created_at < ?").run(t - 60 * 60 * 1000);
 
   try {
@@ -1155,7 +1119,7 @@ function getDbPrograms() {
     incidentMode: r.incident_mode || "ANSWER_AND_TRACK",
     publicTicketsEnabled:
       r.public_tickets_enabled === null || r.public_tickets_enabled === undefined ? true : !!r.public_tickets_enabled,
-    sharedSources: r.id === "ysws-global" ? true : false,
+    sharedSources: false,
     sla: {
       unassignedMs: r.sla_unassigned_ms || null,
       assignedMs: r.sla_assigned_ms || null,
@@ -1940,11 +1904,6 @@ export = {
   recordFeedback,
   removeFeedback,
   feedbackTotals,
-  saveGuide,
-  getGuide,
-  setGuideMessageTs,
-  getGuideByMessageTs,
-  deleteGuide,
   muteThread,
   isThreadMuted,
   unmuteThread,
@@ -2014,7 +1973,6 @@ export = {
   MAX_THREAD_MESSAGES,
   MAX_USER_TOPICS,
   MAX_USER_MESSAGES,
-  GUIDE_TTL_MS,
   CACHE_FRESH_MS,
   CACHE_IDLE_MS,
 };

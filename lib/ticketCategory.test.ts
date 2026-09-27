@@ -2,7 +2,14 @@ export {};
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { classify, configuredCategories } = require("./ticketCategory");
+const ticketCategory = require("./ticketCategory");
+const { classify, configuredCategories } = ticketCategory;
+const db = require("./db");
+const programs = require("./programs");
+
+db.open(":memory:");
+programs.saveProgram({ id: "acme", name: "Acme", categories: ticketCategory.defaultTaxonomy() });
+programs.invalidate();
 
 const RULES = {
   byChannel: { "C-REVIEW": "review" },
@@ -53,44 +60,30 @@ test("a question with a regex-special term does not throw or over-match", () => 
   assert.equal(classify({ question: "help with axb builds", rules }), null);
 });
 
-function pixlRules() {
-  const programs = require("./programs");
-  return programs.get("pixl").categories;
+function acmeRules() {
+  return programs.get("acme").categories;
 }
 
-test("PIXL fallback is general_support, not the old Ricky-shaped 'support'", () => {
-  assert.equal(pixlRules().fallback, "general_support");
-  assert.equal(configuredCategories(pixlRules()).includes("support"), false);
+test("a configured program uses the generic taxonomy fallback", () => {
+  assert.equal(acmeRules().fallback, "other");
+  assert.equal(configuredCategories(acmeRules()).includes("support"), false);
 });
 
-test("PIXL taxonomy covers at least the nine required concepts", () => {
-  const cats = configuredCategories(pixlRules());
-  for (const required of [
-    "review",
-    "journals_hours",
-    "project_requirements",
-    "ai_policy",
-    "hardware",
-    "shop_orders",
-    "account_platform",
-    "program_ops",
-    "general_support",
-  ]) {
+test("the generic taxonomy exposes the configured categories", () => {
+  const cats = configuredCategories(acmeRules());
+  for (const required of ["review", "fulfillment_shipping", "account_access", "site_bug", "advice_how_to", "other"]) {
     assert.ok(cats.includes(required), `missing category: ${required}`);
   }
 });
 
-test("PIXL routes representative live-support questions to distinct, non-support categories", () => {
-  const rules = pixlRules();
+test("the generic taxonomy routes representative support questions", () => {
+  const rules = acmeRules();
   const cases = [
-    ["why is my second pass taking so long?", "review"],
-    ["does learning Java count toward my project hours?", "journals_hours"],
-    ["can I journal hand-drawn art?", "journals_hours"],
-    ["can I use this much AI?", "ai_policy"],
-    ["how do I wire up my PCB to the ESP32?", "hardware"],
-    ["my hardware grant hasn't shipped yet", "shop_orders"],
-    ["website isn't loading for me", "account_platform"],
-    ["when is the deadline for pixl", "program_ops"],
+    ["why was my submission rejected?", "review"],
+    ["does the package include tracking?", "fulfillment_shipping"],
+    ["I cannot sign in to my account", "account_access"],
+    ["the website is not loading for me", "site_bug"],
+    ["how do I configure this?", "advice_how_to"],
     ["can I resubmit my rejected project", "review"],
   ];
   const seen = new Set();
@@ -99,5 +92,5 @@ test("PIXL routes representative live-support questions to distinct, non-support
     assert.equal(got, expected, question);
     seen.add(got);
   }
-  assert.ok(seen.size >= 6, `expected a spread of categories, got only ${[...seen].join(", ")}`);
+  assert.ok(seen.size >= 5, `expected a spread of categories, got only ${[...seen].join(", ")}`);
 });

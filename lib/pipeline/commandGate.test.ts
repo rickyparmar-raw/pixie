@@ -16,7 +16,7 @@ let sums: any;
 
 function configure(behavior: any) {
   process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([
-    { id: "pixl", name: "Pixl", helpChannel: "C_HELP", channels: ["C_HELP", "C_MAIN"], behavior },
+    { id: "acme", name: "Acme", helpChannel: "C_HELP", channels: ["C_HELP", "C_MAIN"], behavior },
   ]);
   programs.invalidate();
 }
@@ -78,8 +78,8 @@ test("a normal user cannot run a helper command, and it never reaches classifica
 
 test("a program helper may run !sum, and it creates no ticket and no answer", async () => {
   configure(null);
-  db.syncHelper({ programId: "pixl", userId: "U_RANDOM", role: "helper" });
-  expect(db.isHelper("pixl", "U_RANDOM")).toBe(true);
+  db.syncHelper({ programId: "acme", userId: "U_RANDOM", role: "helper" });
+  expect(db.isHelper("acme", "U_RANDOM")).toBe(true);
   await handlers.onMessage({ event: event("C_MAIN", "!sum"), client });
   expect(sums).toHaveLength(1);
   expect(responds).toHaveLength(0);
@@ -87,7 +87,7 @@ test("a program helper may run !sum, and it creates no ticket and no answer", as
 
 test("main-channel commands switched off: refused with a clear reason, even for a helper", async () => {
   configure({ main: { commandsEnabled: false } });
-  expect(db.isHelper("pixl", "U_RANDOM")).toBe(true);
+  expect(db.isHelper("acme", "U_RANDOM")).toBe(true);
   await handlers.onMessage({ event: event("C_MAIN", "!sum"), client });
   expect(ephemerals).toHaveLength(1);
   expect(sums).toHaveLength(0);

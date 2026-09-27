@@ -58,7 +58,7 @@ const HELP_CASES = [
     want: { createOnSupport: false, recordTicket: false, escalate: false, pingHelpers: false, expertiseRouting: false },
   },
   {
-    name: "tickets off: no ticket at all, but opted-in helper pings still route (Pixl)",
+    name: "tickets off: no ticket at all, but opted-in helper pings still route (Acme)",
     patch: { ticketsEnabled: false },
     want: { createOnSupport: false, recordTicket: false, escalate: false, pingHelpers: true, expertiseRouting: true },
   },

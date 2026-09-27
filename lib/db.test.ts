@@ -41,17 +41,17 @@ test("user topics are capped at the most recent N", () => {
 });
 
 test("answer cache round-trips and misses on an unknown key", () => {
-  cache.putCachedAnswer("hash-a", "how do i join", { source: "Pixl FAQ", answer: "just sign up" });
+  cache.putCachedAnswer("hash-a", "how do i join", { source: "Acme FAQ", answer: "just sign up" });
 
   const hit = cache.getCachedAnswer("hash-a");
-  assert.equal(hit.source, "Pixl FAQ");
+  assert.equal(hit.source, "Acme FAQ");
   assert.equal(hit.answer, "just sign up");
   assert.ok(hit.ageMs >= 0);
   assert.equal(cache.getCachedAnswer("hash-missing"), null);
 });
 
 test("every hit bumps the ask count", () => {
-  cache.putCachedAnswer("hash-count", "whats the deadline", { source: "Pixl FAQ", answer: "august 18" });
+  cache.putCachedAnswer("hash-count", "whats the deadline", { source: "Acme FAQ", answer: "august 18" });
   assert.equal(cache.getCachedAnswer("hash-count").askCount, 1);
   assert.equal(cache.getCachedAnswer("hash-count").askCount, 2);
   assert.equal(cache.getCachedAnswer("hash-count").askCount, 3);
@@ -60,7 +60,7 @@ test("every hit bumps the ask count", () => {
 test("a refresh updates the answer without counting as an ask", () => {
   const countOf = (question: TestAny) => cache.topCached(50).find((r: TestAny) => r.question === question)?.ask_count;
 
-  cache.putCachedAnswer("hash-refresh", "how do i submit", { source: "Pixl Docs", answer: "old answer" });
+  cache.putCachedAnswer("hash-refresh", "how do i submit", { source: "Acme Docs", answer: "old answer" });
   cache.getCachedAnswer("hash-refresh");
   cache.getCachedAnswer("hash-refresh");
   const before = countOf("how do i submit");
@@ -68,7 +68,7 @@ test("a refresh updates the answer without counting as an ask", () => {
   cache.putCachedAnswer(
     "hash-refresh",
     "how do i submit",
-    { source: "Pixl Docs", answer: "new answer" },
+    { source: "Acme Docs", answer: "new answer" },
     { refreshed: true },
   );
 
@@ -79,8 +79,8 @@ test("a refresh updates the answer without counting as an ask", () => {
 test("sweep keeps a question people still ask and drops one nobody does", () => {
   const old = Date.now() - 8 * 24 * 60 * 60 * 1000;
 
-  cache.putCachedAnswer("hash-popular", "how do i join", { source: "Pixl FAQ", answer: "sign up" });
-  cache.putCachedAnswer("hash-forgotten", "some one-off thing", { source: "Pixl Docs", answer: "whatever" });
+  cache.putCachedAnswer("hash-popular", "how do i join", { source: "Acme FAQ", answer: "sign up" });
+  cache.putCachedAnswer("hash-forgotten", "some one-off thing", { source: "Acme Docs", answer: "whatever" });
 
   db.handle()
     .query("UPDATE answer_cache SET created_at = ?, last_asked_at = ? WHERE question_hash = ?")
@@ -99,9 +99,9 @@ test("staleCacheEntries returns the stalest most-asked first", () => {
   cache.clearCache();
   const old = Date.now() - 60 * 60 * 1000;
 
-  cache.putCachedAnswer("s-rare", "rare question", { source: "Pixl Docs", answer: "a" });
-  cache.putCachedAnswer("s-common", "common question", { source: "Pixl Docs", answer: "b" });
-  cache.putCachedAnswer("s-fresh", "fresh question", { source: "Pixl Docs", answer: "c" });
+  cache.putCachedAnswer("s-rare", "rare question", { source: "Acme Docs", answer: "a" });
+  cache.putCachedAnswer("s-common", "common question", { source: "Acme Docs", answer: "b" });
+  cache.putCachedAnswer("s-fresh", "fresh question", { source: "Acme Docs", answer: "c" });
 
   db.handle().query("UPDATE answer_cache SET refreshed_at = ? WHERE question_hash IN ('s-rare','s-common')").run(old);
   db.handle().query("UPDATE answer_cache SET ask_count = 30 WHERE question_hash = 's-common'").run();
@@ -144,34 +144,6 @@ test("feedback is one vote per user and can be changed or removed", () => {
   db.removeFeedback("m1", "U1");
   totals = db.feedbackTotals();
   assert.equal(totals.down, 0);
-});
-
-test("guide state persists and clears", () => {
-  db.saveGuide("t3", "git-setup", 0, "U1");
-  assert.equal(db.getGuide("t3").guide_id, "git-setup");
-
-  db.saveGuide("t3", "git-setup", 2, "U1");
-  assert.equal(db.getGuide("t3").current_step, 2);
-
-  db.deleteGuide("t3");
-  assert.equal(db.getGuide("t3"), null);
-});
-
-test("guide message_ts links a posted step back to its guide", () => {
-  db.saveGuide("t3-msg", "git-setup", 0, "U1");
-  assert.equal(db.getGuideByMessageTs("1234.5678"), null);
-
-  db.setGuideMessageTs("t3-msg", "1234.5678");
-  const row = db.getGuideByMessageTs("1234.5678");
-  assert.equal(row.thread_ts, "t3-msg");
-  assert.equal(row.guide_id, "git-setup");
-
-  db.setGuideMessageTs("t3-msg", "9999.0001");
-  assert.equal(db.getGuideByMessageTs("1234.5678"), null);
-  assert.equal(db.getGuideByMessageTs("9999.0001").thread_ts, "t3-msg");
-
-  db.deleteGuide("t3-msg");
-  assert.equal(db.getGuideByMessageTs("9999.0001"), null);
 });
 
 test("medianLatency returns null with no data and a value once recorded", () => {
@@ -238,7 +210,7 @@ test("answer cache survives a normal reopen and clearCache remains explicit", ()
     db.close();
     db.open(filename);
     cache.putCachedAnswer("reopen-hash", "a persistent question", {
-      source: "Pixl FAQ",
+      source: "Acme FAQ",
       answer: "a persistent answer",
     });
 
@@ -256,9 +228,9 @@ test("answer cache survives a normal reopen and clearCache remains explicit", ()
 });
 
 test("source text survives a restart", () => {
-  db.saveSourceText("Pixl Docs", "## Get\n\n50 px an hour rising to 86 px an hour");
+  db.saveSourceText("Acme Docs", "## Get\n\n50 px an hour rising to 86 px an hour");
 
-  const stored = db.loadSourceText("Pixl Docs");
+  const stored = db.loadSourceText("Acme Docs");
   assert.match(stored.text, /86 px an hour/);
   assert.ok(stored.fetchedAt > 0);
 });
@@ -349,11 +321,11 @@ test("learned facts are strictly program-scoped; legacy unowned rows get their c
   const h = db.handle();
   h.query("DELETE FROM learned_facts").run();
   db.addLearnedFact({
-    question: "pixl q",
-    answer: "pixl a",
+    question: "acme q",
+    answer: "acme a",
     authorId: "U1",
     status: "approved",
-    channel: "C_PIXL",
+    channel: "C_ACME",
     programId: null,
   });
   db.addLearnedFact({
@@ -378,15 +350,15 @@ test("learned facts are strictly program-scoped; legacy unowned rows get their c
     ["b2b q"],
   );
   assert.deepEqual(
-    db.approvedFacts(50, "pixl").map((f: TestAny) => f.question),
+    db.approvedFacts(50, "acme").map((f: TestAny) => f.question),
     [],
   );
 
-  const res = db.assignUnownedLearnedFacts((ch: TestAny) => (ch === "C_PIXL" ? "pixl" : null));
+  const res = db.assignUnownedLearnedFacts((ch: TestAny) => (ch === "C_ACME" ? "acme" : null));
   assert.deepEqual(res, { unowned: 2, assigned: 1, remaining: 1 });
   assert.deepEqual(
-    db.approvedFacts(50, "pixl").map((f: TestAny) => f.question),
-    ["pixl q"],
+    db.approvedFacts(50, "acme").map((f: TestAny) => f.question),
+    ["acme q"],
   );
   assert.deepEqual(
     db.approvedFacts(50, "b2b").map((f: TestAny) => f.question),
@@ -397,8 +369,8 @@ test("learned facts are strictly program-scoped; legacy unowned rows get their c
     { unowned: 1, assigned: 1, remaining: 0 },
   );
   assert.deepEqual(
-    db.approvedFacts(50, "pixl").map((f: TestAny) => f.question),
-    ["pixl q"],
+    db.approvedFacts(50, "acme").map((f: TestAny) => f.question),
+    ["acme q"],
   );
 });
 
@@ -426,10 +398,10 @@ test("channel-less legacy facts go to whatever the resolver names for them", () 
     channel: null,
     programId: null,
   });
-  const res = db.assignUnownedLearnedFacts((ch: TestAny) => (ch ? null : "pixl"));
+  const res = db.assignUnownedLearnedFacts((ch: TestAny) => (ch ? null : "acme"));
   assert.deepEqual(res, { unowned: 1, assigned: 1, remaining: 0 });
   assert.deepEqual(
-    db.approvedFacts(50, "pixl").map((f: TestAny) => f.question),
+    db.approvedFacts(50, "acme").map((f: TestAny) => f.question),
     ["era q"],
   );
 });

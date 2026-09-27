@@ -92,7 +92,7 @@ function collect(source) {
       helperGroup: r.helper_group,
       sources: r.sources ? JSON.parse(r.sources) : [],
       milestones: r.milestones ? JSON.parse(r.milestones) : [],
-      guides: r.guides ? JSON.parse(r.guides) : ["submit-ysws-guidelines"],
+      guides: r.guides ? JSON.parse(r.guides) : [],
       links: r.links ? JSON.parse(r.links) : {},
     }));
   }

@@ -331,7 +331,7 @@ test("SLA cooldown is a strict 24h per (program,ticket,rule)", () => {
   );
 });
 
-test("SLA loop guards; checkProgram itself never skips shadow/ysws-global", () => {
+test("SLA loop guards; checkProgram handles every program", () => {
   assert.equal(sla.startSlaLoop(null), null);
   assert.equal(sla.startSlaLoop({}, 0), null);
   const timer = sla.startSlaLoop({}, 100000);
@@ -345,12 +345,12 @@ test("SLA loop guards; checkProgram itself never skips shadow/ysws-global", () =
     shadowMode: true,
     sla: { unassignedMs: 60000 },
   });
-  db.saveProgram({ id: "ysws-global", name: "G", helpChannel: "C-g", channels: ["C-g"], sla: { unassignedMs: 60000 } });
+  db.saveProgram({ id: "shared", name: "Shared", helpChannel: "C-g", channels: ["C-g"], sla: { unassignedMs: 60000 } });
   programs.invalidate();
   charSlaTicket("csla-shadow", "csla-shadow-1", 3600000, "open");
-  charSlaTicket("ysws-global", "ysws-global-1", 3600000, "open");
+  charSlaTicket("shared", "shared-1", 3600000, "open");
   assert.equal(sla.checkProgram({ programId: "csla-shadow" }).violations.length, 1);
-  assert.equal(sla.checkProgram({ programId: "ysws-global" }).violations.length, 1);
+  assert.equal(sla.checkProgram({ programId: "shared" }).violations.length, 1);
 });
 
 test("analytics stale48h uses a narrower status set than the SLA/radar open set", () => {

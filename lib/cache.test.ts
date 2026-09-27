@@ -48,7 +48,7 @@ test("keyFor refuses a question with no meaningful words", () => {
   assert.equal(cache.normalize("what is it"), "");
   assert.equal(cache.keyFor("what is it"), null);
 
-  cache.put("what is it", { source: "Pixl FAQ", answer: "nope" });
+  cache.put("what is it", { source: "Acme FAQ", answer: "nope" });
   assert.equal(cache.get("what is it"), null);
   assert.equal(cache.get("how do you do that"), null);
 });
@@ -56,26 +56,26 @@ test("keyFor refuses a question with no meaningful words", () => {
 test("get returns null on a miss and the stored result on a hit", () => {
   assert.equal(cache.get("never asked before"), null);
 
-  cache.put("how do i join", { source: "Pixl FAQ", answer: "just sign up at play.pixl.rsvp" });
+  cache.put("how do i join", { source: "Acme FAQ", answer: "just sign up at play.acme.rsvp" });
   assert.deepEqual(cache.get("How do I join?"), {
-    source: "Pixl FAQ",
-    answer: "just sign up at play.pixl.rsvp",
+    source: "Acme FAQ",
+    answer: "just sign up at play.acme.rsvp",
   });
 });
 
 test("cache keeps the same normalized question isolated by program ID", () => {
   const question = "when is the deadline?";
 
-  cache.put(question, { source: "Pixl FAQ", answer: "august 18" }, undefined, "pixl");
+  cache.put(question, { source: "Acme FAQ", answer: "august 18" }, undefined, "acme");
   cache.put(question, { source: "Sprig FAQ", answer: "september 30" }, undefined, "sprig");
 
-  assert.notEqual(cache.keyFor(question, "pixl"), cache.keyFor(question, "sprig"));
-  assert.deepEqual(cache.get(question, "pixl"), { source: "Pixl FAQ", answer: "august 18" });
+  assert.notEqual(cache.keyFor(question, "acme"), cache.keyFor(question, "sprig"));
+  assert.deepEqual(cache.get(question, "acme"), { source: "Acme FAQ", answer: "august 18" });
   assert.deepEqual(cache.get(question, "sprig"), { source: "Sprig FAQ", answer: "september 30" });
 });
 
 test("an aged answer is still served, so a popular question stays instant", () => {
-  cache.put("how do i unlock a region", { source: "Pixl Docs", answer: "finish the sidequests" });
+  cache.put("how do i unlock a region", { source: "Acme Docs", answer: "finish the sidequests" });
   db.handle()
     .query("UPDATE answer_cache SET created_at = ?, refreshed_at = ? WHERE question_hash = ?")
     .run(1, 1, cache.keyFor("how do i unlock a region"));
@@ -84,20 +84,20 @@ test("an aged answer is still served, so a popular question stays instant", () =
 });
 
 test("an aged timeline answer is refused rather than served", () => {
-  cache.put("when does pixl launch", { source: "Program timeline", answer: "august 18 — in 21 days" });
-  assert.equal(cache.get("when does pixl launch").answer, "august 18 — in 21 days");
+  cache.put("when does acme launch", { source: "Program timeline", answer: "august 18 — in 21 days" });
+  assert.equal(cache.get("when does acme launch").answer, "august 18 — in 21 days");
 
   db.handle()
     .query("UPDATE answer_cache SET created_at = ?, refreshed_at = ? WHERE question_hash = ?")
-    .run(1, 1, cache.keyFor("when does pixl launch"));
+    .run(1, 1, cache.keyFor("when does acme launch"));
 
-  assert.equal(cache.get("when does pixl launch"), null, "a countdown must never be served from yesterday");
+  assert.equal(cache.get("when does acme launch"), null, "a countdown must never be served from yesterday");
 });
 
 test("isVolatile matches the timeline section however it is cased", () => {
   assert.equal(cache.isVolatile("Program timeline"), true);
   assert.equal(cache.isVolatile("  program TIMELINE "), true);
-  assert.equal(cache.isVolatile("Pixl FAQ"), false);
+  assert.equal(cache.isVolatile("Acme FAQ"), false);
   assert.equal(cache.isVolatile(null), false);
 });
 

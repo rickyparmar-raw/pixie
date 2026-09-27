@@ -33,7 +33,7 @@ async function withAnswers(
   }
 }
 
-const docsAnswer = async (question: string) => ({ source: "Pixl FAQ", answer: `answer to ${question}` });
+const docsAnswer = async (question: string) => ({ source: "Acme FAQ", answer: `answer to ${question}` });
 
 test("warmOne caches a doc-grounded answer", async () => {
   cache.clearCache();
@@ -60,7 +60,7 @@ test("warmFaq answers the FAQ questions and skips the ones already known", async
   knowledge.faqQuestions = () => ["who can join?", "is this free?", "do i need a team?"];
 
   try {
-    cache.put("is this free?", { source: "Pixl FAQ", answer: "yep, free" });
+    cache.put("is this free?", { source: "Acme FAQ", answer: "yep, free" });
 
     await withAnswers(docsAnswer, async (asked) => {
       const warmed = await warm.warmFaq({ spacingMs: 0 });
@@ -78,7 +78,7 @@ test("warmFaq does nothing when everything is already warm", async () => {
   knowledge.faqQuestions = () => ["who can join?"];
 
   try {
-    cache.put("who can join?", { source: "Pixl FAQ", answer: "anyone" });
+    cache.put("who can join?", { source: "Acme FAQ", answer: "anyone" });
     await withAnswers(docsAnswer, async (asked) => {
       assert.equal(await warm.warmFaq({ spacingMs: 0 }), 0);
       assert.deepEqual(asked, []);
@@ -97,12 +97,12 @@ test("refreshStale takes the most-asked stale entries, up to the cap", async () 
     ["asked a lot", 40],
     ["asked sometimes", 9],
   ]) {
-    cache.put(question, { source: "Pixl FAQ", answer: "old" });
+    cache.put(question, { source: "Acme FAQ", answer: "old" });
     db.handle()
       .query("UPDATE answer_cache SET refreshed_at = ?, ask_count = ? WHERE question_hash = ?")
       .run(old, asks, cache.keyFor(question));
   }
-  cache.put("just answered", { source: "Pixl FAQ", answer: "current" });
+  cache.put("just answered", { source: "Acme FAQ", answer: "current" });
 
   await withAnswers(docsAnswer, async (asked) => {
     const refreshed = await warm.refreshStale({ limit: 2, spacingMs: 0 });
@@ -114,7 +114,7 @@ test("refreshStale takes the most-asked stale entries, up to the cap", async () 
 test("refreshStale does not inflate the ask count of what it refreshes", async () => {
   cache.clearCache();
   const old = Date.now() - 24 * 60 * 60 * 1000;
-  cache.put("popular question", { source: "Pixl FAQ", answer: "old" });
+  cache.put("popular question", { source: "Acme FAQ", answer: "old" });
   db.handle()
     .query("UPDATE answer_cache SET refreshed_at = ?, ask_count = 12 WHERE question_hash = ?")
     .run(old, cache.keyFor("popular question"));
@@ -130,7 +130,7 @@ test("refreshStale does not inflate the ask count of what it refreshes", async (
 
 test("refreshStale is a no-op when nothing is stale", async () => {
   cache.clearCache();
-  cache.put("fresh question", { source: "Pixl FAQ", answer: "current" });
+  cache.put("fresh question", { source: "Acme FAQ", answer: "current" });
 
   await withAnswers(docsAnswer, async (asked) => {
     assert.equal(await warm.refreshStale({ limit: 5, spacingMs: 0 }), 0);
@@ -147,7 +147,7 @@ test("a failing answer does not abort the rest of the pass", async () => {
     await withAnswers(
       async (question: string) => {
         if (question === "explodes") throw new Error("model on fire");
-        return { source: "Pixl FAQ", answer: "ok" };
+        return { source: "Acme FAQ", answer: "ok" };
       },
       async () => {
         assert.equal(await warm.warmFaq({ spacingMs: 0 }), 1);

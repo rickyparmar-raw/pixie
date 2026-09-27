@@ -17,7 +17,7 @@ type AuditEvent = {
   created_at: number;
 };
 
-// "ticket #4128", "program pixl", "macro 33" — the entity a ledger row points
+// "ticket #4128", "program acme", "macro 33" — the entity a ledger row points
 // at, in the shape the action implies.
 function entityLabel(e: AuditEvent): string {
   if (!e.entity_type) return "";

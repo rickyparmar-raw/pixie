@@ -8,7 +8,6 @@ const db = require("./db");
 const log = require("./log");
 const firecrawl = require("./firecrawl");
 const validator = require("./validator");
-const arithmetic = require("./arithmetic");
 const grounding = require("./grounding");
 import type { Program, ProgramSource } from "./types";
 
@@ -86,21 +85,6 @@ function dateFallback(question: string, contextPrompt: string, prog: ProgramLike
   return direct;
 }
 
-function arithmeticAnswer(question: string) {
-  const text = String(question || "").trim();
-  const expressions: string[] = [
-    text.match(/^(?:what(?:'s| is)|calculate)\s+(.+?)[?!.]?$/i)?.[1],
-    text.match(/^(.+?)\s*=\s*\?$/i)?.[1],
-  ].filter((expression): expression is string => Boolean(expression));
-  for (const expression of expressions) {
-    try {
-      const value = arithmetic.calculateMoney(expression.trim());
-      return { source: "Arithmetic", direct: true, answer: `${expression.trim()} = ${value}` };
-    } catch (_error: unknown) {}
-  }
-  return null;
-}
-
 async function repoValidatorAnswer(question: string) {
   const isCheckQuery = /\b(?:check|inspect|validate|review|audit|ready for submission|submission check)\b/i.test(
     question,
@@ -121,9 +105,6 @@ async function repoValidatorAnswer(question: string) {
 }
 
 async function runCodeStages(question: string) {
-  const arithmeticResult = arithmeticAnswer(question);
-  if (arithmeticResult) return arithmeticResult;
-
   const validated = await repoValidatorAnswer(question);
   if (validated) return validated;
 
@@ -383,7 +364,6 @@ export = {
   lookupAnswer,
   answerOrChat,
   knownAnswer,
-  arithmeticAnswer,
   exactClaimAllowed,
   applyGroundingBoundary,
   isAuthoritativeOnlyTopic,

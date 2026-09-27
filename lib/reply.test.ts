@@ -84,25 +84,25 @@ function fakeClient(): TestClient {
 }
 
 test("withReplySignature appends a program's catchphrase to an answer", () => {
-  const prog = { id: "hardwire", replySignature: "stay wired :hardwire:" };
+  const prog = { id: "demo", replySignature: "stay helpful :demo:" };
   assert.equal(
     reply.withReplySignature("Yes, tier 2 needs a testbench.", prog),
-    "Yes, tier 2 needs a testbench.\n\nstay wired :hardwire:",
+    "Yes, tier 2 needs a testbench.\n\nstay helpful :demo:",
   );
 });
 
 test("withReplySignature is idempotent and trims trailing whitespace before appending", () => {
-  const prog = { id: "hardwire", replySignature: "stay wired :hardwire:" };
+  const prog = { id: "demo", replySignature: "stay helpful :demo:" };
   const once = reply.withReplySignature("answer body", prog);
   assert.equal(reply.withReplySignature(once, prog), once);
-  assert.equal(reply.withReplySignature("answer body\n\n", prog), "answer body\n\nstay wired :hardwire:");
+  assert.equal(reply.withReplySignature("answer body\n\n", prog), "answer body\n\nstay helpful :demo:");
 });
 
 test("withReplySignature is a no-op for a program with no signature, and for empty text", () => {
-  assert.equal(reply.withReplySignature("hello", { id: "pixl" }), "hello");
-  assert.equal(reply.withReplySignature("hello", { id: "pixl", replySignature: "   " }), "hello");
+  assert.equal(reply.withReplySignature("hello", { id: "acme" }), "hello");
+  assert.equal(reply.withReplySignature("hello", { id: "acme", replySignature: "   " }), "hello");
   assert.equal(reply.withReplySignature("hello", null), "hello");
-  assert.equal(reply.withReplySignature("", { id: "hardwire", replySignature: "stay wired :hardwire:" }), "");
+  assert.equal(reply.withReplySignature("", { id: "demo", replySignature: "stay helpful :demo:" }), "");
 });
 
 test("finalize strips dashes from the text and from the blocks", async () => {

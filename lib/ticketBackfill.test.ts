@@ -18,8 +18,8 @@ function setup() {
   db.open(":memory:");
   watcher.stop();
   const program = {
-    id: "backfill-pixl",
-    name: "Pixl",
+    id: "backfill-acme",
+    name: "Acme",
     helpChannel: "C-HELP",
     channels: ["C-HELP"],
     posture: "active",
@@ -365,7 +365,7 @@ test("a passive program with its ticket toggles off still gets every help thread
   watcher.stop();
   const program = {
     id: "backfill-passive",
-    name: "Passive Pixl",
+    name: "Passive Acme",
     helpChannel: "C-PASSIVE",
     channels: ["C-PASSIVE"],
     posture: "passive",

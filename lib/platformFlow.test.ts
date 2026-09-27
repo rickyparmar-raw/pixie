@@ -26,7 +26,7 @@ after(() => {
   knowledge.invalidate();
 });
 
-test("hosted loop end to end for Highway and Pixl", async () => {
+test("hosted loop end to end for Highway and Acme", async () => {
   const hwy = api.internalProgramSync("e2e-hwy", {
     name: "Highway",
     workspaceId: "TE2E",
@@ -40,26 +40,26 @@ test("hosted loop end to end for Highway and Pixl", async () => {
   assert.equal(hwy.ok, true);
   assert.equal(db.isHelper("e2e-hwy", "U-org"), true, "creator bootstrapped as organizer");
 
-  const pxl = api.internalProgramSync("e2e-pixl", {
-    name: "Pixl",
+  const pxl = api.internalProgramSync("e2e-acme", {
+    name: "Acme",
     workspaceId: "TE2E",
     helpChannel: "C-E2E-PXL",
     channels: ["C-E2E-PXL"],
-    sources: [{ name: "E2E Pixl Docs", type: "text", content: "Pixl ships August 18." }],
+    sources: [{ name: "E2E Acme Docs", type: "text", content: "Acme ships August 18." }],
     claimedBy: "U-org2",
     programChannels: [{ id: "C-E2E-PXL", kind: "help" }],
   });
   assert.equal(pxl.ok, true);
 
   assert.equal(programs.forChannel("C-E2E-HWY", "TE2E").id, "e2e-hwy");
-  assert.equal(programs.forChannel("C-E2E-PXL", "TE2E").id, "e2e-pixl");
+  assert.equal(programs.forChannel("C-E2E-PXL", "TE2E").id, "e2e-acme");
 
   const realAnswer = lookup.answerOrChat;
   lookup.answerOrChat = async (question: string, contextPrompt: string, opts: TestRow = {}) => {
     const pid = opts.program ? opts.program.id : null;
     return pid === "e2e-hwy"
       ? { source: "E2E Highway Docs", answer: "October 31" }
-      : { source: "E2E Pixl Docs", answer: "August 18" };
+      : { source: "E2E Acme Docs", answer: "August 18" };
   };
   const posts: TestRow[] = [];
   const client = {
@@ -142,6 +142,6 @@ test("hosted loop end to end for Highway and Pixl", async () => {
   assert.equal(api.internalTicketAction(ticket.id, "reopen", { programId: "e2e-hwy", actorId: "U-helper" }).ok, true);
   assert.equal(db.getTicket(ticket.id).status, "reopened");
 
-  assert.equal(db.searchTickets({ programId: "e2e-pixl" }).total, 0);
+  assert.equal(db.searchTickets({ programId: "e2e-acme" }).total, 0);
 });
 export {};

@@ -1,6 +1,5 @@
 import brand = require("./brand");
 import configModule = require("./config");
-import guides = require("./guides");
 import type { Program } from "./types";
 
 const { isAdmin } = configModule;
@@ -23,23 +22,10 @@ const CAPABILITIES: readonly Capability[] = Object.freeze([
   },
   { suffix: "", label: "help", description: "Show commands available to you", usage: "help" },
   {
-    suffix: "guide",
-    label: "guide",
-    description: "Interactive step-by-step walkthrough guides",
-    usage: "[guide-name]",
-    available: ({ program }) => !program || guides.availableFor(program).length > 0,
-  },
-  {
     suffix: "check",
     label: "check",
-    description: "Check GitHub repository readiness for YSWS submission",
+    description: "Check GitHub repository readiness for program submission",
     usage: "<github_repo_url>",
-  },
-  {
-    suffix: "calc",
-    label: "calc",
-    description: "Calculate build hours, RE progression, and shop item goals",
-    usage: "<hours/re/item>",
   },
   { suffix: "sources", label: "sources", description: "What's loaded and when it last refreshed" },
   { suffix: "stats", label: "stats", description: "Answer rate, cache hits, feedback, latency" },

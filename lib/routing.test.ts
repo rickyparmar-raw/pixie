@@ -23,11 +23,11 @@ test("channel claims are atomic: second program loses, double claim wins", () =>
   const a = db.claimProgramChannel({ workspaceId: "T1", channelId: "C-help", programId: "highway", kind: "help" });
   assert.equal(a.ok, true);
 
-  const conflict = db.claimProgramChannel({ workspaceId: "T1", channelId: "C-help", programId: "pixl", kind: "help" });
+  const conflict = db.claimProgramChannel({ workspaceId: "T1", channelId: "C-help", programId: "acme", kind: "help" });
   assert.equal(conflict.ok, false);
   assert.equal(conflict.ownerProgramId, "highway");
 
-  const other = db.claimProgramChannel({ workspaceId: "T2", channelId: "C-help", programId: "pixl", kind: "help" });
+  const other = db.claimProgramChannel({ workspaceId: "T2", channelId: "C-help", programId: "acme", kind: "help" });
   assert.equal(other.ok, true);
 
   const retry = db.claimProgramChannel({ workspaceId: "T1", channelId: "C-help", programId: "highway", kind: "help" });

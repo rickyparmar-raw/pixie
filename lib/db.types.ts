@@ -8,15 +8,6 @@ export interface ThreadRow {
   [key: string]: unknown;
 }
 
-export interface ActiveGuideRow {
-  thread_ts: string;
-  guide_id: string;
-  current_step: number;
-  user_id?: string | null;
-  message_ts?: string | null;
-  [key: string]: unknown;
-}
-
 export type TicketRow = Ticket;
 
 export interface ProgramRow {

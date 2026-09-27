@@ -37,7 +37,6 @@ const SLA_OPEN_STATUSES = ["open", "waiting_for_helper", "assigned", "claimed", 
 const SLA_ASSIGNED_STATUSES = ["assigned", "claimed", "escalated", "reopened"];
 const SLA_LOOP_DEFAULT_MIN = 15;
 const SLA_LEASE_NAME = "sla-check";
-const SKIPPED_PROGRAM_ID = "ysws-global";
 const SLA_DIGEST_PREVIEW_LINES = 5;
 
 function errorMessage(error: unknown): string {
@@ -163,7 +162,7 @@ function startSlaLoop(
           const messages = require("./slackMessages");
           const reply = require("./reply");
           for (const prog of programs.all()) {
-            if (!prog || prog.id === SKIPPED_PROGRAM_ID) continue;
+            if (!prog) continue;
             if (prog.shadowMode === true) continue;
             try {
               const swept = require("./assignmentLifecycle").sweepProgramTimeouts({ programId: prog.id });

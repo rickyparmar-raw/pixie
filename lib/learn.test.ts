@@ -73,15 +73,15 @@ test("captureFromThread queues as pending and does not touch the live corpus", (
   cache.put("thread-capture-probe", { source: "x", answer: "old answer" });
 
   const id = learn.captureFromThread({
-    question: "how do i join pixl",
-    answer: "post in #pixl-help and a helper will add you",
+    question: "how do i join acme",
+    answer: "post in #acme-help and a helper will add you",
     authorId: "U1",
     threadTs: "thread-teach-1",
     channel: "C1",
   });
 
   assert.ok(id);
-  assert.doesNotMatch(learn.corpusSection(), /how do i join pixl/);
+  assert.doesNotMatch(learn.corpusSection(), /how do i join acme/);
   assert.ok(cache.get("thread-capture-probe"), "approving/teaching busts the cache, capture must not");
 
   const row = learn.pending().find((r: FactRow) => r.id === id);

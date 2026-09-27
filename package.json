@@ -1,7 +1,7 @@
 {
-  "name": "@pixl/pixie",
+  "name": "@pixie/pixie",
   "version": "1.0.0",
-  "description": "Slack bot that answers #pixl-help questions from the Pixl FAQ and docs",
+  "description": "Slack bot that answers help-channel questions from program docs and learned knowledge",
   "main": "index.ts",
   "scripts": {
     "start": "bun index.ts",

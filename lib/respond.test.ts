@@ -1206,7 +1206,7 @@ test("isGroundedAnswer correctly identifies grounded vs ungrounded answers", () 
   );
   assert.equal(isGroundedAnswer({ source: "Bot behavior rule", answer: "ask in the help channel" }), false);
   assert.equal(isGroundedAnswer({ source: "Program FAQ", answer: "i'm not sure about that item" }), false);
-  assert.equal(isGroundedAnswer({ source: "Program catalog", answer: "you should check the listings" }), false);
+  assert.equal(isGroundedAnswer({ source: "Program catalog", answer: "you should check the site" }), false);
   assert.equal(isGroundedAnswer({ source: "Program FAQ", answer: "suggest asking in the help channel" }), false);
   assert.equal(
     isGroundedAnswer({
@@ -1891,7 +1891,7 @@ function answerText(client: { posts: SlackPost[] }) {
 }
 
 test("a program's reply signature ends its genuine answers (grounded and conversational)", async () => {
-  const SIG = "stay wired :signal:";
+  const SIG = "stay helpful :signal:";
 
   await withHelpProgram({ id: "hw-sig-grounded", replySignature: SIG }, async (programId: string, channel: string) => {
     const client = richClient();
@@ -1946,7 +1946,7 @@ test("a program's reply signature ends its genuine answers (grounded and convers
 });
 
 test("the reply signature is never stapled to a fallback or an escalation acknowledgement", async () => {
-  const SIG = "stay wired :signal:";
+  const SIG = "stay helpful :signal:";
 
   await withHelpProgram({ id: "hw-sig-fb", replySignature: SIG }, async (programId: string, channel: string) => {
     const client = richClient();
@@ -1961,7 +1961,10 @@ test("the reply signature is never stapled to a fallback or an escalation acknow
         question: "mr.wire???",
         mode: respond.ALWAYS,
       });
-      assert.ok(!answerText(client).includes("stay wired"), "the human-defer fallback must not carry the catchphrase");
+      assert.ok(
+        !answerText(client).includes("stay helpful"),
+        "the human-defer fallback must not carry the catchphrase",
+      );
     } finally {
       restoreAnswers();
       restoreCache();
@@ -1998,7 +2001,7 @@ test("the reply signature is never stapled to a fallback or an escalation acknow
                 .join(" "),
           )
           .join("\n");
-        assert.ok(!everything.includes("stay wired"), `escalation must stay serious, no catchphrase:\n${everything}`);
+        assert.ok(!everything.includes("stay helpful"), `escalation must stay serious, no catchphrase:\n${everything}`);
       } finally {
         restoreAnswers();
         restoreCache();
@@ -2025,7 +2028,7 @@ test("reply signature stays scoped to its program — an unsigned program never 
       });
       const body = answerText(client);
       assert.ok(
-        !body.includes("stay wired") && !body.includes(":signal:"),
+        !body.includes("stay helpful") && !body.includes(":signal:"),
         `unsigned program must not inherit another program's catchphrase: ${body}`,
       );
     } finally {

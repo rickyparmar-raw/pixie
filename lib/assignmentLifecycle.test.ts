@@ -257,11 +257,11 @@ test("nextEligibleHelper is wired into tickets.js's decline path", () => {
 });
 
 test("shadow routing and the lifecycle offer coexist on the same escalation", () => {
-  prog("pixl", ["U-sh1", "U-sh2"]);
-  helperRoute.setExpertise({ programId: "pixl", userId: "U-sh1", tags: ["support"] });
-  const id = newTicket("pixl", { category: "support" });
+  prog("acme", ["U-sh1", "U-sh2"]);
+  helperRoute.setExpertise({ programId: "acme", userId: "U-sh1", tags: ["support"] });
+  const id = newTicket("acme", { category: "support" });
   tickets.markWaitingForHelper({ ticketId: id });
-  const trail = events("pixl", id);
+  const trail = events("acme", id);
   assert.ok(trail.includes("helper_routing_recommended"), "shadow routing still snapshots");
   assert.ok(trail.includes("helper_assignment_offered"), "a pool offer is recorded");
   const snap = db

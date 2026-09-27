@@ -127,11 +127,11 @@ test("updateHostedProgram persists reply_signature, incident_mode and public_tic
   expect(fresh?.public_tickets_enabled).toBe(true);
 
   const updated = await updateHostedProgram("sig-a", {
-    reply_signature: "stay wired :hardwire:",
+    reply_signature: "stay helpful :demo:",
     incident_mode: "ANSWER_ONLY",
     public_tickets_enabled: false,
   });
-  expect(updated.reply_signature).toBe("stay wired :hardwire:");
+  expect(updated.reply_signature).toBe("stay helpful :demo:");
   expect(updated.incident_mode).toBe("ANSWER_ONLY");
   expect(updated.public_tickets_enabled).toBe(false);
 

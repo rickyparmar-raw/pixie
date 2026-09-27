@@ -16,7 +16,7 @@ const CFG = {
   timeoutMs: 8000,
   engageThreshold: 0.7,
 };
-const PROGRAM = { id: "pixl", name: "Pixl" };
+const PROGRAM = { id: "acme", name: "Acme" };
 const input = (message: any, extra: any = {}) => ({
   message,
   conversationContext: "",
@@ -54,13 +54,13 @@ test("state carries bounded message/context plus identity and posture only, neve
   const state = jev.buildJevState({
     message: "x".repeat(5000),
     conversationContext: "y".repeat(5000),
-    program: { id: "pixl", name: "Pixl", posture: "passive", scope: "program", extra: "drop me" },
+    program: { id: "acme", name: "Acme", posture: "passive", scope: "program", extra: "drop me" },
     channelPosture: "help",
     addressed: true,
   });
   assert.ok(state.message.length <= jev.MAX_MESSAGE_CHARS + 32);
   assert.ok(state.conversationContext.length <= jev.MAX_CONTEXT_CHARS + 32);
-  assert.deepEqual(state.program, { id: "pixl", name: "Pixl" });
+  assert.deepEqual(state.program, { id: "acme", name: "Acme" });
   assert.equal(state.channelPosture, "help");
   assert.equal(state.addressed, true);
   assert.doesNotMatch(JSON.stringify(state), /document|evidence|corpus|retriev/i);
@@ -115,7 +115,7 @@ test("provider failures return action error in every channel posture, never esca
     throw new Error("fetch failed");
   };
   for (const channelPosture of ["main", "help", "dm"]) {
-    const res = await jev.evaluateSupportDecision(input("what is pixl?", { channelPosture }), {
+    const res = await jev.evaluateSupportDecision(input("what is acme?", { channelPosture }), {
       config: CFG,
       evaluateFn: fail,
     });
@@ -145,7 +145,7 @@ test("non-free models are refused before any I/O with errorKind config", async (
 
 test("timeout maps to error/timeout", async () => {
   const timeoutErr = Object.assign(new Error("timeout of 8000ms exceeded"), { code: "ECONNABORTED" });
-  const res = await jev.evaluateSupportDecision(input("what is pixl?"), {
+  const res = await jev.evaluateSupportDecision(input("what is acme?"), {
     config: CFG,
     httpPost: async () => {
       throw timeoutErr;
@@ -156,7 +156,7 @@ test("timeout maps to error/timeout", async () => {
 });
 
 test("401 maps to error/auth", async () => {
-  const res = await jev.evaluateSupportDecision(input("what is pixl?"), {
+  const res = await jev.evaluateSupportDecision(input("what is acme?"), {
     config: CFG,
     httpPost: async () => ({ status: 401, data: { error: "unauthorized" } }),
   });
@@ -166,7 +166,7 @@ test("401 maps to error/auth", async () => {
 
 test("quota failure makes exactly one request and returns error/quota", async () => {
   let calls = 0;
-  const res = await jev.evaluateSupportDecision(input("what is pixl?"), {
+  const res = await jev.evaluateSupportDecision(input("what is acme?"), {
     config: CFG,
     httpPost: async () => {
       calls += 1;
@@ -217,7 +217,7 @@ test("structured log line never contains message or context text", async () => {
     lines.push(args.join(" "));
   };
   try {
-    await jev.evaluateSupportDecision(input(`what is pixl ${marker}?`, { conversationContext: `ctx ${marker} here` }), {
+    await jev.evaluateSupportDecision(input(`what is acme ${marker}?`, { conversationContext: `ctx ${marker} here` }), {
       config: CFG,
       evaluateFn: async () => result("support_question", 0.95),
     });
@@ -230,7 +230,7 @@ test("structured log line never contains message or context text", async () => {
 
 test("disabled Jev returns existing without evaluating", async () => {
   let calls = 0;
-  const res = await jev.evaluateSupportDecision(input("what is pixl?"), {
+  const res = await jev.evaluateSupportDecision(input("what is acme?"), {
     config: { ...CFG, enabled: false },
     httpPost: async () => {
       calls += 1;

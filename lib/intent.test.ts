@@ -46,23 +46,23 @@ test("worthClassifying keeps a real message that opens with a reaction word", ()
 });
 
 test("a scoped program gets the OFF_TOPIC verdict offered", () => {
-  const prompt = intent.intentSystemPrompt({ name: "Pixl" }, { scoped: true });
+  const prompt = intent.intentSystemPrompt({ name: "Acme" }, { scoped: true });
   assert.match(prompt, /OFF_TOPIC/);
   assert.match(prompt, /HELP_NEEDED\|CASUAL_CHAT\|OFF_TOPIC/);
-  assert.match(prompt, /only wants Pixl answers/);
+  assert.match(prompt, /only wants Acme answers/);
   assert.match(prompt, /asking about the shop, catalogue, items/);
   assert.match(prompt, /asking about hardware, firmware, testing/);
-  assert.match(prompt, /cannot tell whether a question is about Pixl.*OFF_TOPIC/s);
+  assert.match(prompt, /cannot tell whether a question is about Acme.*OFF_TOPIC/s);
 });
 
 test("an unscoped program is never offered OFF_TOPIC", () => {
-  const prompt = intent.intentSystemPrompt({ name: "Pixl" });
+  const prompt = intent.intentSystemPrompt({ name: "Acme" });
   assert.doesNotMatch(prompt, /OFF_TOPIC/);
   assert.match(prompt, /exactly one JSON object/);
 });
 
 test("addressing pixie lifts the scope restriction", () => {
-  const scoped = { id: "pixl", name: "Pixl", scope: "program" };
+  const scoped = { id: "acme", name: "Acme", scope: "program" };
   const open = { id: "sprig", name: "Sprig", scope: "any" };
 
   assert.equal(intent.scopedFor(scoped, false), true, "unaddressed in a scoped program");
@@ -278,7 +278,7 @@ test("short-input: length<5 fail-softs to null", async () => {
   test("unparseable classifier output records intent_parse_failure and fails soft to null", async () => {
     const baseline = db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = 'intent_parse_failure'").get().c;
     llm.complete = async () => ({ text: "I think this is HELP_NEEDED, definitely." });
-    const verdict = await intent.classifyIntent("how do i submit my project to pixl", null, { history: [] });
+    const verdict = await intent.classifyIntent("how do i submit my project to acme", null, { history: [] });
     assert.equal(verdict, null, "a bad parse fails soft, never a guessed verdict");
     const after = db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = 'intent_parse_failure'").get().c;
     assert.equal(after, baseline + 1);
@@ -298,7 +298,7 @@ test("short-input: length<5 fail-softs to null", async () => {
         }) +
         "\n```",
     });
-    const verdict = await intent.classifyIntent("how do i submit my project to pixl", null, { history: [] });
+    const verdict = await intent.classifyIntent("how do i submit my project to acme", null, { history: [] });
     assert.equal(verdict, "HELP_NEEDED");
     const after = db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = 'intent_parse_failure'").get().c;
     assert.equal(after, baseline);

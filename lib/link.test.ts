@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const link = require("./link");
 
 test("extractUrl unwraps Slack formatted links and extracts the first http(s) URL", () => {
-  assert.equal(link.extractUrl("check this out: <https://www.pixl.rsvp/docs|Pixl Docs>"), "https://www.pixl.rsvp/docs");
+  assert.equal(link.extractUrl("check this out: <https://www.acme.rsvp/docs|Acme Docs>"), "https://www.acme.rsvp/docs");
   assert.equal(link.extractUrl("see <https://example.com/page> for details."), "https://example.com/page");
   assert.equal(link.extractUrl("pixie how does this look? https://example.org/test"), "https://example.org/test");
   assert.equal(link.extractUrl("no links in this message"), null);
@@ -42,7 +42,7 @@ test("isBlockedHost blocks localhost, loopback, private IPs, and non-http(s) sch
 
 test("isBlockedHost allows public domain names", async () => {
   assert.equal(await link.isBlockedHost("https://github.com"), false);
-  assert.equal(await link.isBlockedHost("https://www.pixl.rsvp"), false);
+  assert.equal(await link.isBlockedHost("https://example.com"), false);
 });
 
 test("fetchUrlContent returns blocked response for local or internal hosts", async () => {

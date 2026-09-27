@@ -2,22 +2,22 @@ process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, expect, beforeEach, beforeAll, afterAll } = require("bun:test");
 
-const PIXL = {
-  id: "pixl",
-  name: "Pixl",
+const ACME = {
+  id: "acme",
+  name: "Acme",
   scope: "program",
-  helpChannel: "C_PIXL_HELP",
-  organizerChannel: "C_PIXL_ORG",
-  channels: ["C_PIXL_HELP", "C_PIXL_MAIN", "C_PIXL_ORG"],
+  helpChannel: "C_ACME_HELP",
+  organizerChannel: "C_ACME_ORG",
+  channels: ["C_ACME_HELP", "C_ACME_MAIN", "C_ACME_ORG"],
   ticketsEnabled: true,
   helperPing: true,
 };
-const B2B = {
-  id: "back-to-basics",
-  name: "Back to Basics",
+const BETA = {
+  id: "beta",
+  name: "Beta Program",
   scope: "program",
-  helpChannel: "C_B2B_HELP",
-  channels: ["C_B2B_HELP", "C_B2B_MAIN"],
+  helpChannel: "C_BETA_HELP",
+  channels: ["C_BETA_HELP", "C_BETA_MAIN"],
 };
 
 const db = require("../db");
@@ -26,13 +26,12 @@ const jevDecision = require("../jevDecision");
 const lookup = require("../lookup");
 const tickets = require("../tickets");
 const context = require("../context");
-const guides = require("../guides");
 const respond = require("../respond");
 
 type TestRecord = Record<string, unknown>;
 type TestMessage = TestRecord & { text?: string; ts?: string };
 type DecisionArgs = TestRecord & { message: string; conversationContext: string };
-type ProgramOverride = { pixl?: TestRecord; b2b?: TestRecord };
+type ProgramOverride = { acme?: TestRecord; beta?: TestRecord };
 type SendArgs = {
   channel: string;
   text: string;
@@ -60,7 +59,7 @@ function stub(obj: object, key: string, value: unknown) {
 
 const JEV: Record<string, { action: string; intent: string }> = {
   "what is restoration energy?": { action: "engage", intent: "direct_program_question" },
-  "what is pixl?": { action: "engage", intent: "direct_program_question" },
+  "what is acme?": { action: "engage", intent: "direct_program_question" },
   "lmao gg": { action: "silence", intent: "unrelated_chatter" },
   "did you finish your game?": { action: "silence", intent: "human_conversation" },
   "does the hardware grant cover shipping?": { action: "engage", intent: "direct_program_question" },
@@ -78,13 +77,13 @@ const JEV: Record<string, { action: string; intent: string }> = {
 
 function fakeAnswer(question: string, program: { id?: string } | null | undefined) {
   const q = question.toLowerCase();
-  if (q.includes("restoration energy") && program?.id === "pixl") {
-    return { answer: "Restoration Energy is what you earn by restoring pixels.", source: "Pixl Docs" };
+  if (q.includes("restoration energy") && program?.id === "acme") {
+    return { answer: "Restoration Energy is what you earn by restoring pixels.", source: "Acme Docs" };
   }
-  if (q === "what is pixl?" && program?.id === "pixl")
-    return { answer: "Pixl is a YSWS for pixel art games.", source: "Pixl Docs" };
-  if (q.includes("resubmit") && program?.id === "pixl")
-    return { answer: "Fix the notes and resubmit from your dashboard.", source: "Pixl Docs" };
+  if (q === "what is acme?" && program?.id === "acme")
+    return { answer: "Acme is a YSWS for pixel art games.", source: "Acme Docs" };
+  if (q.includes("resubmit") && program?.id === "acme")
+    return { answer: "Fix the notes and resubmit from your dashboard.", source: "Acme Docs" };
   if (q.includes("pixorpheus")) return { answer: "Me, obviously. Pixorpheus can swim.", source: "NONE" };
   if (q.includes("cookie")) return { answer: "Cream butter and sugar, add chips, bake at 180C.", source: "NONE" };
   return { answer: null, source: null, unclear: true };
@@ -132,9 +131,9 @@ afterAll(() => {
 });
 
 function configure(overrides: ProgramOverride = {}) {
-  const pixl = { ...PIXL, ...(overrides.pixl || {}) };
-  const b2b = { ...B2B, ...(overrides.b2b || {}) };
-  process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([pixl, b2b]);
+  const acme = { ...ACME, ...(overrides.acme || {}) };
+  const beta = { ...BETA, ...(overrides.beta || {}) };
+  process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([acme, beta]);
   programs.invalidate();
 }
 
@@ -173,7 +172,6 @@ beforeEach(() => {
     handOffs.push({ ...args, sensitive: true });
   });
   stub(context, "seedFromSlack", async () => {});
-  stub(guides, "detectGuideIntent", async () => null);
 });
 
 let seq = 0;
@@ -202,31 +200,31 @@ async function send({
 
 const postedText = () => posts.map((p: TestMessage) => p.text || "").join("\n");
 
-test("main ambient: a Pixl program question is classified, retrieved and answered", async () => {
-  const spoke = await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?" });
+test("main ambient: a Acme program question is classified, retrieved and answered", async () => {
+  const spoke = await send({ channel: "C_ACME_MAIN", text: "what is restoration energy?" });
   expect(spoke).toBe(true);
   expect(jevCalls).toHaveLength(1);
   expect(jevCalls[0].channelPosture).toBe("main");
-  expect(answerCalls[0].program).toBe("pixl");
+  expect(answerCalls[0].program).toBe("acme");
   expect(postedText()).toContain("Restoration Energy");
   expect(ticketCalls).toHaveLength(0);
 });
 
-test("main ambient: 'what is pixl?' answers from Pixl knowledge", async () => {
-  expect(await send({ channel: "C_PIXL_MAIN", text: "what is pixl?" })).toBe(true);
-  expect(postedText()).toContain("Pixl is a YSWS");
+test("main ambient: 'what is acme?' answers from Acme knowledge", async () => {
+  expect(await send({ channel: "C_ACME_MAIN", text: "what is acme?" })).toBe(true);
+  expect(postedText()).toContain("Acme is a YSWS");
 });
 
-test("main ambient: another program's channel never reaches Pixl sources", async () => {
-  const spoke = await send({ channel: "C_B2B_MAIN", text: "what is restoration energy?" });
-  expect(answerCalls[0].program).toBe("back-to-basics");
+test("main ambient: another program's channel never reaches Acme sources", async () => {
+  const spoke = await send({ channel: "C_BETA_MAIN", text: "what is restoration energy?" });
+  expect(answerCalls[0].program).toBe("beta");
   expect(spoke).toBe(false);
   expect(posts).toHaveLength(0);
 });
 
 for (const chatter of ["lmao gg", "did you finish your game?"]) {
   test(`main ambient: '${chatter}' stays silent with no retrieval, no ticket`, async () => {
-    expect(await send({ channel: "C_PIXL_MAIN", text: chatter })).toBe(false);
+    expect(await send({ channel: "C_ACME_MAIN", text: chatter })).toBe(false);
     expect(answerCalls).toHaveLength(0);
     expect(ticketCalls).toHaveLength(0);
     expect(handOffs).toHaveLength(0);
@@ -235,26 +233,26 @@ for (const chatter of ["lmao gg", "did you finish your game?"]) {
 }
 
 test("main ambient: unsupported shipping question stays silent", async () => {
-  expect(await send({ channel: "C_PIXL_MAIN", text: "does the hardware grant cover shipping?" })).toBe(false);
+  expect(await send({ channel: "C_ACME_MAIN", text: "does the hardware grant cover shipping?" })).toBe(false);
   expect(answerCalls).toHaveLength(1);
   expect(posts).toHaveLength(0);
   expect(handOffs).toHaveLength(0);
 });
 
 test("main ambient: exact payout is never fabricated — silence", async () => {
-  expect(await send({ channel: "C_PIXL_MAIN", text: "what is my exact payout amount right now?" })).toBe(false);
+  expect(await send({ channel: "C_ACME_MAIN", text: "what is my exact payout amount right now?" })).toBe(false);
   expect(posts).toHaveLength(0);
 });
 
 test("main ambient: exact AI-code percentage without evidence — silence, no number", async () => {
-  expect(await send({ channel: "C_PIXL_MAIN", text: "what is the exact maximum percentage of AI code allowed?" })).toBe(
+  expect(await send({ channel: "C_ACME_MAIN", text: "what is the exact maximum percentage of AI code allowed?" })).toBe(
     false,
   );
   expect(postedText()).not.toMatch(/\d+\s*%/);
 });
 
 test("main ambient: 'how do i do this' with no referent stays silent", async () => {
-  expect(await send({ channel: "C_PIXL_MAIN", text: "how do i do this" })).toBe(false);
+  expect(await send({ channel: "C_ACME_MAIN", text: "how do i do this" })).toBe(false);
   expect(answerCalls).toHaveLength(0);
 });
 
@@ -268,12 +266,12 @@ test("main ambient: 'how do i do this' with a clear thread referent retrieves an
   stub(lookup, "answerOrChat", async (question: string, ctx: string, opts: { program?: { id?: string } }) => {
     answerCalls.push({ question, program: opts.program?.id });
     return /restoration energy/i.test(ctx)
-      ? { answer: "Restore pixels in the editor to earn it.", source: "Pixl Docs" }
+      ? { answer: "Restore pixels in the editor to earn it.", source: "Acme Docs" }
       : { unclear: true };
   });
-  context.addToThread("9000.000", "user", "what is restoration energy?", "U1", "C_PIXL_MAIN");
+  context.addToThread("9000.000", "user", "what is restoration energy?", "U1", "C_ACME_MAIN");
   const spoke = await send({
-    channel: "C_PIXL_MAIN",
+    channel: "C_ACME_MAIN",
     text: "how do i do this",
     threadTs: "9000.000",
     messageTs: "9000.100",
@@ -302,8 +300,8 @@ test("main ambient: a top-level fragment is classified with the channel's last m
       ? { action: "silence", intent: "human_conversation" }
       : { action: "engage", intent: "direct_program_question" };
   });
-  const spoke = await send({ channel: "C_PIXL_MAIN", text: "it expires tomorrow", seedClient: slack });
-  expect(historyCalls[0]).toMatchObject({ channel: "C_PIXL_MAIN", limit: 5, inclusive: false });
+  const spoke = await send({ channel: "C_ACME_MAIN", text: "it expires tomorrow", seedClient: slack });
+  expect(historyCalls[0]).toMatchObject({ channel: "C_ACME_MAIN", limit: 5, inclusive: false });
   expect(jevCalls[0].conversationContext).toMatch(
     /other member: gm\nother member: mine's broken lol\nother member: yo is your hackatime streak/,
   );
@@ -319,9 +317,9 @@ test("a threaded reply uses its thread, not the channel history", async () => {
     historyCalled = true;
     return { messages: [] };
   };
-  context.addToThread("9100.000", "user", "what is restoration energy?", "U1", "C_PIXL_MAIN");
+  context.addToThread("9100.000", "user", "what is restoration energy?", "U1", "C_ACME_MAIN");
   await send({
-    channel: "C_PIXL_MAIN",
+    channel: "C_ACME_MAIN",
     text: "how do i do this",
     threadTs: "9100.000",
     messageTs: "9100.100",
@@ -332,24 +330,24 @@ test("a threaded reply uses its thread, not the channel history", async () => {
 
 test("main ambient: classifier outage fails closed (silence)", async () => {
   jevMode = "error";
-  expect(await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?" })).toBe(false);
+  expect(await send({ channel: "C_ACME_MAIN", text: "what is restoration energy?" })).toBe(false);
   expect(answerCalls).toHaveLength(0);
   expect(posts).toHaveLength(0);
 });
 
 test("the classifier never receives documentation", async () => {
-  await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?" });
+  await send({ channel: "C_ACME_MAIN", text: "what is restoration energy?" });
   const keys = Object.keys(jevCalls[0]).sort();
   expect(keys).toEqual(["addressed", "channelPosture", "conversationContext", "message", "program"]);
 });
 
 test("addressed: program question gets the grounded answer", async () => {
-  expect(await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?", addressed: true })).toBe(true);
+  expect(await send({ channel: "C_ACME_MAIN", text: "what is restoration energy?", addressed: true })).toBe(true);
   expect(postedText()).toContain("Restoration Energy");
 });
 
 test("addressed: a cookie recipe gets a general-purpose answer", async () => {
-  expect(await send({ channel: "C_PIXL_MAIN", text: "give me a chocolate chip cookie recipe", addressed: true })).toBe(
+  expect(await send({ channel: "C_ACME_MAIN", text: "give me a chocolate chip cookie recipe", addressed: true })).toBe(
     true,
   );
   expect(postedText()).toContain("butter");
@@ -358,7 +356,7 @@ test("addressed: a cookie recipe gets a general-purpose answer", async () => {
 
 test("addressed: banter that @mentions Pixie gets a conversational reply, not 'couldn't verify'", async () => {
   const text = "@ricky if you had to save @pixie or @pixorpheus who would you save?";
-  expect(await send({ channel: "C_PIXL_MAIN", text, addressed: true })).toBe(true);
+  expect(await send({ channel: "C_ACME_MAIN", text, addressed: true })).toBe(true);
   expect(postedText()).toContain("Pixorpheus can swim");
   expect(postedText()).not.toMatch(/couldn't verify/i);
   expect(handOffs).toHaveLength(0);
@@ -366,7 +364,7 @@ test("addressed: banter that @mentions Pixie gets a conversational reply, not 'c
 
 test("addressed: exact payout gets transparent uncertainty, never an amount", async () => {
   expect(
-    await send({ channel: "C_PIXL_MAIN", text: "what is my exact payout amount right now?", addressed: true }),
+    await send({ channel: "C_ACME_MAIN", text: "what is my exact payout amount right now?", addressed: true }),
   ).toBe(true);
   expect(postedText()).toMatch(/couldn't verify/i);
   expect(postedText()).not.toMatch(/\$\s*\d|\d+\s*(?:usd|dollars)/i);
@@ -374,16 +372,16 @@ test("addressed: exact payout gets transparent uncertainty, never an amount", as
 });
 
 test("addressed: program questions never use web search", async () => {
-  await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?", addressed: true });
+  await send({ channel: "C_ACME_MAIN", text: "what is restoration energy?", addressed: true });
   expect(answerCalls[0].allowWebSearch).toBe(false);
 });
 
 test("addressed: classifier outage still answers, docs or not", async () => {
   jevMode = "error";
-  expect(await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?", addressed: true })).toBe(true);
+  expect(await send({ channel: "C_ACME_MAIN", text: "what is restoration energy?", addressed: true })).toBe(true);
   expect(postedText()).toContain("Restoration Energy");
   posts = [];
-  expect(await send({ channel: "C_PIXL_MAIN", text: "give me a chocolate chip cookie recipe", addressed: true })).toBe(
+  expect(await send({ channel: "C_ACME_MAIN", text: "give me a chocolate chip cookie recipe", addressed: true })).toBe(
     true,
   );
   expect(postedText()).toContain("bake at 180C");
@@ -392,12 +390,12 @@ test("addressed: classifier outage still answers, docs or not", async () => {
 
 test("addressed: 'who are you' needs no classifier call", async () => {
   stub(lookup, "answerOrChat", async () => ({ answer: "I'm Pixie!", source: "NONE" }));
-  expect(await send({ channel: "C_PIXL_MAIN", text: "who are you?", addressed: true })).toBe(true);
+  expect(await send({ channel: "C_ACME_MAIN", text: "who are you?", addressed: true })).toBe(true);
   expect(jevCalls).toHaveLength(0);
 });
 
 test("help: a known question opens a ticket and gets the grounded reply; ticket stays open", async () => {
-  expect(await send({ channel: "C_PIXL_HELP", text: "my submission got rejected, how do i resubmit?" })).toBe(true);
+  expect(await send({ channel: "C_ACME_HELP", text: "my submission got rejected, how do i resubmit?" })).toBe(true);
   expect(ticketCalls).toHaveLength(1);
   expect(ticketCalls[0].role).toBe("help");
   expect(postedText()).toContain("resubmit");
@@ -405,7 +403,7 @@ test("help: a known question opens a ticket and gets the grounded reply; ticket 
 });
 
 test("help: an unknown personal question opens a ticket and hands to a helper without hallucinating", async () => {
-  expect(await send({ channel: "C_PIXL_HELP", text: "how do i get my personal grant code?" })).toBe(true);
+  expect(await send({ channel: "C_ACME_HELP", text: "how do i get my personal grant code?" })).toBe(true);
   expect(ticketCalls).toHaveLength(1);
   expect(handOffs).toHaveLength(1);
   expect(handOffs[0].requesterId).toMatch(/^U_REQ_/);
@@ -414,7 +412,7 @@ test("help: an unknown personal question opens a ticket and hands to a helper wi
 
 test("help: chatter creates no ticket and pings nobody", async () => {
   for (const t of ["lmao gg", "did you finish your game?"]) {
-    await send({ channel: "C_PIXL_HELP", text: t });
+    await send({ channel: "C_ACME_HELP", text: t });
   }
   expect(ticketCalls).toHaveLength(0);
   expect(handOffs).toHaveLength(0);
@@ -423,21 +421,21 @@ test("help: chatter creates no ticket and pings nobody", async () => {
 
 test("help: classifier outage preserves the support path (ticket + helper)", async () => {
   jevMode = "error";
-  await send({ channel: "C_PIXL_HELP", text: "how do i get my personal grant code?" });
+  await send({ channel: "C_ACME_HELP", text: "how do i get my personal grant code?" });
   expect(ticketCalls).toHaveLength(1);
   expect(handOffs).toHaveLength(1);
 });
 
 test("help: 'how do i do this' with no referent never fabricates", async () => {
   jevMode = "error";
-  await send({ channel: "C_PIXL_HELP", text: "how do i do this" });
+  await send({ channel: "C_ACME_HELP", text: "how do i do this" });
   expect(posts).toHaveLength(0);
   expect(handOffs).toHaveLength(1);
 });
 
 test("help: a thread reply does not open a second ticket", async () => {
   await send({
-    channel: "C_PIXL_HELP",
+    channel: "C_ACME_HELP",
     text: "how do i get my personal grant code?",
     threadTs: "7000.000",
     messageTs: "7000.500",
@@ -449,7 +447,7 @@ const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> =
   [
     "main disabled: silent even when addressed",
     { main: { enabled: false } },
-    "C_PIXL_MAIN",
+    "C_ACME_MAIN",
     "what is restoration energy?",
     true,
     { spoke: false, answer: 0 },
@@ -457,7 +455,7 @@ const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> =
   [
     "ambient off: ambient question silent, no classifier",
     { main: { ambientProgramReplies: false } },
-    "C_PIXL_MAIN",
+    "C_ACME_MAIN",
     "what is restoration energy?",
     false,
     { spoke: false, answer: 0, jev: 0 },
@@ -465,7 +463,7 @@ const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> =
   [
     "ambient off: addressed still answered",
     { main: { ambientProgramReplies: false } },
-    "C_PIXL_MAIN",
+    "C_ACME_MAIN",
     "what is restoration energy?",
     true,
     { spoke: true },
@@ -473,7 +471,7 @@ const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> =
   [
     "mention replies off: addressed silent",
     { main: { mentionReplies: false } },
-    "C_PIXL_MAIN",
+    "C_ACME_MAIN",
     "what is restoration energy?",
     true,
     { spoke: false, answer: 0 },
@@ -481,7 +479,7 @@ const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> =
   [
     "general chat off: addressed chatter is silent",
     { main: { generalMentionChat: false } },
-    "C_PIXL_MAIN",
+    "C_ACME_MAIN",
     "give me a chocolate chip cookie recipe",
     true,
     { spoke: false, answer: 0 },
@@ -489,7 +487,7 @@ const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> =
   [
     "main escalation on: ambient unknown hands to helper",
     { main: { helperEscalationEnabled: true } },
-    "C_PIXL_MAIN",
+    "C_ACME_MAIN",
     "does the hardware grant cover shipping?",
     false,
     { spoke: true, handoff: 1 },
@@ -497,7 +495,7 @@ const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> =
   [
     "help disabled: silent",
     { help: { enabled: false } },
-    "C_PIXL_HELP",
+    "C_ACME_HELP",
     "how do i get my personal grant code?",
     false,
     { spoke: false, ticket: 0, handoff: 0 },
@@ -505,7 +503,7 @@ const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> =
   [
     "help AI off: no model call, ticket + helper",
     { help: { aiReplies: false } },
-    "C_PIXL_HELP",
+    "C_ACME_HELP",
     "my submission got rejected, how do i resubmit?",
     false,
     { answer: 0, ticket: 1, handoff: 1 },
@@ -513,7 +511,7 @@ const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> =
   [
     "help escalate off: unknown stays silent, ticket still recorded",
     { help: { escalateUnknown: false } },
-    "C_PIXL_HELP",
+    "C_ACME_HELP",
     "how do i get my personal grant code?",
     false,
     { spoke: false, ticket: 1, handoff: 0 },
@@ -521,7 +519,7 @@ const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> =
   [
     "help escalate on: unknown handed off",
     {},
-    "C_PIXL_HELP",
+    "C_ACME_HELP",
     "how do i get my personal grant code?",
     false,
     { ticket: 1, handoff: 1 },
@@ -530,7 +528,7 @@ const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> =
 
 for (const [name, behavior, channel, text, addressed, want] of MATRIX) {
   test(`matrix: ${name}`, async () => {
-    configure({ pixl: { behavior } });
+    configure({ acme: { behavior } });
     const spoke = await send({ channel, text, addressed });
     if ("spoke" in want) expect(spoke).toBe(want.spoke);
     if ("ticket" in want) expect(ticketCalls).toHaveLength(want.ticket);
@@ -542,27 +540,27 @@ for (const [name, behavior, channel, text, addressed, want] of MATRIX) {
 }
 
 test("paused program: silent in main and help, even when addressed", async () => {
-  configure({ pixl: { status: "paused" } });
-  expect(await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?", addressed: true })).toBe(false);
-  expect(await send({ channel: "C_PIXL_HELP", text: "how do i get my personal grant code?" })).toBe(false);
+  configure({ acme: { status: "paused" } });
+  expect(await send({ channel: "C_ACME_MAIN", text: "what is restoration energy?", addressed: true })).toBe(false);
+  expect(await send({ channel: "C_ACME_HELP", text: "how do i get my personal grant code?" })).toBe(false);
   expect(ticketCalls).toHaveLength(0);
   expect(jevCalls).toHaveLength(0);
 });
 
 test("sandbox program runs the same pipeline as live", async () => {
-  configure({ pixl: { status: "sandbox" } });
-  expect(await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?" })).toBe(true);
-  expect(await send({ channel: "C_PIXL_HELP", text: "how do i get my personal grant code?" })).toBe(true);
+  configure({ acme: { status: "sandbox" } });
+  expect(await send({ channel: "C_ACME_MAIN", text: "what is restoration energy?" })).toBe(true);
+  expect(await send({ channel: "C_ACME_HELP", text: "how do i get my personal grant code?" })).toBe(true);
   expect(handOffs).toHaveLength(1);
 });
 
 test("organizer channel: never volunteers, answers when addressed, files no tickets", async () => {
-  expect(await send({ channel: "C_PIXL_ORG", text: "what is restoration energy?" })).toBe(false);
+  expect(await send({ channel: "C_ACME_ORG", text: "what is restoration energy?" })).toBe(false);
   expect(jevCalls).toHaveLength(0);
-  expect(await send({ channel: "C_PIXL_ORG", text: "what is restoration energy?", addressed: true })).toBe(true);
+  expect(await send({ channel: "C_ACME_ORG", text: "what is restoration energy?", addressed: true })).toBe(true);
   expect(postedText()).toContain("Restoration Energy");
   posts = [];
-  expect(await send({ channel: "C_PIXL_ORG", text: "how do i get my personal grant code?", addressed: true })).toBe(
+  expect(await send({ channel: "C_ACME_ORG", text: "how do i get my personal grant code?", addressed: true })).toBe(
     true,
   );
   expect(postedText()).toMatch(/couldn't verify/i);
@@ -571,9 +569,9 @@ test("organizer channel: never volunteers, answers when addressed, files no tick
 });
 
 test("ambient engage without a named intent never pulls a human in, even with escalation on", async () => {
-  configure({ pixl: { behavior: { main: { helperEscalationEnabled: true } } } });
+  configure({ acme: { behavior: { main: { helperEscalationEnabled: true } } } });
   stub(jevDecision, "evaluateSupportDecision", async () => ({ action: "engage", intent: null }));
-  expect(await send({ channel: "C_PIXL_MAIN", text: "hmm is the thing broken" })).toBe(false);
+  expect(await send({ channel: "C_ACME_MAIN", text: "hmm is the thing broken" })).toBe(false);
   expect(handOffs).toHaveLength(0);
 });
 

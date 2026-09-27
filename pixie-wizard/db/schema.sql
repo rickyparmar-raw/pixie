@@ -36,7 +36,7 @@ create table if not exists hosted_programs (
     check (scope in ('any', 'program')),
   sensitive_categories jsonb not null default '[]'::jsonb,
   sources jsonb not null default '[]'::jsonb,
-  guides jsonb not null default '["submit-ysws-guidelines"]'::jsonb,
+  guides jsonb not null default '[]'::jsonb,
   milestones jsonb not null default '[]'::jsonb,
   settings jsonb not null default '{}'::jsonb,
   core_sync_state text not null default 'pending'
@@ -70,15 +70,6 @@ alter table hosted_programs add column if not exists incident_mode text not null
 -- on|off run in that channel.
 alter table hosted_programs add column if not exists public_tickets_enabled boolean not null default true;
 
--- A fixed sign-off the program appends to its genuine AI/FAQ answers only —
--- a per-tenant catchphrase (Hardwire: 'stay wired :hardwire:'). Never added
--- to escalations, incident notices, errors or system copy. Mirrors Core's
--- programs.reply_signature (lib/schema.js). Listed in the create above, but
--- create table if not exists is a no-op against every already-deployed
--- database, so this idempotent alter is what actually adds the column there
--- — same reason incident_mode / public_tickets_enabled / visible_on_profile
--- each carry one. NULL for every program that has not set a signature, so
--- existing answer behaviour is unchanged.
 alter table hosted_programs add column if not exists reply_signature text;
 
 -- Explicit channel claims. The unique (workspace, channel) primary key is

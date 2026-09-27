@@ -16,7 +16,7 @@ const CFG = {
 const INPUT = {
   message: "what is restoration energy?",
   conversationContext: "",
-  program: { id: "pixl", name: "Pixl" },
+  program: { id: "acme", name: "Acme" },
   channelPosture: "main",
 };
 const response = (intent: any = "support_question", p: any = 0.95) => ({

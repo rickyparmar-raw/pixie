@@ -4,10 +4,6 @@ const CORE_URL = required("PIXIE_CORE_BASE_URL").replace(/\/+$/, "");
 const CORE_TOKEN = required("PIXIE_INTERNAL_TOKEN");
 const DB_URL = required("DATABASE_URL");
 const WORKSPACE = process.env.PIXIE_WORKSPACE_ID || "default";
-// Jame Gam is a live production-scoped program now. Keep only genuinely
-// Keep the suspended Live YSWS draft synchronized into its private sandbox.
-// Live is now promoted to production on its existing private help/ticket channels.
-// Keep it out of the draft sync loop so the sandbox cannot be rebound.
 const ids = [];
 
 function required(name) {

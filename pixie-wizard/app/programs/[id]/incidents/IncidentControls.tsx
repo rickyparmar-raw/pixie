@@ -54,9 +54,9 @@ export function ManualIncidentForm({ programId }: { programId: string }) {
         <p className="pixie-eyebrow flex items-center gap-2 text-text-muted"><span className="pixie-mark" aria-hidden="true" />Declare an incident</p>
         <p className="mt-2 text-[13px] text-text-muted">Pixie immediately uses this to answer related questions until you resolve it.</p>
       </div>
-      <label className="block"><span className={labelClass}>Title</span><input name="title" required placeholder="Pixl site is currently down" className={inputClass} /></label>
+      <label className="block"><span className={labelClass}>Title</span><input name="title" required placeholder="Acme site is currently down" className={inputClass} /></label>
       <label className="block"><span className={labelClass}>What&apos;s happening</span><textarea name="description" rows={2} placeholder="The site is returning errors for members." className={`${inputClass} resize-y`} /></label>
-      <label className="block"><span className={labelClass}>Message Pixie tells members</span><textarea name="publicMessage" required rows={2} placeholder="The Pixl site is currently down — the team is on it." className={`${inputClass} resize-y`} /></label>
+      <label className="block"><span className={labelClass}>Message Pixie tells members</span><textarea name="publicMessage" required rows={2} placeholder="The Acme site is currently down — the team is on it." className={`${inputClass} resize-y`} /></label>
       <button type="submit" className={btnPrimary}><IconSiren size={16} />Declare incident</button>
       {state.error && <Notice tone="error">{state.error}</Notice>}
     </form>

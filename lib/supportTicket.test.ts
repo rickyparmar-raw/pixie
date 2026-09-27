@@ -68,11 +68,11 @@ const FLEET = JSON.stringify([
     links: { docs: "https://example.test/docs" },
   },
   {
-    id: "st-pixl",
-    name: "Pixl",
+    id: "st-acme",
+    name: "Acme",
     posture: "passive",
-    helpChannel: "C-st-pixl-help",
-    channels: ["C-st-pixl-help"],
+    helpChannel: "C-st-acme-help",
+    channels: ["C-st-acme-help"],
   },
 ]);
 
@@ -258,20 +258,20 @@ test("help channel chatter opens no ticket; the engagement classifier filters it
   assert.equal(client.posts.length, 0, "and nothing is posted");
 });
 
-test("a passive program (Pixl) opens no ticket; the active program does", async () => {
+test("a passive program (Acme) opens no ticket; the active program does", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
 
   const c1 = clientSpy();
   await respond.respond({
     client: c1,
-    channel: "C-st-pixl-help",
-    threadTs: "t-pixl",
-    messageTs: "t-pixl",
+    channel: "C-st-acme-help",
+    threadTs: "t-acme",
+    messageTs: "t-acme",
     userId: "U1",
     question: "how do i submit?",
     mode: respond.ALWAYS,
   });
-  assert.equal(db.getTicketByThreadTs("t-pixl"), null, "Pixl is passive — answer only, no ticket");
+  assert.equal(db.getTicketByThreadTs("t-acme"), null, "Acme is passive — answer only, no ticket");
 
   const c2 = clientSpy();
   await ask(c2, "t-active", "how do i submit?");

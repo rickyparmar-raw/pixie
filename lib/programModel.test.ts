@@ -15,7 +15,7 @@ test("a fresh program gets the spec defaults for both channel roles", () => {
 
 test("legacy flags carry over so a migrated program keeps its behavior", () => {
   const b = model.behaviorFor({
-    id: "pixl",
+    id: "acme",
     posture: "passive",
     ticketsEnabled: false,
     helperPing: true,
@@ -78,8 +78,8 @@ test("statusFor honors explicit status and defaults to live", () => {
 test("the current production shape validates cleanly", () => {
   const r = model.validateChannelRoles({
     programs: [
-      { id: "pixl", helpChannel: "C0B6STY9G5N", channels: ["C0B6STY9G5N", "C0B5P4N0WHH", "C0BK4F6STFZ"] },
-      { id: "back-to-basics", helpChannel: "C0BMHSDL597", channels: ["C0BMHSDL597"] },
+      { id: "acme", helpChannel: "C0B6STY9G5N", channels: ["C0B6STY9G5N", "C0B5P4N0WHH", "C0BK4F6STFZ"] },
+      { id: "beta", helpChannel: "C0BMHSDL597", channels: ["C0BMHSDL597"] },
     ],
     legacyHelp: "C0B6STY9G5N",
     legacyMain: ["C0B5P4N0WHH", "C0BK4F6STFZ"],
@@ -89,7 +89,7 @@ test("the current production shape validates cleanly", () => {
 
 test("a channel that is main in config but help via env is a conflict", () => {
   const r = model.validateChannelRoles({
-    programs: [{ id: "pixl", helpChannel: "CHELP", channels: ["CHELP", "C0BK4F6STFZ"] }],
+    programs: [{ id: "acme", helpChannel: "CHELP", channels: ["CHELP", "C0BK4F6STFZ"] }],
     legacyHelp: "C0BK4F6STFZ",
   });
   expect(r.ok).toBe(false);
@@ -119,16 +119,16 @@ test("a channel in both SLACK_HELP_CHANNEL and SLACK_FAQ_CHANNELS is a conflict"
 
 test("a hosted claim that disagrees with config is a conflict", () => {
   const r = model.validateChannelRoles({
-    programs: [{ id: "pixl", channels: ["C1"] }],
-    claims: [{ workspace_id: "default", channel_id: "C1", program_id: "pixl", kind: "help" }],
+    programs: [{ id: "acme", channels: ["C1"] }],
+    claims: [{ workspace_id: "default", channel_id: "C1", program_id: "acme", kind: "help" }],
   });
   expect(r.ok).toBe(false);
 });
 
 test("a hosted claim agreeing with config is fine", () => {
   const r = model.validateChannelRoles({
-    programs: [{ id: "pixl", helpChannel: "C1", channels: ["C1"] }],
-    claims: [{ workspace_id: "default", channel_id: "C1", program_id: "pixl", kind: "help" }],
+    programs: [{ id: "acme", helpChannel: "C1", channels: ["C1"] }],
+    claims: [{ workspace_id: "default", channel_id: "C1", program_id: "acme", kind: "help" }],
   });
   expect(r.ok).toBe(true);
 });

@@ -208,13 +208,13 @@ test("seedFromSlack re-seeds a thread whose in-memory transcript was lost", asyn
     conversations: {
       replies: async () => {
         calls += 1;
-        return { messages: [{ user: "U1", text: "what is pixl", ts: "1" }] };
+        return { messages: [{ user: "U1", text: "what is acme", ts: "1" }] };
       },
     },
   };
   await context.seedFromSlack(client, "C1", "seed-restart", "UBOT");
   assert.equal(calls, 1);
-  assert.match(context.getThreadContext("seed-restart") || "", /what is pixl/);
+  assert.match(context.getThreadContext("seed-restart") || "", /what is acme/);
   await context.seedFromSlack(client, "C1", "seed-restart", "UBOT");
   assert.equal(calls, 1, "a thread with a live transcript is not fetched twice");
 });

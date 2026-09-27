@@ -144,7 +144,7 @@ test("homeBlocks renders for a viewer with no history", () => {
   const blocks = homeBlocks(OUTSIDER);
   assert.equal(blocks[0].type, "header");
   assert.ok(blocks.length < 100, "Slack rejects a view over 100 blocks");
-  assert.match(JSON.stringify(blocks), /what i can walk you through/);
+  assert.match(JSON.stringify(blocks), /what i know/);
 });
 
 test("homeBlocks header names the bot and stays within the block budget", () => {

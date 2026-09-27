@@ -8,7 +8,7 @@ import { MAX_SOURCES, RECOMMENDED_SOURCES } from "@/lib/onboardingDraft";
 import { SubmitButton } from "@/app/wizard/_components/SubmitButton";
 import { inputClass, labelClass } from "@/app/wizard/_components/formStyles";
 import { EmptyState, Notice, Section } from "@/app/_components/DashboardShell";
-import { IconBook, IconCheck, IconDoc, IconGrid } from "@/app/_components/icons";
+import { IconBook, IconCheck, IconDoc } from "@/app/_components/icons";
 import {
   PixelIconGitHub,
   PixelIconGoogleDoc,
@@ -126,7 +126,7 @@ export function ProgramSettingsForms({ program }: { program: HostedProgramRow })
 
             <div>
               <label htmlFor="replySignature" className={labelClass}>Reply signature</label>
-              <input id="replySignature" name="replySignature" defaultValue={program.reply_signature ?? ""} maxLength={120} placeholder="stay wired :hardwire:" className={inputClass} />
+              <input id="replySignature" name="replySignature" defaultValue={program.reply_signature ?? ""} maxLength={120} placeholder="stay helpful :demo:" className={inputClass} />
               <p className="mt-1.5 text-[13px] text-text-muted">Optional text added to normal Pixie answers.</p>
             </div>
 
@@ -435,8 +435,6 @@ function kindMark(type: string, url: string | undefined): React.ReactNode {
       return <PixelIconMarkdown size={32} />;
     case "json-faq":
       return <IconBook size={32} />;
-    case "pixl-shop":
-      return <IconGrid size={32} />;
     default:
       return isNotion(url) ? <PixelIconNotion size={32} /> : <IconDoc size={32} />;
   }
