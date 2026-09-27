@@ -1,6 +1,4 @@
-// Slack OAuth for the web console. Signs users in via openid.connect so we get
-// their Slack user ID, then gates every view and every API call through the
-// same isAdmin() function the slash commands use.
+// Slack OAuth creates the session used by both browser views and API guards.
 const crypto = require("crypto");
 const { isAdmin } = require("../config");
 const log = require("../log");
@@ -10,18 +8,31 @@ const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
 const sessions = new Map();
 
-// Ephemeral fallback for when PIXIE_SESSION_SECRET isn't configured: a random
-// per-process secret keeps dev mode working. Sessions just die on restart
-// instead of signSession() returning null and handing out a broken cookie.
-let ephemeralSecret = null;
+type Session = { userId: string; userName: string; role: string };
+type AuthRequest = Request;
+type AuthResult = { status: number; body?: Record<string, unknown>; headers?: Record<string, string> };
+interface SlackTokenResponse {
+  ok: boolean;
+  error?: string;
+  access_token?: string;
+}
+interface SlackUserInfoResponse {
+  ok: boolean;
+  error?: string;
+  name?: string;
+  "https://slack.com/user_id": string;
+}
+
+let ephemeralSecret: string | null = null;
 
 function sessionSecret() {
+  // Development stays usable without a configured secret; sessions expire on restart.
   if (process.env.PIXIE_SESSION_SECRET) return process.env.PIXIE_SESSION_SECRET;
   if (!ephemeralSecret) ephemeralSecret = crypto.randomBytes(32).toString("hex");
   return ephemeralSecret;
 }
 
-function signSession(userId, userName, role = "user") {
+function signSession(userId: string, userName: string, role = "user"): string | null {
   const secret = sessionSecret();
   if (!secret) return null;
   const payload = JSON.stringify({ userId, userName, role, expiresAt: Date.now() + SESSION_TTL_MS });
@@ -30,7 +41,7 @@ function signSession(userId, userName, role = "user") {
   return `${encoded}.${hmac}`;
 }
 
-function verifySession(token) {
+function verifySession(token: string): Session | null {
   try {
     const secret = sessionSecret();
     if (!secret || !token) return null;
@@ -40,7 +51,12 @@ function verifySession(token) {
     const received = Buffer.from(hmac, "hex");
     const expectedBuffer = Buffer.from(expected, "hex");
     if (received.length !== expectedBuffer.length || !crypto.timingSafeEqual(received, expectedBuffer)) return null;
-    const session = JSON.parse(Buffer.from(encoded, "base64url").toString());
+    const session = JSON.parse(Buffer.from(encoded, "base64url").toString()) as {
+      userId: string;
+      userName?: string;
+      role?: string;
+      expiresAt: number;
+    };
     if (!session.userId || !Number.isFinite(session.expiresAt) || session.expiresAt < Date.now()) return null;
     return { userId: session.userId, userName: session.userName || session.userId, role: session.role || "user" };
   } catch {
@@ -48,9 +64,9 @@ function verifySession(token) {
   }
 }
 
-function parseCookies(header) {
+function parseCookies(header: string | null): Record<string, string> {
   if (!header) return {};
-  const map = {};
+  const map: Record<string, string> = {};
   for (const part of header.split(";")) {
     const eq = part.indexOf("=");
     if (eq === -1) continue;
@@ -59,26 +75,22 @@ function parseCookies(header) {
   return map;
 }
 
-function getSession(req) {
+function getSession(req: AuthRequest): Session | null {
   const cookies = parseCookies(req.headers.get("cookie"));
   const token = cookies[COOKIE_NAME];
   if (!token) return null;
   return verifySession(token);
 }
 
-function requireAdmin(req) {
+function requireAdmin(req: AuthRequest): AuthResult | { session: Session } {
   const session = getSession(req);
   if (!session) return { status: 401, body: { error: "unauthorized" } };
   if (!isAdminSession(session)) return { status: 403, body: { error: "admin only" } };
   return { session };
 }
 
-// Single place for "is this session an admin?". Preserved exactly:
-// signed role=admin, legacy userId=admin, the config allowlist, plus the
-// dev-testing bypass which ONLY fires when SLACK_CLIENT_ID=dev-testing (test
-// envs). Production (any other CLIENT_ID, including unset) never takes the
-// bypass — a plain dev-user cookie there still falls through to isAdmin().
-function isAdminSession(session) {
+function isAdminSession(session: Session | null): boolean {
+  // The dev bypass is restricted to the explicit test client id.
   if (!session) return false;
   if (session.role === "admin" || session.userId === "admin") return true;
   if (process.env.SLACK_CLIENT_ID === "dev-testing" && session.userId === "dev-user") return true;
@@ -89,13 +101,13 @@ function isAdminSession(session) {
   }
 }
 
-function requireSession(req) {
+function requireSession(req: AuthRequest): Session | null {
   const session = getSession(req);
   if (!session) return null;
   return session;
 }
 
-function loginUrl(redirect) {
+function loginUrl(redirect: string): string | null {
   const state = crypto.randomBytes(16).toString("hex");
   sessions.set(state, { redirect: redirect || "/", created: Date.now() });
 
@@ -111,7 +123,7 @@ function loginUrl(redirect) {
   return `https://slack.com/openid/connect/authorize?${params}`;
 }
 
-async function handleCallback(req) {
+async function handleCallback(req: AuthRequest): Promise<AuthResult> {
   const url = new URL(req.url);
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
@@ -138,7 +150,7 @@ async function handleCallback(req) {
       }),
     });
 
-    const tokenData = await tokenRes.json();
+    const tokenData = await tokenRes.json() as SlackTokenResponse;
     if (!tokenData.ok) {
       log.error("auth", `token exchange failed: ${tokenData.error}`);
       return { status: 401, body: { error: "auth failed" } };
@@ -147,7 +159,7 @@ async function handleCallback(req) {
     const userRes = await fetch("https://slack.com/api/openid.connect.userInfo", {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
-    const userData = await userRes.json();
+    const userData = await userRes.json() as SlackUserInfoResponse;
     if (!userData.ok) {
       log.error("auth", `userinfo failed: ${userData.error}`);
       return { status: 401, body: { error: "auth failed" } };
@@ -164,7 +176,7 @@ async function handleCallback(req) {
       headers: { "Set-Cookie": setCookie, Location: session.redirect },
     };
   } catch (e) {
-    log.error("auth", `callback error: ${e.message}`);
+    log.error("auth", `callback error: ${e instanceof Error ? e.message : String(e)}`);
     return { status: 500, body: { error: "auth error" } };
   }
 }
@@ -177,7 +189,7 @@ function handleLogout() {
   };
 }
 
-module.exports = {
+export = {
   signSession,
   verifySession,
   getSession,

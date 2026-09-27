@@ -1,37 +1,38 @@
-// Deterministic Program Support Health score. No LLM, no invented precision:
-// every component is a plain ratio of stored counts, clamped to [0, 100], and
-// a program without enough recent activity reports "not enough data" rather
-// than a fake 100%.
-//
-// SCORE_VERSION exists so a future change to the formula can be told apart
-// from an actual change in program health when reading historical scores.
 const supportAnalytics = require("./supportAnalytics");
+// Deterministic support health from stored counts; no model-generated precision.
 const db = require("./db");
 
 const SCORE_VERSION = 1;
 const MIN_QUESTIONS_FOR_SCORE = 5;
 const OPEN_STATUSES = ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"];
 
-function clamp(n) {
+type Analytics = { byStatus: Record<string, number>; stale48h: number; created: number; reopenRate: number; windowDays: number };
+type SourceHealth = { name: string; fail_count: number };
+interface SourceRef { name: string; type?: string; url?: string }
+interface GapCluster { covered: boolean }
+interface HealthComponents { ticketBacklog: number; sourceHealth: number; knowledgeCoverage: number; resolutionQuality: number }
+interface HealthScore { error?: string; programId?: string; version?: number; score?: number | null; label?: string | null; components?: HealthComponents | null; windowDays?: number; questionsInWindow?: number }
+
+function clamp(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
 }
 
-function ticketBacklogComponent(analytics) {
+function ticketBacklogComponent(analytics: Analytics): number {
   const open = OPEN_STATUSES.reduce((sum, status) => sum + (analytics.byStatus[status] || 0), 0);
   if (open === 0) return 100;
   return clamp(100 - (analytics.stale48h / open) * 100);
 }
 
-function sourceHealthComponent(programId) {
+function sourceHealthComponent(programId: string): number {
   const programs = require("./programs");
   const knowledge = require("./knowledge");
   const prog = programs.get(programId);
   const sources = prog && Array.isArray(prog.sources) ? prog.sources : [];
   if (sources.length === 0) return 100;
-  const keyed = sources.map((s) => knowledge.sourceCacheKey(s) || s.name).filter(Boolean);
+  const keyed = sources.map((s: SourceRef) => knowledge.sourceCacheKey(s) || s.name).filter(Boolean) as string[];
   const health = db.getSourceHealth(keyed);
-  const byKey = new Map(health.map((h) => [h.name, h]));
-  const scores = keyed.map((key) => {
+  const byKey = new Map((health as SourceHealth[]).map((h) => [h.name, h]));
+  const scores = keyed.map((key: string) => {
     const h = byKey.get(key);
     if (!h || !h.fail_count) return 100;
     return clamp(100 - h.fail_count * 20);
@@ -39,23 +40,21 @@ function sourceHealthComponent(programId) {
   return clamp(scores.reduce((sum, s) => sum + s, 0) / scores.length);
 }
 
-function knowledgeCoverageComponent(programId) {
+function knowledgeCoverageComponent(programId: string): number {
   const gapClusters = require("./gapClusters");
   const { clusters, error } = gapClusters.clusterGaps({ programId, sinceMs: 30 * 24 * 60 * 60 * 1000, minAskers: 2 });
   if (error || !clusters || clusters.length === 0) return 100;
-  const covered = clusters.filter((c) => c.covered).length;
+  const covered = clusters.filter((c: GapCluster) => c.covered).length;
   return clamp((covered / clusters.length) * 100);
 }
 
-// Reopens double-count against quality (a reopen means the first resolution
-// failed the requester); escalations count once, since routing to a human is
-// often the correct outcome, not a defect.
-function resolutionQualityComponent(analytics) {
+function resolutionQualityComponent(analytics: Analytics): number {
   const escalationRate = analytics.created > 0 ? (analytics.byStatus.escalated || 0) / analytics.created : 0;
   return clamp(100 - analytics.reopenRate * 150 - escalationRate * 50);
 }
 
-function computeHealthScore(programId, { sinceMs = 30 * 24 * 60 * 60 * 1000 } = {}) {
+function computeHealthScore(programId: string, { sinceMs = 30 * 24 * 60 * 60 * 1000 }: { sinceMs?: number } = {}): HealthScore {
+  // Quiet programs report insufficient data instead of a misleading perfect score.
   if (!programId) return { error: "programId required" };
   const analytics = supportAnalytics.overview(programId, sinceMs);
   if (analytics.created < MIN_QUESTIONS_FOR_SCORE) {
@@ -79,4 +78,4 @@ function computeHealthScore(programId, { sinceMs = 30 * 24 * 60 * 60 * 1000 } = 
   return { programId, version: SCORE_VERSION, score, label: null, components, windowDays: analytics.windowDays, questionsInWindow: analytics.created };
 }
 
-module.exports = { computeHealthScore, SCORE_VERSION, MIN_QUESTIONS_FOR_SCORE };
+export = { computeHealthScore, SCORE_VERSION, MIN_QUESTIONS_FOR_SCORE };

@@ -1,15 +1,18 @@
-// Web console for Pixie. Runs as Bun.serve in the same process as the Slack
-// bot, so it can call lib/ functions directly. Serves static assets from
-// public/ with no build step, and JSON APIs that assemble existing DB queries.
+// Bun web console: static assets, browser APIs, and the token-authenticated control plane.
 const path = require("path");
 const fs = require("fs");
 const log = require("../log");
 const auth = require("./auth");
 const api = require("./api");
 
+interface JsonObject {
+  [key: string]: unknown;
+}
+type SseClient = { write: (data: string) => void };
+
 const PUBLIC_DIR = path.join(__dirname, "..", "..", "public");
 
-const MIME = {
+const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -23,7 +26,7 @@ const MIME = {
   ".gif": "image/gif",
 };
 
-function serveFile(filePath) {
+function serveFile(filePath: string): Response {
   const ext = path.extname(filePath).toLowerCase();
   const mime = MIME[ext] || "application/octet-stream";
   const data = fs.readFileSync(filePath);
@@ -32,92 +35,85 @@ function serveFile(filePath) {
   });
 }
 
-function json(data, status = 200) {
+function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json" },
   });
 }
 
-function redirect(location, status = 302) {
+function redirect(location: string, status = 302): Response {
   return new Response(null, { status, headers: { Location: location } });
 }
 
-function htmlResponse(html, extraHeaders = {}) {
+function htmlResponse(html: string, extraHeaders: Record<string, string> = {}): Response {
   return new Response(html, {
     headers: { "Content-Type": "text/html; charset=utf-8", ...extraHeaders },
   });
 }
 
-/* ------------------------------------------------- shared HTTP guards -- */
 
-// Safe JSON body read: malformed payloads degrade to {} so boundary
-// validation returns 4xx, never a 500 throw. DELETE is included because the
-// internal macro-delete route carries its actorId in the body (see
-// pixie-wizard lib/pixieCore.ts coreMacroDelete).
-async function readJsonBody(req, method) {
+async function readJsonBody(req: Request, method: string): Promise<JsonObject> {
+  // Malformed bodies become validation errors; they must never crash the request handler.
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return {};
   try {
-    return await req.json();
+    return await req.json() as JsonObject;
   } catch (_) {
     return {};
   }
 }
 
-// Narrow error→status mapping for the internal API. Each family preserves its
-// historical code (see serve.test.js pins): 403 for helper/tenant denials,
-// 404 for missing rows, 503 for a missing live Slack client, 429 for copilot
-// rate limits, 400 for everything else.
-function isHelperDenied(err) {
+function isHelperDenied(err: string | null | undefined): boolean {
   return !!err && err.includes("not a helper");
 }
-function isTenantDenied(err) {
+function isTenantDenied(err: string | null | undefined): boolean {
   return !!err && (err.includes("not a helper") || err.includes("mismatch"));
 }
-function ticketWriteStatus(err) {
+function ticketWriteStatus(err: string | null | undefined): number {
+  // Tenant/helper denials are 403; other validation remains 400 for the dashboard contract.
   return isTenantDenied(err) ? 403 : 400;
 }
-function helperWriteStatus(err) {
+function helperWriteStatus(err: string | null | undefined): number {
   return isHelperDenied(err) ? 403 : 400;
 }
-function copilotStatus(err) {
+function copilotStatus(err: string | null | undefined): number {
+  // Rate-limit errors remain 429 so the dashboard can distinguish throttling from validation.
   if (isHelperDenied(err)) return 403;
   if (err && err.includes("rate limited")) return 429;
   return 400;
 }
-function notifyStatus(err) {
+function notifyStatus(err: string | null | undefined): number {
   if (isHelperDenied(err)) return 403;
   if (err && err.includes("unavailable")) return 503;
   return 400;
 }
-function radarWriteStatus(err) {
+function radarWriteStatus(err: string | null | undefined): number {
   if (isHelperDenied(err)) return 403;
   if (err && err.includes("not found")) return 404;
   return 400;
 }
 
-/* ------------------------------------------------------------------- SSE -- */
 
-const sseClients = new Set();
+const sseClients = new Set<SseClient>();
 
-function broadcastSSE(event, data) {
+function broadcastSSE(event: string, data: unknown): void {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const client of sseClients) {
     try {
       client.write(payload);
     } catch (error) {
-      log.debug("web/serve", `SSE client write failed: ${error.message}`);
+      log.debug("web/serve", `SSE client write failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }
 
-function sseStream(req) {
+function sseStream(req: Request): Response {
   let closed = false;
   const body = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
       const client = {
-        write(data) {
+        write(data: string): void {
           if (!closed) controller.enqueue(encoder.encode(data));
         },
       };
@@ -128,7 +124,7 @@ function sseStream(req) {
       req.signal.addEventListener("abort", () => {
         closed = true;
         sseClients.delete(client);
-        try { controller.close(); } catch (e) { log.debug("web/serve", `SSE close failed: ${e.message}`); }
+        try { controller.close(); } catch (e) { log.debug("web/serve", `SSE close failed: ${e instanceof Error ? e.message : String(e)}`); }
       });
     },
     cancel() {
@@ -145,21 +141,18 @@ function sseStream(req) {
   });
 }
 
-// Hook log events into the SSE feed so the live panel works without touching
-// any call site. Called by web.start().
 function startLogFeed() {
-  log.subscribe((kind, scope, args) => {
+  log.subscribe((kind: string, scope: string, args: unknown[]) => {
     broadcastSSE("log", {
       kind,
       scope,
-      message: args.map((a) => (typeof a === "string" ? a : String(a))).join(" "),
+      message: args.map((a: unknown) => (typeof a === "string" ? a : String(a))).join(" "),
       time: Date.now(),
     });
   });
 }
 
-// Tick: broadcast vitals every 10s so the HUD updates without polling.
-let metricTimer = null;
+let metricTimer: ReturnType<typeof setInterval> | null = null;
 
 function startMetricTicks() {
   if (metricTimer) return;
@@ -168,31 +161,28 @@ function startMetricTicks() {
       const pulse = api.buildPulse();
       broadcastSSE("pulse", pulse);
     } catch (e) {
-      log.debug("web", `pulse broadcast failed: ${e.message}`);
+      log.debug("web", `pulse broadcast failed: ${e instanceof Error ? e.message : String(e)}`);
     }
     try {
       broadcastSSE("metric", { time: Date.now() });
     } catch (error) {
-      log.debug("web/serve", `metric SSE broadcast failed: ${error.message}`);
+      log.debug("web/serve", `metric SSE broadcast failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }, 10000);
   if (metricTimer.unref) metricTimer.unref();
 }
 
-/* ---------------------------------------------------------------- router -- */
 
-async function handleStatic(req) {
+async function handleStatic(req: Request): Promise<Response | null> {
+  // Static traversal is rejected before path resolution; the root document still requires a session.
   const url = new URL(req.url);
   let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
 
-  // Prevent directory traversal.
   if (filePath.includes("..")) return null;
 
   const fullPath = path.join(PUBLIC_DIR, filePath);
 
-  // If the file exists, serve it. / requires session; static assets don't.
   if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
-    // index.html requires a session.
     if (url.pathname === "/" || url.pathname === "/index.html") {
       const session = auth.requireSession(req);
       if (!session) return redirect("/login");
@@ -203,15 +193,14 @@ async function handleStatic(req) {
   return null;
 }
 
-async function handleScreenshots(req) {
+async function handleScreenshots(req: Request): Promise<Response | null | undefined> {
+  // Screenshots are intentionally public, but their path is still traversal-checked.
   const url = new URL(req.url);
 
-  // Serve screenshots without auth (they're shared in Slack publicly anyway)
   if (url.pathname.startsWith("/screenshots/")) {
     const screenshotPath = url.pathname.slice("/screenshots/".length);
 
-    // Prevent directory traversal
-    if (screenshotPath.includes("..")) return ;
+    if (screenshotPath.includes("..")) return;
 
     const fullPath = path.join(PUBLIC_DIR, "screenshots", screenshotPath);
 
@@ -223,7 +212,7 @@ async function handleScreenshots(req) {
   return null;
 }
 
-function renderLoginPage({ error, slackUrl } = {}) {
+function renderLoginPage({ error, slackUrl }: { error?: string; slackUrl?: string | null } = {}): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -372,11 +361,10 @@ function renderLoginPage({ error, slackUrl } = {}) {
 </html>`;
 }
 
-async function handleAuth(req) {
+async function handleAuth(req: Request): Promise<Response | null> {
   const url = new URL(req.url);
 
   if (url.pathname === "/login") {
-    // Dev mode: skip real OAuth when SLACK_CLIENT_ID is just "dev-testing".
     if (process.env.SLACK_CLIENT_ID === "dev-testing") {
       const cookieValue = auth.signSession("dev-user", "Developer", "admin");
       const setCookie = `${auth.COOKIE_NAME}=${cookieValue}; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800`;
@@ -386,7 +374,7 @@ async function handleAuth(req) {
     if (req.method === "POST") {
       try {
         const formData = await req.formData();
-        const passcode = formData.get("passcode");
+        const passcode = formData.get("passcode") as string | null;
         const expected = process.env.PIXIE_DASHBOARD_PASSCODE || "pixie";
         if (passcode && passcode.trim() === expected.trim()) {
           const cookieValue = auth.signSession("admin", "Admin", "admin");
@@ -420,37 +408,32 @@ async function handleAuth(req) {
   return null;
 }
 
-async function handleApi(req) {
+async function handleApi(req: Request): Promise<Response | null> {
+  // Browser sessions and internal token auth are separate trust boundaries.
   const url = new URL(req.url);
   const method = req.method.toUpperCase();
 
-  // Admin check for writes.
   const adminResult = auth.requireAdmin(req);
 
-  // Pulse — anyone with a session.
   if (url.pathname === "/api/pulse" && method === "GET") {
     const session = auth.requireSession(req);
     if (!session) return json({ error: "unauthorized" }, 401);
     return json(api.buildPulse());
   }
 
-  // Stream — SSE.
   if (url.pathname === "/api/stream" && method === "GET") {
     const session = auth.requireSession(req);
     if (!session) return json({ error: "unauthorized" }, 401);
     return sseStream(req);
   }
 
-  // Ask — the probe.
   if (url.pathname === "/api/ask" && method === "POST") {
-    // Debug probe over program knowledge and retrieval traces: admins only.
     if (adminResult.status) return json(adminResult.body, adminResult.status);
-    const body = await req.json().catch(() => ({}));
+      const body = await req.json().catch(() => ({})) as JsonObject;
     const result = await api.handleAsk(body.question || "");
     return json(result);
   }
 
-  // Queue.
   if (url.pathname === "/api/queue" && method === "GET") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     return json(api.queueList());
@@ -469,12 +452,11 @@ async function handleApi(req) {
   if (url.pathname.startsWith("/api/queue/") && method === "PATCH") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const id = Number(url.pathname.split("/")[3]);
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     api.queueEdit(id, body.question, body.answer);
     return json({ ok: true });
   }
 
-  // Gaps.
   if (url.pathname === "/api/gaps" && method === "GET") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     return json(api.gapsList());
@@ -484,7 +466,7 @@ async function handleApi(req) {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const parts = url.pathname.split("/");
     const id = Number(parts[3]);
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     api.gapsMove(id, body.kind);
     return json({ ok: true });
   }
@@ -496,13 +478,11 @@ async function handleApi(req) {
     return json(result);
   }
 
-  // Silence.
   if (url.pathname === "/api/silence" && method === "GET") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     return json(api.silenceList());
   }
 
-  // Knowledge.
   if (url.pathname === "/api/knowledge" && method === "GET") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     return json(api.knowledgeInfo());
@@ -519,7 +499,6 @@ async function handleApi(req) {
     return json({ ok: true });
   }
 
-  // Cache.
   if (url.pathname === "/api/cache" && method === "GET") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     return json(api.cacheList());
@@ -532,16 +511,14 @@ async function handleApi(req) {
     return json({ ok: true });
   }
 
-  // Teach.
   if (url.pathname === "/api/teach" && method === "POST") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     const taught = api.handleTeach(body.question, body.answer, adminResult.session.userId, body.programId);
     if (taught && taught.error) return json(taught, 400);
     return json({ ok: true });
   }
 
-  // Report.
   if (url.pathname === "/api/report" && method === "GET") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const week = Number(url.searchParams.get("week") || "0");
@@ -554,13 +531,11 @@ async function handleApi(req) {
     return json({ ok });
   }
 
-  // Health.
   if (url.pathname === "/api/health" && method === "GET") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     return json(api.healthCheck());
   }
 
-  // Programs.
   if (url.pathname === "/api/programs" && method === "GET") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     return json(api.programsList());
@@ -568,7 +543,7 @@ async function handleApi(req) {
 
   if (url.pathname === "/api/programs" && method === "POST") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     return json(api.programSave(body));
   }
 
@@ -581,11 +556,10 @@ async function handleApi(req) {
   if (url.pathname.startsWith("/api/programs/") && url.pathname.endsWith("/posture") && method === "PATCH") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const id = url.pathname.split("/")[3];
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     return json(api.programSetPosture(id, body.posture));
   }
 
-  // Tickets.
   if (url.pathname === "/api/tickets" && method === "GET") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const programId = url.searchParams.get("programId") || null;
@@ -596,12 +570,11 @@ async function handleApi(req) {
   if (/^\/api\/tickets\/\d+$/.test(url.pathname) && method === "PATCH") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const id = Number(url.pathname.split("/")[3]);
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     if (!body.status) return json({ error: "status required" }, 400);
     return json(api.ticketUpdate(id, body.status, body.assigneeId, adminResult.session?.userId || null));
   }
 
-  // Channels Matrix.
   if (url.pathname === "/api/channels" && method === "GET") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     return json(api.channelsList());
@@ -627,16 +600,11 @@ async function handleApi(req) {
     return json(api.channelRemove(programId, channelId));
   }
 
-  // Workspace channel list for the picker dropdown.
   if (url.pathname === "/api/slack/channels" && method === "GET") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     return json(await api.slackChannels());
   }
 
-  // Control-plane API for Pixie Wizard. Token-authenticated (no browser
-  // session): the Wizard holds PIXIE_INTERNAL_TOKEN server-side only. Core
-  // keeps serving Slack from its last-synced state when Wizard is down —
-  // nothing on the event path calls these routes.
   const historyImportRoute = url.pathname.match(/^\/internal(?:\/v1)?\/programs\/([^/]+)\/history-import$/);
   if (historyImportRoute && (method === "GET" || method === "POST")) {
     const gate = api.internalAuth(req);
@@ -680,10 +648,6 @@ async function handleApi(req) {
       const res = api.internalProgramSync(progSync[1], body);
       return json(res, res.error ? (res.status || 400) : 200);
     }
-    // Sandbox test-question probe for onboarding (see
-    // api.internalTestQuestion): retrieval + grounded-answer preview with no
-    // Slack side effects. Channel conflicts surface as 409; everything else
-    // validation-shaped stays 400.
     const testQuestion = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/test-question$/);
     if (testQuestion && method === "POST") {
       const res = await api.internalTestQuestion(decodeURIComponent(testQuestion[1]), body);
@@ -935,17 +899,9 @@ async function handleApi(req) {
       const res = await api.internalMacroSend(Number(macroRoute[1]), body);
       return json(res, res.error ? ticketWriteStatus(res.error) : 200);
     }
-    // --- dashboard ops routes ---
-    // Organizer-dashboard ops owned by the dash-ops workstream
-    // (lib/web/dashboardApi.js). Program-scoped ticket search/detail,
-    // metrics, knowledge status/refresh, helper roster/availability.
-    // Lazy-required inside the block so this file's only dashboard-ops
-    // diff stays within these delimiters. Unknown program and
-    // cross-program ticket access are 404s (never 403s that would confirm
-    // another tenant's rows); writes reuse the helper-membership 403s.
     {
       const dashboardApi = require("./dashboardApi");
-      const dashNotFound = (res) => res && res.error === "unknown program" ? 404
+      const dashNotFound = (res: JsonObject) => res && res.error === "unknown program" ? 404
         : res && res.error === "ticket not found" ? 404
         : res && res.error === "helper not found" ? 404
         : null;
@@ -1008,46 +964,39 @@ async function handleApi(req) {
         return json(res);
       }
     }
-    // --- end dashboard ops routes ---
     return json({ error: "unknown internal route" }, 404);
   }
 
   return null;
 }
 
-async function handleRequest(req) {
+async function handleRequest(req: Request): Promise<Response> {
+  // Dispatch internal routes before the static fallback so the control plane is reachable.
   const url = new URL(req.url);
 
   try {
-    // Auth routes first.
     if (["/login", "/auth/callback", "/auth/logout"].includes(url.pathname) || url.pathname.startsWith("/auth/")) {
       const res = await handleAuth(req);
       if (res) return res;
     }
 
-    // API routes. /internal/v1/* is the machine-to-machine control-plane API
-    // handleApi() itself defines and gates — it must be dispatched here too,
-    // or every internal API call (Wizard <-> Core: program sync, tickets,
-    // analytics, membership checks, ...) 404s before ever reaching
-    // handleApi's own auth/routing, regardless of PIXIE_INTERNAL_TOKEN.
+    // Internal and browser APIs share this dispatcher but retain separate authentication.
     if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/internal/v1/") || url.pathname.startsWith("/internal/programs/")) {
       const res = await handleApi(req);
       if (res) return res;
     }
 
-    // Screenshots (public, no auth required).
     if (url.pathname.startsWith("/screenshots/")) {
       const res = await handleScreenshots(req);
       if (res) return res;
     }
 
-    // Static files.
     const res = await handleStatic(req);
      if (res) return res;
 
     return new Response("not found", { status: 404 });
   } catch (e) {
-    log.error("web", `request error: ${e.message}`);
+    log.error("web", `request error: ${e instanceof Error ? e.message : String(e)}`);
     return json({ error: "internal error" }, 500);
   }
 }
@@ -1073,4 +1022,4 @@ function start() {
   return server;
 }
 
-module.exports = { start, broadcastSSE, handleRequest };
+export = { start, broadcastSSE, handleRequest };

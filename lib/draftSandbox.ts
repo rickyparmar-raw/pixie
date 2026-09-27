@@ -1,15 +1,42 @@
-// Draft-only runtime. Drafts never enter the production program registry or
-// production channel claims; this module owns their explicit test bindings.
+// Drafts have explicit bindings and never enter production program or channel claims.
 const db = require("./db");
+import type { SlackClient } from "./types";
 
 const DRAFT_PROGRAMS = new Map();
 const DRAFT_BINDINGS = new Map();
+
+interface DraftBinding {
+  channelId?: string;
+  channel_id?: string;
+  role: "help" | "ticket";
+  draftProgramId?: string;
+  program_id?: string;
+  workspaceId?: string;
+  workspace_id?: string;
+  sandboxOnly: boolean;
+  enabled: boolean;
+  id?: number;
+  card_ts?: string | null;
+}
+
+interface DraftProgram {
+  id: string;
+  name?: string;
+  status: string;
+  privateSandboxOnly: boolean;
+  workspaceId?: string | null;
+  sourceTexts?: Record<string, string>;
+  sandboxBindings?: Array<{ channelId: string; role: "help" | "ticket" }>;
+  autoAssign?: boolean;
+  ticketsEnabled?: boolean;
+  lifecycle?: string;
+}
 
 function ensureTables() {
   db.handle().exec(`CREATE TABLE IF NOT EXISTS draft_sandbox_programs (program_id TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS draft_sandbox_sources (program_id TEXT NOT NULL, source_name TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY (program_id, source_name)); CREATE TABLE IF NOT EXISTS draft_sandbox_bindings (program_id TEXT NOT NULL, workspace_id TEXT NOT NULL, channel_id TEXT NOT NULL, role TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (program_id, workspace_id, channel_id, role)); CREATE TABLE IF NOT EXISTS draft_sandbox_tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, workspace_id TEXT NOT NULL, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, sink_channel TEXT NOT NULL, requester_id TEXT NOT NULL, question TEXT NOT NULL, card_ts TEXT, created_at INTEGER NOT NULL, UNIQUE(program_id, workspace_id, thread_ts));`);
 }
 
-function register(program) {
+function register(program: DraftProgram): DraftProgram | undefined {
   ensureTables();
   if (!program || program.status !== "suspended" || program.privateSandboxOnly !== true) throw new Error("only private suspended drafts may be registered");
   DRAFT_PROGRAMS.set(program.id, { ...program, lifecycle: "draft" });
@@ -25,19 +52,14 @@ function register(program) {
   return DRAFT_PROGRAMS.get(program.id);
 }
 
-function getForChannel(channelId, workspaceId = null) {
+function getForChannel(channelId: string, workspaceId: string | null = null): DraftBinding | null {
+  // Production may use the default workspace; an explicit channel binding remains safe to match.
   if (!channelId) return null;
   const exact = DRAFT_BINDINGS.get(`${workspaceId || "default"}:${channelId}`);
   if (exact && exact.enabled) return exact;
-  // Workspace-agnostic fallback: production Core runs with PIXIE_WORKSPACE_ID
-  // unset, so event workspace resolves to "default" while bindings were stored
-  // under T0266FRGM. A sandbox binding is explicit by channel, so a channel
-  // match across workspaces is safe (production-claimed channels are rejected
-  // at register/sync time).
   for (const binding of DRAFT_BINDINGS.values()) {
     if (binding.channelId === channelId && binding.enabled) return binding;
   }
-  // Last resort: consult persisted rows (covers in-memory map loss).
   try {
     ensureTables();
     const row = db.handle().query("SELECT * FROM draft_sandbox_bindings WHERE channel_id = ? AND enabled = 1 LIMIT 1").get(channelId) || null;
@@ -48,11 +70,11 @@ function getForChannel(channelId, workspaceId = null) {
   }
 }
 
-function get(programId) {
+function get(programId: string): DraftProgram | null {
   return DRAFT_PROGRAMS.get(programId) || null;
 }
 
-function list() {
+function list(): DraftProgram[] {
   return [...DRAFT_PROGRAMS.values()];
 }
 
@@ -61,19 +83,19 @@ function clear() {
   DRAFT_BINDINGS.clear();
 }
 
-function loadPersisted() {
+function loadPersisted(): void {
   ensureTables();
   for (const row of db.handle().query("SELECT payload FROM draft_sandbox_programs").all()) {
     try { register(JSON.parse(row.payload)); } catch (_) {}
   }
 }
 
-function bindingRows() {
+function bindingRows(): DraftBinding[] {
   ensureTables();
   return db.handle().query("SELECT * FROM draft_sandbox_bindings WHERE enabled = 1 ORDER BY program_id, role, channel_id").all();
 }
 
-function ticketSinkFor(programId, workspaceId = null) {
+function ticketSinkFor(programId: string, workspaceId: string | null = null): string | null {
   const workspace = workspaceId || "default";
   for (const binding of DRAFT_BINDINGS.values()) {
     if (binding.draftProgramId === programId && binding.role === "ticket" && binding.enabled && (binding.workspaceId || workspace) === workspace) return binding.channelId;
@@ -82,12 +104,12 @@ function ticketSinkFor(programId, workspaceId = null) {
   return row?.channel_id || null;
 }
 
-function getTicketForThread(programId, workspaceId = null, threadTs) {
+function getTicketForThread(programId: string, workspaceId: string | null = null, threadTs: string): DraftBinding | null {
   ensureTables();
   return db.handle().query("SELECT * FROM draft_sandbox_tickets WHERE program_id = ? AND workspace_id = ? AND thread_ts = ?").get(programId, workspaceId || "default", threadTs) || null;
 }
 
-async function ensureSupportTicket({ programId, workspaceId = null, channel, threadTs, requesterId, question, client }) {
+async function ensureSupportTicket({ programId, workspaceId = null, channel, threadTs, requesterId, question, client }: { programId: string; workspaceId?: string | null; channel: string; threadTs: string; requesterId: string; question: string; client?: SlackClient | null }): Promise<DraftBinding | null> {
   if (!programId || !threadTs || !channel || !requesterId || !question) return null;
   ensureTables();
   const workspace = workspaceId || "default";
@@ -113,4 +135,4 @@ async function ensureSupportTicket({ programId, workspaceId = null, channel, thr
   return getTicketForThread(programId, workspace, threadTs);
 }
 
-module.exports = { register, getForChannel, get, list, clear, loadPersisted, bindingRows, getTicketForThread, ensureSupportTicket };
+export = { register, getForChannel, get, list, clear, loadPersisted, bindingRows, getTicketForThread, ensureSupportTicket };

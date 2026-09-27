@@ -2,10 +2,10 @@
   "name": "@pixl/pixie",
   "version": "1.0.0",
   "description": "Slack bot that answers #pixl-help questions from the Pixl FAQ and docs",
-  "main": "index.js",
+  "main": "index.ts",
   "scripts": {
-    "start": "bun index.js",
-    "ask": "bun index.js --ask",
+    "start": "bun index.ts",
+    "ask": "bun index.ts --ask",
     "manifest": "bun scripts/manifest.cjs",
     "migrate:check": "bun scripts/migrate-railway.mjs --check",
     "migrate:write": "bun scripts/migrate-railway.mjs --write",
