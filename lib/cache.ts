@@ -12,25 +12,31 @@ interface CacheRow {
 }
 
 
-type UntypedInput = any;
+interface CacheResult {
+  source?: string | null;
+  answer: string;
+}
+
+interface CacheOptions { refreshed?: boolean }
+
 const VOLATILE_SOURCE = "Program timeline";
 
 
-function isVolatile(source: UntypedInput) {
+function isVolatile(source: string | null | undefined) {
   // Timeline answers contain a countdown, so an old hit is incorrect rather than merely stale.
   if (!source) return false;
   return String(source).trim().toLowerCase() === VOLATILE_SOURCE.toLowerCase();
 }
 
 
-function normalize(question: UntypedInput) {
+function normalize(question: string) {
   // Sorted meaningful terms make filler and word order irrelevant to the cache key.
   const terms = retrieve.tokenize((question || "").replace(/<@[^>]+>/g, " "));
   return [...new Set(terms)].sort().join(" ");
 }
 
 
-function keyFor(question: UntypedInput, programId: string | null = null) {
+function keyFor(question: string, programId: string | null = null) {
   const normalized = normalize(question);
   if (!normalized) return null;
   // Program identity is part of the key; identical questions must not cross tenant boundaries.
@@ -38,7 +44,7 @@ function keyFor(question: UntypedInput, programId: string | null = null) {
   return crypto.createHash("sha1").update(input).digest("hex");
 }
 
-function get(question: UntypedInput, programId = null) {
+function get(question: string, programId: string | null = null) {
   const key = keyFor(question, programId);
   if (!key) return null;
   const hit = getCachedAnswer(key);
@@ -48,7 +54,7 @@ function get(question: UntypedInput, programId = null) {
   return { source: hit.source, answer: hit.answer };
 }
 
-function put(question: UntypedInput, result: UntypedInput, options: Record<string, UntypedInput> | string = {}, programId: string | null = null) {
+function put(question: string, result: CacheResult, options: CacheOptions | string = {}, programId: string | null = null) {
   // The legacy string overload is retained for callers that passed programId as the third argument.
   if (typeof options === "string") {
     programId = options;
@@ -60,20 +66,20 @@ function put(question: UntypedInput, result: UntypedInput, options: Record<strin
 }
 
 
-function cacheRow(hash: UntypedInput) {
+function cacheRow(hash: string) {
   return db.handle()
     .query("SELECT source, answer, ask_count, COALESCE(refreshed_at, created_at) AS written_at FROM answer_cache WHERE question_hash = ?")
     .get(hash) as CacheRow | null;
 }
 
-function peekCachedAnswer(hash: UntypedInput) {
+function peekCachedAnswer(hash: string) {
   // Peeking is read-only because dashboards must not change popularity statistics.
   const row = cacheRow(hash);
   if (!row) return null;
   return { source: row.source, answer: row.answer, askCount: row.ask_count, ageMs: db.now() - row.written_at };
 }
 
-function getCachedAnswer(hash: UntypedInput) {
+function getCachedAnswer(hash: string) {
   const hit = peekCachedAnswer(hash);
   if (!hit) return null;
   // A read counts as an ask; inspection uses peekCachedAnswer and must not bump it.
@@ -83,7 +89,7 @@ function getCachedAnswer(hash: UntypedInput) {
   return hit;
 }
 
-function putCachedAnswer(hash: UntypedInput, question: UntypedInput, result: UntypedInput, { refreshed = false }: Record<string, UntypedInput> = {}) {
+function putCachedAnswer(hash: string, question: string, result: CacheResult, { refreshed = false }: CacheOptions = {}) {
   // Refreshes replace the answer without pretending that somebody asked again.
   const t = db.now();
   db.handle()
@@ -96,7 +102,7 @@ function putCachedAnswer(hash: UntypedInput, question: UntypedInput, result: Unt
     .run(hash, question, result.source || null, result.answer, t, refreshed ? null : t, t);
 }
 
-function staleCacheEntries(staleAfterMs: UntypedInput, limit: UntypedInput) {
+function staleCacheEntries(staleAfterMs: number, limit: number) {
   // Warm popular stale rows first; idle cleanup is a separate retention decision.
   return db.handle()
     .query(
@@ -123,7 +129,7 @@ function clearCache() {
   db.handle().query("DELETE FROM answer_cache").run();
 }
 
-function forget(hash: UntypedInput) {
+function forget(hash: string) {
   db.handle().query("DELETE FROM answer_cache WHERE question_hash = ?").run(hash);
 }
 

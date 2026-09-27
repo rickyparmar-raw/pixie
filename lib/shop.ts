@@ -3,12 +3,32 @@
 import axios = require("axios");
 import log = require("./log");
 
-type UntypedInput = any;
+interface PayoutStep { re: number; usd: number }
+interface ShopEconomy {
+  pixelValueUsd: number;
+  basePayoutUsd: number;
+  maxPayoutUsd: number;
+  reForMaxPayout: number;
+  payoutSteps: PayoutStep[];
+  tierRePerHour: number[];
+}
+
+interface ShopItem {
+  name: string;
+  price?: number;
+  unlock_xp?: number;
+  category?: string;
+  config_options?: { base_price?: number } | null;
+}
+
+interface ShopData { items: ShopItem[]; economy: ShopEconomy; fetchedAt?: number }
+interface AnswerContext { history?: string }
+
 const CATALOGUE_URL = "https://server.pixl.hackclub.com/api/shop/items";
 const ECONOMY_URL = "https://raw.githubusercontent.com/hackclub/pixl/main/packages/config/pixl.json";
 
 
-const DEFAULT_ECONOMY = {
+const DEFAULT_ECONOMY: ShopEconomy = {
   pixelValueUsd: 0.07,
   basePayoutUsd: 4.0,
   maxPayoutUsd: 6.0,
@@ -28,7 +48,7 @@ const DEFAULT_ECONOMY = {
 const TIER_NAMES = ["Spark", "Signal", "Grid", "Nexus"];
 
 
-function rePerHour(tier: UntypedInput, economy = DEFAULT_ECONOMY) {
+function rePerHour(tier: number, economy: ShopEconomy = DEFAULT_ECONOMY) {
   // Clamp unknown tiers to the supported table instead of throwing or inventing a rate.
   const table = economy.tierRePerHour || DEFAULT_ECONOMY.tierRePerHour;
   const t = Math.min(Math.max(Math.trunc(tier) || 1, 1), table.length);
@@ -36,7 +56,7 @@ function rePerHour(tier: UntypedInput, economy = DEFAULT_ECONOMY) {
 }
 
 
-function payoutUsdPerHour(re: UntypedInput, economy = DEFAULT_ECONOMY) {
+function payoutUsdPerHour(re: number, economy: ShopEconomy = DEFAULT_ECONOMY) {
   const steps = economy.payoutSteps || DEFAULT_ECONOMY.payoutSteps;
   const r = Math.max(Number(re) || 0, 0);
   let usd = steps[0].usd;
@@ -47,12 +67,12 @@ function payoutUsdPerHour(re: UntypedInput, economy = DEFAULT_ECONOMY) {
   return usd;
 }
 
-function pxPerHour(re: UntypedInput, economy = DEFAULT_ECONOMY) {
+function pxPerHour(re: number, economy: ShopEconomy = DEFAULT_ECONOMY) {
   return payoutUsdPerHour(re, economy) / (economy.pixelValueUsd || DEFAULT_ECONOMY.pixelValueUsd);
 }
 
 
-function hoursRange(px: UntypedInput, economy = DEFAULT_ECONOMY) {
+function hoursRange(px: number, economy: ShopEconomy = DEFAULT_ECONOMY) {
   const floorUsd = economy.basePayoutUsd ?? DEFAULT_ECONOMY.basePayoutUsd;
   const capUsd = economy.maxPayoutUsd ?? DEFAULT_ECONOMY.maxPayoutUsd;
   const value = economy.pixelValueUsd || DEFAULT_ECONOMY.pixelValueUsd;
@@ -65,7 +85,7 @@ function hoursRange(px: UntypedInput, economy = DEFAULT_ECONOMY) {
 }
 
 
-function hoursForPixels(px: UntypedInput, { tier = 4, startingRe = 0, economy = DEFAULT_ECONOMY }: Record<string, UntypedInput> = {}) {
+function hoursForPixels(px: number, { tier = 4, startingRe = 0, economy = DEFAULT_ECONOMY }: { tier?: number; startingRe?: number; economy?: ShopEconomy } = {}) {
   // Walk payout steps segment by segment because each shipped hour can raise the rate.
   const target = Math.max(Number(px) || 0, 0);
   if (target === 0) return 0;
@@ -79,7 +99,7 @@ function hoursForPixels(px: UntypedInput, { tier = 4, startingRe = 0, economy = 
 
   for (let guard = 0; guard <= steps.length; guard += 1) {
     const rate = pxPerHour(re, economy);
-    const next = steps.find((s: UntypedInput) => s.re > re);
+    const next = steps.find((s) => s.re > re);
     if (!next) return hours + remaining / rate;
 
     const hoursToNext = (next.re - re) / perHour;
@@ -94,7 +114,7 @@ function hoursForPixels(px: UntypedInput, { tier = 4, startingRe = 0, economy = 
 }
 
 
-function parseTier(text: UntypedInput) {
+function parseTier(text: string) {
   const t = String(text || "").toLowerCase();
   const numbered = t.match(/\b(?:t|tier)\s*-?\s*([1-4])\b/);
   if (numbered) return Number(numbered[1]);
@@ -106,7 +126,7 @@ function parseTier(text: UntypedInput) {
 
 const PIXEL_AMOUNT = /\b(\d[\d,]*)\s*(?:px|pixels?|pixls?|pixl)\b/i;
 
-function parsePixelAmount(text: UntypedInput) {
+function parsePixelAmount(text: string) {
   const m = PIXEL_AMOUNT.exec(String(text || ""));
   if (!m) return null;
   const n = Number(m[1].replace(/,/g, ""));
@@ -115,7 +135,7 @@ function parsePixelAmount(text: UntypedInput) {
 
 const ASKS_EVERY_TIER = /\b(?:each|every|all|per)\s+tiers?\b|\btiers?\s+by\s+tiers?\b|\ball\s+(?:four|4)\b/i;
 
-function normalize(text: UntypedInput) {
+function normalize(text: string) {
   return String(text || "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
@@ -135,7 +155,7 @@ const WEAK_TOKENS = new Set([
   "pixl", "pixel", "pixels",
 ]);
 
-const ALIASES = [
+const ALIASES: Array<[RegExp, string]> = [
   [/\bplay\s*station\s*(\d)\b/g, "ps$1"],
   [/\braspberry\s*pi\b/g, "raspberry pi"],
   [/\brpi\b/g, "raspberry pi"],
@@ -143,24 +163,24 @@ const ALIASES = [
   [/\bair\s*pods\b/g, "airpods"],
 ];
 
-function applyAliases(normalized: UntypedInput) {
+function applyAliases(normalized: string) {
   return ALIASES.reduce((acc, [pattern, replacement]) => acc.replace(pattern, replacement), normalized);
 }
 
-function priceOf(item: UntypedInput) {
+function priceOf(item: ShopItem) {
   const base = item?.config_options?.base_price;
   return Number(base != null ? base : item?.price) || 0;
 }
 
-function isTrophy(item: UntypedInput) {
+function isTrophy(item: ShopItem) {
   return Number(item?.unlock_xp || 0) > 0;
 }
 
-function isUnpriced(item: UntypedInput) {
+function isUnpriced(item: ShopItem) {
   return priceOf(item) <= 0;
 }
 
-function itemPhrases(item: UntypedInput, frequencies: UntypedInput) {
+function itemPhrases(item: ShopItem, frequencies: Map<string, number>) {
   const tokens = normalize(item.name).split(" ").filter(Boolean);
   if (tokens.length === 0) return [];
 
@@ -179,7 +199,7 @@ function itemPhrases(item: UntypedInput, frequencies: UntypedInput) {
   return phrases;
 }
 
-function tokenFrequencies(items: UntypedInput) {
+function tokenFrequencies(items: ShopItem[]) {
   const counts = new Map();
   for (const item of items) {
     for (const token of new Set(normalize(item.name).split(" ").filter(Boolean))) {
@@ -189,7 +209,7 @@ function tokenFrequencies(items: UntypedInput) {
   return counts;
 }
 
-function findItems(text: UntypedInput, items: UntypedInput) {
+function findItems(text: string, items: ShopItem[]) {
   // Return ties rather than guessing; ambiguity is the case worth asking about.
   const haystack = ` ${applyAliases(normalize(text))} `;
   if (haystack.trim() === "" || !Array.isArray(items) || items.length === 0) return [];
@@ -206,14 +226,14 @@ function findItems(text: UntypedInput, items: UntypedInput) {
   }
   if (scored.length === 0) return [];
 
-  const top = Math.max(...scored.map((s: UntypedInput) => s.score));
-  return scored.filter((s: UntypedInput) => s.score === top).map((s: UntypedInput) => s.item);
+  const top = Math.max(...scored.map((s) => s.score));
+  return scored.filter((s) => s.score === top).map((s) => s.item);
 }
 
 const TIER_REPLY_FILLER =
   /\b(?:at|on|in|im|i|m|its|it|is|are|the|a|an|for|to|do|doing|ship|shipping|shipped|my|our|project|projects|would|be|say|maybe|probably|guess|think|reckon|prob|all|mostly|usually|mine|yeah|yea|ok|okay)\b/g;
 
-function isBareTierReply(text: UntypedInput) {
+function isBareTierReply(text: string) {
   // A bare tier can continue a shop follow-up, but filler is not an item name.
   const stripped = normalize(text)
     .replace(/\b(?:t|tier)\s*-?\s*[1-4]\b/g, " ")
@@ -222,10 +242,10 @@ function isBareTierReply(text: UntypedInput) {
   return stripped.split(/\s+/).filter(Boolean).length === 0;
 }
 
-function lastMentionedItems(history: UntypedInput, items: UntypedInput) {
+function lastMentionedItems(history: string, items: ShopItem[]) {
   // Walk backward because the latest priced item is the only safe thread referent.
   const lines = String(history || "").split("\n");
-  if (!lines.some((l: UntypedInput) => asksAboutPrice(l) || /\bpx\b/i.test(l))) return [];
+  if (!lines.some((l) => asksAboutPrice(l) || /\bpx\b/i.test(l))) return [];
 
   for (let i = lines.length - 1; i >= 0; i -= 1) {
     const found = findItems(lines[i], items);
@@ -242,7 +262,7 @@ const CURRENCY_WORD = /\b(?:px|pixel|pixels|hour|hours|hr|hrs)\b/i;
 const NON_PRICE_ATTRIBUTES = /\b(?:storage|space|capacity|gigabytes?|terabytes?|gb|tb|fps|hz|resolution|ram|memory|weight|color|controller drift|battery|specs|features|play|played|gameplay)\b/i;
 const EXPLICIT_PRICE_QUERY = /\b(?:how much (?:is|does|to (?:buy|get|earn|redeem|order)|for|in (?:the )?shop)|how many (?:pixels?|px|hours? (?:to (?:buy|get|earn|redeem|reach|unlock)|for|do i need|needed|require|required))|what(?:'s|s|\s+(?:is|are)) (?:the )?(?:price|prices|pricing|cost|costs)(?: of)?|(?:price|prices|cost|costs) of|what does .+ cost|in the shop|on the shelf|can i afford|how do i buy)\b/i;
 
-function asksAboutPrice(text: UntypedInput) {
+function asksAboutPrice(text: string) {
   const t = String(text || "");
   if (NON_PRICE_ATTRIBUTES.test(t) && !/\b(?:price|cost|in (?:the )?shop|pixels?|px)\b/i.test(t)) {
     return false;
@@ -250,29 +270,29 @@ function asksAboutPrice(text: UntypedInput) {
   return EXPLICIT_PRICE_QUERY.test(t) || (ASKS_PRICE.test(t) && (CURRENCY_WORD.test(t) || SHOP_WORD.test(t)));
 }
 
-function isShopQuestion(text: UntypedInput) {
+function isShopQuestion(text: string) {
   return SHOP_WORD.test(String(text || "")) || asksAboutPrice(text);
 }
 
 
-function fmtPx(n: UntypedInput) {
+function fmtPx(n: number) {
   return Math.round(n).toLocaleString("en-US");
 }
 
-function fmtHours(h: UntypedInput) {
+function fmtHours(h: number) {
   const r = Math.round(h * 10) / 10;
   return Number.isInteger(r) ? String(r) : r.toFixed(1);
 }
 
-function fmtUsd(usd: UntypedInput) {
+function fmtUsd(usd: number) {
   return `$${Number.isInteger(usd) ? usd : usd.toFixed(2)}`;
 }
 
 const REGION_NOTE = "These are the US catalogue prices; the shop page shows your own region's if you're somewhere else.";
 
-function priceLine(item: UntypedInput) {
+function priceLine(item: ShopItem) {
   if (isTrophy(item)) {
-    return `${item.name} is a trophy, not something you buy. Trophies unlock at a level and you claim them free once you get there. This one is at ${fmtPx(item.unlock_xp)} XP.`;
+    return `${item.name} is a trophy, not something you buy. Trophies unlock at a level and you claim them free once you get there. This one is at ${fmtPx(item.unlock_xp ?? 0)} XP.`;
   }
   if (isUnpriced(item)) {
     return `${item.name} is in the catalogue but has no price on it, which is the "not available" state: it isn't stocked for your region yet. Nothing to work hours out for until it is.`;
@@ -283,7 +303,7 @@ function priceLine(item: UntypedInput) {
     : `${item.name} is ${px} px.`;
 }
 
-function rangeLine(px: UntypedInput, economy: UntypedInput) {
+function rangeLine(px: number, economy: ShopEconomy) {
   const r = hoursRange(px, economy);
   return (
     `Every price is set at the payout floor, so that's ${fmtHours(r.floorHours)}h at the ${fmtUsd(r.floorUsd)}/h base rate, ` +
@@ -291,7 +311,7 @@ function rangeLine(px: UntypedInput, economy: UntypedInput) {
   );
 }
 
-function tierLine(px: UntypedInput, tier: UntypedInput, economy: UntypedInput) {
+function tierLine(px: number, tier: number, economy: ShopEconomy) {
   const hours = hoursForPixels(px, { tier, economy });
   return (
     `At T${tier} ${TIER_NAMES[tier - 1]} (${rePerHour(tier, economy)} RE/h) starting from no banked RE, ` +
@@ -300,7 +320,7 @@ function tierLine(px: UntypedInput, tier: UntypedInput, economy: UntypedInput) {
 }
 
 
-function amountAnswer(px: UntypedInput, tier: UntypedInput, economy: UntypedInput, everyTier: UntypedInput) {
+function amountAnswer(px: number, tier: number | null, economy: ShopEconomy, everyTier: boolean) {
   const r = hoursRange(px, economy);
   const opening =
     `${fmtPx(px)} px is ${fmtHours(r.floorHours)}h at the floor rate of ${fmtPx(pxPerHour(0, economy))} px an hour.`;
@@ -321,15 +341,15 @@ function amountAnswer(px: UntypedInput, tier: UntypedInput, economy: UntypedInpu
     name,
     hours: hoursForPixels(px, { tier: i + 1, economy }),
   }));
-  const allSame = perTier.every((t: UntypedInput) => Math.abs(t.hours - perTier[0].hours) < 0.05);
+  const allSame = perTier.every((t) => Math.abs(t.hours - perTier[0].hours) < 0.05);
   const steps = economy.payoutSteps || DEFAULT_ECONOMY.payoutSteps;
-  const firstStep = steps.find((st: UntypedInput) => st.re > 0);
+  const firstStep = steps.find((st) => st.re > 0);
 
   if (allSame) {
     const banked = perTier[perTier.length - 1].hours * rePerHour(4, economy);
     return [
       opening,
-      `The tier makes no difference at that size, it's the same on all four. Tier decides how fast you bank Restoration Energy, not what an hour pays, and your rate only steps up once lifetime RE passes ${fmtPx(firstStep.re)} RE. ${fmtHours(perTier[0].hours)}h banks at most ${fmtPx(banked)} RE even at T4 ${TIER_NAMES[3]}.`,
+      `The tier makes no difference at that size, it's the same on all four. Tier decides how fast you bank Restoration Energy, not what an hour pays, and your rate only steps up once lifetime RE passes ${fmtPx(firstStep?.re ?? 0)} RE. ${fmtHours(perTier[0].hours)}h banks at most ${fmtPx(banked)} RE even at T4 ${TIER_NAMES[3]}.`,
       ceiling,
     ].join("\n\n");
   }
@@ -337,14 +357,14 @@ function amountAnswer(px: UntypedInput, tier: UntypedInput, economy: UntypedInpu
   return [
     opening,
     `That's enough hours to start banking Restoration Energy and lift your own rate, so the tier does change it here, from a standing start: ${perTier
-      .map((t: UntypedInput) => `T${t.tier} ${fmtHours(t.hours)}h`)
+      .map((t) => `T${t.tier} ${fmtHours(t.hours)}h`)
       .join(", ")}. Tier sets how fast RE banks, not what an hour pays.`,
     ceiling,
   ].join("\n\n");
 }
 
 
-function directAnswer(question: UntypedInput, data: UntypedInput, { history = "" }: Record<string, UntypedInput> = {}) {
+function directAnswer(question: string, data: ShopData, { history = "" }: AnswerContext = {}) {
   // Matching decides whether this is a shop ask; formatting below only writes the answer.
   const items = data?.items || [];
   const economy = data?.economy || DEFAULT_ECONOMY;
@@ -387,7 +407,7 @@ function directAnswer(question: UntypedInput, data: UntypedInput, { history = ""
     const SHOWN = 4;
     const named = matches
       .slice(0, SHOWN)
-      .map((i: UntypedInput) => (isUnpriced(i) ? `${i.name} (not priced yet)` : `${i.name} at ${fmtPx(priceOf(i))} px`))
+      .map((i) => (isUnpriced(i) ? `${i.name} (not priced yet)` : `${i.name} at ${fmtPx(priceOf(i))} px`))
       .join(", ");
     const rest = matches.length - SHOWN;
     const tail = rest > 0 ? `, and ${rest} more` : "";
@@ -416,7 +436,7 @@ function directAnswer(question: UntypedInput, data: UntypedInput, { history = ""
 }
 
 
-function answerForSingleItem(item: UntypedInput, tier: UntypedInput, economy: UntypedInput) {
+function answerForSingleItem(item: ShopItem, tier: number | null, economy: ShopEconomy) {
   const lines = [priceLine(item)];
   if (!isTrophy(item) && !isUnpriced(item)) {
     const px = priceOf(item);
@@ -436,7 +456,7 @@ function answerForSingleItem(item: UntypedInput, tier: UntypedInput, economy: Un
 }
 
 
-function corpusText(data: UntypedInput) {
+function corpusText(data: ShopData) {
   const items = data?.items || [];
   const economy = data?.economy || DEFAULT_ECONOMY;
   if (items.length === 0) return "";
@@ -446,22 +466,22 @@ function corpusText(data: UntypedInput) {
     "Live prices from the Pixl shop, in pixels (px), as the US catalogue lists them. Other regions get different stock and different prices. These are current; the docs do not list prices.",
     "",
     "Rate table, by lifetime Restoration Energy, showing what an hour of shipped work pays:",
-    ...steps.map((s: UntypedInput) => `- ${fmtPx(s.re)} RE: ${fmtUsd(s.usd)} an hour = ${fmtPx(s.usd / (economy.pixelValueUsd || 0.07))} px an hour`),
+    ...steps.map((s) => `- ${fmtPx(s.re)} RE: ${fmtUsd(s.usd)} an hour = ${fmtPx(s.usd / (economy.pixelValueUsd || 0.07))} px an hour`),
     "",
     `Tier decides how fast RE banks: ${(economy.tierRePerHour || DEFAULT_ECONOMY.tierRePerHour)
       .map((re: number, i: number) => `T${i + 1} ${TIER_NAMES[i]} ${re} RE/hour`)
       .join(", ")}.`,
     "",
     "RE an hour is not pixels an hour, and the two must never be mixed up. To get hours from a pixel amount, divide by the PIXELS per hour in the rate table above, never by a tier's RE per hour. A tier only changes the hours once enough RE has banked to cross a rate step, so for small amounts every tier gives the same answer.",
-    `Worked example: 275 px at the floor rate is 275 / ${fmtPx(pxPerHour(0, economy))} = ${fmtHours(275 / pxPerHour(0, economy))} hours, and that is the answer on all four tiers, because ${fmtHours(275 / pxPerHour(0, economy))} hours banks well under the first ${fmtPx((economy.payoutSteps || DEFAULT_ECONOMY.payoutSteps).find((st: UntypedInput) => st.re > 0).re)} RE step.`,
+    `Worked example: 275 px at the floor rate is 275 / ${fmtPx(pxPerHour(0, economy))} = ${fmtHours(275 / pxPerHour(0, economy))} hours, and that is the answer on all four tiers, because ${fmtHours(275 / pxPerHour(0, economy))} hours banks well under the first ${fmtPx((economy.payoutSteps || DEFAULT_ECONOMY.payoutSteps).find((st) => st.re > 0)?.re ?? 0)} RE step.`,
     "",
     "Every price is set at the payout floor, so each item costs the most hours at the floor rate and the fewest at the cap.",
     "",
     "Catalogue:",
   ];
 
-  const describe = (item: UntypedInput) => {
-    if (isTrophy(item)) return `- ${item.name}: a trophy, claimed free at ${fmtPx(item.unlock_xp)} XP`;
+  const describe = (item: ShopItem) => {
+    if (isTrophy(item)) return `- ${item.name}: a trophy, claimed free at ${fmtPx(item.unlock_xp ?? 0)} XP`;
     if (isUnpriced(item)) return `- ${item.name}: not priced for this region yet, not buyable`;
     const px = priceOf(item);
     const r = hoursRange(px, economy);
@@ -470,11 +490,12 @@ function corpusText(data: UntypedInput) {
   };
 
   const ITEMS_PER_PARAGRAPH = 4;
-  const byCategory = new Map();
+  const byCategory = new Map<string, ShopItem[]>();
   for (const item of [...items].sort((a, b) => priceOf(a) - priceOf(b))) {
     const key = item.category || "other";
-    if (!byCategory.has(key)) byCategory.set(key, []);
-    byCategory.get(key).push(item);
+    const group = byCategory.get(key);
+    if (group) group.push(item);
+    else byCategory.set(key, [item]);
   }
 
   const sections = [];
@@ -511,8 +532,8 @@ function restoreFromDisk() {
     snapshot = { items: parsed.items, economy: parsed.economy || DEFAULT_ECONOMY, fetchedAt: stored.fetchedAt };
     log.info("shop", `restored ${parsed.items.length} items from disk`);
     return true;
-  } catch (e: UntypedInput) {
-    log.debug("shop", `no stored catalogue: ${e.message}`);
+  } catch (e: unknown) {
+    log.debug("shop", `no stored catalogue: ${e instanceof Error ? e.message : String(e)}`);
     return false;
   }
 }
@@ -526,8 +547,8 @@ async function refresh() {
     if (data?.economy && typeof data.economy.basePayoutUsd === "number") {
       economy = { ...DEFAULT_ECONOMY, ...data.economy };
     }
-  } catch (e: UntypedInput) {
-    log.warn("shop", `economy config fetch failed, keeping current rates: ${e.message}`);
+  } catch (e: unknown) {
+    log.warn("shop", `economy config fetch failed, keeping current rates: ${e instanceof Error ? e.message : String(e)}`);
   }
 
   const res = await require("./sourceGuard").fetchSourceUrl(CATALOGUE_URL, { timeout: 10000 });
@@ -537,8 +558,8 @@ async function refresh() {
   snapshot = { items, economy, fetchedAt: Date.now() };
   try {
     require("./db").saveSourceText(STORE_KEY, JSON.stringify({ items, economy }));
-  } catch (e: UntypedInput) {
-    log.warn("shop", `could not persist catalogue: ${e.message}`);
+  } catch (e: unknown) {
+    log.warn("shop", `could not persist catalogue: ${e instanceof Error ? e.message : String(e)}`);
   }
   return snapshot;
 }
@@ -546,9 +567,9 @@ async function refresh() {
 async function refreshText() {
   try {
     return corpusText(await refresh());
-  } catch (e: UntypedInput) {
+  } catch (e: unknown) {
     if (snapshot.items.length === 0 && !restoreFromDisk()) throw e;
-    log.warn("shop", `catalogue fetch failed: ${e.message} — serving last good copy`);
+    log.warn("shop", `catalogue fetch failed: ${e instanceof Error ? e.message : String(e)} — serving last good copy`);
     return corpusText(snapshot);
   }
 }

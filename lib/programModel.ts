@@ -1,6 +1,28 @@
 // Behavior settings bridge persisted hosted values and legacy flags. Stored values
 // win per field, while absent fields retain the old deployment behavior.
-type UntypedInput = any;
+type ConfigValue = boolean | number | string | null | undefined;
+type Settings = Record<string, boolean>;
+interface BehaviorObject { main?: Record<string, unknown>; help?: Record<string, unknown>; [key: string]: unknown }
+interface ProgramModelInput {
+  posture?: string;
+  supportActive?: boolean;
+  aiAnswers?: boolean;
+  ticketsEnabled?: boolean;
+  autoEscalate?: boolean;
+  helperPing?: boolean;
+  behavior?: unknown;
+  status?: string | null;
+  [key: string]: unknown;
+}
+interface ChannelProgram {
+  id: string;
+  workspaceId?: string | null;
+  helpChannel?: string | null;
+  organizerChannel?: string | null;
+  channels?: string[];
+}
+interface ChannelClaim { workspace_id: string | null; channel_id: string; program_id: string; kind: string }
+interface ChannelOwner { programId: string; role: string; origin: string }
 const STATUSES = ["sandbox", "live", "paused"];
 
 const MAIN_DEFAULTS = Object.freeze({
@@ -27,7 +49,7 @@ const HELP_DEFAULTS = Object.freeze({
 const MAIN_KEYS = Object.keys(MAIN_DEFAULTS);
 const HELP_KEYS = Object.keys(HELP_DEFAULTS);
 
-function bool(value: UntypedInput, fallback: UntypedInput) {
+function bool(value: ConfigValue, fallback: boolean | undefined): boolean | undefined {
   // Configuration arrives from JSON, SQLite, and env, so accept their boolean forms.
   if (value === true || value === 1 || value === "1" || value === "true") return true;
   if (value === false || value === 0 || value === "0" || value === "false") return false;
@@ -35,7 +57,7 @@ function bool(value: UntypedInput, fallback: UntypedInput) {
 }
 
 
-function legacyMain(p: UntypedInput) {
+function legacyMain(p: ProgramModelInput): Settings {
   const posture = p.posture || "active";
   return {
     enabled: posture !== "muted" && p.supportActive !== false,
@@ -44,7 +66,7 @@ function legacyMain(p: UntypedInput) {
   };
 }
 
-function legacyHelp(p: UntypedInput) {
+function legacyHelp(p: ProgramModelInput): Settings {
   const posture = p.posture || "active";
   return {
     enabled: posture !== "muted" && p.supportActive !== false,
@@ -56,37 +78,38 @@ function legacyHelp(p: UntypedInput) {
   };
 }
 
-function pick(obj: UntypedInput, keys: string[]): Record<string, UntypedInput> {
-  const out: Record<string, UntypedInput> = {};
+function pick(obj: unknown, keys: string[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
   if (!obj || typeof obj !== "object") return out;
-  for (const k of keys) if (Object.hasOwn(obj, k)) out[k] = obj[k];
+  const record = obj as Record<string, unknown>;
+  for (const k of keys) if (Object.hasOwn(record, k)) out[k] = record[k];
   return out;
 }
 
-function resolveSection(defaults: Record<string, UntypedInput>, legacy: Record<string, UntypedInput>, stored: Record<string, UntypedInput> | null, keys: string[]): Record<string, UntypedInput> {
-  const out: Record<string, UntypedInput> = {};
+function resolveSection(defaults: Settings, legacy: Settings, stored: Record<string, unknown> | null, keys: string[]): Settings {
+  const out: Settings = {};
   for (const k of keys) {
-    const fromStored = stored && Object.hasOwn(stored, k) ? bool(stored[k], undefined) : undefined;
+    const fromStored = stored && Object.hasOwn(stored, k) ? bool(stored[k] as ConfigValue, undefined) : undefined;
     const fromLegacy = legacy && Object.hasOwn(legacy, k) ? legacy[k] : undefined;
     out[k] = fromStored !== undefined ? fromStored : fromLegacy !== undefined ? fromLegacy : defaults[k];
   }
   return Object.freeze(out);
 }
 
-function parseStoredBehavior(raw: UntypedInput) {
+function parseStoredBehavior(raw: unknown): BehaviorObject | null {
   // Malformed persisted settings are ignored so one bad row does not disable routing.
   if (!raw) return null;
-  if (typeof raw === "object") return raw;
+  if (typeof raw === "object") return raw as BehaviorObject;
   try {
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch (_: UntypedInput) {
+    const parsed: unknown = JSON.parse(raw as string);
+    return parsed && typeof parsed === "object" ? parsed as BehaviorObject : null;
+  } catch {
     return null;
   }
 }
 
 
-function behaviorFor(p: Record<string, UntypedInput> = {}) {
+function behaviorFor(p: ProgramModelInput = {}): { main: Settings; help: Settings } {
   const stored = parseStoredBehavior(p.behavior);
   return Object.freeze({
     main: resolveSection(MAIN_DEFAULTS, legacyMain(p), pick(stored?.main, MAIN_KEYS), MAIN_KEYS),
@@ -94,22 +117,23 @@ function behaviorFor(p: Record<string, UntypedInput> = {}) {
   });
 }
 
-function statusFor(p: Record<string, UntypedInput> = {}) {
-  if (STATUSES.includes(p.status)) return p.status;
+function statusFor(p: ProgramModelInput = {}): string {
+  if (typeof p.status === "string" && STATUSES.includes(p.status)) return p.status;
   if (p.posture === "muted") return "paused";
   return "live";
 }
 
 
-function sanitizeBehaviorPatch(patch: UntypedInput) {
+function sanitizeBehaviorPatch(patch: unknown): BehaviorObject {
   const src = parseStoredBehavior(patch) || {};
-  const out: Record<string, UntypedInput> = {};
+  const out: BehaviorObject = {};
   const sections: Array<[string, string[]]> = [["main", MAIN_KEYS], ["help", HELP_KEYS]];
   for (const [section, keys] of sections) {
     if (!src[section] || typeof src[section] !== "object") continue;
-    const clean: Record<string, UntypedInput> = {};
+    const clean: Record<string, boolean> = {};
+    const sectionValues = src[section] as Record<string, unknown>;
     for (const k of keys) {
-      const v = bool(src[section][k], undefined);
+      const v = bool(sectionValues[k] as ConfigValue, undefined);
       if (v !== undefined) clean[k] = v;
     }
     if (Object.keys(clean).length) out[section] = clean;
@@ -117,23 +141,27 @@ function sanitizeBehaviorPatch(patch: UntypedInput) {
   return out;
 }
 
-function mergeBehavior(existing: UntypedInput, patch: UntypedInput) {
+function mergeBehavior(existing: unknown, patch: unknown): BehaviorObject {
   const base = parseStoredBehavior(existing) || {};
   const clean = sanitizeBehaviorPatch(patch);
+  const baseMain = base.main || {};
+  const baseHelp = base.help || {};
+  const cleanMain = clean.main || {};
+  const cleanHelp = clean.help || {};
   return {
-    main: { ...(base.main || {}), ...(clean.main || {}) },
-    help: { ...(base.help || {}), ...(clean.help || {}) },
+    main: { ...baseMain, ...cleanMain },
+    help: { ...baseHelp, ...cleanHelp },
   };
 }
 
 
-function validateChannelRoles({ programs = [], legacyHelp = null, legacyMain = [], claims = [] }: Record<string, UntypedInput> = {}) {
+function validateChannelRoles({ programs = [], legacyHelp = null, legacyMain = [], claims = [] }: { programs?: ChannelProgram[]; legacyHelp?: string | null; legacyMain?: string[]; claims?: ChannelClaim[] } = {}) {
   // Compare configured and hosted ownership in the same workspace/channel namespace.
   const errors = [];
-  const owners = new Map();
-  const key = (ws: UntypedInput, ch: UntypedInput) => `${ws || "*"}::${ch}`;
+  const owners = new Map<string, ChannelOwner>();
+  const key = (ws: string | null, ch: string) => `${ws || "*"}::${ch}`;
 
-  function assign(ws: UntypedInput, channelId: UntypedInput, programId: UntypedInput, role: UntypedInput, origin: UntypedInput) {
+  function assign(ws: string | null, channelId: string | null, programId: string, role: string, origin: string) {
     if (!channelId) return;
     const k = key(ws, channelId);
     const star = key(null, channelId);
@@ -161,7 +189,7 @@ function validateChannelRoles({ programs = [], legacyHelp = null, legacyMain = [
     }
   }
 
-  const roleOf = (ch: UntypedInput) => {
+  const roleOf = (ch: string) => {
     for (const [k, v] of owners) if (k.endsWith(`::${ch}`)) return v;
     return null;
   };

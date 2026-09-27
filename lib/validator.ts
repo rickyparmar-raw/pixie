@@ -3,7 +3,24 @@
 import axios = require("axios");
 import log = require("./log");
 
-type UntypedInput = any;
+interface ReadmeAnalysis {
+  hasReadme: boolean;
+  wordCount: number;
+  hasInstructions: boolean;
+  hasDemo: boolean;
+  hasScreenshots: boolean;
+}
+
+interface ValidationResult {
+  ok: boolean;
+  error?: string;
+  url?: string;
+  fullName?: string;
+  isReady?: boolean;
+  passes?: string[];
+  issues?: string[];
+  tips?: string[];
+}
 const GITHUB_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)(?:\/|\.git|\/tree\/[a-zA-Z0-9_.-]+)?/i;
 
 const OPEN_SOURCE_LICENSES = [
@@ -18,7 +35,7 @@ const OPEN_SOURCE_LICENSES = [
   { id: "unlicense", name: "The Unlicense", regex: /\bThis is free and unencumbered software released into the public domain/i },
 ];
 
-function parseGithubUrl(text: UntypedInput) {
+function parseGithubUrl(text: string | null | undefined) {
   if (!text) return null;
   const match = String(text).match(GITHUB_URL_REGEX);
   if (!match) return null;
@@ -28,7 +45,7 @@ function parseGithubUrl(text: UntypedInput) {
   return { owner, repo, fullName: `${owner}/${repo}`, url: `https://github.com/${owner}/${repo}` };
 }
 
-async function fetchRawFile(owner: UntypedInput, repo: UntypedInput, filename: UntypedInput) {
+async function fetchRawFile(owner: string, repo: string, filename: string) {
   // Repositories commonly use either branch name; the first successful file wins.
   const branches = ["main", "master"];
   for (const branch of branches) {
@@ -38,13 +55,13 @@ async function fetchRawFile(owner: UntypedInput, repo: UntypedInput, filename: U
       if (res.status === 200 && typeof res.data === "string") {
         return res.data;
       }
-    } catch (e: UntypedInput) {
+    } catch {
     }
   }
   return null;
 }
 
-function detectLicense(content: UntypedInput) {
+function detectLicense(content: string | null) {
   if (!content || !content.trim()) return null;
   for (const lic of OPEN_SOURCE_LICENSES) {
     if (lic.regex.test(content)) return lic.name;
@@ -52,7 +69,7 @@ function detectLicense(content: UntypedInput) {
   return "Custom / Unknown Open Source License";
 }
 
-function analyzeReadme(readmeText: UntypedInput) {
+function analyzeReadme(readmeText: string | null): ReadmeAnalysis {
   if (!readmeText || !readmeText.trim()) {
     return {
       hasReadme: false,
@@ -77,9 +94,9 @@ function analyzeReadme(readmeText: UntypedInput) {
   };
 }
 
-async function validateRepository(ownerOrUrl: UntypedInput, repoName = null) {
+async function validateRepository(ownerOrUrl: string, repoName: string | null = null) {
   let owner = ownerOrUrl;
-  let repo: string | null = repoName;
+  let repo = repoName || "";
 
   if (!repoName) {
     const parsed = parseGithubUrl(ownerOrUrl);
@@ -127,7 +144,7 @@ async function validateRepository(ownerOrUrl: UntypedInput, repoName = null) {
 }
 
 
-async function fetchFirstHit(owner: UntypedInput, repo: UntypedInput, filenames: UntypedInput) {
+async function fetchFirstHit(owner: string, repo: string, filenames: string[]) {
   for (const fn of filenames) {
     const text = await fetchRawFile(owner, repo, fn);
     if (text) return { text, file: fn };
@@ -136,7 +153,7 @@ async function fetchFirstHit(owner: UntypedInput, repo: UntypedInput, filenames:
 }
 
 
-function assessReadiness({ licenseName, matchedLicenseFile, readmeAnalysis }: Record<string, UntypedInput>) {
+function assessReadiness({ licenseName, matchedLicenseFile, readmeAnalysis }: { licenseName: string | null; matchedLicenseFile: string | null; readmeAnalysis: ReadmeAnalysis }) {
 
   const issues = [];
   const passes = [];
@@ -173,7 +190,7 @@ function assessReadiness({ licenseName, matchedLicenseFile, readmeAnalysis }: Re
   return { isReady: issues.length === 0, passes, issues, tips };
 }
 
-function formatValidationReport(result: UntypedInput) {
+function formatValidationReport(result: ValidationResult | null) {
   if (!result || !result.ok) {
     return result?.error || "Could not inspect GitHub repository.";
   }
@@ -187,19 +204,19 @@ function formatValidationReport(result: UntypedInput) {
     "",
   ];
 
-  if (result.passes.length > 0) {
+  if (result.passes && result.passes.length > 0) {
     lines.push("*What looks good:*");
     for (const p of result.passes) lines.push(`• ✅ ${p}`);
     lines.push("");
   }
 
-  if (result.issues.length > 0) {
+  if (result.issues && result.issues.length > 0) {
     lines.push("*Action items to fix:*");
     for (const item of result.issues) lines.push(`• 🔴 ${item}`);
     lines.push("");
   }
 
-  if (result.tips.length > 0) {
+  if (result.tips && result.tips.length > 0) {
     lines.push("*Reviewer approval tips:*");
     for (const tip of result.tips) lines.push(`• 💡 ${tip}`);
     lines.push("");
