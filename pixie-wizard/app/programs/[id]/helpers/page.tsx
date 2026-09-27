@@ -62,7 +62,7 @@ export default async function HelpersPage({ params }: { params: Promise<{ id: st
         : "The helper roster is unavailable."
       : null;
   const statsError = null;
-  const helpers = helpersR.status === "fulfilled" ? helpersR.value.helpers.filter((h) => h.active) : [];
+  const helpers = helpersR.status === "fulfilled" ? helpersR.value.helpers : [];
   const categories = helpersR.status === "fulfilled"
     ? Array.isArray(helpersR.value.categories)
       ? helpersR.value.categories.filter((value): value is string => typeof value === "string")

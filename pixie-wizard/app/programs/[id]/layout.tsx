@@ -2,6 +2,9 @@ import { redirect } from "next/navigation";
 import { loadProgramContext, isSuperadminSession } from "@/lib/programAccess";
 import { DashboardShell } from "@/app/_components/DashboardShell";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 // Only checks that a session exists and the program is real — NOT
 // membership. Every management route under here (tickets, audit, settings,
 // ...) independently calls requireProgramMembership() itself; this layout's

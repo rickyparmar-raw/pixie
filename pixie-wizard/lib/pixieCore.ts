@@ -28,6 +28,7 @@ async function call(path: string, init: RequestInit = {}): Promise<{ status: num
   let res: Response;
   try {
     res = await timeoutFetch(`${coreBaseUrl()}${path}`, {
+      cache: "no-store",
       ...init,
       headers: { Authorization: `Bearer ${coreToken()}`, "Content-Type": "application/json", ...(init.headers || {}) },
     });
@@ -352,8 +353,25 @@ export interface CoreHelperStats {
   }>;
 }
 
-export async function coreHelperStats(programId: string): Promise<CoreHelperStats> {
-  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers/stats`, "helper stats failed");
+export async function coreHelperStats(programId: string, since?: number): Promise<CoreHelperStats> {
+  const query = since === undefined ? "" : `?since=${since}`;
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/helpers/stats${query}`, "helper stats failed");
+}
+
+export interface CoreLeaderboardEntry {
+  userId: string;
+  role: string;
+  active: boolean;
+  resolved: number;
+  replies: number;
+  open: number;
+  reopened: number;
+  reopenRate: number | null;
+  points: number;
+}
+
+export async function coreLeaderboard(programId: string, days = 30): Promise<{ programId: string; days: number; leaderboard: CoreLeaderboardEntry[] }> {
+  return request(`/internal/v1/programs/${encodeURIComponent(programId)}/leaderboard?days=${days}`, "leaderboard failed");
 }
 
 export async function coreRoutingExpertise(programId: string, payload: Record<string, unknown>): Promise<unknown> {
@@ -472,6 +490,7 @@ export interface DashboardTicketRow {
   category: string | null;
   priority: string | null;
   resolved_by: string | null;
+  resolved_credit_id: string | null;
   first_responder_id: string | null;
   notes_count: number;
   created_at: number;

@@ -24,6 +24,9 @@ import {
 } from "@/app/_components/icons";
 import type { HostedProgramRow } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 function percent(value: number, total: number): string {
   return total ? `${Math.round((value / total) * 100)}%` : "0%";
 }
