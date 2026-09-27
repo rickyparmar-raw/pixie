@@ -10,11 +10,31 @@ import log = require("./log");
 import brand = require("./brand");
 import configModule = require("./config");
 import stats = require("./stats");
+import type { KnownBlock } from "@slack/types";
+import type { SlackClient } from "./types";
 
 const { isAdmin } = configModule;
 const { relativeTime, coverageStats, statsText } = stats;
-interface Legacy {
-  [key: string]: any;
+interface LearnedRow {
+  id: number;
+  question: string;
+  answer: string;
+  author_id?: string | null;
+  created_at?: number | string | null;
+  ask_count?: number;
+}
+interface TopicRow { topic: string }
+interface GapRow { question: string; ask_count: number }
+interface SourceRow { name: string }
+interface HomeActionArgs {
+  ack: () => Promise<unknown>;
+  body: { user?: { id?: string } };
+  action?: { value?: string };
+  client: SlackClient;
+}
+interface HomeApp {
+  event(name: string, handler: unknown): void;
+  action(name: RegExp, handler: unknown): void;
 }
 
 const HOME_REVIEW_LIMIT = 8;
@@ -26,15 +46,15 @@ const DROP_ACTION = "learn_drop";
 const HEALTHY_COVERAGE = 50;
 
 // Keep review rows below Slack's block limit: each candidate uses multiple blocks.
-function divider(): Legacy {
+function divider(): KnownBlock {
   return { type: "divider" };
 }
 
-function section(text: string): Legacy {
+function section(text: string): KnownBlock {
   return { type: "section", text: { type: "mrkdwn", text } };
 }
 
-function coverageBlocks(): Legacy[] {
+function coverageBlocks(): KnownBlock[] {
   // Coverage is hidden until there is a question sample; an empty denominator should not look like zero percent.
   const { docs, asked, rate } = coverageStats();
   if (asked === 0) return [];
@@ -50,12 +70,12 @@ function coverageBlocks(): Legacy[] {
   ];
 }
 
-function learnedBlocks(): Legacy[] {
+function learnedBlocks(): KnownBlock[] {
   // Only repeated cache hits are useful on Home; one-off facts would crowd out actionable review data.
   const { known, cacheHits, instant } = coverageStats();
   if (known === 0) return [];
 
-  const top = cache.topCached(HOME_LEARNED_LIMIT).filter((row: Legacy) => row.ask_count > 1);
+  const top = cache.topCached(HOME_LEARNED_LIMIT).filter((row: LearnedRow) => (row.ask_count || 0) > 1);
   const lines = [`*answers known cold — ${known}*`, `${cacheHits} replies (${instant}%) needed no thinking at all.`];
 
   if (top.length > 0) {
@@ -66,15 +86,15 @@ function learnedBlocks(): Legacy[] {
   return [divider(), section(lines.join("\n"))];
 }
 
-function reviewBlocks(userId: string): Legacy[] {
+function reviewBlocks(userId: string): KnownBlock[] {
   if (!isAdmin(userId)) return [];
 
-  const rows = learn.pending(HOME_REVIEW_LIMIT);
+  const rows = learn.pending(HOME_REVIEW_LIMIT) as LearnedRow[];
   if (rows.length === 0) {
     return [divider(), section("*waiting for review*\n_nothing queued_ :yay:")];
   }
 
-  const blocks: Legacy[] = [divider(), section(`*waiting for review* — ${rows.length} candidate answer(s)`)];
+  const blocks: KnownBlock[] = [divider(), section(`*waiting for review* — ${rows.length} candidate answer(s)`)];
 
   for (const row of rows) {
     // Pending rows without an author come from aggregated gaps, not a Slack member.
@@ -123,31 +143,31 @@ function allProgramNames(): string[] {
   try {
     return programs
       .all()
-      .filter((p: Legacy) => p.id !== "ysws-global")
-      .map((p: Legacy) => p.name);
+      .filter((p: { id: string; name: string }) => p.id !== "ysws-global")
+      .map((p: { id: string; name: string }) => p.name);
   } catch (e) {
     log.warn("home", `failed to get all program names: ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
 }
 
-function safeSources(): Legacy[] {
+function safeSources(): SourceRow[] {
   try {
-    return knowledge.loadSources();
+    return knowledge.loadSources() as SourceRow[];
   } catch (e) {
     log.warn("home", `failed to load safe sources: ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
 }
 
-function homeBlocks(userId: string): Legacy[] {
+function homeBlocks(userId: string): KnownBlock[] {
   // Home is assembled from safe fallbacks so a broken source or program lookup cannot prevent publishing.
   const sources = safeSources();
 
   const gaps = db.topGaps(5);
   const topics = db.getTopics(userId).slice(0, 5);
 
-  const blocks: Legacy[] = [
+  const blocks: KnownBlock[] = [
     { type: "header", text: { type: "plain_text", text: brand.name(), emoji: true } },
     {
       type: "section",
@@ -169,7 +189,7 @@ function homeBlocks(userId: string): Legacy[] {
       text: {
         type: "mrkdwn",
         text: `*what i can walk you through*\n${guides.availableFor(programs.all()[0])
-          .map(([, g]: [string, Legacy]) => `• ${g.name}`)
+          .map(([, g]: [string, { name: string }]) => `• ${g.name}`)
           .join("\n")}`,
       },
     },
@@ -184,7 +204,7 @@ function homeBlocks(userId: string): Legacy[] {
       { type: "divider" },
       {
         type: "section",
-        text: { type: "mrkdwn", text: `*you've asked about*\n${topics.map((t: Legacy) => `• ${t.topic}`).join("\n")}` },
+        text: { type: "mrkdwn", text: `*you've asked about*\n${(topics as TopicRow[]).map((t) => `• ${t.topic}`).join("\n")}` },
       },
     );
   }
@@ -196,7 +216,7 @@ function homeBlocks(userId: string): Legacy[] {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*top gaps in the docs*\n${gaps.map((g: Legacy) => `• ${g.ask_count}× ${g.question.slice(0, 80)}`).join("\n")}`,
+          text: `*top gaps in the docs*\n${(gaps as GapRow[]).map((g) => `• ${g.ask_count}× ${g.question.slice(0, 80)}`).join("\n")}`,
         },
       },
     );
@@ -209,7 +229,7 @@ function homeBlocks(userId: string): Legacy[] {
 
 function reviewAction(apply: (id: number) => unknown, verb: string) {
   // Button actions re-check the actor because a Home view can outlive the authorization that rendered it.
-  return async ({ ack, body, action, client }: Legacy): Promise<void> => {
+  return async ({ ack, body, action, client }: HomeActionArgs): Promise<void> => {
     await ack();
 
     const userId = body?.user?.id;
@@ -235,14 +255,14 @@ function reviewAction(apply: (id: number) => unknown, verb: string) {
     }
 
     try {
-      await client.views.publish({ user_id: userId, view: { type: "home", blocks: homeBlocks(userId) } });
+      await client.views.publish({ user_id: userId!, view: { type: "home", blocks: homeBlocks(userId!) } });
     } catch (e) {
       log.error("home", "republish after review failed:", e instanceof Error ? e.message : String(e));
     }
   };
 }
 
-async function onAppHomeOpened({ event, client }: Legacy): Promise<void> {
+async function onAppHomeOpened({ event, client }: { event: { tab?: string; user: string }; client: SlackClient }): Promise<void> {
   if (event.tab !== "home") return;
   try {
     await client.views.publish({
@@ -254,7 +274,7 @@ async function onAppHomeOpened({ event, client }: Legacy): Promise<void> {
   }
 }
 
-function register(app: Legacy): void {
+function register(app: HomeApp): void {
   app.event("app_home_opened", onAppHomeOpened);
 
   app.action(new RegExp(`^${APPROVE_ACTION}_`), reviewAction(learn.approve, "approved"));

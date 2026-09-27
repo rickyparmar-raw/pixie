@@ -14,12 +14,79 @@ import brand = require("./brand");
 import capabilities = require("./capabilities");
 import configModule = require("./config");
 import stats = require("./stats");
+import type { Program, SlackClient } from "./types";
 
 const { config, isAdmin } = configModule;
 const { relativeTime, statsText } = stats;
-interface Legacy {
-  [key: string]: any;
+interface SlashCommand {
+  text?: string;
+  user_id?: string;
+  channel_id?: string;
+  team_id?: string;
+  thread_ts?: string;
+  trigger_id?: string;
 }
+interface ResponsePayload {
+  response_type?: string;
+  text?: string;
+  blocks?: unknown[];
+  [key: string]: unknown;
+}
+type Ack = () => Promise<unknown>;
+type Respond = (payload: ResponsePayload | string) => Promise<unknown>;
+interface CommandArgs {
+  command: SlashCommand;
+  ack: Ack;
+  respond: Respond;
+  client?: SlackClient;
+}
+interface ShortcutArgs {
+  shortcut: {
+    channel: { id: string };
+    user: { id: string };
+    message: { thread_ts?: string };
+    message_ts: string;
+  };
+  ack: Ack;
+  client: SlackClient;
+}
+interface ActionArgs {
+  action: { value?: string };
+  body: { channel?: { id?: string }; message?: { ts?: string; thread_ts?: string }; user?: { id?: string } };
+  ack: Ack;
+  client: SlackClient;
+}
+interface AppLike {
+  command(name: string, handler: unknown): void;
+  action(name: string | RegExp, handler: unknown): void;
+  shortcut(name: string, handler: unknown): void;
+  event(name: string, handler: unknown): void;
+}
+interface LearnedRow {
+  id: number;
+  question: string;
+  answer: string;
+  author_id?: string | null;
+  created_at?: number | string | null;
+}
+interface ForgetAll { type: "all" }
+interface ForgetPending { type: "pending" }
+interface ForgetRange { type: "range"; from: number; to: number }
+interface ForgetId { type: "id"; id: number }
+type ForgetInput = ForgetAll | ForgetPending | ForgetRange | ForgetId;
+interface GuideResult {
+  message: string;
+  checkNext?: string | null;
+  screenshot?: string | null;
+  guideName?: string | null;
+  [key: string]: unknown;
+}
+const formatHelp = (args: { actorId?: string | null; program?: Program | null }): string => (capabilities.formatHelp as unknown as (input: { actorId?: string | null; program?: Program | null }) => string)(args);
+const lookupAnswer = (question: string, context: string, program: Program | null, channel?: string | null): Promise<{ answer: string; source?: string } | null> => (respond.lookupAnswer as unknown as (q: string, c: string, p: Program | null, ch?: string | null) => Promise<{ answer: string; source?: string } | null>)(question, context, program, channel);
+const recordGap = (question: string, userId?: string | null, channel?: string | null, messageTs?: string | null, programId?: string | null): unknown => (db.recordGap as unknown as (q: string, u?: string | null, c?: string | null, ts?: string | null, p?: string | null) => unknown)(question, userId, channel, messageTs, programId);
+const topGaps = (limit?: number, sinceMs?: number, options?: { kind?: string }): Array<{ ask_count: number; question: string }> => (db.topGaps as unknown as (n?: number, since?: number, opts?: { kind?: string }) => Array<{ ask_count: number; question: string }>)(limit, sinceMs, options);
+const teach = (input: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }): number | null => (learn.teach as unknown as (value: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }) => number | null)(input);
+const addToThread = (threadTs: string, role: string, content: string, userId?: string | null, channel?: string | null): unknown => (context.addToThread as unknown as (ts: string, r: string, text: string, u?: string | null, c?: string | null) => unknown)(threadTs, role, content, userId, channel);
 
 function errorMessage(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("message" in error)) return undefined;
@@ -31,8 +98,8 @@ const GAP_LIMIT = 15;
 const PENDING_LIMIT = 15;
 const NOT_ALLOWED = "that one's helpers-only :nono:";
 
-function adminOnly(handler: (args: Legacy) => Promise<unknown>) {
-  return async (args: Legacy): Promise<void> => {
+function adminOnly(handler: (args: CommandArgs) => Promise<unknown>) {
+  return async (args: CommandArgs): Promise<void> => {
     if (!isAdmin(args.command?.user_id)) {
       await args.ack();
       await args.respond({ response_type: "ephemeral", text: NOT_ALLOWED });
@@ -42,12 +109,12 @@ function adminOnly(handler: (args: Legacy) => Promise<unknown>) {
   };
 }
 
-function plainSpoken(handler: (args: Legacy) => Promise<unknown>) {
+function plainSpoken(handler: (args: CommandArgs) => Promise<unknown>) {
   // Bolt's respond helper bypasses the normal reply formatter, so normalize both text and blocks here.
-  return async (args: Legacy): Promise<unknown> => {
+  return async (args: CommandArgs): Promise<unknown> => {
     const original = args.respond;
     const respond = typeof original === "function"
-      ? async (payload: Legacy) => {
+      ? async (payload: ResponsePayload | string) => {
           if (payload && typeof payload === "object") {
             return original({
               ...payload,
@@ -62,8 +129,8 @@ function plainSpoken(handler: (args: Legacy) => Promise<unknown>) {
   };
 }
 
-function adminOnlyShortcut(handler: (args: Legacy) => Promise<unknown>) {
-  return async (args: Legacy): Promise<unknown> => {
+function adminOnlyShortcut(handler: (args: ShortcutArgs) => Promise<unknown>) {
+  return async (args: ShortcutArgs): Promise<unknown> => {
     if (!isAdmin(args.shortcut?.user?.id)) {
       await args.ack();
       await args.client.chat.postEphemeral({
@@ -79,7 +146,7 @@ function adminOnlyShortcut(handler: (args: Legacy) => Promise<unknown>) {
 
 
 
-async function reportCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function reportCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
 
   const weeksAgo = (command.text || "").trim().toLowerCase() === "last" ? 1 : 0;
@@ -87,16 +154,16 @@ async function reportCommand({ command, ack, respond: sendEphemeral }: Legacy): 
 }
 
 
-async function askCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function askCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   // Private slash answers resolve documentation from the command channel's program binding.
   await ack();
 
   const question = (command.text || "").trim();
   if (/^help(?:\s|$)/i.test(question)) {
-    const program = programs.forChannel(command.channel_id);
+    const program = programs.forChannel(command.channel_id as string);
     await sendEphemeral({
       response_type: "ephemeral",
-      text: capabilities.formatHelp({ actorId: command.user_id, program }),
+      text: formatHelp({ actorId: command.user_id as string, program }),
     });
     return;
   }
@@ -109,7 +176,7 @@ async function askCommand({ command, ack, respond: sendEphemeral }: Legacy): Pro
   const askPolicy = require("./channelPolicy").resolve(command.channel_id, command.team_id || null);
   const askProgram = askPolicy.role === "none" ? null : askPolicy.program;
   try {
-    const result = askProgram ? await respond.lookupAnswer(question, "", askProgram, command.channel_id) : null;
+    const result = askProgram ? await lookupAnswer(question, "", askProgram, command.channel_id as string) : null;
     if (result) {
       await sendEphemeral({
         response_type: "ephemeral",
@@ -119,7 +186,7 @@ async function askCommand({ command, ack, respond: sendEphemeral }: Legacy): Pro
       return;
     }
 
-    if (askProgram) db.recordGap(question, command.user_id, command.channel_id, null, askProgram.id);
+    if (askProgram) recordGap(question, command.user_id as string, command.channel_id as string, null, askProgram.id);
     const { getChatReply } = require("./chat");
     const chatReply = await getChatReply(question, "", command.channel_id === config.slack.helpChannel);
     await sendEphemeral({ response_type: "ephemeral", text: chatReply || respond.MENTION_FALLBACK });
@@ -133,7 +200,7 @@ async function askCommand({ command, ack, respond: sendEphemeral }: Legacy): Pro
 
 const validator = require("./validator");
 
-async function checkCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function checkCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
   const input = (command.text || "").trim();
   if (!input) {
@@ -156,7 +223,7 @@ async function checkCommand({ command, ack, respond: sendEphemeral }: Legacy): P
 }
 
 
-async function calcCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function calcCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
   const input = (command.text || "").trim();
   if (!input) {
@@ -168,8 +235,8 @@ async function calcCommand({ command, ack, respond: sendEphemeral }: Legacy): Pr
   }
 
   try {
-    const prog = programs.forChannel(command.channel_id);
-    const lookupResult = await respond.lookupAnswer(input, "", prog, command.channel_id);
+    const prog = programs.forChannel(command.channel_id as string);
+    const lookupResult = await lookupAnswer(input, "", prog, command.channel_id as string);
     if (lookupResult) {
       await sendEphemeral({ response_type: "ephemeral", text: lookupResult.answer });
       db.recordMetric("command_calc");
@@ -186,7 +253,7 @@ async function calcCommand({ command, ack, respond: sendEphemeral }: Legacy): Pr
 }
 
 
-async function sourcesCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function sourcesCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
 
   let sources = [];
@@ -213,12 +280,12 @@ async function sourcesCommand({ command, ack, respond: sendEphemeral }: Legacy):
 }
 
 
-async function reloadCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function reloadCommand({ ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
   try {
     // An explicit reload bypasses the cached corpus.
     await knowledge.refreshCorpus(true);
-  (db as Legacy).clearCache();
+    (db as typeof db & { clearCache: () => void }).clearCache();
     await sendEphemeral({
       response_type: "ephemeral",
       text: "refreshed the docs and cleared the answer cache :yesyes:",
@@ -229,16 +296,16 @@ async function reloadCommand({ ack, respond: sendEphemeral }: Legacy): Promise<v
 }
 
 
-async function gapsCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function gapsCommand({ ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
 
-  const gaps = db.topGaps(GAP_LIMIT, undefined, { kind: (report as Legacy).DOCS });
+  const gaps = topGaps(GAP_LIMIT, undefined, { kind: report.DOCS });
   if (gaps.length === 0) {
     await sendEphemeral({ response_type: "ephemeral", text: "no unanswered questions logged yet :yay:" });
     return;
   }
 
-  const lines = gaps.map((g: Legacy, i: number) => `${i + 1}. *${g.ask_count}×* — ${g.question.slice(0, 160)}`);
+  const lines = gaps.map((g: { ask_count: number; question: string }, i: number) => `${i + 1}. *${g.ask_count}×* — ${g.question.slice(0, 160)}`);
   await sendEphemeral({
     response_type: "ephemeral",
     text: ["*questions the docs didn't cover* (last 30d)", ...lines, "", "_worth adding these to the docs_"].join("\n"),
@@ -246,18 +313,18 @@ async function gapsCommand({ ack, respond: sendEphemeral }: Legacy): Promise<voi
 }
 
 
-async function statsCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function statsCommand({ ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
   await sendEphemeral({ response_type: "ephemeral", text: statsText() });
 }
 
 
-async function teachCommand({ command, ack, respond: sendEphemeral, client }: Legacy): Promise<void> {
+async function teachCommand({ command, ack, respond: sendEphemeral, client }: CommandArgs): Promise<void> {
   // Learned facts are scoped to the channel's program; an unclaimed channel cannot choose one implicitly.
   await ack();
 
   const text = (command.text || "").trim();
-  const teachPolicy = require("./channelPolicy").resolve(command.channel_id, command.team_id || null);
+  const teachPolicy = require("./channelPolicy").resolve(command.channel_id as string, command.team_id || null);
   if (teachPolicy.role !== "main" && teachPolicy.role !== "help") {
     await sendEphemeral({ response_type: "ephemeral", text: "run this in one of the program's channels so i know which program it's for :nono:" });
     return;
@@ -265,7 +332,7 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Le
   const teachProgramId = teachPolicy.program.id;
   const parsed = learn.parseTeach(text);
   if (parsed) {
-    const id = learn.teach({ ...parsed, authorId: command.user_id, channel: command.channel_id, programId: teachProgramId });
+    const id = teach({ ...parsed, authorId: command.user_id as string, channel: command.channel_id as string, programId: teachProgramId });
     await sendEphemeral({
       response_type: "ephemeral",
       text: id
@@ -276,13 +343,13 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Le
   }
 
   let threadTs = command.thread_ts;
-  const channel = command.channel_id;
-  const user = command.user_id;
+  const channel = command.channel_id as string;
+  const user = command.user_id as string;
 
   if (!threadTs && client && client.conversations && client.conversations.history) {
     try {
       const history = await client.conversations.history({ channel, limit: 10 });
-    const recentWithThread = (history.messages || []).find((m: Legacy) => m.thread_ts || (m.reply_count && m.reply_count > 0));
+    const recentWithThread = (history.messages || []).find((m: { thread_ts?: string; reply_count?: number; ts?: string }) => m.thread_ts || (m.reply_count && m.reply_count > 0));
       if (recentWithThread) {
         threadTs = recentWithThread.thread_ts || recentWithThread.ts;
       }
@@ -295,7 +362,7 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Le
     try {
       const threadResult = await teachThread.summarizeThread({ client, channel, threadTs });
       if (threadResult) {
-        const id = learn.teach({ ...threadResult, authorId: user, threadTs, channel, programId: teachProgramId });
+        const id = teach({ ...threadResult, authorId: user, threadTs, channel, programId: teachProgramId });
         await sendEphemeral({
           response_type: "ephemeral",
           text: id
@@ -315,7 +382,7 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Le
   });
 }
 
-async function teachThreadShortcut({ shortcut, ack, client }: Legacy): Promise<void> {
+async function teachThreadShortcut({ shortcut, ack, client }: ShortcutArgs): Promise<void> {
   // The message shortcut carries thread context directly, unlike the slash command's channel fallback.
   await ack();
 
@@ -350,7 +417,7 @@ async function teachThreadShortcut({ shortcut, ack, client }: Legacy): Promise<v
   }
 }
 
-async function pendingCommand({ ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function pendingCommand({ ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
 
   const rows = learn.pending(PENDING_LIMIT);
@@ -360,7 +427,7 @@ async function pendingCommand({ ack, respond: sendEphemeral }: Legacy): Promise<
   }
 
     const lines = rows.map(
-    (r: Legacy) =>
+    (r: LearnedRow) =>
       `*#${r.id}* — asked: _${r.question.slice(0, 100)}_\n` +
       `> ${r.answer.slice(0, 240)}\n` +
       `> _from <@${r.author_id}>, ${relativeTime(r.created_at)}_`,
@@ -382,7 +449,7 @@ function parseId(text: string): number | null {
   return Number.isInteger(id) && id > 0 ? id : null;
 }
 
-function parseForgetInput(text: string): Legacy | null {
+function parseForgetInput(text: string): ForgetInput | null {
   const raw = (text || "").trim();
   if (!raw) return null;
   if (raw === "all") return { type: "all" };
@@ -403,10 +470,10 @@ function parseForgetInput(text: string): Legacy | null {
   return null;
 }
 
-async function approveCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function approveCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
 
-  const id = parseId(command.text);
+  const id = parseId(command.text || "");
   if (!id) {
     await sendEphemeral({ response_type: "ephemeral", text: `use \`${brand.cmd("approve")} <n>\` — get the number from \`${brand.cmd("pending")}\`` });
     return;
@@ -418,10 +485,10 @@ async function approveCommand({ command, ack, respond: sendEphemeral }: Legacy):
   });
 }
 
-async function forgetCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function forgetCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
 
-  const parsed = parseForgetInput(command.text);
+  const parsed = parseForgetInput(command.text || "");
   if (!parsed) {
     await sendEphemeral({
       response_type: "ephemeral",
@@ -490,9 +557,9 @@ async function onMemberJoined(): Promise<void> {
 }
 
 
-const programs = require("./programs");
+const programs = require("./programs") as { forChannel: (channelId: string | null | undefined, workspaceId?: string | null) => Program; all: () => Program[]; get: (id: string) => Program | null; saveProgram: (program: Partial<Program> & { id: string; name: string }) => unknown; removeProgram: (id: string) => unknown };
 
-async function programCommand({ command, ack, respond: sendEphemeral }: Legacy): Promise<void> {
+async function programCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   // Ticket toggles are helper-level; program creation and maintenance remain organizer-only.
   await ack();
   const raw = (command.text || "").trim();
@@ -535,7 +602,7 @@ async function programCommand({ command, ack, respond: sendEphemeral }: Legacy):
 
   if (!raw || sub === "list") {
     const allProgs = programs.all();
-    const lines = allProgs.map((p: Legacy) =>
+    const lines = allProgs.map((p: Program) =>
       `• *${p.id}* (${p.name}): posture=\`${p.posture || "active"}\`, scope=\`${p.scope || "any"}\`, help_channel=\`${p.helpChannel || "none"}\`, channels=[\`${(p.channels || []).join("`, `")}\`]`,
     );
     await sendEphemeral({
@@ -615,7 +682,7 @@ async function programCommand({ command, ack, respond: sendEphemeral }: Legacy):
 
 const guides = require("./guides");
 
-async function postGuideFirstStep({ client, channel, threadTs, guideId, userId }: Legacy): Promise<Legacy | null> {
+async function postGuideFirstStep({ client, channel, threadTs, guideId, userId }: { client: SlackClient; channel: string; threadTs: string; guideId: string; userId: string }): Promise<GuideResult | null> {
   const result = guides.startGuide(guideId, threadTs, userId);
   if (!result) return null;
   const text = respond.formatGuideText(result);
@@ -627,15 +694,15 @@ async function postGuideFirstStep({ client, channel, threadTs, guideId, userId }
     blocks: reply.plainDashesInBlocks(blocks),
   });
   db.setGuideMessageTs(threadTs, posted.ts);
-  context.addToThread(threadTs, "assistant", text, null, channel);
+  addToThread(threadTs, "assistant", text, null, channel);
   return result;
 }
 
-async function guideCommand({ command, ack, respond: sendEphemeral, client }: Legacy): Promise<void> {
+async function guideCommand({ command, ack, respond: sendEphemeral, client }: CommandArgs): Promise<void> {
   await ack();
   const text = (command.text || "").trim();
-  const channel = command.channel_id;
-  const user = command.user_id;
+  const channel = command.channel_id as string;
+  const user = command.user_id as string;
   const prog = programs.forChannel(channel);
 
   if (text) {
@@ -647,7 +714,7 @@ async function guideCommand({ command, ack, respond: sendEphemeral, client }: Le
           channel,
           text: reply.plainDashes(`📖 <@${user}> started the *${guideName}* walkthrough! Follow along in the thread below 👇`),
         });
-        const threadTs = root.ts;
+        const threadTs = root.ts as string;
         if (await postGuideFirstStep({ client, channel, threadTs, guideId, userId: user })) return;
       } else {
         const result = guides.startGuide(guideId, command.trigger_id || Date.now().toString(), user);
@@ -686,7 +753,7 @@ async function guideCommand({ command, ack, respond: sendEphemeral, client }: Le
 
 const tickets = require("./tickets");
 
-function register(app: Legacy): void {
+function register(app: AppLike): void {
   // Keep the registered surface derived from the active brand, with the legacy guide alias only by default.
   const cmd = brand.cmd;
 
@@ -712,7 +779,7 @@ function register(app: Legacy): void {
 
   tickets.registerActions(app);
 
-  app.action(/^start_guide_.+$/, async ({ action, body, ack, client }: Legacy) => {
+  app.action(/^start_guide_.+$/, async ({ action, body, ack, client }: ActionArgs) => {
     await ack();
     const guideId = action.value;
     const channelId = body.channel?.id;
@@ -749,7 +816,7 @@ function register(app: Legacy): void {
     if (!result) return;
   });
 
-  app.action("sum_post_to_thread", async ({ action, body, ack, client }: Legacy) => {
+  app.action("sum_post_to_thread", async ({ action, body, ack, client }: ActionArgs) => {
     await ack();
     try {
       const data = JSON.parse(action.value || "{}");
@@ -757,7 +824,7 @@ function register(app: Legacy): void {
       await client.chat.postMessage({
         channel: data.channel,
         thread_ts: data.threadTs,
-        text: reply.plainDashes(`🧵 *Thread Summary* (shared by <@${body.user.id}>):\n\n${data.summary}`),
+        text: reply.plainDashes(`🧵 *Thread Summary* (shared by <@${body.user!.id}>):\n\n${data.summary}`),
       });
     } catch (e: unknown) {
       log.debug("commands", `sum_post_to_thread error: ${errorMessage(e)}`);
