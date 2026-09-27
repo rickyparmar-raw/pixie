@@ -4,14 +4,12 @@ const relatedThreads = require("./relatedThreads");
 const db = require("./db");
 
 test("isSimpleLookupQuestion identifies simple link and navigation lookups", () => {
-  assert.equal(relatedThreads.isSimpleLookupQuestion("where is the shop"), true);
-  assert.equal(relatedThreads.isSimpleLookupQuestion("where do i go for the shop"), true);
-  assert.equal(relatedThreads.isSimpleLookupQuestion("what is the link to pixl"), true);
+  assert.equal(relatedThreads.isSimpleLookupQuestion("where is the dashboard"), true);
+  assert.equal(relatedThreads.isSimpleLookupQuestion("where do i go for the docs"), true);
+  assert.equal(relatedThreads.isSimpleLookupQuestion("what is the link to the docs"), true);
   assert.equal(relatedThreads.isSimpleLookupQuestion("what's the website url"), true);
-  assert.equal(relatedThreads.isSimpleLookupQuestion("when is the deadline"), true);
-  assert.equal(relatedThreads.isSimpleLookupQuestion("when does pixl end"), true);
+  assert.equal(relatedThreads.isSimpleLookupQuestion("what is the deadline"), true);
   assert.equal(relatedThreads.isSimpleLookupQuestion("hi"), true);
-  assert.equal(relatedThreads.isSimpleLookupQuestion("shop?"), true);
 });
 
 test("isSimpleLookupQuestion identifies direct calculation results", () => {
@@ -20,7 +18,7 @@ test("isSimpleLookupQuestion identifies direct calculation results", () => {
 
 test("isSimpleLookupQuestion allows nuanced and troubleshooting questions", () => {
   assert.equal(relatedThreads.isSimpleLookupQuestion("how do i fix sprite rendering artifacts in Godot export"), false);
-  assert.equal(relatedThreads.isSimpleLookupQuestion("can i change my project idea midway through the jam"), false);
+  assert.equal(relatedThreads.isSimpleLookupQuestion("can i change my project idea midway through the program"), false);
   assert.equal(relatedThreads.isSimpleLookupQuestion("is custom hardware allowed if i built the PCB myself"), false);
 });
 
@@ -43,29 +41,29 @@ test("buildSlackPermalink generates clean Slack archive URLs", () => {
 test("findRelatedThread finds past thread and ignores current active thread", async () => {
   db.open(":memory:");
   db.recordAnsweredThread({
-    question: "how to fix godot web export wasm error",
-    channel: "C0B6STY9G5N",
+    question: "how to fix a web export error",
+    channel: "C_HELP",
     threadTs: "1788100100.111111",
   });
 
-  const simple = await relatedThreads.findRelatedThread("where is the shop", {
+  const simple = await relatedThreads.findRelatedThread("where is the dashboard", {
     currentThreadTs: "1788200000.222222",
-    channel: "C0B6STY9G5N",
+    channel: "C_HELP",
   });
   assert.equal(simple, null);
 
-  const selfMatch = await relatedThreads.findRelatedThread("godot web export error", {
+  const selfMatch = await relatedThreads.findRelatedThread("web export error", {
     currentThreadTs: "1788100100.111111",
     channel: "C0B6STY9G5N",
   });
   assert.equal(selfMatch, null);
 
-  const match = await relatedThreads.findRelatedThread("how do i fix godot web export wasm error on chrome", {
+  const match = await relatedThreads.findRelatedThread("how do i fix the web export error on chrome", {
     currentThreadTs: "1788200000.222222",
     channel: "C0B6STY9G5N",
   });
   assert.notEqual(match, null);
-  assert.equal(match.channel, "C0B6STY9G5N");
+  assert.equal(match.channel, "C_HELP");
   assert.equal(match.threadTs, "1788100100.111111");
   assert.ok(match.permalink.includes("p1788100100111111"));
 
@@ -80,8 +78,8 @@ test("thin token queries never match", async () => {
 });
 
 test("similarity needs two shared tokens — single-word overlap is zero", () => {
-  assert.equal(relatedThreads.calculateTokenSimilarity(["godot"], ["godot", "export", "wasm"]), 0);
-  assert.ok(relatedThreads.calculateTokenSimilarity(["godot", "export"], ["godot", "export", "wasm"]) > 0);
+  assert.equal(relatedThreads.calculateTokenSimilarity(["web"], ["web", "export", "error"]), 0);
+  assert.ok(relatedThreads.calculateTokenSimilarity(["web", "export"], ["web", "export", "error"]) > 0);
 });
 
 test("malformed thread ts yields no permalink and empty line", () => {

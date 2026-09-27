@@ -46,7 +46,7 @@ async function withJudge(reply: string | JudgeReply, fn: JudgeCheck) {
 }
 
 test("judgeGap maps each verdict, however the model pads it", async () => {
-  await withJudge("DOCS", async () => assert.equal(await report.judgeGap("who are pixl orgs"), report.DOCS));
+  await withJudge("DOCS", async () => assert.equal(await report.judgeGap("what are the program rules"), report.DOCS));
   await withJudge("transient\n", async () => assert.equal(await report.judgeGap("is the site down"), report.TRANSIENT));
   await withJudge("NOISE.", async () => assert.equal(await report.judgeGap("marketing as in?"), report.NOISE));
 });
@@ -85,12 +85,12 @@ test("the judge uses the cheap classifier model, not the answer model", async ()
 
 test("classifyGaps writes a verdict per gap and leaves unreadable ones alone", async () => {
   db.handle().query("DELETE FROM doc_gaps").run();
-  db.recordGap("who are pixl orgs", "U1", "C1");
+  db.recordGap("what are the program rules", "U1", "C1");
   db.recordGap("and my pc crashed -_-", "U2", "C1");
   db.recordGap("even sp[aces failed me", "U3", "C1");
 
   const verdicts: Record<string, string> = {
-    "who are pixl orgs": "DOCS",
+    "what are the program rules": "DOCS",
     "and my pc crashed -_-": "TRANSIENT",
     "even sp[aces failed me": "???",
   };
@@ -182,7 +182,7 @@ test("draftDoc grounds the prompt in the corpus, the thread transcript, and the 
       "Q: how do i unlock the next region\nREPLY: finish your ship requirement",
     );
     assert.match(system, /Finish your region's ship requirement/, "corpus reaches the prompt");
-    assert.match(system, /Never invent a Pixl fact, number, date, or rule/, "the shared guardrail is included");
+    assert.match(system, /Never invent .* fact, number, date, or rule/, "the shared guardrail is included");
   } finally {
     llm.complete = original;
   }
@@ -250,7 +250,7 @@ test("draftGaps queues a PENDING learned fact per unclassified DOCS gap", async 
   db.handle().query("DELETE FROM doc_gaps").run();
   db.handle().query("DELETE FROM learned_facts").run();
   seedGap("how do i export a sprite", report.DOCS);
-  seedGap("is the pixl server down", report.TRANSIENT);
+  seedGap("is the program server down", report.TRANSIENT);
 
   await withJudge("export as PNG, no upscaling", async () => {
     assert.equal(await report.draftGaps(null, { limit: 5, spacingMs: 0 }), 1);
@@ -269,7 +269,7 @@ test("draftGaps does not re-draft a gap already queued for review", async () => 
   seedGap("how do i join a village", report.DOCS);
   seedGap("how do i join a village", report.DOCS);
 
-  await withJudge("ask in #pixl-help and a maintainer will add you", async (asked: string[]) => {
+  await withJudge("ask in the help channel and a maintainer will add you", async (asked: string[]) => {
     assert.equal(await report.draftGaps(null, { limit: 5, spacingMs: 0 }), 1);
     assert.equal(asked.length, 1, "one draft call for the grouped question");
 
@@ -281,7 +281,7 @@ test("draftGaps does not re-draft a gap already queued for review", async () => 
 test("draftGaps leaves a gap undrafted when the model doesn't know", async () => {
   db.handle().query("DELETE FROM doc_gaps").run();
   db.handle().query("DELETE FROM learned_facts").run();
-  seedGap("what colour is the pixl logo exactly", report.DOCS);
+  seedGap("what colour is the program logo exactly", report.DOCS);
 
   await withJudge("UNKNOWN", async () => {
     assert.equal(await report.draftGaps(null, { limit: 5, spacingMs: 0 }), 0);
@@ -303,7 +303,7 @@ test("draftGaps stops at the per-pass cap", async () => {
 test("draftGaps is a no-op with no DOCS gaps", async () => {
   db.handle().query("DELETE FROM doc_gaps").run();
   db.handle().query("DELETE FROM learned_facts").run();
-  seedGap("is the pixl server down", report.TRANSIENT);
+  seedGap("is the program server down", report.TRANSIENT);
   seedGap("even sp[aces failed me", report.NOISE);
 
   await withJudge("an answer", async (asked: string[]) => {
@@ -346,10 +346,10 @@ test("the report lists docs gaps and never the ones that aren't docs problems", 
   db.handle().query("DELETE FROM doc_gaps").run();
   db.handle().query("DELETE FROM metrics").run();
 
-  seedGap("who are pixl orgs", report.DOCS);
-  seedGap("who are pixl orgs", report.DOCS);
+  seedGap("who are the program organizers", report.DOCS);
+  seedGap("who are the program organizers", report.DOCS);
   seedGap("how do i be an org", report.DOCS);
-  seedGap("is the pixl server down", report.TRANSIENT);
+  seedGap("is the program server down", report.TRANSIENT);
   seedGap("my pfp is bugged sometimes", report.TRANSIENT);
   seedGap("even sp[aces failed me", report.NOISE);
   seedMetric("answer_docs");
@@ -357,7 +357,7 @@ test("the report lists docs gaps and never the ones that aren't docs problems", 
 
   const text = report.reportText(0);
 
-  assert.match(text, /who are pixl orgs/);
+  assert.match(text, /who are the program organizers/);
   assert.match(text, /how do i be an org/);
   assert.match(text, /2×/, "identical asks are grouped and counted");
 
@@ -411,6 +411,7 @@ test("lastBoundary rolls back a week when the boundary hasn't passed yet", () =>
 test("a report is due once per week and not twice after a restart", async () => {
   db.handle().query("DELETE FROM metrics").run();
   db.handle().query("DELETE FROM doc_gaps").run();
+  config.reportChannel = "C_REPORT";
   assert.equal(report.isReportDue(), true, "never sent — due");
 
   const posts: PostedMessage[] = [];
@@ -438,6 +439,7 @@ test("a report is due once per week and not twice after a restart", async () => 
 
 test("a post that throws leaves the report due", async () => {
   db.handle().query("DELETE FROM metrics").run();
+  config.reportChannel = "C_REPORT";
   const client = {
     chat: {
       postMessage: async () => {

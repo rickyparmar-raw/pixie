@@ -45,7 +45,7 @@ export interface Program {
   sources: ProgramSource[];
   sharedSources: boolean;
   milestones: unknown[];
-  guides: string[];
+  guides?: string[];
   pinnedRules: string[];
   links: Record<string, string>;
   behavior: Record<string, unknown> | null;

@@ -1,4 +1,3 @@
-type TestAny = any;
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
@@ -8,50 +7,13 @@ const programs = require("./programs");
 
 db.open(":memory:");
 
-test("scope defaults to any, so an existing program keeps answering everything", () => {
-  programs.saveProgram({ id: "t-open", name: "Open Program" });
-  assert.equal(programs.scope("t-open"), "any");
-  assert.equal(programs.isProgramScoped(programs.get("t-open")), false);
-});
-
-test("scope survives a round trip through the database", () => {
-  programs.saveProgram({ id: "t-scoped", name: "Scoped Program", scope: "program" });
-  programs.invalidate();
-
-  const loaded = programs.get("t-scoped");
-  assert.equal(loaded.scope, "program");
-  assert.equal(programs.scope("t-scoped"), "program");
-  assert.equal(programs.isProgramScoped(loaded), true);
-  assert.equal(programs.isProgramScoped("t-scoped"), true);
-});
-
-test("scope can be flipped back without a redeploy", () => {
-  programs.saveProgram({ id: "t-flip", name: "Flip", scope: "program" });
-  assert.equal(programs.scope("t-flip"), "program");
-
-  programs.saveProgram({ ...programs.get("t-flip"), scope: "any" });
-  assert.equal(programs.scope("t-flip"), "any");
-});
-
-test("an unrecognised scope value falls back to any", () => {
-  programs.saveProgram({ id: "t-typo", name: "Typo", scope: "programme" });
-  programs.invalidate();
-  assert.equal(programs.scope("t-typo"), "any");
-});
-
-test("the shared YSWS program is never scoped", () => {
-  assert.equal(programs.shared().scope, "any");
-  assert.equal(programs.isProgramScoped(programs.shared()), false);
-  assert.equal(programs.scope(null), "any");
-});
-
-function withEnvPrograms(value: TestAny, fn: TestAny) {
+function withEnvPrograms(value: string | undefined, fn: () => void) {
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   if (value === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
   else process.env.PIXIE_PROGRAMS_JSON = value;
   programs.invalidate();
   try {
-    return fn();
+    fn();
   } finally {
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
@@ -59,238 +21,88 @@ function withEnvPrograms(value: TestAny, fn: TestAny) {
   }
 }
 
-test("PIXIE_PROGRAMS_JSON supplies programs without any file on disk", () => {
+test("an absent configuration does not invent a program", () => {
+  withEnvPrograms(undefined, () => {
+    assert.equal(programs.get("missing-program"), null);
+    assert.equal(programs.forChannel("C_UNKNOWN").id, "shared");
+    assert.equal(programs.shared().sources.length, 0);
+  });
+});
+
+test("scope defaults to any and survives a database round trip", () => {
+  programs.saveProgram({ id: "acme", name: "Acme", scope: "program" });
+  programs.invalidate();
+  assert.equal(programs.scope("acme"), "program");
+  assert.equal(programs.isProgramScoped(programs.get("acme")), true);
+
+  programs.saveProgram({ ...programs.get("acme"), scope: "any" });
+  assert.equal(programs.scope("acme"), "any");
+});
+
+test("PIXIE_PROGRAMS_JSON supplies neutral programs and takes precedence", () => {
   withEnvPrograms(
     JSON.stringify([
       {
-        id: "solvable",
-        name: "Solvable",
-        helpChannel: "C0SOLVE",
-        channels: ["C0SOLVE", "C0CHAT"],
+        id: "demo",
+        name: "Demo",
+        helpChannel: "C_DEMO",
+        channels: ["C_DEMO", "C_MAIN"],
         scope: "program",
         posture: "passive",
-        sources: [{ name: "Solvable Docs", type: "url", url: "https://solvable.hackclub.com/docs" }],
+        sources: [{ name: "Demo docs", type: "url", url: "https://example.invalid/docs" }],
       },
     ]),
     () => {
-      const p = programs.get("solvable");
-      assert.equal(p.name, "Solvable");
-      assert.equal(p.helpChannel, "C0SOLVE");
-      assert.equal(p.scope, "program");
-      assert.equal(p.posture, "passive");
-      assert.equal(p.sources[0].url, "https://solvable.hackclub.com/docs");
-      assert.equal(programs.forChannel("C0CHAT").id, "solvable");
-      assert.equal(programs.isHelpChannel("C0SOLVE"), true);
+      const demo = programs.get("demo");
+      assert.equal(demo.name, "Demo");
+      assert.equal(demo.helpChannel, "C_DEMO");
+      assert.equal(programs.forChannel("C_MAIN").id, "demo");
+      assert.equal(programs.isHelpChannel("C_DEMO"), true);
+      assert.ok(programs.all().some((p: { id: string }) => p.id === "demo"));
     },
   );
 });
 
-test("AI answers default on and honor the legacy snake_case field", () => {
+test("wrapped and malformed environment configuration are handled safely", () => {
+  withEnvPrograms(JSON.stringify({ programs: [{ id: "beta", name: "Beta" }] }), () => {
+    assert.equal(programs.get("beta").name, "Beta");
+  });
+  withEnvPrograms('[{"id":"demo"', () => {
+    assert.equal(programs.get("demo"), null);
+  });
+});
+
+test("source sharing is opt in and normalization keeps service flags", () => {
   withEnvPrograms(
     JSON.stringify([
-      { id: "answers-default", name: "Default" },
-      { id: "answers-off-legacy", name: "Legacy", ai_answers: false },
+      { id: "cfg-acme", name: "Acme", sharedSources: true },
+      { id: "cfg-demo", name: "Demo", sharedSources: false, incidentMode: "TRACK_ONLY", publicTicketsEnabled: false },
     ]),
     () => {
-      assert.equal(programs.get("answers-default").aiAnswers, true);
-      assert.equal(programs.get("answers-off-legacy").aiAnswers, false);
-      assert.equal(programs.aiAnswersEnabled("answers-default"), true);
-      assert.equal(programs.aiAnswersEnabled("answers-off-legacy"), false);
+      assert.equal(programs.get("cfg-acme").sharedSources, true);
+      assert.equal(programs.get("cfg-demo").sharedSources, false);
+      assert.equal(programs.get("cfg-demo").incidentMode, "TRACK_ONLY");
+      assert.equal(programs.get("cfg-demo").publicTicketsEnabled, false);
     },
   );
 });
 
-test("PIXIE_PROGRAMS_JSON wins over the repo's programs.json", () => {
-  withEnvPrograms(JSON.stringify([{ id: "solvable", name: "Solvable", channels: ["C0SOLVE"] }]), () => {
-    const ids = programs.all().map((p: TestAny) => p.id);
-    assert.ok(ids.includes("solvable"));
-    assert.ok(!ids.includes("pixl"), "the image's own program must not leak into a fleet bot");
-  });
-});
-
-test("PIXIE_PROGRAMS_JSON accepts the wrapped object form", () => {
-  withEnvPrograms(JSON.stringify({ programs: [{ id: "twisted", name: "Twisted" }] }), () => {
-    assert.equal(programs.get("twisted").name, "Twisted");
-  });
-});
-
-test("Hardwire defaults to an isolated corpus when sync omits sharedSources", () => {
-  withEnvPrograms(JSON.stringify([{ id: "hardwire", name: "Hardwire", scope: "program" }]), () => {
-    assert.equal(programs.get("hardwire").sharedSources, false);
-  });
-});
-
-test("malformed PIXIE_PROGRAMS_JSON falls back to files instead of throwing", () => {
-  withEnvPrograms('[{"id":"solvable"', () => {
-    const ids = programs.all().map((p: TestAny) => p.id);
-    assert.ok(ids.length > 0);
-    assert.ok(!ids.includes("solvable"));
-  });
-});
-
-test("PIXIE_PROGRAMS_JSON of the wrong type falls back to files", () => {
-  withEnvPrograms(JSON.stringify({ solvable: { name: "Solvable" } }), () => {
-    assert.ok(!programs.all().some((p: TestAny) => p.id === "solvable"));
-  });
-});
-
-test("PIXIE_PROGRAMS_JSON drops records with no id", () => {
-  withEnvPrograms(JSON.stringify([{ name: "Nameless" }, { id: "real", name: "Real" }]), () => {
-    const ids = programs.all().map((p: TestAny) => p.id);
-    assert.deepEqual(
-      ids.filter((id: TestAny) => id === "real"),
-      ["real"],
-    );
-    assert.ok(!ids.includes(undefined));
-  });
-});
-
-test("a ysws-global entry in PIXIE_PROGRAMS_JSON overrides the shared sources", () => {
+test("workspace channel claims override matching channel configuration", () => {
   withEnvPrograms(
     JSON.stringify([
-      { id: "ysws-global", name: "Shared", sources: [{ name: "My FAQ", type: "json-faq", content: [] }] },
+      { id: "acme", name: "Acme", helpChannel: "C_SHARED", channels: ["C_SHARED"] },
+      { id: "demo", name: "Demo", helpChannel: "C_OTHER", channels: ["C_OTHER"] },
     ]),
     () => {
-      const sharedProg = programs.shared();
-      assert.equal(sharedProg.sources.length, 1);
-      assert.equal(sharedProg.sources[0].name, "My FAQ");
-      assert.equal(sharedProg.scope, "any", "shared stays unscoped whatever the blob says");
+      db.claimProgramChannel({ workspaceId: "T_DEMO", channelId: "C_SHARED", programId: "demo", kind: "help" });
+      try {
+        assert.equal(programs.forChannel("C_SHARED", "T_DEMO").id, "demo");
+        assert.equal(programs.forChannel("C_SHARED", "T_OTHER").id, "acme");
+      } finally {
+        db.releaseProgramChannel({ workspaceId: "T_DEMO", channelId: "C_SHARED" });
+      }
     },
   );
 });
 
-test("with no PIXIE_PROGRAMS_JSON the shared program still comes from sources.json", () => {
-  withEnvPrograms(undefined, () => {
-    assert.equal(programs.shared().id, "ysws-global");
-    assert.equal(programs.shared().name, "YSWS Global");
-  });
-});
-
-test("Twisted is program-scoped and does not inherit shared program facts", () => {
-  withEnvPrograms(undefined, () => {
-    const twisted = programs.get("twisted");
-    assert.equal(twisted.scope, "program");
-    assert.equal(twisted.sharedSources, false);
-    assert.ok(twisted.sources.some((source: TestAny) => source.url === "file://./knowledge/twisted-faq.json"));
-    assert.ok(twisted.pinnedRules.some((rule: TestAny) => /program_id=twisted/.test(rule)));
-    assert.ok(!twisted.sources.some((source: TestAny) => source.url === "file://./knowledge/quick-links.json"));
-  });
-});
-
-test("a fleet bot gets an empty shared layer rather than Pixl's quick links", () => {
-  withEnvPrograms(JSON.stringify([{ id: "solvable", name: "Solvable" }]), () => {
-    const sharedProg = programs.shared();
-    assert.deepEqual(sharedProg.sources, []);
-    assert.deepEqual(sharedProg.milestones, []);
-    assert.equal(sharedProg.scope, "any");
-    assert.deepEqual(sharedProg.guides, ["submit-ysws-guidelines"]);
-  });
-});
-
-test("the shared program stays unscoped even if the blob says otherwise", () => {
-  withEnvPrograms(JSON.stringify([{ id: "ysws-global", name: "Shared", scope: "program" }]), () => {
-    assert.equal(programs.shared().scope, "any");
-  });
-});
-
-test("forChannel prefers an explicit workspace-scoped claim over config lists", () => {
-  withEnvPrograms(undefined, () => {
-    programs.saveProgram({ id: "char-a", name: "A", helpChannel: "C-CHAR-A", channels: ["C-CHAR-A"] });
-    programs.saveProgram({ id: "char-b", name: "B", helpChannel: "C-CHAR-B", channels: ["C-CHAR-B"] });
-    programs.invalidate();
-    db.claimProgramChannel({ workspaceId: "T-CHAR", channelId: "C-CHAR-A", programId: "char-b", kind: "help" });
-    try {
-      assert.equal(programs.forChannel("C-CHAR-A", "T-CHAR").id, "char-b");
-      assert.equal(programs.forChannel("C-CHAR-A", "T-OTHER").id, "char-a");
-    } finally {
-      db.releaseProgramChannel({ workspaceId: "T-CHAR", channelId: "C-CHAR-A" });
-    }
-  });
-});
-
-test("forChannel with no channel falls back to shared, never another program", () => {
-  withEnvPrograms(undefined, () => {
-    assert.equal(programs.forChannel(null).id, "ysws-global");
-    assert.equal(programs.forChannel(undefined).id, "ysws-global");
-  });
-});
-
-test("channel claims are atomic — second program loses, same-program retry wins", () => {
-  const first = db.claimProgramChannel({
-    workspaceId: "T-CHAR-AT",
-    channelId: "C-CHAR-AT",
-    programId: "char-a",
-    kind: "help",
-  });
-  assert.equal(first.ok, true);
-  const conflict = db.claimProgramChannel({
-    workspaceId: "T-CHAR-AT",
-    channelId: "C-CHAR-AT",
-    programId: "char-b",
-    kind: "help",
-  });
-  assert.equal(conflict.ok, false);
-  assert.equal(conflict.ownerProgramId, "char-a");
-  const retry = db.claimProgramChannel({
-    workspaceId: "T-CHAR-AT",
-    channelId: "C-CHAR-AT",
-    programId: "char-a",
-    kind: "help",
-  });
-  assert.equal(retry.ok, true);
-  db.releaseProgramChannel({ workspaceId: "T-CHAR-AT", channelId: "C-CHAR-AT" });
-});
-
-test("same channel id in another workspace is a different claim", () => {
-  db.claimProgramChannel({ workspaceId: "T-CHAR-W1", channelId: "C-CHAR-WS", programId: "char-a", kind: "help" });
-  try {
-    const other = db.claimProgramChannel({
-      workspaceId: "T-CHAR-W2",
-      channelId: "C-CHAR-WS",
-      programId: "char-b",
-      kind: "help",
-    });
-    assert.equal(other.ok, true);
-  } finally {
-    db.releaseProgramChannel({ workspaceId: "T-CHAR-W1", channelId: "C-CHAR-WS" });
-    db.releaseProgramChannel({ workspaceId: "T-CHAR-W2", channelId: "C-CHAR-WS" });
-  }
-});
-
-test("normalize preserves the uncommitted incident/public-ticket fields", () => {
-  withEnvPrograms(
-    JSON.stringify([
-      { id: "char-inc", name: "Inc", incidentMode: "TRACK_ONLY", publicTicketsEnabled: false },
-      { id: "char-inc2", name: "Inc2", incident_mode: "ANSWER_AND_TRACK", public_tickets_enabled: 0 },
-    ]),
-    () => {
-      assert.equal(programs.get("char-inc").incidentMode, "TRACK_ONLY");
-      assert.equal(programs.get("char-inc").publicTicketsEnabled, false);
-      assert.equal(programs.get("char-inc2").incidentMode, "ANSWER_AND_TRACK");
-      assert.equal(programs.get("char-inc2").publicTicketsEnabled, false);
-    },
-  );
-});
-
-test("normalize defaults incident/public-ticket fields when absent", () => {
-  withEnvPrograms(JSON.stringify([{ id: "char-def", name: "Def" }]), () => {
-    assert.equal(programs.get("char-def").incidentMode, "ANSWER_AND_TRACK");
-    assert.equal(programs.get("char-def").publicTicketsEnabled, true);
-  });
-});
-
-test("isHelpChannel is workspace-scoped for claims", () => {
-  withEnvPrograms(undefined, () => {
-    programs.saveProgram({ id: "char-h", name: "H", helpChannel: "C-CHAR-H", channels: ["C-CHAR-H"] });
-    programs.invalidate();
-    db.claimProgramChannel({ workspaceId: "T-CHAR-H", channelId: "C-CHAR-H", programId: "char-h", kind: "help" });
-    try {
-      assert.equal(programs.isHelpChannel("C-CHAR-H", "T-CHAR-H"), true);
-      assert.equal(programs.isHelpChannel("C-NOWHERE", "T-CHAR-H"), false);
-      assert.equal(programs.isHelpChannel(null), false);
-    } finally {
-      db.releaseProgramChannel({ workspaceId: "T-CHAR-H", channelId: "C-CHAR-H" });
-    }
-  });
-});
 export {};

@@ -28,7 +28,7 @@ const TIMING_DATE_WORDS_RE = /\b(?:deadline|release date|launch date)\b/i;
 const NON_PROGRAM_DURATION_RE =
   /how long (?:does|do|is|will) (?:review|quest|sidequest|building|approval|processing|take)/i;
 
-const IGNORED_MILESTONE_WORDS = new Set(["pixl", "ysws", "official", "program", "the", "hack", "club"]);
+const IGNORED_MILESTONE_WORDS = new Set(["official", "program", "the", "hack", "club"]);
 
 function load(filePath = PROGRAM_PATH): ProgramData | null {
   try {
@@ -102,7 +102,7 @@ function parseDate(value: string | number | Date | null | undefined) {
 
 function buildNamesRegexPattern(metadata: ProgramMetadata | null) {
   if (metadata === null || metadata === undefined) {
-    return "pixl";
+    return null;
   }
   const names = [];
   if (typeof metadata === "object") {
@@ -202,7 +202,7 @@ function directAnswer(
 
   const namesPattern = buildNamesRegexPattern(metadata);
   const programTerms = new RegExp(
-    `\\b(?:release|launch|out|deadline|finish|due|drop|schedule)\\b|\\b(?:is|are|has|have|does|did|will)\\b[^?.!]{0,20}\\b(?:${namesPattern}|it|this|program|chapter)\\b[^?.!]{0,20}\\b(?:start(?:s|ed|ing)?|end(?:s|ed|ing)?|launch(?:ed|ing)?|release[ds]?)\\b`,
+    `\\b(?:release|launch|out|deadline|finish|due|drop|schedule)\\b|\\b(?:is|are|has|have|does|did|will)\\b[^?.!]{0,20}\\b(?:${namesPattern || "program"}|it|this|program|chapter)\\b[^?.!]{0,20}\\b(?:start(?:s|ed|ing)?|end(?:s|ed|ing)?|launch(?:ed|ing)?|release[ds]?)\\b`,
     "i",
   );
   const entry = named.length === 1 ? named[0] : entries.length === 1 && programTerms.test(asked) ? entries[0] : null;

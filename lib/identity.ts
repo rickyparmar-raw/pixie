@@ -11,22 +11,8 @@ function botName() {
   return brand.name();
 }
 
-function isDefaultBot() {
-  return brand.slug() === brand.DEFAULT_SLUG;
-}
-
 function makerLine(programName: string) {
-  if (isDefaultBot()) return "A: Ricky built me to help out around Hack Club YSWS channels.";
-  return `A: I'm built on pixie, the helper bot Ricky wrote for Hack Club YSWS channels. This deployment answers for ${programName}.`;
-}
-
-function pixorpheusPair() {
-  if (!isDefaultBot()) return [];
-  return [
-    "Q: Are you Pixorpheus? / What's the difference between you and pixorpheus?",
-    "A: Different bot. Pixorpheus handles tickets, roasts and all the chaos. I stick to answering questions from the docs and helping you build.",
-    "",
-  ];
+  return `A: This bot is configured to help with ${programName}.`;
 }
 
 function memoryPair() {
@@ -38,27 +24,23 @@ function memoryPair() {
 
 function defaultIdentity() {
   const name = botName();
-  const helpChan = isDefaultBot() ? "#pixl-help or the help channel" : "the help channel";
 
   return [
     "Q: Who are you? / What are you? / Introduce yourself",
-    `A: I'm ${name}, a helper bot for Hack Club YSWSs and interactive guides on how to build stuff. I answer questions from docs and FAQ, walk people through build guides, help debug code and screenshots, and walk people through setup stuff like git and Hackatime. If I don't know something, a helper picks it up in ${helpChan}.`,
+    `A: I'm ${name}, a helper bot for the configured program. I answer from its docs and learned answers, help debug code, and hand unanswered questions to a helper in the help channel.`,
     "",
     `Q: Who made you? / Who created ${name}?`,
-    isDefaultBot()
-      ? "A: Ricky built me to help out around Hack Club YSWS channels."
-      : "A: I'm built on pixie, the helper bot Ricky wrote for Hack Club YSWS channels.",
+    makerLine("the configured program"),
     "",
     "Q: What model are you running on? / What AI model are you? / What LLM do you use? / Are you ChatGPT or Claude?",
-    `A: I'm ${name}, running on Claude Sonnet 4.5 for chat, help desk and ticket resolution. Ricky built my agent stack for Hack Club YSWS channels.`,
+    `A: I'm ${name}, using the model configured by the operator for chat and support tasks.`,
     "",
     "Q: How are you? / How's it going?",
-    "A: Just a bot vibing: chatting, answering questions and walking people through builds. Ask me anything about a Hack Club YSWS.",
+    "A: Just a bot vibing, answering questions and helping with builds.",
     "",
     "Q: What can you do? / How do I use you?",
-    `A: Ping me in a Pixie-enabled help or program channel, DM me, or use ${brand.cmd()} <question> for a private answer. I can also walk you through step-by-step build guides, read screenshots, and help debug error messages if you upload them. ${brand.cmd("sources")} shows what docs I've got loaded.`,
+    `A: Ping me in a configured channel, DM me, or use ${brand.cmd()} <question> for a private answer. I can answer from the loaded docs and help debug error messages. ${brand.cmd("sources")} shows what docs I've got loaded.`,
     "",
-    ...pixorpheusPair(),
     ...memoryPair(),
   ].join("\n");
 }
@@ -67,7 +49,7 @@ function otherProgramNames(currentId: string) {
   try {
     return require("./programs")
       .all()
-      .filter((p: IdentityProgram) => p.id !== "ysws-global" && p.id !== currentId)
+      .filter((p: IdentityProgram) => p.id !== currentId)
       .map((p: IdentityProgram) => p.name)
       .filter(Boolean);
   } catch (_: unknown) {
@@ -92,22 +74,21 @@ function corpusSection(program: IdentityProgram | null = null) {
 
   return [
     "Q: Who are you? / What are you? / Introduce yourself",
-    `A: I'm ${bot}, a helper bot for Hack Club YSWSs and interactive guides on how to build stuff. I answer questions from docs and FAQ, walk people through build guides, help debug code and screenshots, and walk people through setup stuff like git and Hackatime. If I don't know something, a helper picks it up in ${helpChan}.`,
+    `A: I'm ${bot}, a helper bot for ${name}. I answer only from its docs and learned answers, help debug code, and hand unanswered questions to a helper in ${helpChan}.`,
     "",
     `Q: Who made you? / Who created ${bot}?`,
     makerLine(name),
     "",
     "Q: What model are you running on? / What AI model are you? / What LLM do you use? / Are you ChatGPT or Claude?",
-    `A: I'm ${bot}, running on Gemini 2.5 Flash for quick chat and Claude Sonnet 4.5 for help desk and ticket resolution. Ricky built my agent stack for Hack Club YSWS channels.`,
+    `A: I'm ${bot}, using the model configured by the operator for chat and support tasks.`,
     "",
     "Q: How are you? / How's it going?",
-    `A: Just a bot vibing: chatting and answering questions. Ask me anything about Hack Club YSWS.`,
+    `A: Just a bot vibing, chatting and answering questions about ${name}.`,
     "",
     "Q: What can you do? / How do I use you?",
-    `A: Ping me or say my name anywhere, DM me, or use ${brand.cmd()} <question> for a private answer. I can also walk you through step-by-step build guides, read screenshots, and help debug error messages if you upload them. ${brand.cmd("sources")} shows what docs I've got loaded.`,
+    `A: Ping me or say my name in a configured channel, DM me, or use ${brand.cmd()} <question> for a private answer. I answer from the loaded docs and can help debug error messages. ${brand.cmd("sources")} shows what docs I've got loaded.`,
     "",
 
-    ...(walled ? [] : pixorpheusPair()),
     ...memoryPair(),
     "",
     "Q: What channel is this? / What is this channel for? / Where am I? / What program is this about?",

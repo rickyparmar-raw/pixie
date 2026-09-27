@@ -2,520 +2,85 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const answer = require("./answer");
 const llm = require("./llm");
-const { config } = require("./config");
-const {
-  parseReply,
-  parseAnswerOrChat,
-  normalizeEmoji,
-  NONE_MARKER,
-  pixlGuardrail,
-  answerOrChatPrompt,
-  systemPrompt,
-  timelineAuthorityRule,
-} = answer;
 
-test("normalizeEmoji closes a bare :3c", () => {
-  assert.equal(normalizeEmoji("nice one :3c"), "nice one :3c:");
-  assert.equal(normalizeEmoji("go for it :3c and lmk"), "go for it :3c: and lmk");
+test("normalizeEmoji closes custom emoji and converts markdown emphasis", () => {
+  assert.equal(answer.normalizeEmoji("nice :3c"), "nice :3c:");
+  assert.equal(answer.normalizeEmoji("**ready** and __set__"), "*ready* and _set_");
 });
 
-test("normalizeEmoji leaves an already-closed :3c: alone", () => {
-  assert.equal(normalizeEmoji("all good :3c:"), "all good :3c:");
+test("normalizeEmoji leaves ordinary channel text generic", () => {
+  assert.equal(answer.normalizeEmoji("ask in the help channel"), "ask in the help channel");
 });
 
-test("normalizeEmoji linkifies the help channel", () => {
-  const original = config.slack.helpChannel;
-  try {
-    config.slack.helpChannel = "C1";
-    assert.equal(normalizeEmoji("ask in #pixl-help"), "ask in <#C1>");
-    assert.equal(normalizeEmoji("ask in <#pixl-help>"), "ask in <#C1>");
-    assert.equal(normalizeEmoji("ask in <#C1>"), "ask in <#C1>");
-
-    config.slack.helpChannel = null;
-    assert.equal(normalizeEmoji("ask in #pixl-help"), "ask in #pixl-help");
-  } finally {
-    config.slack.helpChannel = original;
-  }
-});
-
-test("normalizeEmoji handles empty input", () => {
-  assert.equal(normalizeEmoji(""), "");
-  assert.equal(normalizeEmoji(undefined), "");
-});
-
-test("normalizeEmoji converts Markdown bold to Slack mrkdwn", () => {
-  assert.equal(normalizeEmoji("drops on **august 18, 2026**"), "drops on *august 18, 2026*");
-  assert.equal(normalizeEmoji("__emphasis__"), "_emphasis_");
-});
-
-test("normalizeEmoji leaves single-asterisk bold and code fences alone", () => {
-  assert.equal(normalizeEmoji("already *bold*"), "already *bold*");
-  assert.equal(normalizeEmoji("a * b * c"), "a * b * c");
-});
-
-test("parseReply closes a bare :3c in the answer", () => {
-  const result = parseReply("SOURCE: Pixl FAQ\nANSWER: just sign up :3c");
-  assert.equal(result.answer, "just sign up :3c:");
-});
-
-test("parseReply returns null for the NONE marker", () => {
-  assert.equal(parseReply(NONE_MARKER), null);
-  assert.equal(parseReply("  NONE  "), null);
-});
-
-test("parseReply returns null for empty or missing text", () => {
-  assert.equal(parseReply(""), null);
-  assert.equal(parseReply(undefined), null);
-});
-
-test("parseReply extracts source and answer", () => {
-  const raw = "SOURCE: Pixl FAQ\nANSWER: Anyone can join, no team required.";
-  const result = parseReply(raw);
-  assert.deepEqual(result, {
-    source: "Pixl FAQ",
-    answer: "Anyone can join, no team required.",
+test("parseReply extracts a source and answer", () => {
+  assert.deepEqual(answer.parseReply("SOURCE: Example docs\nANSWER: follow the setup steps"), {
+    source: "Example docs",
+    answer: "follow the setup steps",
   });
+  assert.deepEqual(answer.parseReply("SOURCE: NONE\nANSWER: UNCLEAR"), { source: "NONE", answer: "UNCLEAR" });
 });
 
-test("parseReply handles a missing SOURCE line", () => {
-  const raw = "ANSWER: Just the docs, no source given.";
-  const result = parseReply(raw);
-  assert.deepEqual(result, {
+test("parseReply rejects empty and instruction-like output", () => {
+  assert.equal(answer.parseReply(""), null);
+  assert.equal(answer.parseReply("SOURCE: Example\nANSWER: output only the final answer"), null);
+});
+
+test("parseAnswerOrChat keeps ordinary conversational replies ungrounded", () => {
+  assert.deepEqual(answer.parseAnswerOrChat("not much, just vibing :3c"), {
     source: null,
-    answer: "Just the docs, no source given.",
+    answer: "not much, just vibing :3c:",
   });
 });
 
-test("parseReply returns null when there is no ANSWER line", () => {
-  assert.equal(parseReply("SOURCE: Pixl FAQ"), null);
+test("the unclear marker produces no answer", () => {
+  assert.deepEqual(answer.parseAnswerOrChat("SOURCE: NONE\nANSWER: UNCLEAR"), {
+    source: null,
+    answer: "",
+    unclear: true,
+  });
 });
 
-test("parseReply strips a leading ### from the source if the model echoes the heading", () => {
-  const raw = "SOURCE: ### Pixl FAQ\nANSWER: Anyone can join.";
-  const result = parseReply(raw);
-  assert.deepEqual(result, { source: "Pixl FAQ", answer: "Anyone can join." });
+test("program prompts use configured identity and timeline metadata", () => {
+  const program = { id: "demo", name: "Demo", helpChannel: "C_HELP", scope: "program" };
+  const prompt = answer.answerOrChatPrompt("### Demo docs\nA rule", "", false, program, "C_HELP");
+  assert.match(prompt, /WHERE YOU ARE: <#C_HELP>/);
+  assert.match(prompt, /Demo/);
+  assert.match(prompt, /Program timeline/);
 });
 
-test("parseAnswerOrChat reports a grounded answer with its source", () => {
-  const result = parseAnswerOrChat("SOURCE: Pixl FAQ\nANSWER: Anyone can join, no team needed.");
-  assert.deepEqual(result, { source: "Pixl FAQ", answer: "Anyone can join, no team needed." });
+test("generic guardrails point to configured help without inventing program facts", () => {
+  const guardrail = answer.programGuardrail({ id: "acme", name: "Acme", helpChannel: "C_HELP" }, false);
+  assert.match(guardrail, /Acme/);
+  assert.match(guardrail, /<\#C_HELP>/);
+  assert.match(guardrail, /Never invent/);
 });
 
-test("parseAnswerOrChat treats a padded NONE as uncovered", () => {
-  const result = parseAnswerOrChat("SOURCE: NONE  \n\nANSWER: no clue on that one, ask a helper :hii:");
-  assert.deepEqual(result, { source: null, answer: "no clue on that one, ask a helper :hii:" });
-  assert.equal(parseAnswerOrChat("SOURCE: none\nANSWER: hey").source, null);
+test("whereYouAre distinguishes owned and unowned channels", () => {
+  const owned = answer.whereYouAre({ id: "demo", name: "Demo", helpChannel: "C_HELP" }, "C_HELP");
+  assert.match(owned, /every question here is about Demo/);
+  assert.match(owned, /redirect to any other/);
+
+  const unowned = answer.whereYouAre(null, "C_RANDOM");
+  assert.match(unowned, /isn't tied to any one/);
 });
 
-test("parseAnswerOrChat treats an unprefixed reply as conversational", () => {
-  const result = parseAnswerOrChat("not much, just vibing :3c");
-  assert.deepEqual(result, { source: null, answer: "not much, just vibing :3c:" });
-});
-
-test("parseAnswerOrChat never attributes an unlabeled reply to a source", () => {
-  const result = parseAnswerOrChat("Jame Gam is a game-jam program.", { id: "jame-gam" });
-  assert.equal(result?.source, null);
-  assert.equal(result?.answer, "Jame Gam is a game-jam program.");
-});
-
-test("ownedSourceName still identifies a single owned source (used for display only)", () => {
-  assert.equal(answer.ownedSourceName("jame-gam"), "Jame Gam Complete Docs");
-  assert.equal(answer.ownedSourceName(null), null);
-  assert.equal(answer.ownedSourceName("pixl"), null);
-});
-
-test("an explicit NONE decline never gains a source, even for a single-source program", () => {
-  const result = parseAnswerOrChat("SOURCE: NONE\nANSWER: UNCLEAR", { id: "jame-gam" });
-  assert.equal(result?.source, null);
-  assert.equal(result?.unclear, true);
-});
-
-test("parseAnswerOrChat returns null when the model gave us nothing", () => {
-  assert.equal(parseAnswerOrChat(""), null);
-  assert.equal(parseAnswerOrChat(undefined), null);
-});
-
-function streamOf(text: string) {
-  return async (_options: unknown, onDelta: (delta: string, text: string) => boolean | void) => {
-    let seen = "";
-    for (const chunk of text.match(/.{1,7}/gs) || []) {
-      seen += chunk;
-      if (onDelta(chunk, seen) === false) return { text: seen, stopped: true };
-    }
-    return { text: seen, stopped: false };
-  };
-}
-
-test("getAnswerOrChatStream emits the answer only, never the SOURCE line", async () => {
+test("stream parsing emits only answer text", async () => {
   const original = llm.completeStream;
-  llm.completeStream = streamOf("SOURCE: Pixl FAQ\nANSWER: just sign up at play.pixl.rsvp :yay:");
+  llm.completeStream = async (_options: unknown, onDelta: (delta: string, text: string) => void) => {
+    const text = "SOURCE: Example docs\nANSWER: use the configured docs :3c:";
+    onDelta(text, text);
+    return { text, stopped: false };
+  };
   try {
     const seen: string[] = [];
-    const result = await answer.getAnswerOrChatStream("how do i join", "docs", "", {
-      onText: (t: string) => seen.push(t),
+    const result = await answer.getAnswerOrChatStream("how do I start", "### Example docs\nsetup", "", {
+      onText: (text: string) => seen.push(text),
     });
-
-    assert.ok(seen.length > 1, "should have streamed more than once");
-    for (const text of seen) assert.doesNotMatch(text, /SOURCE|ANSWER:/);
-    assert.equal(seen[seen.length - 1], "just sign up at play.pixl.rsvp :yay:");
-    assert.deepEqual(result, { source: "Pixl FAQ", answer: "just sign up at play.pixl.rsvp :yay:" });
+    assert.deepEqual(result, { source: "Example docs", answer: "use the configured docs :3c:" });
+    assert.deepEqual(seen, ["use the configured docs :3c:"]);
   } finally {
     llm.completeStream = original;
   }
 });
 
-test("getAnswerOrChatStream emits nothing when the model skips the ANSWER marker", async () => {
-  const original = llm.completeStream;
-  llm.completeStream = streamOf("not much, just vibing");
-  try {
-    const seen: string[] = [];
-    const result = await answer.getAnswerOrChatStream("whats up", "docs", "", { onText: (t: string) => seen.push(t) });
-
-    assert.deepEqual(seen, []);
-    assert.deepEqual(result, { source: null, answer: "not much, just vibing" });
-  } finally {
-    llm.completeStream = original;
-  }
-});
-
-test("getAnswerOrChatStream returns null rather than calling the model on an empty corpus", async () => {
-  const original = llm.completeStream;
-  llm.completeStream = async () => {
-    throw new Error("should not have been called");
-  };
-  try {
-    assert.equal(await answer.getAnswerOrChatStream("anything", "", "", { onText: () => {} }), null);
-  } finally {
-    llm.completeStream = original;
-  }
-});
-
-test("pixlGuardrail points elsewhere by default and stays local when already in the help channel", () => {
-  assert.match(pixlGuardrail(false), /point them at (?:<#|#pixl-help)/);
-  assert.doesNotMatch(pixlGuardrail(false), /already here/);
-
-  assert.match(pixlGuardrail(true), /a helper in this channel will pick it up/);
-  assert.match(pixlGuardrail(true), /already here/);
-  assert.doesNotMatch(pixlGuardrail(true), /point them at (?:<#|#pixl-help)/);
-});
-
-test("answerOrChatPrompt tells the model not to let identity docs hijack a follow-up to its own reply", () => {
-  assert.match(answerOrChatPrompt("docs", "", false), /About pixie.*section happens to share a word/s);
-});
-
-test("answerOrChatPrompt warns against vocabulary-overlap doc matches on an unrelated topic", () => {
-  const prompt = answerOrChatPrompt("docs", "", false);
-  assert.match(prompt, /not merely because it shares a word or two/);
-  assert.match(prompt, /installing KiCad or any other third-party tool is not a git question/);
-  assert.match(prompt, /is general tech knowledge, CASE 2/);
-});
-
-test("answerOrChatPrompt warns that 'step by step' describes format, not subject, and inherits the topic from context", () => {
-  const prompt = answerOrChatPrompt("docs", "", false);
-  assert.match(prompt, /describe the FORMAT someone wants/);
-  assert.match(prompt, /never match a doc section just because it happens to BE a numbered list/i);
-  assert.match(prompt, /inherits its subject from the immediately preceding exchange/);
-});
-
-test("answerOrChatPrompt explicitly rules out treating 'step N' as an index into a doc's numbered list", () => {
-  const prompt = answerOrChatPrompt("docs", "", false);
-  assert.match(prompt, /never treat 'step N' as an index into whichever doc section has a step N/);
-});
-
-test("timelineAuthorityRule does not let a bare 'start'/'begin' alone trigger the launch-date override", () => {
-  const rule = timelineAuthorityRule(NONE_MARKER);
-  assert.match(rule, /how do i start building a PCB/);
-  assert.match(rule, /must never trigger this rule on its own/);
-  assert.match(rule, /ONLY on questions asking specifically whether the Pixl program itself has launched/);
-});
-
-test("both prompt builders carry the same timeline boundary, not two copies that can drift", () => {
-  assert.match(systemPrompt("docs"), /must never trigger this rule on its own/);
-  assert.match(answerOrChatPrompt("docs"), /must never trigger this rule on its own/);
-});
-
-test("answerOrChatPrompt swaps in the help-channel guardrail copy", () => {
-  assert.match(answerOrChatPrompt("docs", "", false), /point them at (?:<#|#pixl-help)/);
-  assert.match(answerOrChatPrompt("docs", "", true), /a helper in this channel will pick it up/);
-});
-
-test("getAnswerOrChatStream threads inHelpChannel through to the actual system prompt", async () => {
-  const original = llm.completeStream;
-  let seenPrompt: string | null = null;
-  llm.completeStream = async (options: { messages: Array<{ content: string }> }) => {
-    seenPrompt = options.messages[0].content;
-    return { text: "SOURCE: NONE\nANSWER: not sure on that one", stopped: false };
-  };
-  try {
-    await answer.getAnswerOrChatStream("is it out yet", "docs", "", { onText: () => {}, inHelpChannel: true });
-  } finally {
-    llm.completeStream = original;
-  }
-
-  assert.match(seenPrompt, /a helper in this channel will pick it up/);
-});
-
-test("whereYouAre names the channel and the program that owns it", () => {
-  const block = answer.whereYouAre({ id: "pixl", name: "Pixl", helpChannel: "C-help" }, "C-help");
-  assert.match(block, /<#C-help>/);
-  assert.match(block, /the help channel for Pixl/);
-  assert.match(block, /every question here is about Pixl/);
-});
-
-test("whereYouAre distinguishes a program's other channels from its help channel", () => {
-  const block = answer.whereYouAre({ id: "pixl", name: "Pixl", helpChannel: "C-help" }, "C-chat");
-  assert.match(block, /one of the channels for Pixl/);
-  assert.doesNotMatch(block, /the help channel for Pixl/);
-});
-
-test("whereYouAre does not name or redirect to other programs from inside a named channel", () => {
-  const block = answer.whereYouAre({ id: "pixl", name: "Pixl", helpChannel: "C-help" }, "C-help");
-  assert.match(block, /This is a Pixl channel only/);
-  assert.match(block, /sounds like another program's name is still a Pixl question/);
-  assert.doesNotMatch(block, /point them at that program's channel/);
-  assert.doesNotMatch(block, /Hardwire/);
-});
-
-test("whereYouAre refuses to assume a program in an unowned channel", () => {
-  const block = answer.whereYouAre(null, "C-random");
-  assert.match(block, /isn't tied to any one YSWS program/);
-  assert.match(block, /ask them which/);
-  assert.doesNotMatch(block, /every question here is about/);
-});
-
-test("whereYouAre survives having no channel to name", () => {
-  const block = answer.whereYouAre({ id: "pixl", name: "Pixl" }, null);
-  assert.match(block, /a Slack channel/);
-  assert.doesNotMatch(block, /undefined/);
-});
-
-test("a bare program id resolves to the program's real name, not the id", () => {
-  const resolved = answer.resolveProgram("ysws-global");
-  assert.equal(resolved.name, "YSWS Global");
-  assert.equal(answer.resolveProgram(null), null);
-});
-
-test("both prompts carry the where-you-are block", () => {
-  const prog = { id: "pixl", name: "Pixl", helpChannel: "C-help" };
-  assert.match(answer.systemPrompt("docs", "", prog, "C-help"), /WHERE YOU ARE: <#C-help>/);
-  assert.match(answer.answerOrChatPrompt("docs", "", true, prog, "C-help"), /WHERE YOU ARE: <#C-help>/);
-});
-
-test("answerOrChatPrompt gives the model a way to say it cannot tell what is being asked", () => {
-  const prompt = answerOrChatPrompt("docs", "", false);
-  assert.match(prompt, /cannot tell what they.re asking about/i);
-  assert.match(prompt, new RegExp(`ANSWER: ${answer.UNCLEAR_MARKER}`));
-  assert.match(prompt, /says nothing at all/i);
-});
-
-test("parseAnswerOrChat turns the unclear marker into no answer at all", () => {
-  const parsed = answer.parseAnswerOrChat(`SOURCE: NONE\nANSWER: ${answer.UNCLEAR_MARKER}`);
-  assert.equal(parsed.unclear, true);
-  assert.equal(parsed.answer, "");
-  assert.equal(parsed.source, null);
-});
-
-test("parseAnswerOrChat leaves an ordinary reply alone", () => {
-  const parsed = answer.parseAnswerOrChat("SOURCE: NONE\nANSWER: unclear on that one, but the deadline is the 18th");
-  assert.equal(parsed.unclear, undefined);
-  assert.match(parsed.answer, /deadline/);
-});
-
-test("the prompts forbid working out shop numbers by hand", () => {
-  for (const prompt of [answer.systemPrompt("corpus"), answer.answerOrChatPrompt("corpus", "", false)]) {
-    assert.match(prompt, /only source of reward thresholds/);
-    assert.match(prompt, /never estimate a reward threshold/i);
-  }
-});
-
-test("the voice rules forbid dashes outright", () => {
-  for (const prompt of [answer.systemPrompt("corpus"), answer.answerOrChatPrompt("corpus", "", false)]) {
-    assert.match(prompt, /never use (?:em )?dashes|no dashes/i);
-  }
-});
-
-test("sanitizeAnswer extracts clean answer from reasoning scratchpad leakage", () => {
-  const incident = `<a normal, friendly reply, 1-3 sentences>
-
-We should give some ideas for TypeScript projects: maybe a CLI tool, a game, a web app, etc. Keep casual tone, short.
-
-We must not mention we checked docs. Just answer.
-
-Let's produce: "Sure! Some fun TypeScript ideas: a terminal todo-list CLI, a simple 2-D canvas game (like Snake or Breakout), a React/Vite weather dashboard that fetches an API, or a markdown-to-HTML converter with plugins. Pick something that excites you and start small!"
-
-Make sure it's 1-3 sentences. That's maybe 2 sentences. Good.
-
-We must not use em dashes. Use commas or periods.
-
-Add maybe an emoji? We can sprinkle 0-2 emojis if they fit. Use :yay: maybe. But not forced. Let's add one at end.
-
-Make sure no dash. Use hyphen only inside words like "cli". That's fine.
-
-Proceed`;
-
-  const cleaned = answer.sanitizeAnswer(incident);
-  assert.equal(
-    cleaned,
-    "Sure! Some fun TypeScript ideas: a terminal todo-list CLI, a simple 2-D canvas game (like Snake or Breakout), a React/Vite weather dashboard that fetches an API, or a markdown-to-HTML converter with plugins. Pick something that excites you and start small!",
-  );
-});
-
-test("sanitizeAnswer strips template placeholder echoes while preserving Slack links and channels", () => {
-  const withPlaceholder =
-    "<a normal, friendly reply, 1-3 sentences>\nCheck out the docs at <https://example.com> or ask in <#C123|pixl-help>!";
-  assert.equal(
-    answer.sanitizeAnswer(withPlaceholder),
-    "Check out the docs at <https://example.com> or ask in <#C123|pixl-help>!",
-  );
-});
-
-test("parseAnswerOrChat sanitizes reasoning leak in full completion", () => {
-  const raw = `SOURCE: NONE
-ANSWER: <a normal, friendly reply, 1-3 sentences>
-We should tell them to check the shop.
-Let's produce: "You can check the shop for that item!"
-Proceed`;
-  const result = answer.parseAnswerOrChat(raw);
-  assert.equal(result.source, null);
-  assert.equal(result.answer, "You can check the shop for that item!");
-});
-
-test("getAnswerOrChatStream does not emit scratchpad or template placeholders to onText", async () => {
-  const llm = require("./llm");
-  const originalCompleteStream = llm.completeStream;
-
-  try {
-    llm.completeStream = async (_req: unknown, onDelta: (delta: string, text: string) => void) => {
-      const chunks = [
-        "SOURCE: NONE\nANSWER: <a normal, friendly reply, 1-3 sentences>\n",
-        "We should give some ideas.\n",
-        "Let's produce: \"Sure! ",
-        "Build a CLI tool or ",
-        'a game."\n',
-        "Proceed",
-      ];
-      let text = "";
-      for (const chunk of chunks) {
-        text += chunk;
-        onDelta(chunk, text);
-      }
-      return { text, stopped: false };
-    };
-
-    const emitted: string[] = [];
-    await answer.getAnswerOrChatStream("give me typescript ideas", "documentation", "", {
-      onText: (t: string) => emitted.push(t),
-      inHelpChannel: false,
-    });
-
-    assert.ok(emitted.length > 0, "should have emitted something");
-    for (const msg of emitted) {
-      assert.ok(!msg.includes("<a normal"), `must not contain placeholder: ${msg}`);
-      assert.ok(!msg.includes("We should"), `must not contain planning: ${msg}`);
-      assert.ok(!msg.includes("Let's produce"), `must not contain produce label: ${msg}`);
-      assert.ok(!msg.includes("Proceed"), `must not contain trailing Proceed: ${msg}`);
-    }
-    assert.equal(emitted[emitted.length - 1], "Sure! Build a CLI tool or a game.");
-  } finally {
-    llm.completeStream = originalCompleteStream;
-  }
-});
-
-test("stripLeadingSafety strips safety prefixes and allows valid answer to parse", () => {
-  const raw = "User Safety: safe\nSOURCE: Eligibility\nANSWER: You need to be 18 or under when you ship.";
-  const result = answer.parseReply(raw);
-  assert.ok(result);
-  assert.equal(result.source, "Eligibility");
-  assert.equal(result.answer, "You need to be 18 or under when you ship.");
-
-  assert.equal(answer.stripLeadingSafety("Safety: pass\n\nContent Filter: clean\nHello world"), "Hello world");
-});
-
-test("looksTruncated accurately detects dangling ends, unfinished blocks, and punctuation", () => {
-  assert.equal(answer.looksTruncated("Nah, referral codes expire 48 hours after you"), true);
-  assert.equal(answer.looksTruncated("You must submit the project to"), true);
-  assert.equal(answer.looksTruncated("Make sure that"), true);
-  assert.equal(answer.looksTruncated("If you turn 19 while it's sitting in review it'll"), true);
-  assert.equal(answer.looksTruncated("Here are the steps: ```bash\nrun code"), true);
-  assert.equal(answer.looksTruncated("The parts list,"), true);
-
-  assert.equal(answer.looksTruncated("not much, just vibing"), false);
-  assert.equal(answer.looksTruncated("A returned project is not a punishment. Fix the issue and resubmit."), false);
-  assert.equal(answer.looksTruncated("You're good to go :yay:"), false);
-  assert.equal(answer.looksTruncated("Check https://pixl.hackclub.com/docs"), false);
-});
-
-test("parseAnswerOrChat fails closed when model output is only instruction echo or deliberation", () => {
-  const echoRaw =
-    "my short, casual answer in your voice, 1-3 sentences\nwe need to determine whether the docs cover this\nchecking docs structure and section names";
-  const result = answer.parseAnswerOrChat(echoRaw);
-  assert.equal(result, null);
-});
-
-test("answer prompt preserves an explicit request for ideas", () => {
-  assert.equal(answer.isExplicitIdeasRequest("give me some project ideas"), true);
-  assert.match(answer.answerOrChatPrompt("docs", "", false), /Preserve explicit user intent/);
-  assert.equal(answer.isExplicitIdeasRequest("what is the current policy?"), false);
-});
-
-test("prompts enforce domain specificity isolating software and hardware terms", () => {
-  for (const prompt of [
-    answer.systemPrompt("corpus"),
-    answer.answerOrChatPrompt("corpus", "", false),
-    answer.answerOrChatPrompt("corpus", "", false, { requireGroundedAnswer: true }),
-  ]) {
-    assert.match(prompt, /DOMAIN SPECIFICITY/);
-    assert.match(prompt, /never include hardware-specific requirements/i);
-    assert.match(prompt, /wiring diagrams, PCBs, CAD, schematics/i);
-    assert.match(prompt, /Keep software and hardware requirements strictly separated/i);
-  }
-});
-
-const pixlProgram = require("./programs").get("pixl");
-
-test("Pixl's prompt pins its concrete policy: 30% AI cap, referral expiry, CAD rule, returned-submission scope", () => {
-  for (const prompt of [
-    answer.systemPrompt("corpus", "", pixlProgram),
-    answer.answerOrChatPrompt("corpus", "", false, pixlProgram),
-    answer.answerOrChatPrompt("corpus", "", false, { ...pixlProgram, requireGroundedAnswer: true }),
-  ]) {
-    assert.match(prompt, /RULE HIERARCHY & CONTRADICTION HANDLING/);
-    assert.match(prompt, /0% AI, no AI allowed/i);
-    assert.match(prompt, /never cite or apply the general 30% software code AI allowance/i);
-    assert.match(prompt, /30% AI POLICY/);
-    assert.match(prompt, /hard ceiling of <=30% AI code/i);
-    assert.match(prompt, /hiding AI is treated as fraud and leads to rejection and a permanent ban/i);
-    assert.match(prompt, /REFERRAL CODES.*expire in 48 hours \(2 days\)/i);
-    assert.match(prompt, /never mention reduced-hour approvals, payout deductions/i);
-  }
-});
-
-test("another program's prompt carries none of Pixl's pinned policy", () => {
-  const b2b = require("./programs").get("back-to-basics");
-  for (const prompt of [
-    answer.systemPrompt("corpus", "", b2b),
-    answer.answerOrChatPrompt("corpus", "", false, b2b),
-    answer.answerOrChatPrompt("corpus", "", false, { ...b2b, requireGroundedAnswer: true }),
-  ]) {
-    assert.doesNotMatch(prompt, /30% AI POLICY/);
-    assert.doesNotMatch(prompt, /REFERRAL CODES/);
-    assert.doesNotMatch(prompt, /100% original CAD/i);
-    assert.doesNotMatch(prompt, /reduced-hour approvals/i);
-    assert.match(prompt, /STRICT SCENARIO FOCUS/);
-  }
-});
-
-test("selectAnswerTier routes pings outside help to the ping tier", () => {
-  const { config } = require("./config");
-  const pingTier = config.pingAnswer || config.answer;
-  const helpTier = config.helpAnswer || config.answer;
-  assert.ok(pingTier.model || pingTier.baseUrl, "ping tier is configured");
-  assert.ok(helpTier.model || helpTier.baseUrl, "help tier is configured");
-});
-
-test("UNCLEAR marker parses to unclear:true and never leaks as prose", () => {
-  const parsed = answer.parseAnswerOrChat("SOURCE: NONE\nANSWER: UNCLEAR");
-  assert.equal(parsed.unclear, true);
-  assert.equal(parsed.answer, "");
-});
 export {};

@@ -1,6 +1,6 @@
 const { config } = require("./config");
 const { complete } = require("./llm");
-const { VOICE, pixlGuardrail, normalizeEmoji, looksLikeCode, MAX_TOKENS, DEBUG_MAX_TOKENS } = require("./answer");
+const { VOICE, programGuardrail, normalizeEmoji, looksLikeCode, MAX_TOKENS, DEBUG_MAX_TOKENS } = require("./answer");
 
 const QUESTION_MARK = /\?/;
 const QUESTION_WORD =
@@ -15,11 +15,11 @@ function looksLikeQuestion(text: string) {
 
 function chatSystemPrompt(additionalContext = "", inHelpChannel = false) {
   const parts = [
-    "You are pixie, a helper bot for Hack Club YSWSs and guides on how to build stuff. You're helpful and you talk like a person.",
+    "You are pixie, a helper bot for configured programs and build tools. You're helpful and you talk like a person.",
     ...VOICE,
     "Keep it short — 1-3 sentences unless they asked something that genuinely needs more.",
     "If it's just a greeting or small talk ('whats up', 'hey pixie', 'thanks'), match it — one short friendly line back. Don't turn it into a help desk prompt, don't list what you can do, don't ask them to rephrase.",
-    pixlGuardrail(inHelpChannel),
+    programGuardrail(null, inHelpChannel),
     "Don't announce that you checked documentation, and don't apologise for what you don't have. Just talk.",
   ];
   if (additionalContext) parts.push("", additionalContext);
@@ -32,7 +32,7 @@ function debugSystemPrompt(additionalContext = "", inHelpChannel = false) {
     ...VOICE,
     "They pasted code or an error. Lead with what's wrong, then the fix. Show corrected code in a fenced block when it helps.",
     "Be concrete. If you genuinely can't tell from what's shown, say what else you'd need to see rather than guessing.",
-    pixlGuardrail(inHelpChannel),
+    programGuardrail(null, inHelpChannel),
   ];
   if (additionalContext) parts.push("", additionalContext);
   return parts.join("\n");

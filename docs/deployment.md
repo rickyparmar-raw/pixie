@@ -39,8 +39,8 @@ re-authorization after adding it, branding falls back to plain Pixie),
 `reactions:read`, `reactions:write`, `commands`, `im:history`, `im:write`,
 `channels:read`, `groups:read`, `files:read`. Socket Mode on, Interactivity
 on. Generate the manifest with `bun run manifest` — command names derive from
-`PIXIE_BOT_SLUG`, shared commands are `/pixie`, `/pixie-guide`,
-`/pixie-sources`, `/pixie-help`, `/pixie-admin`.
+`PIXIE_BOT_SLUG`; command names use that configured slug, including the sources
+and administration commands.
 
 Regenerate + re-install the app only when scopes/commands change. Adding a
 program never touches the manifest.
