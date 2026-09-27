@@ -14,6 +14,8 @@ const { config } = require("./config");
 // live API. Same reason lib/respond.js holds ./answer this way.
 const llm = require("./llm");
 
+type Fact = Record<string, any>;
+
 const PENDING = "pending";
 const APPROVED = "approved";
 
@@ -37,7 +39,7 @@ const JUDGE_TIMEOUT_MS = 10000;
 // to pass through whole while covering the long tail helpers actually teach.
 const CORPUS_FACT_LIMIT = 50;
 
-function parseTeach(text) {
+function parseTeach(text: string): { question: string; answer: string } | null {
   const raw = (text || "").trim();
   if (!raw) return null;
   const idx = raw.indexOf(TEACH_SEPARATOR);
@@ -61,7 +63,7 @@ function invalidateCorpus() {
 }
 
 // Teaching is deliberate, so it skips the queue entirely and enters active memory.
-function teach({ question, answer, authorId, threadTs = null, channel = null, programId = null }) {
+function teach({ question, answer, authorId, threadTs = null, channel = null, programId = null }: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }): number | null {
   const id = db.addLearnedFact({
     question,
     answer,
@@ -76,14 +78,14 @@ function teach({ question, answer, authorId, threadTs = null, channel = null, pr
 }
 
 // Same insert path as teach(), but for the "Teach Pixie from thread" message shortcut
-function captureFromThread({ question, answer, authorId, threadTs, channel, programId = null, autoApprove = false }) {
+function captureFromThread({ question, answer, authorId, threadTs, channel, programId = null, autoApprove = false }: { question: string; answer: string; authorId: string; threadTs: string; channel: string; programId?: string | null; autoApprove?: boolean }): number | null {
   const status = autoApprove ? APPROVED : PENDING;
   const id = db.addLearnedFact({ question, answer, authorId, status, sourceTs: threadTs, channel, programId });
   if (id && status === APPROVED) invalidateCorpus();
   return id;
 }
 
-function stripNoise(text) {
+function stripNoise(text: string): string {
   return String(text || "")
     .replace(/<[@#!][^>]+>/g, "")
     .replace(/:[a-z0-9_+-]+:/gi, "")
@@ -91,14 +93,14 @@ function stripNoise(text) {
     .trim();
 }
 
-function isCaptureWorthy(text) {
+function isCaptureWorthy(text: string): boolean {
   const trimmed = (text || "").trim();
   if (trimmed.length < MIN_CAPTURE_LENGTH || trimmed.length > MAX_CAPTURE_LENGTH) return false;
   // A reply that's only a mention, emoji or link isn't an answer.
   return stripNoise(trimmed).length >= MIN_CAPTURE_LENGTH;
 }
 
-function judgeMessages(question, replyText) {
+function judgeMessages(question: string, replyText: string): Array<{ role: string; content: string }> {
   return [
     {
       role: "system",
@@ -124,7 +126,7 @@ function judgeMessages(question, replyText) {
 // So ask. Fails closed — a network error or an unparseable reply means no
 // capture, because a wrong fact in the corpus is stated with the same confidence
 // as the real docs, while a missed capture costs nothing but a second chance.
-async function judgeAnswer(question, replyText) {
+async function judgeAnswer(question: string, replyText: string): Promise<boolean> {
   try {
     const { text } = await llm.complete(
       {
@@ -143,7 +145,7 @@ async function judgeAnswer(question, replyText) {
     );
     return text?.trim().toUpperCase().startsWith("YES") === true;
   } catch (e) {
-    log.debug("learn", `capture judge failed: ${e.message}`);
+    log.debug("learn", `capture judge failed: ${e instanceof Error ? e.message : String(e)}`);
     return false;
   }
 }
@@ -160,39 +162,39 @@ async function judgeAnswer(question, replyText) {
 // on explicit /pixie-teach or manual approval. The unreachable history below
 // was the old gap->judge->insert path; it stays deleted, not commented, so no
 // future edit can re-enable it by removing one line.
-async function captureFromReply(_args) {
+async function captureFromReply(_args: unknown): Promise<null> {
   void _args;
   return null;
 }
 
-function pending(limit = 25, programId = null) {
+function pending(limit = 25, programId: string | null = null): Fact[] {
   return db.listLearnedFacts(PENDING, limit, programId);
 }
 
-function approved(limit = 200, programId = null) {
+function approved(limit = 200, programId: string | null = null): Fact[] {
   return db.listLearnedFacts(APPROVED, limit, programId);
 }
 
-function approve(id) {
+function approve(id: number): boolean {
   const ok = db.setLearnedStatus(id, APPROVED);
   // Without this the answer cache keeps serving the pre-learning reply.
   if (ok) invalidateCorpus();
   return ok;
 }
 
-function forget(id) {
+function forget(id: number): boolean {
   const ok = db.deleteLearnedFact(id);
   if (ok) invalidateCorpus();
   return ok;
 }
 
-function forgetByStatus(status) {
+function forgetByStatus(status: string): number {
   const count = db.deleteLearnedByStatus(status);
   if (count > 0) invalidateCorpus();
   return count;
 }
 
-function forgetRange(fromId, toId) {
+function forgetRange(fromId: number, toId: number): number {
   const count = db.deleteLearnedRange(fromId, toId);
   if (count > 0) invalidateCorpus();
   return count;
@@ -202,10 +204,10 @@ function forgetRange(fromId, toId) {
 // so the answer prompt needs no special handling and can cite it like any
 // other source. Returns "" when nothing is approved, so the section is omitted
 // rather than appearing empty.
-function corpusSection(programId = null) {
+function corpusSection(programId: string | null = null): string {
   const facts = db.approvedFacts(CORPUS_FACT_LIMIT, programId);
   if (facts.length === 0) return "";
-  return facts.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
+  return facts.map((f: Fact) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
 }
 
 // The context path never sends the whole taught section: in production it is
@@ -214,7 +216,7 @@ function corpusSection(programId = null) {
 // facts sharing vocabulary with the question travel, best first, capped at
 // LEARNED_MAX_FACTS whole facts within LEARNED_BUDGET chars. Program-scoped
 // like corpusSection — another program's facts never rank here.
-function relevantFacts(question, programId = null, { maxFacts = retrieve.LEARNED_MAX_FACTS, maxChars = retrieve.LEARNED_BUDGET } = {}) {
+function relevantFacts(question: string, programId: string | null = null, { maxFacts = retrieve.LEARNED_MAX_FACTS, maxChars = retrieve.LEARNED_BUDGET }: { maxFacts?: number; maxChars?: number } = {}): Fact[] {
   const questionTokens = retrieve.tokenize(question);
   if (questionTokens.length === 0) return [];
   const scored = [];
@@ -245,17 +247,17 @@ function relevantFacts(question, programId = null, { maxFacts = retrieve.LEARNED
 // Question-scoped twin of corpusSection for the context path: same Q/A shape,
 // only the relevant facts. Returns "" when none match, so the section is
 // omitted rather than appearing empty.
-function relevantCorpusSection(question, programId = null, opts = {}) {
+function relevantCorpusSection(question: string, programId: string | null = null, opts: { maxFacts?: number; maxChars?: number } = {}): string {
   const facts = relevantFacts(question, programId, opts);
   if (facts.length === 0) return "";
-  return facts.map((f) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
+  return facts.map((f: Fact) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
 }
 
 function invalidateCorpusPublic() {
   invalidateCorpus();
 }
 
-module.exports = {
+export = {
   parseTeach,
   teach,
   captureFromThread,

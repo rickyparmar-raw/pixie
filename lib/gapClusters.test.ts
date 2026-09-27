@@ -1,5 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
+type TestRow = Record<string, any>;
+
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -23,7 +25,7 @@ test("equivalent phrasings cluster; distinct questions do not", () => {
     "what color is the sky",
   ]);
   assert.equal(groups.length, 2);
-  const pcb = groups.find((g) => g.some((q) => q.includes("pcbway") || q.includes("pcb way")));
+  const pcb = groups.find((g: string[]) => g.some((q: string) => q.includes("pcbway") || q.includes("pcb way")));
   assert.equal(pcb.length, 3);
 });
 
@@ -35,8 +37,8 @@ test("clusterGaps aggregates asks, askers, and coverage per program", () => {
   }
   const res = clusters.clusterGaps({ programId: "gc-hwy", minAskers: 1 });
   assert.ok(!res.error);
-  const pcb = res.clusters.find((c) => c.representative.includes("pcbway") || c.variants > 1);
-  assert.ok(pcb, JSON.stringify(res.clusters.map((c) => c.representative)));
+  const pcb = res.clusters.find((c: TestRow) => c.representative.includes("pcbway") || c.variants > 1);
+  assert.ok(pcb, JSON.stringify(res.clusters.map((c: TestRow) => c.representative)));
   assert.equal(pcb.askers, 3);
   assert.equal(pcb.askCount, 3);
   assert.equal(pcb.covered, false);
@@ -49,7 +51,7 @@ test("clusterGaps aggregates asks, askers, and coverage per program", () => {
 test("coverage flips once an approved fact answers the cluster", async () => {
   db.addLearnedFact({ question: "can pcbway be used", answer: "yes, allowed", status: "approved", programId: "gc-hwy" });
   const res = clusters.clusterGaps({ programId: "gc-hwy", minAskers: 1 });
-  const pcb = res.clusters.find((c) => c.variants > 1);
+  const pcb = res.clusters.find((c: TestRow) => c.variants > 1);
   assert.equal(pcb.covered, true);
 });
 
@@ -95,5 +97,6 @@ test("unscoped gaps are never shown to a program", () => {
   db.recordGap("char unscoped shared question", "U9", "C-SHARED-PIN", "char-unscoped-ts-1", null);
   const res = clusters.clusterGaps({ programId: "gc-shared-pin", minAskers: 1 });
   assert.ok(!res.error);
-  assert.ok(!res.clusters.some((c) => c.representative.includes("char unscoped shared question")));
+  assert.ok(!res.clusters.some((c: TestRow) => c.representative.includes("char unscoped shared question")));
 });
+export {};

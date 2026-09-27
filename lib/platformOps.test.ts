@@ -1,5 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
+type TestRow = Record<string, any>;
+
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -63,15 +65,15 @@ test("analytics daily series is zero-filled and splits a day by who answered", (
   db.handle().query("UPDATE tickets SET created_at = ? WHERE id = ?").run(threeDaysAgo, ids[2]);
 
   const { daily } = analytics.overview("an-daily");
-  const day = (ms) => new Date(ms).toISOString().slice(0, 10);
+  const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
   assert.equal(daily.length, 31);
   assert.equal(daily.at(-1).date, day(now));
   assert.deepEqual(daily.at(-1), { date: day(now), questions: 2, aiOnly: 1, human: 1 });
-  assert.equal(daily.find((d) => d.date === day(threeDaysAgo)).questions, 1);
+  assert.equal(daily.find((d: TestRow) => d.date === day(threeDaysAgo)).questions, 1);
   // Quiet days are zeros, never gaps — a chart must not smooth over them.
-  assert.equal(daily.filter((d) => d.questions === 0).length, 29);
+  assert.equal(daily.filter((d: TestRow) => d.questions === 0).length, 29);
 
-  assert.equal(analytics.overview("an-nobody-daily").daily.every((d) => d.questions === 0), true);
+  assert.equal(analytics.overview("an-nobody-daily").daily.every((d: TestRow) => d.questions === 0), true);
 });
 
 test("SLA flags violations, cools down notifications, suggests actions", () => {
@@ -154,7 +156,7 @@ test("analytics/SLA/retention routes reject unknown programs", () => {
 /* SLA thresholds/cooldown/skip ownership and analytics shapes.       */
 /* ------------------------------------------------------------------ */
 
-function charSlaTicket(programId, threadTs, ageMs, status = "open") {
+function charSlaTicket(programId: string, threadTs: string, ageMs: number, status = "open") {
   const id = db.createTicket({ programId, workspaceId: "T1", channel: `C-${programId}`, threadTs, requesterId: "U1", question: "q" });
   db.handle().query("UPDATE tickets SET created_at = ?, updated_at = ?, status = ? WHERE id = ?")
     .run(Date.now() - ageMs, Date.now() - ageMs, status, id);
@@ -170,8 +172,8 @@ test("char: SLA thresholds are per-rule; null means off", () => {
   db.assignTicket(wid, "U-helper");
   db.handle().query("UPDATE tickets SET assigned_at = ? WHERE id = ?").run(Date.now() - 3600000, wid);
   const checked = sla.checkProgram({ programId: "csla-off" });
-  assert.ok(checked.violations.every((v) => v.rule === "unassigned"));
-  assert.ok(!checked.violations.some((v) => v.ticketId === wid));
+  assert.ok(checked.violations.every((v: TestRow) => v.rule === "unassigned"));
+  assert.ok(!checked.violations.some((v: TestRow) => v.ticketId === wid));
 });
 
 test("char: SLA pins waiting_for_helper, assigned_no_response, and claimed mapping", () => {
@@ -187,7 +189,7 @@ test("char: SLA pins waiting_for_helper, assigned_no_response, and claimed mappi
   const c = charSlaTicket("csla-rules", "csla-rules-c", 3600000, "claimed");
   db.handle().query("UPDATE tickets SET assignee_id = ? WHERE id = ?").run("U-helper", c);
   const checked = sla.checkProgram({ programId: "csla-rules" });
-  const byId = Object.fromEntries(checked.violations.map((v) => [v.ticketId, v.rule]));
+  const byId = Object.fromEntries(checked.violations.map((v: TestRow) => [v.ticketId, v.rule]));
   assert.equal(byId[w], "waiting_for_helper");
   assert.equal(byId[a], "assigned_no_response");
   assert.equal(byId[f], "assigned_no_response");
@@ -306,3 +308,4 @@ test("helper pings are off unless a program turns them on, and the flag survives
   programs.invalidate();
   assert.equal(programs.get("hp-on").helperPing, false);
 });
+export {};

@@ -1,5 +1,8 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
+type TestRow = Record<string, any>;
+type TestFn = (...args: any[]) => any;
+
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -30,7 +33,7 @@ const BLOB = JSON.stringify([
   },
 ]);
 
-async function withCorpus(fn) {
+async function withCorpus(fn: TestFn) {
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   const axios = require("axios");
   const realGet = axios.get;
@@ -56,9 +59,9 @@ test("factCheck marks supported claims and flags the rest", async () => {
   await withCorpus(async () => {
     const prog = programs.get("cp-hwy");
     const res = await copilot.factCheck({ program: prog, text: "PCBs from PCBWay are allowed for Highway builds. The moon is made of cheese." });
-    const byVerdict = Object.fromEntries(res.verdicts.map((v) => [v.sentence.slice(0, 20), v.verdict]));
-    const supported = res.verdicts.find((v) => v.verdict === "supported");
-    const unsupported = res.verdicts.find((v) => v.verdict === "unsupported");
+    const byVerdict = Object.fromEntries(res.verdicts.map((v: TestRow) => [v.sentence.slice(0, 20), v.verdict]));
+    const supported = res.verdicts.find((v: TestRow) => v.verdict === "supported");
+    const unsupported = res.verdicts.find((v: TestRow) => v.verdict === "unsupported");
     assert.ok(supported, JSON.stringify(byVerdict));
     assert.ok(unsupported, JSON.stringify(byVerdict));
     assert.ok(supported.evidence.length > 0);
@@ -79,7 +82,7 @@ test("findSimilar ranks resolved tickets in-program by wording overlap", () => {
   const res = copilot.findSimilar({ programId: "cp-hwy", question: "can I order my pcb from pcbway" });
   assert.ok(res.candidates.length >= 1);
   assert.equal(res.candidates[0].ticketId, a);
-  assert.ok(!res.candidates.some((x) => x.ticketId === c), "other programs never leak");
+  assert.ok(!res.candidates.some((x: TestRow) => x.ticketId === c), "other programs never leak");
   assert.ok(res.candidates[0].similarity > 0);
 });
 
@@ -194,8 +197,8 @@ test("char: copilot scopes every helper to its program", async () => {
   const other = db.createTicket({ programId: "cp-scope-other", workspaceId: "T1", channel: "CX", threadTs: "char-cp-t2", requesterId: "U2", question: "char pcbway order scope" });
   db.resolveTicket(other, "other answer");
   const res = copilot.findSimilar({ programId: "cp-hwy", question: "char pcbway order scope" });
-  assert.ok(res.candidates.some((c) => c.ticketId === a));
-  assert.ok(!res.candidates.some((c) => c.ticketId === other));
+  assert.ok(res.candidates.some((c: TestRow) => c.ticketId === a));
+  assert.ok(!res.candidates.some((c: TestRow) => c.ticketId === other));
   assert.equal(res.programId, "cp-hwy");
   assert.equal(copilot.findSimilar({ programId: null, question: "q" }).error, "programId and question required");
 
@@ -247,3 +250,4 @@ test("char: copilot factualTokens + improveReply guard shape", async () => {
     llm.complete = real;
   }
 });
+export {};

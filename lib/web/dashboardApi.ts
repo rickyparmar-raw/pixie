@@ -15,12 +15,15 @@ const programs = require("../programs");
 const log = require("../log");
 const ticketMetrics = require("../ticketMetrics");
 
-function needProgram(programId) {
+type Row = Record<string, any>;
+type Params = Record<string, any>;
+
+function needProgram(programId: string): { error: string } | null {
   if (!programId || !programs.get(programId)) return { error: "unknown program" };
   return null;
 }
 
-function ticketActorAllowed(programId, actorId) {
+function ticketActorAllowed(programId: string, actorId: string | null): boolean {
   // Same fail-closed membership check as web/api.js: an empty roster denies,
   // and the ticket's own program is the tenant (never client claims).
   try {
@@ -40,17 +43,17 @@ const RESOLVED_GROUP = ["resolved"];
 
 // Sort whitelist — column + default direction. "waiting" is longest-waiting
 // first (oldest creation), which for open tickets is the triage order.
-const SORTS = {
+const SORTS: Record<string, { column: string; dir: string }> = {
   created: { column: "created_at", dir: "DESC" },
   updated: { column: "updated_at", dir: "DESC" },
   waiting: { column: "created_at", dir: "ASC" },
 };
 
-function escapeLike(value) {
+function escapeLike(value: unknown): string {
   return String(value).replace(/[\\%_]/g, (c) => `\\${c}`);
 }
 
-function ticketSearchScoped(programId, params = {}) {
+function ticketSearchScoped(programId: string, params: Params = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   const sort = SORTS[params.sort] ? params.sort : "created";
@@ -58,7 +61,7 @@ function ticketSearchScoped(programId, params = {}) {
     ? params.dir.toUpperCase()
     : SORTS[sort].dir;
   const clauses = ["program_id = ?"];
-  const values = [programId];
+  const values: Array<string | number> = [programId];
   if (params.status) {
     clauses.push("status = ?");
     values.push(params.status);
@@ -85,10 +88,10 @@ function ticketSearchScoped(programId, params = {}) {
   const total = db.handle().query(`SELECT COUNT(*) AS n FROM tickets WHERE ${where}`).get(...values)?.n || 0;
   const rows = db.handle().query(
     `SELECT * FROM tickets WHERE ${where} ORDER BY ${SORTS[sort].column} ${dir} LIMIT ? OFFSET ?`,
-  ).all(...values, safeLimit, safeOffset);
+  ).all(...values, safeLimit, safeOffset) as Row[];
   if (rows.length === 0) return { total, rows };
   // Responder attribution + note counts in two batched queries, not N+1.
-  const ids = rows.map((r) => r.id);
+  const ids = rows.map((r: Row) => r.id);
   const placeholders = ids.map(() => "?").join(",");
   const firstReplies = db.handle().query(
     `SELECT ticket_id, actor_id, MIN(created_at) AS at FROM ticket_events
@@ -97,8 +100,8 @@ function ticketSearchScoped(programId, params = {}) {
   const noteCounts = db.handle().query(
     `SELECT ticket_id, COUNT(*) AS n FROM ticket_notes WHERE ticket_id IN (${placeholders}) GROUP BY ticket_id`,
   ).all(...ids);
-  const firstByTicket = new Map(firstReplies.map((r) => [r.ticket_id, r.actor_id]));
-  const notesByTicket = new Map(noteCounts.map((r) => [r.ticket_id, r.n]));
+  const firstByTicket = new Map((firstReplies as Row[]).map((r: Row) => [r.ticket_id, r.actor_id]));
+  const notesByTicket = new Map((noteCounts as Row[]).map((r: Row) => [r.ticket_id, r.n]));
   for (const row of rows) {
     row.first_responder_id = firstByTicket.get(row.id) || null;
     row.notes_count = notesByTicket.get(row.id) || 0;
@@ -106,7 +109,7 @@ function ticketSearchScoped(programId, params = {}) {
   return { total, rows };
 }
 
-function ticketDetailScoped(programId, ticketId) {
+function ticketDetailScoped(programId: string, ticketId: number): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   const ticket = db.getTicket(Number(ticketId));
@@ -124,27 +127,27 @@ function ticketDetailScoped(programId, ticketId) {
 
 /* ------------------------------------------------------------- metrics -- */
 
-function median(values) {
+function median(values: number[]): number | null {
   const sorted = [...values].filter((n) => Number.isFinite(n) && n >= 0).sort((a, b) => a - b);
   if (sorted.length === 0) return null;
   return sorted[Math.floor(sorted.length / 2)];
 }
 
-function average(values) {
+function average(values: number[]): number | null {
   const clean = [...values].filter((n) => Number.isFinite(n) && n >= 0);
   if (clean.length === 0) return null;
   return Math.round(clean.reduce((sum, n) => sum + n, 0) / clean.length);
 }
 
-function rate(numerator, denominator) {
+function rate(numerator: number, denominator: number): number | null {
   return denominator > 0 ? Number((numerator / denominator).toFixed(3)) : null;
 }
 
-function utcDay(ms) {
+function utcDay(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-function volumeByDay(rows, cutoff, now) {
+function volumeByDay(rows: Row[], cutoff: number, now: number): Row[] {
   const days = new Map();
   for (let t = Date.parse(`${utcDay(cutoff)}T00:00:00Z`); t <= now; t += 86400000) {
     const date = utcDay(t);
@@ -169,7 +172,7 @@ const ANSWERED_KINDS = new Set(["answer_docs", "answer_chat", "answer_link"]);
 
 // Program-scoped ops rollup for the analytics page. Every figure is counted
 // from stored tickets/ticket_events/metrics rows — no estimates, no model.
-function metricsOverview(programId, query = {}) {
+function metricsOverview(programId: string, query: Params = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   const days = Math.min(Math.max(Number(query.days) || 30, 1), 365);
@@ -181,21 +184,21 @@ function metricsOverview(programId, query = {}) {
   const rows = db.handle().query(
     `SELECT created_at, first_response_at, first_human_response_at, resolved_at, resolved_by, assignee_id, status
      FROM tickets WHERE program_id = ? AND created_at > ?`,
-  ).all(programId, cutoff);
+  ).all(programId, cutoff) as Row[];
 
   const firstLags = rows
-    .filter((r) => r.first_response_at)
-    .map((r) => r.first_response_at - r.created_at);
+    .filter((r: Row) => r.first_response_at)
+    .map((r: Row) => r.first_response_at - r.created_at);
   const resolveLags = rows
-    .filter((r) => r.status === "resolved" && r.resolved_at)
-    .map((r) => r.resolved_at - r.created_at);
-  const pixieAnswered = rows.filter((r) => r.first_response_at && !r.first_human_response_at).length;
-  const humanHandled = rows.filter((r) => r.first_human_response_at).length;
+    .filter((r: Row) => r.status === "resolved" && r.resolved_at)
+    .map((r: Row) => r.resolved_at - r.created_at);
+  const pixieAnswered = rows.filter((r: Row) => r.first_response_at && !r.first_human_response_at).length;
+  const humanHandled = rows.filter((r: Row) => r.first_human_response_at).length;
 
   const metricRows = db.handle().query(
     "SELECT kind, detail FROM metrics WHERE program_id = ? AND created_at > ?",
-  ).all(programId, cutoff);
-  const byReason = {};
+  ).all(programId, cutoff) as Row[];
+  const byReason: Record<string, number> = {};
   let blocked = 0;
   let answered = 0;
   for (const row of metricRows) {
@@ -215,12 +218,12 @@ function metricsOverview(programId, query = {}) {
     `SELECT assignee_id AS userId, COUNT(*) AS openAssigned FROM tickets
      WHERE program_id = ? AND assignee_id IS NOT NULL
      AND created_at > ? AND status IN (${OPEN_GROUP.map(() => "?").join(",")}) GROUP BY assignee_id`,
-  ).all(programId, cutoff, ...OPEN_GROUP);
-  const resolvedBy = ticketMetrics.leaderboard(programId, { since: cutoff })
-    .filter((row) => row.resolved > 0)
-    .map((row) => ({ userId: row.userId, resolved: row.resolved }));
-  const resolvedMap = new Map(resolvedBy.map((r) => [r.userId, r.resolved]));
-  const helpers = openLoad.map((r) => ({
+  ).all(programId, cutoff, ...OPEN_GROUP) as Row[];
+  const resolvedBy: Row[] = ticketMetrics.leaderboard(programId, { since: cutoff })
+    .filter((row: Row) => row.resolved > 0)
+    .map((row: Row) => ({ userId: row.userId, resolved: row.resolved }));
+  const resolvedMap = new Map(resolvedBy.map((r: Row) => [r.userId, r.resolved]));
+  const helpers = openLoad.map((r: Row) => ({
     userId: r.userId,
     openAssigned: r.openAssigned,
     resolved: resolvedMap.get(r.userId) || 0,
@@ -230,7 +233,7 @@ function metricsOverview(programId, query = {}) {
       helpers.push({ userId: r.userId, openAssigned: 0, resolved: r.resolved });
     }
   }
-  helpers.sort((a, b) => (b.openAssigned + b.resolved) - (a.openAssigned + a.resolved));
+  helpers.sort((a: Row, b: Row) => (b.openAssigned + b.resolved) - (a.openAssigned + a.resolved));
 
   return {
     programId,
@@ -253,10 +256,10 @@ function metricsOverview(programId, query = {}) {
 // Scrub credentials out of a source URL before it leaves Core. Mirrors the
 // web/api.js publicSourceUrl contract: userinfo, query and fragment never
 // render on the dashboard.
-function publicSourceUrl(value) {
+function publicSourceUrl(value: unknown): string | null {
   if (!value) return null;
   try {
-    const url = new URL(value);
+    const url = new URL(String(value));
     url.username = "";
     url.password = "";
     url.search = "";
@@ -272,13 +275,13 @@ const SOURCE_STATUSES = new Set(["Pending", "Fetching", "Processing", "Ready", "
 // lib/knowledge.js reports lowercase states (pending|fetching|ready|error|
 // stale); the dashboard renders capitalized labels. Anything unknown is
 // Pending rather than a made-up state.
-function normalizeSourceStatus(value) {
+function normalizeSourceStatus(value: unknown): string {
   const raw = String(value || "");
   const cap = raw.charAt(0).toUpperCase() + raw.slice(1).toLowerCase();
   return SOURCE_STATUSES.has(cap) ? cap : "Pending";
 }
 
-function sanitizeSourceRow(row) {
+function sanitizeSourceRow(row: Row): Row {
   return {
     name: row.name || "source",
     type: row.type || null,
@@ -295,7 +298,7 @@ function sanitizeSourceRow(row) {
 // when it provides sourceStatus(programId) (owned by another worker);
 // otherwise degrades to the same freshness signals the corpus gate reads,
 // with chunk counts unavailable.
-function knowledgeStatus(programId) {
+function knowledgeStatus(programId: string): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   let knowledge = null;
@@ -308,7 +311,7 @@ function knowledgeStatus(programId) {
     try {
       const rows = knowledge.sourceStatus(programId);
       const list = Array.isArray(rows) ? rows : [];
-      return { programId, sources: list.map(sanitizeSourceRow) };
+      return { programId, sources: list.map((s: Row) => sanitizeSourceRow(s)) };
     } catch (e) {
       return { error: e instanceof Error ? e.message : "knowledge status failed" };
     }
@@ -316,7 +319,7 @@ function knowledgeStatus(programId) {
   // Graceful fallback: program-declared sources plus source_cache health.
   const program = programs.get(programId);
   const declared = Array.isArray(program.sources) ? program.sources : [];
-  const sources = declared.map((source) => {
+  const sources = declared.map((source: Row) => {
     let key = null;
     try {
       key = knowledge && typeof knowledge.sourceCacheKey === "function"
@@ -353,7 +356,7 @@ function knowledgeStatus(programId) {
 
 // Fire-and-forget refresh: the fetch fan-out must not hold the HTTP call.
 // Returns { started: true } once the job is kicked off, never its result.
-function knowledgeRefresh(programId) {
+function knowledgeRefresh(programId: string): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   let knowledge = null;
@@ -368,7 +371,7 @@ function knowledgeRefresh(programId) {
   try {
     const res = knowledge.refreshProgramSources(programId, { force: true });
     if (res && typeof res.catch === "function") {
-      res.catch((e) => log.warn("web/dashboardApi", `program source refresh failed (${programId}): ${e instanceof Error ? e.message : e}`));
+      res.catch((e: unknown) => log.warn("web/dashboardApi", `program source refresh failed (${programId}): ${e instanceof Error ? e.message : e}`));
     }
     return { started: true };
   } catch (e) {
@@ -382,18 +385,18 @@ function knowledgeRefresh(programId) {
 // inactive helpers take no pings and no assignments), declared expertise,
 // workload and solved counts, plus the program's own categories so the
 // expertise editor can suggest from them.
-function helperRoster(programId) {
+function helperRoster(programId: string): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   const program = programs.get(programId);
-  let stats = [];
+  let stats: Row[] = [];
   try {
     stats = require("../helperStats").listHelperStats(programId, { recentLimit: 1, since: Date.now() - 30 * 86400000 });
   } catch (_) {
     stats = [];
   }
-  const byId = new Map(stats.map((s) => [s.userId, s]));
-  const helpers = db.listHelpers(programId, false).map((h) => {
+  const byId = new Map(stats.map((s: Row) => [s.userId, s]));
+  const helpers = (db.listHelpers(programId, false) as Row[]).map((h: Row) => {
     const s = byId.get(h.user_id);
     return {
       userId: h.user_id,
@@ -409,7 +412,7 @@ function helperRoster(programId) {
       lastActivity: s ? s.lastActivity : null,
     };
   });
-  helpers.sort((a, b) => (b.openAssigned + b.resolved) - (a.openAssigned + a.resolved));
+  helpers.sort((a: Row, b: Row) => (b.openAssigned + b.resolved) - (a.openAssigned + a.resolved));
   return { programId, categories: program.categories || null, helpers };
 }
 
@@ -418,7 +421,7 @@ function helperRoster(programId) {
 // as every other dashboard write — the actor must be a helper of the
 // program (the wizard page additionally restricts the switch to
 // owners/admins; Core re-checks membership here regardless).
-function helperSetActive(programId, body = {}) {
+function helperSetActive(programId: string, body: Params = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   const actorId = body.actorId || null;
@@ -427,7 +430,7 @@ function helperSetActive(programId, body = {}) {
   }
   const userId = typeof body.userId === "string" ? body.userId.trim() : "";
   if (!userId) return { error: "userId required" };
-  const row = db.listHelpers(programId, false).find((h) => h.user_id === userId);
+  const row = (db.listHelpers(programId, false) as Row[]).find((h: Row) => h.user_id === userId);
   if (!row) return { error: "helper not found" };
   // Pausing pings keeps the helper on the roster (commands, manual
   // assignment); only automatic offers and pings skip them.
@@ -449,13 +452,13 @@ function helperSetActive(programId, body = {}) {
       entityId: userId,
     });
   } catch (e) {
-    log.warn("web/dashboardApi", `helper availability audit failed: ${e.message}`);
+    log.warn("web/dashboardApi", `helper availability audit failed: ${e instanceof Error ? e.message : String(e)}`);
   }
-  const updated = db.listHelpers(programId, false).find((h) => h.user_id === userId);
+  const updated = (db.listHelpers(programId, false) as Row[]).find((h: Row) => h.user_id === userId);
   return { ok: true, helper: updated ? { userId: updated.user_id, active: Boolean(updated.active), pingEligible: updated.ping_eligible !== 0, role: updated.role } : null };
 }
 
-module.exports = {
+export = {
   OPEN_GROUP,
   RESOLVED_GROUP,
   ticketSearchScoped,

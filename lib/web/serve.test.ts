@@ -64,7 +64,7 @@ test("an actually unmatched route still falls through to the plain 404", async (
 /* identical unless a genuine bug ships with evidence + regression.    */
 /* ------------------------------------------------------------------ */
 
-function withToken(tok) {
+function withToken(tok: string) {
   return { Authorization: `Bearer ${tok}` };
 }
 
@@ -375,3 +375,4 @@ test("POST /internal/v1/programs/:id/incidents/manual creates only for a program
     else process.env.PIXIE_INTERNAL_TOKEN = saved;
   }
 });
+export {};

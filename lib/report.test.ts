@@ -1,5 +1,8 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
+type TestRow = Record<string, any>;
+type TestFn = (...args: any[]) => any;
+
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -12,10 +15,10 @@ db.open(":memory:");
 
 // Every test drives the judge, so the model is stubbed throughout — otherwise
 // the suite would spend a real call per gap.
-async function withJudge(reply, fn) {
+async function withJudge(reply: string | TestFn, fn: TestFn) {
   const original = llm.complete;
-  const asked = [];
-  llm.complete = async (options) => {
+  const asked: string[] = [];
+  llm.complete = async (options: TestRow) => {
     const question = options.messages.at(-1).content;
     asked.push(question);
     if (typeof reply === "function") return { text: await reply(question) };
@@ -57,8 +60,8 @@ test("judgeGap returns null when the call throws", async () => {
 
 test("the judge uses the cheap classifier model, not the answer model", async () => {
   const original = llm.complete;
-  let used = null;
-  llm.complete = async (options) => {
+  let used: string | null = null;
+  llm.complete = async (options: TestRow) => {
     used = options.model;
     return { text: "DOCS" };
   };
@@ -78,13 +81,13 @@ test("classifyGaps writes a verdict per gap and leaves unreadable ones alone", a
   db.recordGap("and my pc crashed -_-", "U2", "C1");
   db.recordGap("even sp[aces failed me", "U3", "C1");
 
-  const verdicts = {
+  const verdicts: TestRow = {
     "who are pixl orgs": "DOCS",
     "and my pc crashed -_-": "TRANSIENT",
     "even sp[aces failed me": "???",
   };
 
-  await withJudge((q) => verdicts[q], async () => {
+  await withJudge((q: string) => verdicts[q], async () => {
     assert.equal(await report.classifyGaps({ limit: 10, spacingMs: 0 }), 2);
   });
 
@@ -98,7 +101,7 @@ test("classifyGaps stops at the per-pass cap and skips already-judged rows", asy
   db.handle().query("DELETE FROM doc_gaps").run();
   for (let i = 0; i < 5; i++) db.recordGap(`question ${i}`, "U1", "C1");
 
-  await withJudge("DOCS", async (asked) => {
+  await withJudge("DOCS", async (asked: string[]) => {
     assert.equal(await report.classifyGaps({ limit: 2, spacingMs: 0 }), 2);
     assert.equal(asked.length, 2, "the cap is a cap");
 
@@ -109,7 +112,7 @@ test("classifyGaps stops at the per-pass cap and skips already-judged rows", asy
 
 test("classifyGaps is a no-op with nothing pending", async () => {
   db.handle().query("DELETE FROM doc_gaps").run();
-  await withJudge("DOCS", async (asked) => {
+  await withJudge("DOCS", async (asked: string[]) => {
     assert.equal(await report.classifyGaps({ limit: 5, spacingMs: 0 }), 0);
     assert.deepEqual(asked, []);
   });
@@ -145,8 +148,8 @@ test("draftDoc returns null when the call throws", async () => {
 
 test("draftDoc uses the answer model, not the cheap classifier", async () => {
   const original = llm.complete;
-  let used = null;
-  llm.complete = async (options) => {
+  let used: string | null = null;
+  llm.complete = async (options: TestRow) => {
     used = options.model;
     return { text: "an answer" };
   };
@@ -167,8 +170,8 @@ test("draftDoc uses the answer model, not the cheap classifier", async () => {
 // along with them.
 test("draftDoc grounds the prompt in the corpus, the thread transcript, and the anti-invention guardrail", async () => {
   const original = llm.complete;
-  let system = null;
-  llm.complete = async (options) => {
+  let system: string | null = null;
+  llm.complete = async (options: TestRow) => {
     system = options.messages[0].content;
     return { text: "an answer" };
   };
@@ -187,8 +190,8 @@ test("draftDoc grounds the prompt in the corpus, the thread transcript, and the 
 
 test("draftDoc passes the thread transcript alongside the question", async () => {
   const original = llm.complete;
-  let userContent = null;
-  llm.complete = async (options) => {
+  let userContent: string | null = null;
+  llm.complete = async (options: TestRow) => {
     userContent = options.messages[1].content;
     return { text: "an answer" };
   };
@@ -211,10 +214,10 @@ test("gatherThreadContext pulls the real thread(s) behind a question", async () 
   db.handle().query("DELETE FROM doc_gaps").run();
   db.recordGap("how do i unlock the next region", "U1", "C1", "100.1");
 
-  const fetched = [];
+  const fetched: TestRow[] = [];
   const client = {
     conversations: {
-      replies: async ({ channel, ts }) => {
+      replies: async ({ channel, ts }: TestRow) => {
         fetched.push({ channel, ts });
         return {
           messages: [
@@ -272,7 +275,7 @@ test("draftGaps does not re-draft a gap already queued for review", async () => 
   seedGap("how do i join a village", report.DOCS);
   seedGap("how do i join a village", report.DOCS);
 
-  await withJudge("ask in #pixl-help and a maintainer will add you", async (asked) => {
+  await withJudge("ask in #pixl-help and a maintainer will add you", async (asked: string[]) => {
     assert.equal(await report.draftGaps(null, { limit: 5, spacingMs: 0 }), 1);
     assert.equal(asked.length, 1, "one draft call for the grouped question");
 
@@ -299,7 +302,7 @@ test("draftGaps stops at the per-pass cap", async () => {
   db.handle().query("DELETE FROM learned_facts").run();
   for (let i = 0; i < 5; i++) seedGap(`question ${i}`, report.DOCS);
 
-  await withJudge("an answer", async (asked) => {
+  await withJudge("an answer", async (asked: string[]) => {
     assert.equal(await report.draftGaps(null, { limit: 2, spacingMs: 0 }), 2);
     assert.equal(asked.length, 2, "the cap is a cap");
   });
@@ -311,7 +314,7 @@ test("draftGaps is a no-op with no DOCS gaps", async () => {
   seedGap("is the pixl server down", report.TRANSIENT);
   seedGap("even sp[aces failed me", report.NOISE);
 
-  await withJudge("an answer", async (asked) => {
+  await withJudge("an answer", async (asked: string[]) => {
     assert.equal(await report.draftGaps(null, { limit: 5, spacingMs: 0 }), 0);
     assert.deepEqual(asked, []);
   });
@@ -336,13 +339,13 @@ test("an approved draft lands in the corpus like any other learned fact", async 
 /* ---------------------------------------------------------------- report -- */
 
 // Seeds a gap already carrying its verdict, at a chosen age.
-function seedGap(question, kind, agoMs = 0) {
+function seedGap(question: string, kind: string, agoMs = 0) {
   db.recordGap(question, "U1", "C1");
   const id = db.handle().query("SELECT MAX(id) AS id FROM doc_gaps").get().id;
   db.handle().query("UPDATE doc_gaps SET kind = ?, created_at = ? WHERE id = ?").run(kind, Date.now() - agoMs, id);
 }
 
-function seedMetric(kind, agoMs = 0) {
+function seedMetric(kind: string, agoMs = 0) {
   db.recordMetric(kind, 1000);
   const id = db.handle().query("SELECT MAX(id) AS id FROM metrics").get().id;
   db.handle().query("UPDATE metrics SET created_at = ? WHERE id = ?").run(Date.now() - agoMs, id);
@@ -427,10 +430,10 @@ test("a report is due once per week and not twice after a restart", async () => 
   db.handle().query("DELETE FROM doc_gaps").run();
   assert.equal(report.isReportDue(), true, "never sent — due");
 
-  const posts = [];
+  const posts: TestRow[] = [];
   const client = {
     chat: {
-      postMessage: async (payload) => {
+      postMessage: async (payload: TestRow) => {
         posts.push(payload);
         return { ts: "1" };
       },
@@ -536,3 +539,4 @@ test("char: draftSourceTs namespaces synthetic rows off the Slack ts space", () 
   assert.match(report.draftSourceTs(42), /^gap-draft:42$/);
   assert.doesNotMatch(report.draftSourceTs(42), /^\d+\.\d+$/);
 });
+export {};

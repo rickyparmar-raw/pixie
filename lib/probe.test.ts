@@ -1,5 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
+type TestRow = Record<string, any>;
+
 const { test, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -82,7 +84,7 @@ test("db.metricDetails returns grouped detail counts", () => {
   const details = db.metricDetails("silent", 7 * 24 * 60 * 60 * 1000);
   assert.ok(details.length >= 2);
 
-  const a = details.find((d) => d.detail === "test_reason_a");
+  const a = details.find((d: TestRow) => d.detail === "test_reason_a");
   assert.ok(a);
   assert.equal(a.count, 2);
 });
@@ -103,9 +105,9 @@ after(() => {
 
 test("char: probe is read-only — it never writes the answer cache", async () => {
   const cache = require("./cache");
-  const seen = [];
+  const seen: unknown[][] = [];
   const origPut = cache.put;
-  cache.put = (...args) => { seen.push(args); return origPut(...args); };
+  cache.put = (...args: any[]) => { seen.push(args); return origPut(...args); };
   answer.getAnswerOrChatStream = async () => ({ source: "Pixl FAQ", answer: "probe answer" });
   intent.classifyIntent = async () => "HELP_NEEDED";
   try {
@@ -126,7 +128,7 @@ test("char: probe reports citation membership against retrieved chunks", async (
 });
 
 test("char: probe surfaces firstTokenMs only when streaming yields text", async () => {
-  answer.getAnswerOrChatStream = async (q, corpus, ctx, opts) => {
+  answer.getAnswerOrChatStream = async (q: string, corpus: string, ctx: TestRow, opts: TestRow) => {
     if (opts?.onText) opts.onText("partial");
     return { source: "Pixl FAQ", answer: "partial" };
   };
@@ -134,3 +136,4 @@ test("char: probe surfaces firstTokenMs only when streaming yields text", async 
   const result = await probe("streaming probe");
   assert.equal(typeof result.firstTokenMs === "number" || result.firstTokenMs === null, true);
 });
+export {};

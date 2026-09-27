@@ -1,6 +1,8 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 process.env.PIXIE_INTERNAL_TOKEN = "test-internal-token";
 
+type TestRow = Record<string, any>;
+
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -54,16 +56,16 @@ test("hosted loop end to end for Highway and Pixl", async () => {
 
   // 3-4. message → grounded AI answer in the right tenant only.
   const realAnswer = lookup.answerOrChat;
-  lookup.answerOrChat = async (question, contextPrompt, opts = {}) => {
+  lookup.answerOrChat = async (question: string, contextPrompt: string, opts: TestRow = {}) => {
     const pid = opts.program ? opts.program.id : null;
     return pid === "e2e-hwy"
       ? { source: "E2E Highway Docs", answer: "October 31" }
       : { source: "E2E Pixl Docs", answer: "August 18" };
   };
-  const posts = [];
+  const posts: TestRow[] = [];
   const client = {
     chat: {
-      postMessage: async (p) => {
+      postMessage: async (p: TestRow) => {
         posts.push(p);
         return { ts: `ts-${posts.length}` };
       },
@@ -81,13 +83,13 @@ test("hosted loop end to end for Highway and Pixl", async () => {
     lookup.answerOrChat = realAnswer;
   }
   assert.ok(posts.length >= 1);
-  assert.ok(posts.some((p) => p.username === "Highway Help"), "answer carries program branding");
+  assert.ok(posts.some((p: TestRow) => p.username === "Highway Help"), "answer carries program branding");
 
   // 5. undocumented question → escalation + ticket (no hallucination).
   const realAnswer2 = lookup.answerOrChat;
   lookup.answerOrChat = async () => ({ source: null, answer: null });
-  const posts2 = [];
-  const client2 = { chat: { postMessage: async (p) => { posts2.push(p); return { ts: "x" }; }, update: async () => ({}), delete: async () => ({}) }, reactions: { add: async () => ({}) } };
+  const posts2: TestRow[] = [];
+  const client2 = { chat: { postMessage: async (p: TestRow) => { posts2.push(p); return { ts: "x" }; }, update: async () => ({}), delete: async () => ({}) }, reactions: { add: async () => ({}) } };
   // HELP_ONLY in a non-help mapping still needs a help channel: use the help channel directly.
   const intent = require("./intent");
   const realClassify = intent.classifyIntent;
@@ -119,3 +121,4 @@ test("hosted loop end to end for Highway and Pixl", async () => {
   // 10. tenant B untouched throughout.
   assert.equal(db.searchTickets({ programId: "e2e-pixl" }).total, 0);
 });
+export {};

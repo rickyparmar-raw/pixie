@@ -1,6 +1,8 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 process.env.PIXIE_PROGRAMS_JSON = "[]";
 
+type TestRow = Record<string, any>;
+
 const { test, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -71,9 +73,9 @@ test("suspended draft sandbox answers without production claim; muted posture an
   assert.equal(prog.id, "ysws-global");
   const savedAnswer = answer.getGroundedAnswer;
   const savedSend = slackMessages.sendProgramMessage;
-  const posted = [];
+  const posted: TestRow[] = [];
   answer.getGroundedAnswer = async () => ({ answer: "draft answer", source: "docs" });
-  slackMessages.sendProgramMessage = async (args) => { posted.push(args); return { ts: "1" }; };
+  slackMessages.sendProgramMessage = async (args: TestRow) => { posted.push(args); return { ts: "1" }; };
   try {
     await handlers.onMessage({
       event: { channel: "C-DRAFT-HELP", user: "U-TESTER", text: "where do i get the prize selection dm for jame gam?", ts: "1789202762.605789" },
@@ -112,9 +114,9 @@ test("draft help question creates one sandbox ticket in its bound sink without a
   );
   const savedAnswer = answer.getGroundedAnswer;
   const savedSend = slackMessages.sendProgramMessage;
-  const posted = [];
+  const posted: TestRow[] = [];
   answer.getGroundedAnswer = async () => ({ answer: "draft answer", source: "docs" });
-  slackMessages.sendProgramMessage = async (args) => { posted.push(args); return { ts: `post-${posted.length}` }; };
+  slackMessages.sendProgramMessage = async (args: TestRow) => { posted.push(args); return { ts: `post-${posted.length}` }; };
   const event = { channel: "C-DRAFT-HELP", user: "U-TESTER", text: "where do i get the prize selection dm?", ts: "draft-ticket-1", team: "T0266FRGM" };
   try {
     await handlers.onMessage({ event, client: {} });
@@ -127,8 +129,8 @@ test("draft help question creates one sandbox ticket in its bound sink without a
   assert.ok(ticket, "a draft help question must create a sandbox ticket");
   assert.equal(ticket.sink_channel, "C-DRAFT-SINK");
   assert.equal(db.getTicketByThreadTs("draft-ticket-1", "T0266FRGM", "jame-gam"), null, "draft tickets must not enter the production tickets table");
-  assert.equal(posted.filter((post) => post.channel === "C-DRAFT-SINK").length, 1, "Slack retries must not duplicate the sink card");
-  assert.equal(posted.filter((post) => post.channel === "C-DRAFT-HELP").length, 1, "Slack retries must not duplicate the same-thread answer");
+  assert.equal(posted.filter((post: TestRow) => post.channel === "C-DRAFT-SINK").length, 1, "Slack retries must not duplicate the sink card");
+  assert.equal(posted.filter((post: TestRow) => post.channel === "C-DRAFT-HELP").length, 1, "Slack retries must not duplicate the same-thread answer");
 });
 
 test("unanswerable draft question posts scoped fallback instead of silence", async () => {
@@ -151,9 +153,9 @@ test("unanswerable draft question posts scoped fallback instead of silence", asy
   );
   const savedAnswer = answer.getGroundedAnswer;
   const savedSend = slackMessages.sendProgramMessage;
-  const posted = [];
+  const posted: TestRow[] = [];
   answer.getGroundedAnswer = async () => null;
-  slackMessages.sendProgramMessage = async (args) => { posted.push(args); return { ts: "1" }; };
+  slackMessages.sendProgramMessage = async (args: TestRow) => { posted.push(args); return { ts: "1" }; };
   try {
     await handlers.onMessage({
       event: { channel: "C-DRAFT-HELP", user: "U-TESTER", text: "something not in draft docs?", ts: "1789203999.000001" },
@@ -176,3 +178,4 @@ test("public non-bound channel gets no draft response and foreign query stays dr
   );
   assert.doesNotMatch(knowledge.getDraftContext("jame-gam", "what are Hardwire tiers"), /T1 Digital Logic|iCE40|T2 ASIC Tapeout|T3 Custom Carrier Board/i);
 });
+export {};

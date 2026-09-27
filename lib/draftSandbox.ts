@@ -5,11 +5,15 @@ const db = require("./db");
 const DRAFT_PROGRAMS = new Map();
 const DRAFT_BINDINGS = new Map();
 
+type DraftProgram = Record<string, any>;
+type DraftBinding = Record<string, any>;
+type DraftClient = Record<string, any>;
+
 function ensureTables() {
   db.handle().exec(`CREATE TABLE IF NOT EXISTS draft_sandbox_programs (program_id TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS draft_sandbox_sources (program_id TEXT NOT NULL, source_name TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY (program_id, source_name)); CREATE TABLE IF NOT EXISTS draft_sandbox_bindings (program_id TEXT NOT NULL, workspace_id TEXT NOT NULL, channel_id TEXT NOT NULL, role TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (program_id, workspace_id, channel_id, role)); CREATE TABLE IF NOT EXISTS draft_sandbox_tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, workspace_id TEXT NOT NULL, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, sink_channel TEXT NOT NULL, requester_id TEXT NOT NULL, question TEXT NOT NULL, card_ts TEXT, created_at INTEGER NOT NULL, UNIQUE(program_id, workspace_id, thread_ts));`);
 }
 
-function register(program) {
+function register(program: DraftProgram): DraftProgram | undefined {
   ensureTables();
   if (!program || program.status !== "suspended" || program.privateSandboxOnly !== true) throw new Error("only private suspended drafts may be registered");
   DRAFT_PROGRAMS.set(program.id, { ...program, lifecycle: "draft" });
@@ -25,7 +29,7 @@ function register(program) {
   return DRAFT_PROGRAMS.get(program.id);
 }
 
-function getForChannel(channelId, workspaceId = null) {
+function getForChannel(channelId: string, workspaceId: string | null = null): DraftBinding | null {
   if (!channelId) return null;
   const exact = DRAFT_BINDINGS.get(`${workspaceId || "default"}:${channelId}`);
   if (exact && exact.enabled) return exact;
@@ -48,11 +52,11 @@ function getForChannel(channelId, workspaceId = null) {
   }
 }
 
-function get(programId) {
+function get(programId: string): DraftProgram | null {
   return DRAFT_PROGRAMS.get(programId) || null;
 }
 
-function list() {
+function list(): DraftProgram[] {
   return [...DRAFT_PROGRAMS.values()];
 }
 
@@ -61,19 +65,19 @@ function clear() {
   DRAFT_BINDINGS.clear();
 }
 
-function loadPersisted() {
+function loadPersisted(): void {
   ensureTables();
   for (const row of db.handle().query("SELECT payload FROM draft_sandbox_programs").all()) {
     try { register(JSON.parse(row.payload)); } catch (_) {}
   }
 }
 
-function bindingRows() {
+function bindingRows(): DraftBinding[] {
   ensureTables();
   return db.handle().query("SELECT * FROM draft_sandbox_bindings WHERE enabled = 1 ORDER BY program_id, role, channel_id").all();
 }
 
-function ticketSinkFor(programId, workspaceId = null) {
+function ticketSinkFor(programId: string, workspaceId: string | null = null): string | null {
   const workspace = workspaceId || "default";
   for (const binding of DRAFT_BINDINGS.values()) {
     if (binding.draftProgramId === programId && binding.role === "ticket" && binding.enabled && (binding.workspaceId || workspace) === workspace) return binding.channelId;
@@ -82,12 +86,12 @@ function ticketSinkFor(programId, workspaceId = null) {
   return row?.channel_id || null;
 }
 
-function getTicketForThread(programId, workspaceId = null, threadTs) {
+function getTicketForThread(programId: string, workspaceId: string | null = null, threadTs: string): DraftBinding | null {
   ensureTables();
   return db.handle().query("SELECT * FROM draft_sandbox_tickets WHERE program_id = ? AND workspace_id = ? AND thread_ts = ?").get(programId, workspaceId || "default", threadTs) || null;
 }
 
-async function ensureSupportTicket({ programId, workspaceId = null, channel, threadTs, requesterId, question, client }) {
+async function ensureSupportTicket({ programId, workspaceId = null, channel, threadTs, requesterId, question, client }: { programId: string; workspaceId?: string | null; channel: string; threadTs: string; requesterId: string; question: string; client?: DraftClient | null }): Promise<DraftBinding | null> {
   if (!programId || !threadTs || !channel || !requesterId || !question) return null;
   ensureTables();
   const workspace = workspaceId || "default";
@@ -113,4 +117,4 @@ async function ensureSupportTicket({ programId, workspaceId = null, channel, thr
   return getTicketForThread(programId, workspace, threadTs);
 }
 
-module.exports = { register, getForChannel, get, list, clear, loadPersisted, bindingRows, getTicketForThread, ensureSupportTicket };
+export = { register, getForChannel, get, list, clear, loadPersisted, bindingRows, getTicketForThread, ensureSupportTicket };

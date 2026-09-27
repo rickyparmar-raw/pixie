@@ -1,5 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
+type TestRow = Record<string, any>;
+
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -15,7 +17,7 @@ after(() => {
   programs.invalidate();
 });
 
-function seedProgram(id, extra = {}) {
+function seedProgram(id: string, extra: TestRow = {}) {
   db.saveProgram({ id, name: id, helpChannel: `C-${id}`, channels: [`C-${id}`], ...extra });
   programs.invalidate();
 }
@@ -69,3 +71,4 @@ test("reopened tickets pull resolutionQuality down more than a plain escalation"
   const reopened = health.computeHealthScore("health-e");
   assert.ok(reopened.components.resolutionQuality < clean.components.resolutionQuality);
 });
+export {};

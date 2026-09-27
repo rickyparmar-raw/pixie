@@ -136,3 +136,4 @@ test("char: loginUrl needs Slack env; handleLogout clears the session cookie", (
   assert.equal(out.status, 302);
   assert.ok(out.headers["Set-Cookie"].includes(`${auth.COOKIE_NAME}=;`));
 });
+export {};

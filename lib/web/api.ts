@@ -11,9 +11,13 @@ const config = require("../config").config;
 const { probe } = require("../probe");
 const { coverageStats, relativeTime } = require("../stats");
 
+type Row = Record<string, any>;
+type Body = Record<string, any>;
+type SlackClient = Record<string, any>;
+
 /* --------------------------------------------------------------- pulse -- */
 
-function buildPulse() {
+function buildPulse(): Row {
   const stats = coverageStats();
   const now = Date.now();
 
@@ -45,16 +49,16 @@ function buildPulse() {
 
 /* ---------------------------------------------------------------- ask -- */
 
-async function handleAsk(question) {
+async function handleAsk(question: string): Promise<Row> {
   if (!question) return { error: "empty question" };
   return probe(question);
 }
 
 /* -------------------------------------------------------------- queue -- */
 
-function queueList() {
+function queueList(): Row[] {
   const pending = learn.pending(100);
-  return pending.map((row) => ({
+  return pending.map((row: Row) => ({
     id: row.id,
     question: row.question,
     answer: row.answer,
@@ -66,15 +70,15 @@ function queueList() {
   }));
 }
 
-function queueApprove(id) {
+function queueApprove(id: number): void {
   learn.approve(id);
 }
 
-function queueDrop(id) {
+function queueDrop(id: number): void {
   learn.forget(id);
 }
 
-function queueEdit(id, question, answer) {
+function queueEdit(id: number, question: string, answer: string): void {
   if (!question || !answer) return;
   // Re-teach under the original fact's program and provenance; an edit must
   // never move a fact to another tenant or orphan it.
@@ -103,7 +107,7 @@ function gapsList() {
   const unjudged = db.handle()
     .query("SELECT id, question, user_id, channel, message_ts, created_at FROM doc_gaps WHERE kind IS NULL ORDER BY created_at DESC LIMIT 100")
     .all()
-    .map((r) => ({
+    .map((r: Row) => ({
       id: r.id,
       question: r.question,
       userId: r.user_id,
@@ -120,21 +124,21 @@ function gapsList() {
       unjudged: counts.unjudged || 0,
     },
     columns: {
-      docs: docs.map((g) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
-      transient: transient.map((g) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
-      noise: noise.map((g) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
+      docs: docs.map((g: Row) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
+      transient: transient.map((g: Row) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
+      noise: noise.map((g: Row) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
       unjudged,
     },
   };
 }
 
-function gapsMove(id, kind) {
+function gapsMove(id: number, kind: string): void {
   if ([report.DOCS, report.TRANSIENT, report.NOISE].includes(kind)) {
     db.setGapKind(id, kind);
   }
 }
 
-async function gapsRejudge(id) {
+async function gapsRejudge(id: number): Promise<Row> {
   const row = db.handle().query("SELECT question FROM doc_gaps WHERE id = ?").get(id);
   if (!row) return { error: "not found" };
   const kind = await report.judgeGap(row.question);
@@ -144,18 +148,18 @@ async function gapsRejudge(id) {
 
 /* ------------------------------------------------------------ silence -- */
 
-function silenceList() {
+function silenceList(): Row {
   const details = db.metricDetails("silent");
   return {
-    breakdown: details.map((d) => ({ reason: d.detail, count: d.count })),
-    total: details.reduce((sum, d) => sum + d.count, 0),
+    breakdown: details.map((d: Row) => ({ reason: d.detail, count: d.count })),
+    total: details.reduce((sum: number, d: Row) => sum + d.count, 0),
   };
 }
 
 /* --------------------------------------------------------- knowledge -- */
 
-function knowledgeInfo() {
-  const sources = knowledge.loadSources().map((s) => ({
+function knowledgeInfo(): Row {
+  const sources = knowledge.loadSources().map((s: Row) => ({
     name: s.name,
     type: s.type,
     url: publicSourceUrl(s.url),
@@ -175,8 +179,8 @@ function knowledgeInfo() {
   };
 }
 
-function sourceHealthMetrics() {
-  const counts = Object.fromEntries(db.metricCounts().map((row) => [row.kind, row.count]));
+function sourceHealthMetrics(): Row {
+  const counts = Object.fromEntries(db.metricCounts().map((row: Row) => [row.kind, row.count]));
   return {
     sourceRefreshFailure: counts.source_refresh_failure || 0,
     staleDynamicSourceUsed: counts.stale_dynamic_source_used || 0,
@@ -187,7 +191,7 @@ function sourceHealthMetrics() {
 // source-cache row. In particular, cache keys and fetch errors can contain
 // tenant URLs or credentials. The source key itself remains inside knowledge,
 // where freshness is resolved against the namespaced cache row.
-function sourceHealthShape(source) {
+function sourceHealthShape(source: Row): Row {
   const health = knowledge.sourceEligibility(source);
   return {
     authority: health.authority,
@@ -200,10 +204,10 @@ function sourceHealthShape(source) {
   };
 }
 
-function publicSourceUrl(value) {
+function publicSourceUrl(value: unknown): string | null {
   if (!value) return null;
   try {
-    const url = new URL(value);
+    const url = new URL(String(value));
     url.username = "";
     url.password = "";
     url.search = "";
@@ -214,12 +218,12 @@ function publicSourceUrl(value) {
   }
 }
 
-function scopedSources(programId) {
+function scopedSources(programId: string): Row[] | null {
   const program = programs.get(programId);
   if (!program) return null;
   const shared = program.sharedSources === false ? [] : (programs.shared().sources || []);
   const seen = new Set();
-  return [...(program.sources || []), ...shared].filter((source) => {
+  return [...(program.sources || []), ...shared].filter((source: Row) => {
     const key = knowledge.sourceCacheKey(source);
     if (!key || seen.has(key)) return false;
     seen.add(key);
@@ -230,12 +234,12 @@ function scopedSources(programId) {
 // Program-scoped counterpart used by internal consumers. Do not derive this
 // from loadSources(): that intentionally returns the refresh set for every
 // hosted program and would cross tenant boundaries in a health response.
-function internalKnowledgeHealth(programId) {
+function internalKnowledgeHealth(programId: string): Row {
   const sources = scopedSources(programId);
   if (!sources) return { error: "unknown program" };
   return {
     programId,
-    sources: sources.map((source) => ({
+    sources: sources.map((source: Row) => ({
       name: source.name,
       type: source.type,
       url: publicSourceUrl(source.url),
@@ -245,11 +249,11 @@ function internalKnowledgeHealth(programId) {
   };
 }
 
-function knowledgeCorpus() {
+function knowledgeCorpus(): Row {
   const index = knowledge.getIndex();
   return {
     corpus: knowledge.getCorpus().slice(0, 50000),
-    chunks: index.docs.map((d) => ({
+    chunks: index.docs.map((d: Row) => ({
       source: d.chunk.source,
       heading: d.chunk.heading || null,
       text: d.chunk.text.slice(0, 300),
@@ -259,18 +263,18 @@ function knowledgeCorpus() {
   };
 }
 
-async function knowledgeRefresh() {
+async function knowledgeRefresh(): Promise<void> {
   // force=true — someone in the web console explicitly hit refresh, same
   // reasoning as the /pixie-reload slash command.
-  const before = new Map(knowledge.loadSources().map((source) => [
+  const before = new Map((knowledge.loadSources() as Row[]).map((source: Row) => [
     knowledge.sourceCacheKey(source), knowledge.sourceFreshness(source).failCount,
   ]));
   await knowledge.refreshCorpus(true);
-  for (const source of knowledge.loadSources()) {
+  for (const source of knowledge.loadSources() as Row[]) {
     const key = knowledge.sourceCacheKey(source);
     const beforeFailures = before.get(key) || 0;
     const health = knowledge.sourceFreshness(source);
-    for (let i = beforeFailures; i < health.failCount; i += 1) {
+    for (let i = Number(beforeFailures); i < health.failCount; i += 1) {
       db.recordMetric("source_refresh_failure", null, source.name);
     }
     if (health.authority === "dynamic" && health.freshness === "stale" && health.hasLastGood) {
@@ -281,18 +285,18 @@ async function knowledgeRefresh() {
 
 /* ------------------------------------------------------------- cache -- */
 
-function cacheList() {
+function cacheList(): Row {
   const stale = cache.staleCacheEntries(db.CACHE_FRESH_MS, 20);
   const top = cache.topCached(20);
 
   return {
     known: cache.cachedCount(),
-    stale: stale.map((r) => ({
+    stale: stale.map((r: Row) => ({
       hash: r.question_hash,
       question: r.question,
       askCount: r.ask_count,
     })),
-    top: top.map((r) => ({
+    top: top.map((r: Row) => ({
       hash: r.question_hash,
       question: r.question,
       askCount: r.ask_count,
@@ -303,7 +307,7 @@ function cacheList() {
   };
 }
 
-function cacheBust(hash) {
+function cacheBust(hash: string): void {
   cache.forget(hash);
 }
 
@@ -311,7 +315,7 @@ function cacheBust(hash) {
 
 // A taught fact always belongs to one program — a program-less fact would be
 // served to nobody (or, historically, to everybody).
-function handleTeach(question, answer, authorId, programId = null) {
+function handleTeach(question: string, answer: string, authorId: string, programId: string | null = null): Row | boolean {
   if (!question || !answer) return false;
   if (!programId || !programs.get(programId)) return { error: "programId required (an existing program)" };
   return learn.teach({ question, answer, authorId, programId });
@@ -319,24 +323,24 @@ function handleTeach(question, answer, authorId, programId = null) {
 
 /* ------------------------------------------------------------ report -- */
 
-function reportText(week = 0) {
+function reportText(week = 0): Row {
   return { text: report.reportText(week) };
 }
 
-let slackClient = null;
+let slackClient: SlackClient | null = null;
 
-function setSlackClient(client) {
+function setSlackClient(client: SlackClient): void {
   slackClient = client;
 }
 
-async function reportPost() {
+async function reportPost(): Promise<boolean> {
   if (!slackClient) return false;
   return report.postWeekly(slackClient);
 }
 
 /* ------------------------------------------------------------- health -- */
 
-function healthCheck() {
+function healthCheck(): Row {
   const missing = [];
   if (!config.slack.botToken) missing.push("SLACK_BOT_TOKEN");
   return {
@@ -361,26 +365,26 @@ function programsList() {
   return programs.all();
 }
 
-function programSave(prog) {
+function programSave(prog: Body): Row {
   if (!prog || !prog.id || !prog.name) return { error: "id and name are required" };
   programs.saveProgram(prog);
   return { ok: true, program: programs.get(prog.id) };
 }
 
-function programRemove(id) {
+function programRemove(id: string): Row {
   if (!id) return { error: "id required" };
   programs.removeProgram(id);
   return { ok: true };
 }
 
-function programSetPosture(id, posture) {
+function programSetPosture(id: string, posture: string): Row {
   const existing = programs.get(id);
   if (!existing) return { error: "program not found" };
   programs.saveProgram({ ...existing, posture });
   return { ok: true, posture };
 }
 
-function ticketsList(programId = null, status = null) {
+function ticketsList(programId: string | null = null, status: string | null = null): Row[] {
   if (programId) {
     return db.getTicketsForProgram(programId, status);
   }
@@ -390,11 +394,11 @@ function ticketsList(programId = null, status = null) {
   return status ? db.handle().query(queryStr).all(status) : db.handle().query(queryStr).all();
 }
 
-function ticketUpdate(id, status, assigneeId = null, actorId = null) {
-  const map = { claimed: "claim", unclaim: "unclaim", resolved: "resolve", reopen: "reopen", closed: "close" };
+function ticketUpdate(id: number, status: string, assigneeId: string | null = null, actorId: string | null = null): Row {
+  const map: Record<string, string> = { claimed: "claim", unclaim: "unclaim", resolved: "resolve", reopen: "reopen", closed: "close" };
   const action = map[status];
   if (!action) return { error: `unknown status ${status}` };
-  const body = { actorId, assigneeId };
+  const body: Body = { actorId, assigneeId };
   if (action === "claim") body.assigneeId = assigneeId || "admin";
   if (action === "resolve") body.resolution = "resolved via admin dashboard";
   const res = internalTicketAction(id, action, body);
@@ -406,14 +410,14 @@ function ticketUpdate(id, status, assigneeId = null, actorId = null) {
 
 function channelsList() {
   const list = programs.getChannelsList();
-  return list.map((ch) => {
+  return list.map((ch: Row) => {
     let msgCount = 0;
     let ticketCount = 0;
     try {
       msgCount = db.handle().query("SELECT COUNT(*) as count FROM user_messages WHERE channel = ?").get(ch.channelId)?.count || 0;
       ticketCount = db.handle().query("SELECT COUNT(*) as count FROM tickets WHERE channel = ?").get(ch.channelId)?.count || 0;
     } catch (e) {
-      log.debug("web/api", `channel counts query failed for ${ch.channelId}: ${e.message}`);
+      log.debug("web/api", `channel counts query failed for ${ch.channelId}: ${e instanceof Error ? e.message : String(e)}`);
     }
     return {
       ...ch,
@@ -423,7 +427,7 @@ function channelsList() {
   });
 }
 
-function channelToggle(body = {}) {
+function channelToggle(body: Body = {}): Row {
   const { channelId, programId, field, value } = body;
   if (!channelId) return { error: "channelId required" };
 
@@ -443,7 +447,7 @@ function channelToggle(body = {}) {
   return { ok: true, channels: channelsList() };
 }
 
-function channelAdd(body = {}) {
+function channelAdd(body: Body = {}): Row {
   const { programId, channelId, isHelp } = body;
   if (!channelId) return { error: "channelId required" };
   const targetProgId = programId || "pixl";
@@ -451,7 +455,7 @@ function channelAdd(body = {}) {
   return { ok, channels: channelsList() };
 }
 
-function channelRemove(programId, channelId) {
+function channelRemove(programId: string, channelId: string): Row {
   if (!channelId) return { error: "channelId required" };
   const targetProgId = programId || "pixl";
   const ok = programs.removeChannelFromProgram(targetProgId, channelId);
@@ -470,7 +474,7 @@ function channelRemove(programId, channelId) {
 // admin or an active helper of that program. Wizard verifies session-level
 // eligibility (allowlist, ownership); Core re-verifies tenant + actor here.
 
-function internalAuth(req) {
+function internalAuth(req: Request): Row {
   const token = process.env.PIXIE_INTERNAL_TOKEN;
   if (!token) return { ok: false, status: 404, body: { error: "internal api disabled" } };
   const header = req.headers.get("authorization") || "";
@@ -482,13 +486,13 @@ function internalAuth(req) {
   return { ok: true };
 }
 
-function internalHistoryImportProgress(programId) {
+function internalHistoryImportProgress(programId: string): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../ticketBackfill").getProgress(programId);
 }
 
-function internalHistoryImportStart(programId) {
+function internalHistoryImportStart(programId: string): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   if (!slackClient) return { error: "Slack client unavailable" };
@@ -497,7 +501,7 @@ function internalHistoryImportStart(programId) {
   return { ok: true, started: true, progress: backfill.getProgress(programId) };
 }
 
-function ticketActorAllowed(programId, actorId) {
+function ticketActorAllowed(programId: string, actorId: string | null): boolean {
   // WHY: Wizard fails closed on an empty roster — same check as Slack, opposite empty policy.
   try {
     return require("../tickets").isActorAllowed(programId, actorId, false);
@@ -510,24 +514,24 @@ function ticketActorAllowed(programId, actorId) {
 // stored rows (never trusts client-supplied program/helper IDs for auth) and
 // fails closed on missing membership. Error strings are part of the
 // serve.js status-mapping contract — keep them byte-identical.
-function needProgram(programId) {
+function needProgram(programId: string): Row | null {
   if (!programs.get(programId)) return { error: "unknown program" };
   return null;
 }
 
-function needProgramActor(programId, actorId) {
+function needProgramActor(programId: string, actorId: string | null): Row | null {
   if (!programs.get(programId)) return { error: "unknown program" };
   if (!ticketActorAllowed(programId, actorId)) return { error: "actor is not a helper of this program" };
   return null;
 }
 
-function ticketTenantError(ticket, body = {}) {
+function ticketTenantError(ticket: Row, body: Body = {}): string | null {
   if (body.programId && body.programId !== ticket.program_id) return "program mismatch";
   if (body.workspaceId && ticket.workspace_id && body.workspaceId !== ticket.workspace_id) return "workspace mismatch";
   return null;
 }
 
-function ticketDetail(id) {
+function ticketDetail(id: number): Row | null {
   const ticket = db.getTicket(id);
   if (!ticket) return null;
   const resolutionSummary = ticket.resolution_summary || null;
@@ -544,7 +548,7 @@ function ticketDetail(id) {
 // the channel, and double-submit Activate collapses onto the existing row.
 const CHANNEL_KINDS = new Set(["help", "organizer", "discussion", "announcement"]);
 
-function internalProgramSync(id, body = {}) {
+function internalProgramSync(id: string, body: Body = {}): Row {
   if (!id || !/^[a-z0-9][a-z0-9-]{1,60}[a-z0-9]$/.test(id)) {
     return { error: "invalid program id (lowercase slug, 3-62 chars)" };
   }
@@ -600,7 +604,7 @@ function internalProgramSync(id, body = {}) {
         try {
           db.releaseProgramChannel({ workspaceId, channelId: ch.id, programId: id });
         } catch (e) {
-          log.warn("web/api", `channel release failed (${ch.id}): ${e.message}`);
+          log.warn("web/api", `channel release failed (${ch.id}): ${e instanceof Error ? e.message : String(e)}`);
         }
       }
     }
@@ -627,7 +631,7 @@ function internalProgramSync(id, body = {}) {
     try {
       db.syncHelper({ programId: id, userId: body.claimedBy, source: "creator", role: "organizer" });
     } catch (e) {
-      log.warn("web/api", `creator helper sync failed (${body.claimedBy}): ${e.message}`);
+      log.warn("web/api", `creator helper sync failed (${body.claimedBy}): ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -640,12 +644,12 @@ function internalProgramSync(id, body = {}) {
       entityId: id,
     });
   } catch (error) {
-    log.warn("web/api", `program audit write failed: ${error.message}`);
+    log.warn("web/api", `program audit write failed: ${error instanceof Error ? error.message : String(error)}`);
   }
   try {
     require("../knowledge").invalidate();
   } catch (error) {
-    log.warn("web/api", `knowledge invalidation failed: ${error.message}`);
+    log.warn("web/api", `knowledge invalidation failed: ${error instanceof Error ? error.message : String(error)}`);
   }
   return { ok: true, program: programs.get(id) };
 }
@@ -655,7 +659,7 @@ function internalProgramSync(id, body = {}) {
 // carry the rest) and validates it against all other stored programs plus the
 // hosted claim table. Returns a 409-shaped error naming the channel, or null
 // when there is no conflict. Pure read — saves nothing.
-function validateSyncChannelRoles(id, merged, channels, workspaceId) {
+function validateSyncChannelRoles(id: string, merged: Body, channels: Array<string | Body>, workspaceId: string | null): Row | null {
   const programModel = require("../programModel");
   const releases = new Set();
   const toClaim = [];
@@ -681,12 +685,12 @@ function validateSyncChannelRoles(id, merged, channels, workspaceId) {
   if (organizerChannel) mainChannels.delete(organizerChannel);
 
   const candidate = { id, workspaceId: merged.workspaceId || workspaceId || null, helpChannel, organizerChannel, channels: [...mainChannels] };
-  const rest = programs.all().filter((p) => p && p.id !== id && p.id !== "ysws-global");
-  let claims = [];
+  const rest = programs.all().filter((p: Row) => p && p.id !== id && p.id !== "ysws-global");
+  let claims: Row[] = [];
   try {
     // This program's own claims are rewritten by the sync itself; only other
     // programs' claims can conflict with the candidate.
-    claims = (db.listChannelClaims?.() || []).filter((c) => c.program_id !== id);
+    claims = (db.listChannelClaims?.() || []).filter((c: Row) => c.program_id !== id);
   } catch (_) {
     claims = [];
   }
@@ -707,8 +711,8 @@ function validateSyncChannelRoles(id, merged, channels, workspaceId) {
 }
 
 // Retrieved source names from a corpus context blob (`### name` sections).
-function sourceNamesFromContext(context) {
-  const names = [];
+function sourceNamesFromContextLegacy(context: string): string[] {
+  const names: string[] = [];
   for (const line of String(context || "").split("\n")) {
     const match = line.match(/^###\s+(.+?)\s*$/);
     if (match && !names.includes(match[1])) names.push(match[1]);
@@ -724,7 +728,7 @@ function sourceNamesFromContext(context) {
 //   "uncertain"      addressed, not verifiable: transparent "can't verify"
 //   "ticket+helper"  handed to a human
 //   "silence"
-function testQuestionExpectedAction({ program, role, settings, addressed = false, engagement, grounded, hasAnswer = false }) {
+function testQuestionExpectedAction({ program, role, settings, addressed = false, engagement, grounded, hasAnswer = false }: { program: Row; role: string; settings: Body; addressed?: boolean; engagement: Row; grounded: boolean; hasAnswer?: boolean }): Row {
   const messagePolicy = require("../pipeline/messagePolicy");
   const plan = messagePolicy.planEngagement({ role, settings, addressed, engagement });
   if (!plan.proceed) return { expectedAction: "silence", reason: plan.reason };
@@ -737,13 +741,13 @@ function testQuestionExpectedAction({ program, role, settings, addressed = false
     const human = policy.recordTicket || policy.pingHelpers;
     action = human ? "escalate" : action === "escalate_and_reply_chat" ? "reply_chat" : addressed ? "uncertain" : "silence";
   }
-  const map = { reply: "reply", reply_chat: "reply", uncertain: "uncertain", escalate: "ticket+helper", silence: "silence" };
+  const map: Record<string, string> = { reply: "reply", reply_chat: "reply", uncertain: "uncertain", escalate: "ticket+helper", silence: "silence" };
   return { expectedAction: map[action] || "silence", reason: plan.reason };
 }
 
 // Retrieved source names from a corpus context blob (`### name` sections).
-function sourceNamesFromContext(context) {
-  const names = [];
+function sourceNamesFromContext(context: string): string[] {
+  const names: string[] = [];
   for (const line of String(context || "").split("\n")) {
     const match = line.match(/^###\s+(.+?)\s*$/);
     if (match && !names.includes(match[1])) names.push(match[1]);
@@ -755,7 +759,7 @@ function sourceNamesFromContext(context) {
 // real retrieval and a grounded-answer attempt, with zero Slack or ticket side
 // effects (lookupAnswer reads the corpus and the model only). Returns what
 // Pixie would do in the chosen channel role, and why.
-async function internalTestQuestion(programId, body = {}) {
+async function internalTestQuestion(programId: string, body: Body = {}): Promise<Row> {
   const program = programs.get(programId);
   if (!program) return { error: "unknown program" };
   const question = String(body.question || "").trim();
@@ -824,7 +828,7 @@ async function internalTestQuestion(programId, body = {}) {
   };
 }
 
-function internalTicketSearch(params) {
+function internalTicketSearch(params: Body): Row {
   if (!params.programId) return { error: "programId required" };
   return db.searchTickets({
     programId: params.programId,
@@ -843,7 +847,7 @@ function internalTicketSearch(params) {
 
 // WHY: dashboard mutations share the Slack canonicals so cards, timelines
 // and audit stay in sync — no raw db writes here.
-function internalTicketAction(id, action, body = {}) {
+function internalTicketAction(id: number, action: string, body: Body = {}): Row {
   const ticket = db.getTicket(id);
   if (!ticket) return { error: "ticket not found" };
   if (body.programId && body.programId !== ticket.program_id) {
@@ -899,7 +903,7 @@ function internalTicketAction(id, action, body = {}) {
   return { ok: true, ticket: ticketDetail(id) };
 }
 
-async function internalTicketReply(id, body = {}) {
+async function internalTicketReply(id: number, body: Body = {}): Promise<Row> {
   const ticket = db.getTicket(id);
   if (!ticket) return { error: "ticket not found" };
   if (body.programId && body.programId !== ticket.program_id) {
@@ -917,7 +921,7 @@ async function internalTicketReply(id, body = {}) {
   return tickets.replyToTicket({ ticketId: id, authorId: actorId, text: body.text, client: slackClient, programId: body.programId, workspaceId: body.workspaceId, source: "dashboard" });
 }
 
-function internalTicketNote(id, body = {}) {
+function internalTicketNote(id: number, body: Body = {}): Row {
   const ticket = db.getTicket(id);
   if (!ticket) return { error: "ticket not found" };
   if (body.programId && body.programId !== ticket.program_id) {
@@ -936,7 +940,7 @@ function internalTicketNote(id, body = {}) {
 
 // Helper reconciliation from the control plane: the provided set becomes the
 // non-manual membership, so removals propagate instead of going stale.
-function internalHelpersSync(programId, body = {}) {
+function internalHelpersSync(programId: string, body: Body = {}): Row {
   // Tenant first: never create orphan membership for an unknown program.
   if (!programs.get(programId)) return { error: "unknown program" };
   const actorId = body.actorId || null;
@@ -959,7 +963,7 @@ function internalHelpersSync(programId, body = {}) {
     for (const userId of seen) db.setHelperPingEligible({ programId, userId, eligible: !notPinged.has(userId) });
   }
   if (body.reconcile) {
-    for (const row of db.listHelpers(programId)) {
+    for (const row of db.listHelpers(programId) as Row[]) {
       if (row.helper_source === source && !seen.has(row.user_id)) {
         db.removeHelper({ programId, userId: row.user_id });
       }
@@ -973,7 +977,7 @@ function internalHelpersSync(programId, body = {}) {
 // Helper copilot actions for the ticket workspace. Reads are program-scoped;
 // model-spending actions (draft/improve/ask) are rate-limited per actor and
 // audited. Nothing here sends to Slack — drafts return for human review.
-async function internalCopilot(action, body = {}) {
+async function internalCopilot(action: string, body: Body = {}): Promise<Row> {
   const copilot = require("../copilot");
   const programId = body.programId || null;
   const actorId = body.actorId || null;
@@ -1020,7 +1024,7 @@ async function internalCopilot(action, body = {}) {
         return { error: `unknown copilot action ${action}` };
     }
   } catch (e) {
-    log.warn("api", `copilot ${action} failed: ${e.message}`);
+    log.warn("api", `copilot ${action} failed: ${e instanceof Error ? e.message : String(e)}`);
     return { error: "copilot unavailable right now" };
   }
 }
@@ -1030,14 +1034,14 @@ async function internalCopilot(action, body = {}) {
 // Resolved tickets become corpus knowledge only through explicit approval.
 // Proposals carry the ticket link; approval stamps verification and
 // invalidates caches via learn.approve(); rejection excludes permanently.
-function internalKnowledgeCandidates(programId, status = null) {
+function internalKnowledgeCandidates(programId: string, status: string | null = null): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   const memory = require("../resolutionMemory");
   return memory.listCandidates(programId, status || memory.CANDIDATE, 50);
 }
 
-async function internalKnowledgePropose(programId, body = {}) {
+async function internalKnowledgePropose(programId: string, body: Body = {}): Promise<Row> {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   const memory = require("../resolutionMemory");
@@ -1046,7 +1050,7 @@ async function internalKnowledgePropose(programId, body = {}) {
   return memory.proposeFromTicket({ ticketId: ticket.id, actorId: body.actorId || null });
 }
 
-function internalKnowledgeCandidateAction(id, body = {}) {
+function internalKnowledgeCandidateAction(id: number, body: Body = {}): Row {
   const memory = require("../resolutionMemory");
   const actorId = body.actorId || null;
   const row = db.getLearnedFactById(Number(id));
@@ -1060,7 +1064,7 @@ function internalKnowledgeCandidateAction(id, body = {}) {
   return { error: `unknown action ${body.action}` };
 }
 
-function internalGapClusters(programId, query = {}) {
+function internalGapClusters(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   const clusters = require("../gapClusters");
@@ -1071,14 +1075,14 @@ function internalGapClusters(programId, query = {}) {
   });
 }
 
-async function internalFaqPropose(programId, body = {}) {
+async function internalFaqPropose(programId: string, body: Body = {}): Promise<Row> {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   const clusters = require("../gapClusters");
   return clusters.proposeFaq({ programId, actorId: body.actorId || null, question: body.question });
 }
 
-function macroScope(id, actorId) {
+function macroScope(id: number, actorId: string | null): { error: string; macro?: never } | { error?: never; macro: Row } {
   const macros = require("../macros");
   const macro = macros.get(Number(id));
   if (!macro) return { error: "macro not found" };
@@ -1088,14 +1092,14 @@ function macroScope(id, actorId) {
   return { macro };
 }
 
-function internalMacrosList(programId, query = {}) {
+function internalMacrosList(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   const macros = require("../macros");
   return macros.list(programId, { enabledOnly: query.enabledOnly === "1", q: query.q || null });
 }
 
-function internalMacroCreate(programId, body = {}) {
+function internalMacroCreate(programId: string, body: Body = {}): Row {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   const macros = require("../macros");
@@ -1109,9 +1113,9 @@ function internalMacroCreate(programId, body = {}) {
   });
 }
 
-function internalMacroUpdate(id, body = {}) {
+function internalMacroUpdate(id: number, body: Body = {}): Row {
   const scoped = macroScope(id, body.actorId || null);
-  if (scoped.error) return scoped;
+  if ("error" in scoped) return scoped;
   const { actorId, onSendTransition, on_send_transition, ...patch } = body;
   if (onSendTransition !== undefined || on_send_transition !== undefined) {
     patch.on_send_transition = onSendTransition !== undefined ? onSendTransition : on_send_transition;
@@ -1119,23 +1123,23 @@ function internalMacroUpdate(id, body = {}) {
   return require("../macros").update(Number(id), patch, actorId || null);
 }
 
-function internalMacroDelete(id, body = {}) {
+function internalMacroDelete(id: number, body: Body = {}): Row {
   const scoped = macroScope(id, body.actorId || null);
-  if (scoped.error) return scoped;
+  if ("error" in scoped) return scoped;
   return require("../macros").remove(Number(id), body.actorId || null);
 }
 
-async function internalMacroSend(id, body = {}) {
+async function internalMacroSend(id: number, body: Body = {}): Promise<Row> {
   const scoped = macroScope(id, body.actorId || null);
-  if (scoped.error) return scoped;
+  if ("error" in scoped) return scoped;
   if (!body.ticketId) return { error: "ticketId required" };
   if (!slackClient) return { error: "slack client unavailable" };
   return require("../macros").send({ id: Number(id), ticketId: Number(body.ticketId), actorId: body.actorId || null, client: slackClient });
 }
 
-async function internalMacroBulkSend(id, body = {}) {
+async function internalMacroBulkSend(id: number, body: Body = {}): Promise<Row> {
   const scoped = macroScope(id, body.actorId || null);
-  if (scoped.error) return scoped;
+  if ("error" in scoped) return scoped;
   if (!slackClient) return { error: "slack client unavailable" };
   let ticketIds = body.ticketIds;
   if (!Array.isArray(ticketIds) && body.selector === "waiting_for_helper") {
@@ -1153,33 +1157,33 @@ async function internalMacroBulkSend(id, body = {}) {
   });
 }
 
-function internalMacroTemplates(programId, query = {}) {
+function internalMacroTemplates(programId: string, query: Body = {}): Row {
   const missing = needProgramActor(programId, query.actorId || null);
   if (missing) return missing;
   const macros = require("../macros");
   return { templates: macros.suggestedTemplates(), placeholders: macros.placeholderDocs() };
 }
 
-function internalMacroWaiting(programId, query = {}) {
+function internalMacroWaiting(programId: string, query: Body = {}): Row {
   const missing = needProgramActor(programId, query.actorId || null);
   if (missing) return missing;
   const ticketIds = require("../macros").waitingTicketIds({ programId, category: query.category || null });
   return { programId, category: query.category || null, ticketIds, count: ticketIds.length };
 }
 
-function internalMacroSuggest(programId, query = {}) {
+function internalMacroSuggest(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../macros").suggestFor({ programId, question: query.q || "", limit: query.limit ? Number(query.limit) : 3 });
 }
 
-function internalRoutingRecommend(programId, query = {}) {
+function internalRoutingRecommend(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../helperRoute").recommend({ programId, category: query.category || null, limit: query.limit ? Number(query.limit) : 3 });
 }
 
-function internalHelperStats(programId, query = {}) {
+function internalHelperStats(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   const stats = require("../helperStats").listHelperStats(programId, {
@@ -1197,20 +1201,20 @@ function internalHelperStats(programId, query = {}) {
   };
 }
 
-function internalLeaderboard(programId, query = {}) {
+function internalLeaderboard(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   const days = Math.min(Math.max(Number(query.days) || 30, 1), 365);
   return { programId, days, leaderboard: require("../ticketMetrics").leaderboard(programId, { since: Date.now() - days * 86400000 }) };
 }
 
-function internalShadowRouting(programId, query = {}) {
+function internalShadowRouting(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return { programId, mode: "shadow", decisions: require("../shadowRouting").list(programId, query.limit) };
 }
 
-async function internalDraftSync(programId, body = {}) {
+async function internalDraftSync(programId: string, body: Body = {}): Promise<Row> {
   const draft = body.draft || {};
   if (programId !== draft.id) return { error: "draft id mismatch" };
   if (draft.status !== "suspended" || draft.privateSandboxOnly !== true) return { error: "only private suspended drafts may sync" };
@@ -1222,13 +1226,13 @@ async function internalDraftSync(programId, body = {}) {
   }
   try {
     const result = await require("../knowledge").ingestDraftSources(draft);
-    return { ok: true, programId, ...result, bindings: require("../draftSandbox").bindingRows().filter((row) => row.program_id === programId) };
+    return { ok: true, programId, ...result, bindings: require("../draftSandbox").bindingRows().filter((row: Row) => row.program_id === programId) };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "draft ingestion failed" };
   }
 }
 
-function internalRoutingExpertise(programId, body = {}) {
+function internalRoutingExpertise(programId: string, body: Body = {}): Row {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   const actorId = body.actorId || null;
@@ -1237,12 +1241,12 @@ function internalRoutingExpertise(programId, body = {}) {
   try {
     require("../audit").record({ programId, actorId, action: "routing.expertise_updated", entityType: "helper", entityId: body.userId });
   } catch (error) {
-    log.warn("web/api", `routing audit write failed: ${error.message}`);
+    log.warn("web/api", `routing audit write failed: ${error instanceof Error ? error.message : String(error)}`);
   }
   return { ok: true, tags };
 }
 
-function internalDuplicates(programId, query = {}) {
+function internalDuplicates(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../incidents").suggestDuplicates({
@@ -1253,26 +1257,26 @@ function internalDuplicates(programId, query = {}) {
   });
 }
 
-function internalIncidents(programId, query = {}) {
+function internalIncidents(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../incidents").listIncidents(programId, query.status || null, query.limit ? Math.min(Number(query.limit) || 50, 200) : 50);
 }
 
-function internalIncidentDetail(incidentId) {
+function internalIncidentDetail(incidentId: number): Row {
   const incidents = require("../incidents");
   const inc = incidents.getIncident(Number(incidentId));
   if (!inc) return { error: "incident not found" };
   return { incident: inc, tickets: incidents.incidentTickets(Number(incidentId)) };
 }
 
-function internalIncidentDetect(programId, body = {}) {
+function internalIncidentDetect(programId: string, body: Body = {}): Row {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   return require("../incidents").detectBursts({ programId });
 }
 
-function internalIncidentCreate(programId, body = {}) {
+function internalIncidentCreate(programId: string, body: Body = {}): Row {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   return require("../incidents").createIncident({
@@ -1284,7 +1288,7 @@ function internalIncidentCreate(programId, body = {}) {
   });
 }
 
-function internalIncidentAction(incidentId, body = {}) {
+function internalIncidentAction(incidentId: number, body: Body = {}): Row {
   const incidents = require("../incidents");
   const inc = incidents.getIncident(Number(incidentId));
   if (!inc) return { error: "incident not found" };
@@ -1309,7 +1313,7 @@ function internalIncidentAction(incidentId, body = {}) {
 // generic incident action: it needs the live Slack client, sends real
 // messages, and must never be reachable through the same code path as a
 // status change.
-async function internalIncidentNotify(incidentId, body = {}) {
+async function internalIncidentNotify(incidentId: number, body: Body = {}): Promise<Row> {
   const incidents = require("../incidents");
   const inc = incidents.getIncident(Number(incidentId));
   if (!inc) return { error: "incident not found" };
@@ -1325,31 +1329,31 @@ async function internalIncidentNotify(incidentId, body = {}) {
   });
 }
 
-function internalIncidentAffected(incidentId, query = {}) {
+function internalIncidentAffected(incidentId: number, query: Body = {}): Row {
   const incidents = require("../incidents");
   const inc = incidents.getIncident(Number(incidentId));
   if (!inc) return { error: "incident not found" };
   const reports = incidents.affectedReports(Number(incidentId), query.onlyUnnotified === "1");
-  return { total: reports.length, unnotified: reports.filter((r) => !r.notified_at).length, reports };
+  return { total: reports.length, unnotified: reports.filter((r: Row) => !r.notified_at).length, reports };
 }
 
 /* -------------------------------------------------------- support radar -- */
 
-function internalRadarList(programId, query = {}) {
+function internalRadarList(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return { signals: require("../radar").listSignals(programId, { status: query.status || null, severity: query.severity || null, limit: query.limit }) };
 }
 
-function internalRadarEvaluate(programId, body = {}) {
+function internalRadarEvaluate(programId: string, body: Body = {}): Row {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   return require("../radar").evaluateProgram(programId);
 }
 
-function internalRadarAction(signalId, body = {}) {
+function internalRadarAction(signalId: number, body: Body = {}): Row {
   const radar = require("../radar");
-  const requireHelper = (programId, actorId) => ticketActorAllowed(programId, actorId);
+  const requireHelper = (programId: string, actorId: string | null) => ticketActorAllowed(programId, actorId);
   const actorId = body.actorId || null;
   if (body.action === "acknowledge") return radar.acknowledgeSignal({ id: Number(signalId), actorId, requireHelper });
   if (body.action === "resolve") return radar.resolveSignal({ id: Number(signalId), actorId, requireHelper });
@@ -1357,31 +1361,31 @@ function internalRadarAction(signalId, body = {}) {
   return { error: `unknown action ${body.action}` };
 }
 
-function internalHealthScore(programId) {
+function internalHealthScore(programId: string): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../programHealth").computeHealthScore(programId);
 }
 
-function internalWaitEstimate(programId, query = {}) {
+function internalWaitEstimate(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../waitTime").estimate({ programId, category: query.category || null, ticketId: query.ticketId ? Number(query.ticketId) : null });
 }
 
-function internalAnalytics(programId, query = {}) {
+function internalAnalytics(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   const days = Math.min(Math.max(Number(query.days) || 30, 1), 365);
   return require("../supportAnalytics").overview(programId, days * 86400000);
 }
 
-function internalUsage(query = {}) {
+function internalUsage(query: Body = {}): Row {
   const days = Math.min(Math.max(Number(query.days) || 30, 1), 365);
   return { days, rows: db.llmUsageSummary(days * 86400000) };
 }
 
-function internalProgramUsage(programId, query = {}) {
+function internalProgramUsage(programId: string, query: Body = {}): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return db.llmUsageReport({
@@ -1395,25 +1399,25 @@ function internalProgramUsage(programId, query = {}) {
   });
 }
 
-function internalSlaCheck(programId) {
+function internalSlaCheck(programId: string): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../sla").checkProgram({ programId });
 }
 
-function internalRetentionPreview(programId) {
+function internalRetentionPreview(programId: string): Row {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../retention").preview(programId);
 }
 
-function internalRetentionSweep(programId, body = {}) {
+function internalRetentionSweep(programId: string, body: Body = {}): Row {
   const actorId = body.actorId || null;
   if (!programs.get(programId)) return { error: "unknown program" };
   const { isAdmin } = require("../config");
   // Destructive by design: Pixie admins always, otherwise only the program's
   // organizers/owners — never a plain helper, never cross-program.
-  const organizer = db.listHelpers(programId).find((h) => h.user_id === actorId && (h.role === "organizer" || h.role === "owner"));
+  const organizer = (db.listHelpers(programId) as Row[]).find((h: Row) => h.user_id === actorId && (h.role === "organizer" || h.role === "owner"));
   if (!(actorId && (isAdmin(actorId) || organizer))) {
     return { error: "retention sweeps require a program organizer" };
   }
@@ -1421,7 +1425,7 @@ function internalRetentionSweep(programId, body = {}) {
   return require("../retention").sweepProgram(programId, { dryRun: false });
 }
 
-function internalRetentionPolicy(programId, body = {}) {
+function internalRetentionPolicy(programId: string, body: Body = {}): Row {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   const problem = require("../retention").validatePolicy(body.policy || {});
@@ -1435,7 +1439,7 @@ function internalRetentionPolicy(programId, body = {}) {
     analyticsDays: "retention_analytics_days",
     auditDays: "retention_audit_days",
   };
-  const row = {};
+  const row: Body = {};
   for (const [key, col] of Object.entries(map)) {
     if (p[key] !== undefined) row[col] = Number(p[key]);
   }
@@ -1448,14 +1452,14 @@ function internalRetentionPolicy(programId, body = {}) {
   try {
     require("../audit").record({ programId, actorId: body.actorId || null, action: "retention.policy_updated", entityType: "program", entityId: programId });
   } catch (error) {
-    log.warn("web/api", `retention audit write failed: ${error.message}`);
+    log.warn("web/api", `retention audit write failed: ${error instanceof Error ? error.message : String(error)}`);
   }
   return { ok: true, policy: require("../retention").policyFor(programId) };
 }
 
 /* -------------------------------------------------------- slack lookup -- */
 
-let slackChannelsCache = { at: 0, channels: [] };
+let slackChannelsCache: { at: number; channels: Row[] } = { at: 0, channels: [] };
 
 // Slack identity resolution for the dashboard. Returns the public name
 // variants and the avatar — display name, real name, username — plus the
@@ -1463,11 +1467,11 @@ let slackChannelsCache = { at: 0, channels: [] };
 // any other profile field. Cached per user for an hour (names change rarely
 // and Slack's own rate limits matter far more than staleness); failures are
 // cached briefly so a deleted/bot user is not re-looked-up on every render.
-const userInfoCache = new Map(); // userId -> { at, ok, displayName, realName, username, avatarUrl }
+const userInfoCache = new Map<string, Row>(); // userId -> { at, ok, displayName, realName, username, avatarUrl }
 const USER_INFO_TTL_MS = 60 * 60 * 1000;
 const USER_INFO_MISS_TTL_MS = 5 * 60 * 1000;
 
-function cachedUserInfo(userId) {
+function cachedUserInfo(userId: string): Row | null {
   const hit = userInfoCache.get(userId);
   if (!hit) return null;
   const ttl = hit.ok ? USER_INFO_TTL_MS : USER_INFO_MISS_TTL_MS;
@@ -1475,7 +1479,7 @@ function cachedUserInfo(userId) {
   return hit;
 }
 
-async function internalUserInfo(userId) {
+async function internalUserInfo(userId: string): Promise<Row> {
   if (!userId) return { ok: false, reason: "user id required" };
   const cached = cachedUserInfo(userId);
   if (cached) {
@@ -1501,7 +1505,8 @@ async function internalUserInfo(userId) {
     // of these mean "show the id", never a thrown error the caller has to
     // handle specially. Cached briefly so a page full of a deleted user's
     // rows costs one failed lookup, not one per row.
-    const reason = (e && e.message) || "lookup failed";
+    const error = e as Row;
+    const reason = (error && error.message) || "lookup failed";
     userInfoCache.set(userId, { at: Date.now(), ok: false, reason });
     return { ok: false, slackId: userId, reason };
   }
@@ -1513,9 +1518,9 @@ async function internalUserInfo(userId) {
 // caller renders a name where there is one and the id where there is not.
 const USER_INFO_BATCH_CAP = 200;
 
-async function internalUserInfoBatch(userIds) {
-  const ids = [...new Set((Array.isArray(userIds) ? userIds : []).filter((id) => typeof id === "string" && id))].slice(0, USER_INFO_BATCH_CAP);
-  const users = {};
+async function internalUserInfoBatch(userIds: unknown): Promise<Row> {
+  const ids = [...new Set((Array.isArray(userIds) ? userIds : []).filter((id: unknown): id is string => typeof id === "string" && Boolean(id)))].slice(0, USER_INFO_BATCH_CAP);
+  const users: Record<string, Row | null> = {};
   await Promise.all(
     ids.map(async (id) => {
       try {
@@ -1533,7 +1538,7 @@ async function internalUserInfoBatch(userIds) {
 
 // One listing at a time: concurrent dashboard loads share the in-flight
 // crawl instead of each paging the whole workspace into Slack's rate limit.
-let slackChannelsInFlight = null;
+let slackChannelsInFlight: Promise<Row> | null = null;
 
 function slackChannels() {
   if (!slackChannelsInFlight) {
@@ -1544,7 +1549,7 @@ function slackChannels() {
   return slackChannelsInFlight;
 }
 
-async function fetchSlackChannels() {
+async function fetchSlackChannels(): Promise<Row> {
   if (!config.slack.botToken) {
     return { ok: false, reason: "no SLACK_BOT_TOKEN in this environment", channels: [] };
   }
@@ -1557,10 +1562,10 @@ async function fetchSlackChannels() {
   try {
     const { WebClient } = require("@slack/web-api");
     const client = new WebClient(config.slack.botToken);
-    const channels = [];
+    const channels: Row[] = [];
     let cursor;
     do {
-      const res = await client.conversations.list({
+      const res: Row = await client.conversations.list({
         types: "public_channel,private_channel",
         exclude_archived: true,
         limit: 200,
@@ -1572,18 +1577,18 @@ async function fetchSlackChannels() {
       cursor = res.response_metadata?.next_cursor;
     } while (cursor);
 
-    channels.sort((a, b) => a.name.localeCompare(b.name));
+    channels.sort((a: Row, b: Row) => a.name.localeCompare(b.name));
     slackChannelsCache = { at: Date.now(), channels };
     return { ok: true, channels };
   } catch (e) {
-    return { ok: false, reason: e.message, channels: [] };
+    return { ok: false, reason: e instanceof Error ? e.message : String(e), channels: [] };
   }
 }
 
 // Whether the shared @Pixie can actually operate in a channel, for the
 // hosted onboarding picker. Uses conversations.info (is_member reflects the
 // caller) and falls back to a join attempt for public channels.
-async function internalSlackMembership(channelId) {
+async function internalSlackMembership(channelId: string): Promise<Row> {
   if (!channelId) return { ok: false, hasAccess: false, reason: "channel required" };
   const token = config.slack.botToken;
   if (!token && !slackClient) return { ok: false, hasAccess: false, reason: "slack not connected" };
@@ -1599,13 +1604,14 @@ async function internalSlackMembership(channelId) {
       isArchived: !!ch.is_archived,
     };
   } catch (e) {
-    const code = e && (e.code || (e.data && e.data.error));
+    const error = e as Row;
+    const code = error.code || (error.data && error.data.error);
     if (code === "channel_not_found") return { ok: true, hasAccess: false, reason: "channel_not_found" };
-    return { ok: false, hasAccess: false, reason: (e && e.message) || "lookup failed" };
+    return { ok: false, hasAccess: false, reason: e instanceof Error ? e.message : "lookup failed" };
   }
 }
 
-module.exports = {
+export = {
   buildPulse,
   handleAsk,
   queueList,

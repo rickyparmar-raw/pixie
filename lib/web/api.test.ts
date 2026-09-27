@@ -1,5 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
+type TestRow = Record<string, any>;
+
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("../db");
@@ -96,7 +98,7 @@ after(() => {
 test("internalUserInfo returns display name and avatar, never the raw profile", async () => {
   api.setSlackClient({
     users: {
-      info: async ({ user }) => {
+      info: async ({ user }: TestRow) => {
         assert.equal(user, "U_TARGET");
         return {
           user: {
@@ -166,7 +168,7 @@ test("knowledge health exposes namespaced freshness without source-cache secrets
   });
 
   const health = api.internalKnowledgeHealth("health-source-a");
-  const source = health.sources.find((item) => item.url === "https://a.example/docs");
+  const source = health.sources.find((item: TestRow) => item.url === "https://a.example/docs");
   assert.ok(source);
   assert.equal(source.name, "Docs");
   assert.equal(source.freshness, "unavailable");
@@ -211,8 +213,8 @@ test("internalUserInfo caches a resolved identity — a second call doesn't hit 
 /* These pin CURRENT behavior — the rewrite must keep them green.      */
 /* ------------------------------------------------------------------ */
 
-function charReq(token) {
-  return { headers: { get: (k) => (k === "authorization" ? `Bearer ${token}` : "") } };
+function charReq(token: string) {
+  return { headers: { get: (k: string) => (k === "authorization" ? `Bearer ${token}` : "") } };
 }
 function charAnon() {
   return { headers: { get: () => "" } };
@@ -417,7 +419,7 @@ test("internalProgramSync 409s a conflicting help channel and saves nothing", ()
 });
 
 test("testQuestionExpectedAction reuses the pipeline policy", () => {
-  const f = (args) => api.testQuestionExpectedAction(args).expectedAction;
+  const f = (args: TestRow) => api.testQuestionExpectedAction(args).expectedAction;
   const program = { id: "p", helpChannel: "CH", channels: ["CH"] };
   const help = { enabled: true, aiReplies: true, ticketsEnabled: true, autoCreateTickets: true, escalateUnknown: true, helperPings: true };
   const main = { enabled: true, ambientProgramReplies: true, mentionReplies: true, generalMentionChat: true, ticketsEnabled: false, helperEscalationEnabled: false };
@@ -512,3 +514,4 @@ test("editing a queued fact keeps its program; dashboard teach requires a progra
   assert.match(api.handleTeach("q", "a", "U-e").error, /programId required/);
   assert.ok(api.handleTeach("q2", "a2", "U-e", "edit-prog"));
 });
+export {};

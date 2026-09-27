@@ -1,5 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
+type TestRow = Record<string, any>;
+
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -11,9 +13,9 @@ db.open(":memory:");
 
 // Capture is gated on the help channel. Set on the config object inside before()
 // and restored in after() so it doesn't pollute other test suites.
-let savedHelpChannel;
+let savedHelpChannel: string | undefined;
 let judgeVerdict = "YES";
-let realComplete;
+let realComplete: typeof llm.complete;
 before(() => {
   db.close();
   db.open(":memory:");
@@ -89,7 +91,7 @@ test("captureFromThread queues as pending and does not touch the live corpus", (
   assert.doesNotMatch(learn.corpusSection(), /how do i join pixl/);
   assert.ok(cache.get("thread-capture-probe"), "approving/teaching busts the cache, capture must not");
 
-  const row = learn.pending().find((r) => r.id === id);
+  const row = learn.pending().find((r: TestRow) => r.id === id);
   assert.equal(row.status, "pending");
 });
 
@@ -178,7 +180,7 @@ test("captureFromReply drops a reply the judge says is not an answer", async () 
 
   assert.equal(id, null);
   assert.equal(
-    learn.pending(200).some((r) => r.question === "pixie whats my slack id"),
+    learn.pending(200).some((r: TestRow) => r.question === "pixie whats my slack id"),
     false,
   );
 });
@@ -395,3 +397,4 @@ test("relevantCorpusSection never serves another program's facts", () => {
     learn.forget(id);
   }
 });
+export {};

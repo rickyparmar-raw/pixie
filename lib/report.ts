@@ -20,6 +20,9 @@ const log = require("./log");
 const brand = require("./brand");
 const { coverageStats, relativeTime } = require("./stats");
 
+type Row = Record<string, any>;
+type SlackClient = Record<string, any>;
+
 // Which program these prompts are about. A single-program deployment has exactly
 // one, which is the fleet case; the multi-program Pixl deployment falls back to
 // "Pixl" as before, since the gap log there isn't split per program.
@@ -27,7 +30,7 @@ function programName() {
   try {
     const progs = require("./programs")
       .all()
-      .filter((p) => p.id !== "ysws-global");
+      .filter((p: Row) => p.id !== "ysws-global");
     if (progs.length === 1 && progs[0].name) return progs[0].name;
   } catch (e) {
     // Registry unavailable (no database yet) — fall through to the default.
@@ -60,9 +63,9 @@ const REPORT_HOUR = 9;
 
 const SENT_METRIC = "weekly_report";
 
-let timer = null;
+let timer: ReturnType<typeof setInterval> | null = null;
 
-function sleep(ms) {
+function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
@@ -126,7 +129,7 @@ function judgePrompt() {
 // Returns a verdict, or null when the call failed or came back unreadable.
 // Null leaves the row unjudged, which keeps it OUT of the to-do list — the same
 // fail-closed shape as the capture judge in lib/learn.js.
-async function judgeGap(question) {
+async function judgeGap(question: string): Promise<string | null> {
   try {
     const { text } = await llm.complete(
       {
@@ -150,14 +153,14 @@ async function judgeGap(question) {
     const verdict = (text || "").trim().toLowerCase();
     return [DOCS, TRANSIENT, NOISE].find((kind) => verdict.startsWith(kind)) || null;
   } catch (e) {
-    log.debug("report", `gap judge failed: ${e.message}`);
+    log.debug("report", `gap judge failed: ${e instanceof Error ? e.message : String(e)}`);
     return null;
   }
 }
 
 // One pass over the unjudged backlog. Newest first, so today's questions are
 // classified before three-week-old ones.
-async function classifyGaps({ limit = JUDGE_PER_PASS, spacingMs = JUDGE_SPACING_MS } = {}) {
+async function classifyGaps({ limit = JUDGE_PER_PASS, spacingMs = JUDGE_SPACING_MS }: { limit?: number; spacingMs?: number } = {}): Promise<number> {
   const pending = db.unclassifiedGaps(limit);
   if (pending.length === 0) return 0;
 
@@ -213,7 +216,7 @@ const THREAD_CONTEXT_CHAR_CAP = 4000;
 // front of it. Corpus and thread transcript are both real source material —
 // same as judgePrompt, when in doubt this reaches for UNKNOWN, because a wrong
 // or invented answer in the review queue does more damage than a missing one.
-function draftPrompt(corpus) {
+function draftPrompt(corpus: string): string {
   const program = programName();
 
   return [
@@ -239,7 +242,7 @@ function draftPrompt(corpus) {
 // Returns drafted doc text, or null when the call failed or the model didn't
 // actually know the answer. Null leaves the gap undrafted — same fail-closed
 // shape as judgeGap and learn.judgeAnswer.
-async function draftDoc(question, corpus = "", threadContext = "") {
+async function draftDoc(question: string, corpus = "", threadContext = ""): Promise<string | null> {
   try {
     const userContent = threadContext ? `${question}\n\n=== SLACK THREAD(S) ===\n${threadContext}` : question;
     const { text } = await llm.complete(
@@ -264,12 +267,12 @@ async function draftDoc(question, corpus = "", threadContext = "") {
     if (!trimmed || trimmed.toUpperCase().startsWith("UNKNOWN")) return null;
     return trimmed;
   } catch (e) {
-    log.debug("report", `doc draft failed: ${e.message}`);
+    log.debug("report", `doc draft failed: ${e instanceof Error ? e.message : String(e)}`);
     return null;
   }
 }
 
-function draftSourceTs(gapId) {
+function draftSourceTs(gapId: number): string {
   return `${DRAFT_SOURCE_PREFIX}${gapId}`;
 }
 
@@ -279,11 +282,11 @@ function draftSourceTs(gapId) {
 // a thread that already has a real answer in it beats asking the model to
 // invent one from nothing. No client (tests, or a run with nothing to fetch
 // with) means no thread context, not an error.
-async function gatherThreadContext(client, question) {
+async function gatherThreadContext(client: SlackClient | null, question: string): Promise<string> {
   if (!client) return "";
 
   const refs = db.gapThreads(question, THREAD_REFS_PER_GAP, THREAD_LOOKBACK_MS);
-  const transcripts = [];
+  const transcripts: string[] = [];
   for (const ref of refs) {
     try {
       const { messages } = await client.conversations.replies({
@@ -294,7 +297,7 @@ async function gatherThreadContext(client, question) {
       const transcript = teachThread.buildTranscript(messages || []);
       if (transcript) transcripts.push(transcript);
     } catch (e) {
-      log.debug("report", `thread fetch failed for draft context: ${e.message}`);
+      log.debug("report", `thread fetch failed for draft context: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
@@ -306,14 +309,14 @@ async function gatherThreadContext(client, question) {
 // the existing Home tab Approve/Drop buttons and corpusSection() need no
 // changes to pick these up. topGaps groups by normalized question, so "how do
 // i join" asked by five people drafts once, not five times.
-async function draftGaps(client, { limit = DRAFT_PER_PASS, spacingMs = JUDGE_SPACING_MS, sinceMs = WEEK_MS } = {}) {
+async function draftGaps(client: SlackClient | null, { limit = DRAFT_PER_PASS, spacingMs = JUDGE_SPACING_MS, sinceMs = WEEK_MS }: { limit?: number; spacingMs?: number; sinceMs?: number } = {}): Promise<number> {
   const candidates = db
     // Drafts run as a maintainer background task: a single asker may still
     // surface a real one-off gap, and the draft itself has to be reviewed
     // before it lands. The 2-asker floor is the user-facing one (commands.js,
     // home.js) where the troll problem was.
     .topGaps(GAP_LIMIT, sinceMs, { kind: DOCS, minAskers: 1 })
-    .filter((gap) => !db.hasCapturedSource(draftSourceTs(gap.id)))
+    .filter((gap: Row) => !db.hasCapturedSource(draftSourceTs(gap.id)))
     .slice(0, limit);
   if (candidates.length === 0) return 0;
 
@@ -343,18 +346,18 @@ async function draftGaps(client, { limit = DRAFT_PER_PASS, spacingMs = JUDGE_SPA
 
 /* ---------------------------------------------------------------- report -- */
 
-function pct(part, whole) {
+function pct(part: number, whole: number): number {
   return whole > 0 ? Math.round((part / whole) * 100) : 0;
 }
 
 // Signed, so "coverage 41% (+18)" reads as movement rather than a bare number.
-function delta(current, previous) {
+function delta(current: number, previous: number): string {
   const diff = current - previous;
   if (diff === 0) return "no change";
   return `${diff > 0 ? "+" : ""}${diff}`;
 }
 
-function answeredFrom(counts) {
+function answeredFrom(counts: Record<string, number>): Row {
   const docs = counts.answer_docs || 0;
   const chat = counts.answer_chat || 0;
   const linked = counts.answer_link || 0;
@@ -363,11 +366,11 @@ function answeredFrom(counts) {
 
 // Everything the report needs, for one week-long window. `weeksAgo` of 1 gives
 // the week before, which is where the trend comes from.
-function collect(weeksAgo = 0, programId = null) {
+function collect(weeksAgo = 0, programId: string | null = null): Row {
   const until = Date.now() - weeksAgo * WEEK_MS;
   const sinceMs = (weeksAgo + 1) * WEEK_MS;
 
-  const counts = Object.fromEntries(db.metricCounts(sinceMs, until).map((r) => [r.kind, r.count]));
+  const counts = Object.fromEntries(db.metricCounts(sinceMs, until).map((r: Row) => [r.kind, r.count])) as Record<string, number>;
   const answered = answeredFrom(counts);
 
   return {
@@ -380,7 +383,7 @@ function collect(weeksAgo = 0, programId = null) {
   };
 }
 
-function reportLines(weeksAgo = 0, programId = null) {
+function reportLines(weeksAgo = 0, programId: string | null = null): string[] {
   const week = collect(weeksAgo, programId);
   const previous = collect(weeksAgo + 1, programId);
   const { known, instant, cacheHits } = coverageStats();
@@ -445,11 +448,11 @@ function reportLines(weeksAgo = 0, programId = null) {
   return lines;
 }
 
-function reportText(weeksAgo = 0, programId = null) {
+function reportText(weeksAgo = 0, programId: string | null = null): string {
   return reportLines(weeksAgo, programId).join("\n");
 }
 
-function reportBlocks(weeksAgo = 0, programId = null) {
+function reportBlocks(weeksAgo = 0, programId: string | null = null): Row[] {
   return [{ type: "section", text: { type: "mrkdwn", text: reportText(weeksAgo, programId) } }];
 }
 
@@ -457,7 +460,7 @@ function reportBlocks(weeksAgo = 0, programId = null) {
 
 const programs = require("./programs");
 
-function reportChannel(programId = null) {
+function reportChannel(programId: string | null = null): string | null {
   if (config.reportChannel) return config.reportChannel;
   if (config.slack?.helpChannel) return config.slack.helpChannel;
   if (config.reportChannel === null && config.slack?.helpChannel === null) return null;
@@ -484,7 +487,7 @@ function isReportDue(at = new Date()) {
   return sentAt === null || sentAt < lastBoundary(at);
 }
 
-async function postWeekly(client, programId = null) {
+async function postWeekly(client: SlackClient, programId: string | null = null): Promise<boolean> {
   const channel = reportChannel(programId);
   if (!channel) return false;
 
@@ -501,21 +504,21 @@ async function postWeekly(client, programId = null) {
   return true;
 }
 
-async function tick(client) {
-  await classifyGaps().catch((e) => log.debug("report", `classify pass failed: ${e.message}`));
-  await draftGaps(client).catch((e) => log.debug("report", `draft pass failed: ${e.message}`));
+async function tick(client: SlackClient): Promise<boolean> {
+  await classifyGaps().catch((e: unknown) => log.debug("report", `classify pass failed: ${e instanceof Error ? e.message : String(e)}`));
+  await draftGaps(client).catch((e: unknown) => log.debug("report", `draft pass failed: ${e instanceof Error ? e.message : String(e)}`));
   if (!isReportDue()) return false;
   return postWeekly(client);
 }
 
-function start(client, { cycleMs = JUDGE_CYCLE_MS } = {}) {
+function start(client: SlackClient, { cycleMs = JUDGE_CYCLE_MS }: { cycleMs?: number } = {}): ReturnType<typeof setInterval> | null {
   if (timer) return timer;
   if (!reportChannel()) {
     log.info("report", `no report channel configured — weekly report disabled, ${brand.cmd("report")} still works`);
   }
 
   timer = setInterval(() => {
-    tick(client).catch((e) => log.error("report", "weekly tick failed:", e.message));
+    tick(client).catch((e: unknown) => log.error("report", "weekly tick failed:", e instanceof Error ? e.message : String(e)));
   }, cycleMs);
   if (timer.unref) timer.unref();
   return timer;
@@ -526,7 +529,7 @@ function stop() {
   timer = null;
 }
 
-module.exports = {
+export = {
   judgeGap,
   judgePrompt,
   classifyGaps,

@@ -19,4 +19,4 @@ COPY . .
 
 # Socket Mode: pixie dials out to Slack and listens on no port at all. This
 # service needs no Railway domain and no healthcheck path.
-CMD ["bun", "index.js"]
+CMD ["bun", "index.ts"]

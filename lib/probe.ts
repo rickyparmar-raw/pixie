@@ -9,17 +9,20 @@ const retrieve = require("./retrieve");
 const cache = require("./cache");
 const intent = require("./intent");
 
+type Chunk = { source: string; heading?: string; text: string };
+type Rank = { chunk: Chunk; value: number };
+
 // Date.now() has 1ms granularity, which is coarse for the one panel whose whole
 // job is reporting how long things took — a cache hit or a stubbed call lands on
 // exactly 0ms and reads as "unmeasured". performance.now() is sub-millisecond.
-function elapsedMs(since) {
+function elapsedMs(since: number): number {
   return Math.round((performance.now() - since) * 1000) / 1000;
 }
 
 // What the cache would have done — reported, never acted on. Note a stale
 // volatile entry reports BOTH wouldHit and wouldMiss: the key exists, but the
 // answer path would refuse to serve it.
-function cacheVerdict(question) {
+function cacheVerdict(question: string): Record<string, any> {
   const cacheKey = cache.keyFor(question);
   const cacheHit = cacheKey ? cache.peekCachedAnswer(cacheKey) : null;
   if (!cacheHit) return { cacheKey, cacheHit: null, wouldHit: false, wouldMiss: true };
@@ -30,12 +33,12 @@ function cacheVerdict(question) {
 
 // Does the cited source appear in the retrieved chunks? Null when there is no
 // citation to check — absence of evidence, not evidence of absence.
-function citationCheck(source, chunks) {
+function citationCheck(source: string | null, chunks: Chunk[]): boolean | null {
   if (!source) return null;
   return new Set(chunks.map((c) => c.source)).has(source);
 }
 
-function traceChunk(c, snippetLen) {
+function traceChunk(c: Chunk, snippetLen: number) {
   return {
     source: c.source,
     heading: c.heading || null,
@@ -44,7 +47,7 @@ function traceChunk(c, snippetLen) {
   };
 }
 
-async function probe(question) {
+async function probe(question: string): Promise<Record<string, any>> {
   const startedAt = performance.now();
   const q = (question || "").trim();
   if (!q) return { error: "empty question" };
@@ -59,11 +62,11 @@ async function probe(question) {
 
   // Retrieval trace.
   const chunks = retrieve.selectChunks(index, q, retrieve.DEFAULT_BUDGET);
-  const retrievalTrace = chunks.map((c) => traceChunk(c, 200));
+  const retrievalTrace = chunks.map((c: Chunk) => traceChunk(c, 200));
 
   // Full retrieval ranking for inspection.
   const ranking = retrieve.score(index, queryTerms);
-  const bm25Trace = ranking.map((r) => ({
+  const bm25Trace = ranking.map((r: Rank) => ({
     source: r.chunk.source,
     heading: r.chunk.heading || null,
     snippet: r.chunk.text.slice(0, 150),
@@ -71,14 +74,14 @@ async function probe(question) {
   }));
 
   // Model answer.
-  let firstTokenMs = null;
+  let firstTokenMs: number | null = null;
   let answerText = null;
   let source = null;
   let result = null;
 
   try {
     result = await answer.getAnswerOrChatStream(q, corpus, "", {
-      onText: (text) => {
+      onText: (text: string) => {
         if (firstTokenMs === null) firstTokenMs = elapsedMs(startedAt);
         answerText = text;
       },
@@ -86,7 +89,7 @@ async function probe(question) {
   } catch (e) {
     return {
       question: q,
-      error: e.message,
+      error: e instanceof Error ? e.message : String(e),
       latencyMs: elapsedMs(startedAt),
       queryTerms,
       retrievalTrace,
@@ -129,10 +132,10 @@ async function probe(question) {
     bm25Trace,
     citationOk,
     gateVerdict,
-    generatedSections: generated.map(([name, text]) => ({ name, length: text.length })),
+    generatedSections: generated.map(([name, text]: [string, string]) => ({ name, length: text.length })),
     corpusSize: corpus.length,
     chunkCount: index.docs.length,
   };
 }
 
-module.exports = { probe };
+export = { probe };

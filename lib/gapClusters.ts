@@ -9,6 +9,9 @@ const audit = require("./audit");
 const programs = require("./programs");
 const log = require("./log");
 
+type Row = Record<string, any>;
+type QuestionGroup = { question: string; askCount: number; askers: Set<string>; firstSeen: number; lastSeen: number; threads: Array<{ channel: string; messageTs: string }> };
+
 // 0.35 joins clear paraphrases without merging everything that shares "how do i".
 const DEFAULT_THRESHOLD = 0.35;
 
@@ -33,16 +36,16 @@ const MAX_THREADS_PER_CLUSTER = 3;
 // Cap fact scan for coverage so a huge learned table cannot stall triage.
 const COVERAGE_FACT_LIMIT = 200;
 
-function despace(s) {
+function despace(s: unknown): string {
   return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-function longTokens(question, cachedSets) {
+function longTokens(question: string, cachedSets: ((question: string) => Set<string>) | null): string[] {
   const terms = cachedSets ? [...cachedSets(question)] : retrieve.tokenize(question);
-  return terms.filter((t) => t.length >= KEYWORD_MIN_LEN);
+  return terms.filter((t: string) => t.length >= KEYWORD_MIN_LEN);
 }
 
-function keywordContained(a, b, cachedSets = null) {
+function keywordContained(a: string, b: string, cachedSets: ((question: string) => Set<string>) | null = null): boolean {
   const tokensA = longTokens(a, cachedSets);
   const tokensB = longTokens(b, cachedSets);
   const flatA = despace(a);
@@ -59,15 +62,15 @@ function keywordContained(a, b, cachedSets = null) {
 // Token sets are memoized per clustering pass: pairOverlap is called O(n²)
 // times and retokenizing the same questions on every pair dominated burst
 // detection over a few hundred tickets.
-function tokenSetCache(questions) {
-  const cache = new Map();
-  return (q) => {
-    if (!cache.has(q)) cache.set(q, new Set(retrieve.tokenize(q)));
-    return cache.get(q);
+function tokenSetCache(questions: string[]): (q: string) => Set<string> {
+  const cache = new Map<string, Set<string>>();
+  return (q: string) => {
+    if (!cache.has(q)) cache.set(q, new Set<string>(retrieve.tokenize(q)));
+    return cache.get(q) as Set<string>;
   };
 }
 
-function overlapOf(setA, setB) {
+function overlapOf(setA: Set<string>, setB: Set<string>): number {
   if (setA.size === 0 || setB.size === 0) return 0;
   let common = 0;
   for (const t of setA) {
@@ -76,30 +79,30 @@ function overlapOf(setA, setB) {
   return common / Math.min(setA.size, setB.size);
 }
 
-function pairOverlap(a, b, cachedSets = null) {
-  const setA = cachedSets ? cachedSets(a) : new Set(retrieve.tokenize(a));
-  const setB = cachedSets ? cachedSets(b) : new Set(retrieve.tokenize(b));
+function pairOverlap(a: string, b: string, cachedSets: ((question: string) => Set<string>) | null = null): number {
+  const setA = cachedSets ? cachedSets(a) : new Set<string>(retrieve.tokenize(a));
+  const setB = cachedSets ? cachedSets(b) : new Set<string>(retrieve.tokenize(b));
   const overlap = overlapOf(setA, setB);
   if (overlap < KEYWORD_SIM && keywordContained(a, b, cachedSets)) return KEYWORD_SIM;
   return overlap;
 }
 
-function unionFind(count) {
+function unionFind(count: number): { find: (x: number) => number; union: (a: number, b: number) => void } {
   const parent = Array.from({ length: count }, (_, i) => i);
-  function find(x) {
+  function find(x: number): number {
     while (parent[x] !== x) {
       parent[x] = parent[parent[x]];
       x = parent[x];
     }
     return x;
   }
-  function union(a, b) {
+  function union(a: number, b: number): void {
     parent[find(a)] = find(b);
   }
   return { find, union };
 }
 
-function clusterQuestions(questions, threshold = DEFAULT_THRESHOLD) {
+function clusterQuestions(questions: string[], threshold = DEFAULT_THRESHOLD): string[][] {
   if (!Array.isArray(questions) || questions.length === 0) return [];
   const sets = tokenSetCache(questions);
   const { find, union } = unionFind(questions.length);
@@ -108,16 +111,17 @@ function clusterQuestions(questions, threshold = DEFAULT_THRESHOLD) {
       if (pairOverlap(questions[i], questions[j], sets) >= threshold) union(i, j);
     }
   }
-  const groups = new Map();
+  const groups = new Map<number, string[]>();
   questions.forEach((q, i) => {
     const root = find(i);
-    if (!groups.has(root)) groups.set(root, []);
-    groups.get(root).push(q);
+    const group = groups.get(root);
+    if (group) group.push(q);
+    else groups.set(root, [q]);
   });
   return [...groups.values()];
 }
 
-function fetchGapRows(programId, sinceMs) {
+function fetchGapRows(programId: string, sinceMs: number): Row[] {
   // Strictly program-scoped: unscoped legacy rows carry other programs'
   // members' questions and user ids, so they are never shown to a program.
   return db.handle().query(
@@ -125,15 +129,16 @@ function fetchGapRows(programId, sinceMs) {
   ).all(Date.now() - sinceMs, programId);
 }
 
-function groupRowsByQuestion(rows) {
-  const byQuestion = new Map();
+function groupRowsByQuestion(rows: Row[]): QuestionGroup[] {
+  const byQuestion = new Map<string, QuestionGroup>();
   for (const r of rows) {
     const q = String(r.question || "").trim();
     if (!q) continue;
     if (!byQuestion.has(q)) {
-      byQuestion.set(q, { question: q, askCount: 0, askers: new Set(), firstSeen: r.created_at, lastSeen: r.created_at, threads: [] });
+      byQuestion.set(q, { question: q, askCount: 0, askers: new Set<string>(), firstSeen: r.created_at, lastSeen: r.created_at, threads: [] });
     }
     const g = byQuestion.get(q);
+    if (!g) continue;
     g.askCount += 1;
     if (r.user_id) g.askers.add(r.user_id);
     g.firstSeen = Math.min(g.firstSeen, r.created_at);
@@ -145,7 +150,7 @@ function groupRowsByQuestion(rows) {
   return [...byQuestion.values()];
 }
 
-function countEscalated(parts, programId) {
+function countEscalated(parts: QuestionGroup[], programId: string): number {
   let escalated = 0;
   try {
     for (const p of parts) {
@@ -157,23 +162,23 @@ function countEscalated(parts, programId) {
       }
     }
   } catch (e) {
-    log.warn("gapClusters", `failed to count escalated threads: ${e.message}`);
+    log.warn("gapClusters", `failed to count escalated threads: ${e instanceof Error ? e.message : String(e)}`);
   }
   return escalated;
 }
 
-function isCovered(representative, programId) {
+function isCovered(representative: string, programId: string): boolean {
   try {
     const facts = db.approvedFacts(COVERAGE_FACT_LIMIT, programId);
-    return facts.some((f) => pairOverlap(representative, `${f.question} ${f.answer}`.slice(0, 200)) >= COVERAGE_THRESHOLD);
+    return facts.some((f: Row) => pairOverlap(representative, `${f.question} ${f.answer}`.slice(0, 200)) >= COVERAGE_THRESHOLD);
   } catch (e) {
-    log.warn("gapClusters", `failed to check coverage for representative: ${e.message}`);
+    log.warn("gapClusters", `failed to check coverage for representative: ${e instanceof Error ? e.message : String(e)}`);
     return false;
   }
 }
 
-function summarizeCluster(members, byQuestion, programId) {
-  const parts = members.map((q) => byQuestion.get(q));
+function summarizeCluster(members: string[], byQuestion: Map<string, QuestionGroup>, programId: string): Row {
+  const parts = members.map((q) => byQuestion.get(q) as QuestionGroup);
   const askers = new Set();
   for (const p of parts) for (const u of p.askers) askers.add(u);
   const representative = parts.slice().sort((a, b) => b.askCount - a.askCount)[0].question;
@@ -190,26 +195,26 @@ function summarizeCluster(members, byQuestion, programId) {
   };
 }
 
-function clusterGaps({ programId, sinceMs = DEFAULT_SINCE_MS, minAskers = DEFAULT_MIN_ASKERS } = {}) {
+function clusterGaps({ programId, sinceMs = DEFAULT_SINCE_MS, minAskers = DEFAULT_MIN_ASKERS }: { programId?: string; sinceMs?: number; minAskers?: number } = {}): Row {
   if (!programId) return { error: "programId required" };
   let rows = [];
   try {
     rows = fetchGapRows(programId, sinceMs);
   } catch (e) {
-    return { error: e.message };
+    return { error: e instanceof Error ? e.message : String(e) };
   }
   if (rows.length === 0) return { clusters: [] };
   const distinct = groupRowsByQuestion(rows);
   if (distinct.length === 0) return { clusters: [] };
-  const byQuestion = new Map(distinct.map((g) => [g.question, g]));
+  const byQuestion = new Map(distinct.map((g: QuestionGroup) => [g.question, g]));
   const clusters = clusterQuestions(distinct.map((g) => g.question))
     .map((members) => summarizeCluster(members, byQuestion, programId))
-    .filter((c) => c.askers >= minAskers)
-    .sort((a, b) => b.askers - a.askers || b.askCount - a.askCount);
+    .filter((c: Row) => c.askers >= minAskers)
+    .sort((a: Row, b: Row) => b.askers - a.askers || b.askCount - a.askCount);
   return { clusters };
 }
 
-async function proposeFaq({ programId, actorId, question }) {
+async function proposeFaq({ programId, actorId, question }: { programId: string; actorId?: string | null; question: string }): Promise<Row> {
   const program = programs.get(programId);
   if (!program) return { error: "unknown program" };
   const clean = String(question || "").trim();
@@ -228,7 +233,7 @@ async function proposeFaq({ programId, actorId, question }) {
       grounded = true;
     }
   } catch (e) {
-    log.warn("gapClusters", `failed to ask copilot for FAQ draft: ${e.message}`);
+    log.warn("gapClusters", `failed to ask copilot for FAQ draft: ${e instanceof Error ? e.message : String(e)}`);
   }
   if (!draft) draft = "(No grounded answer in current docs — write the approved answer, then approve.)";
   const id = db.addLearnedFact({
@@ -244,7 +249,7 @@ async function proposeFaq({ programId, actorId, question }) {
   return { ok: true, candidate: db.getLearnedFactById(id), grounded };
 }
 
-module.exports = {
+export = {
   clusterGaps,
   clusterQuestions,
   pairOverlap,

@@ -1,5 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
+type TestRow = Record<string, any>;
+
 const { test, before } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("../db");
@@ -11,11 +13,11 @@ before(() => {
   db.open(":memory:");
 });
 
-function seedProgram(id, sources = null) {
+function seedProgram(id: string, sources: TestRow[] | null = null) {
   programs.saveProgram({ id, name: id, sources, sharedSources: false });
 }
 
-function seedTicket(programId, overrides = {}) {
+function seedTicket(programId: string, overrides: TestRow = {}) {
   const t = overrides.createdAt !== undefined ? overrides.createdAt : Date.now();
   const res = db.handle().query(
     `INSERT INTO tickets (program_id, channel, thread_ts, requester_id, question, summary, status, assignee_id, category,
@@ -152,8 +154,8 @@ test("metrics overview counts ops figures from stored rows only", () => {
   assert.equal(m.grounding.answered, 1);
   assert.equal(m.grounding.blockRate, 0.667);
   assert.ok(Array.isArray(m.volumeByDay) && m.volumeByDay.length >= 30);
-  assert.equal(m.volumeByDay.reduce((sum, d) => sum + d.questions, 0), 3);
-  const helper = m.helpers.find((h) => h.userId === "U-H");
+  assert.equal(m.volumeByDay.reduce((sum: number, d: TestRow) => sum + d.questions, 0), 3);
+  const helper = m.helpers.find((h: TestRow) => h.userId === "U-H");
   assert.equal(helper.openAssigned, 1);
   assert.equal(helper.resolved, 1);
   assert.equal(dash.metricsOverview("no-such-program", {}).error, "unknown program");
@@ -200,10 +202,10 @@ test("knowledge status and refresh honor the sourceStatus contract when present"
     { name: "Bad", type: "url", url: "not a url", status: "Exploding", lastSyncedAt: "n/a", error: "boom", chunks: -1 },
   ]);
   let calledWith = null;
-  knowledge.refreshProgramSources = (programId, opts) => {
+  knowledge.refreshProgramSources = ((programId: string, opts: TestRow) => {
     calledWith = [programId, opts];
     return Promise.resolve({ ok: true });
-  };
+  }) as unknown as typeof knowledge.refreshProgramSources;
   try {
     const res = dash.knowledgeStatus("dash-know-live");
     assert.equal(res.sources[0].status, "Ready");
@@ -233,9 +235,9 @@ test("helper roster and availability toggle are program-scoped", () => {
   const roster = dash.helperRoster("dash-roster");
   assert.equal(roster.programId, "dash-roster");
   assert.equal(roster.helpers.length, 2);
-  assert.ok(roster.helpers.every((h) => h.active));
-  assert.equal(roster.helpers.find((h) => h.userId === "U-R2").role, "organizer");
-  assert.equal(roster.helpers.find((h) => h.userId === "U-R1").openAssigned, 1);
+  assert.ok(roster.helpers.every((h: TestRow) => h.active));
+  assert.equal(roster.helpers.find((h: TestRow) => h.userId === "U-R2").role, "organizer");
+  assert.equal(roster.helpers.find((h: TestRow) => h.userId === "U-R1").openAssigned, 1);
   assert.equal(dash.helperRoster("no-such-program").error, "unknown program");
 
   // A stranger — or a helper from another program — cannot flip availability.
@@ -244,7 +246,8 @@ test("helper roster and availability toggle are program-scoped", () => {
   assert.equal(dash.helperSetActive("dash-roster", { actorId: "U-R2", userId: "U-ghost", active: false }).error, "helper not found");
 
   assert.equal(dash.helperSetActive("dash-roster", { actorId: "U-R2", userId: "U-R1", active: false }).ok, true);
-  assert.equal(dash.helperRoster("dash-roster").helpers.find((h) => h.userId === "U-R1").active, false);
+  assert.equal(dash.helperRoster("dash-roster").helpers.find((h: TestRow) => h.userId === "U-R1").active, false);
   assert.equal(dash.helperSetActive("dash-roster", { actorId: "U-R2", userId: "U-R1", active: true }).ok, true);
-  assert.equal(dash.helperRoster("dash-roster").helpers.find((h) => h.userId === "U-R1").active, true);
+  assert.equal(dash.helperRoster("dash-roster").helpers.find((h: TestRow) => h.userId === "U-R1").active, true);
 });
+export {};

@@ -7,9 +7,12 @@ const log = require("../log");
 const auth = require("./auth");
 const api = require("./api");
 
+type JsonObject = Record<string, any>;
+type SseClient = { write: (data: string) => void };
+
 const PUBLIC_DIR = path.join(__dirname, "..", "..", "public");
 
-const MIME = {
+const MIME: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -23,7 +26,7 @@ const MIME = {
   ".gif": "image/gif",
 };
 
-function serveFile(filePath) {
+function serveFile(filePath: string): Response {
   const ext = path.extname(filePath).toLowerCase();
   const mime = MIME[ext] || "application/octet-stream";
   const data = fs.readFileSync(filePath);
@@ -32,18 +35,18 @@ function serveFile(filePath) {
   });
 }
 
-function json(data, status = 200) {
+function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
     headers: { "Content-Type": "application/json" },
   });
 }
 
-function redirect(location, status = 302) {
+function redirect(location: string, status = 302): Response {
   return new Response(null, { status, headers: { Location: location } });
 }
 
-function htmlResponse(html, extraHeaders = {}) {
+function htmlResponse(html: string, extraHeaders: Record<string, string> = {}): Response {
   return new Response(html, {
     headers: { "Content-Type": "text/html; charset=utf-8", ...extraHeaders },
   });
@@ -55,10 +58,10 @@ function htmlResponse(html, extraHeaders = {}) {
 // validation returns 4xx, never a 500 throw. DELETE is included because the
 // internal macro-delete route carries its actorId in the body (see
 // pixie-wizard lib/pixieCore.ts coreMacroDelete).
-async function readJsonBody(req, method) {
+async function readJsonBody(req: Request, method: string): Promise<JsonObject> {
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return {};
   try {
-    return await req.json();
+    return await req.json() as JsonObject;
   } catch (_) {
     return {};
   }
@@ -68,29 +71,29 @@ async function readJsonBody(req, method) {
 // historical code (see serve.test.js pins): 403 for helper/tenant denials,
 // 404 for missing rows, 503 for a missing live Slack client, 429 for copilot
 // rate limits, 400 for everything else.
-function isHelperDenied(err) {
+function isHelperDenied(err: string | null | undefined): boolean {
   return !!err && err.includes("not a helper");
 }
-function isTenantDenied(err) {
+function isTenantDenied(err: string | null | undefined): boolean {
   return !!err && (err.includes("not a helper") || err.includes("mismatch"));
 }
-function ticketWriteStatus(err) {
+function ticketWriteStatus(err: string | null | undefined): number {
   return isTenantDenied(err) ? 403 : 400;
 }
-function helperWriteStatus(err) {
+function helperWriteStatus(err: string | null | undefined): number {
   return isHelperDenied(err) ? 403 : 400;
 }
-function copilotStatus(err) {
+function copilotStatus(err: string | null | undefined): number {
   if (isHelperDenied(err)) return 403;
   if (err && err.includes("rate limited")) return 429;
   return 400;
 }
-function notifyStatus(err) {
+function notifyStatus(err: string | null | undefined): number {
   if (isHelperDenied(err)) return 403;
   if (err && err.includes("unavailable")) return 503;
   return 400;
 }
-function radarWriteStatus(err) {
+function radarWriteStatus(err: string | null | undefined): number {
   if (isHelperDenied(err)) return 403;
   if (err && err.includes("not found")) return 404;
   return 400;
@@ -98,26 +101,26 @@ function radarWriteStatus(err) {
 
 /* ------------------------------------------------------------------- SSE -- */
 
-const sseClients = new Set();
+const sseClients = new Set<SseClient>();
 
-function broadcastSSE(event, data) {
+function broadcastSSE(event: string, data: unknown): void {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
   for (const client of sseClients) {
     try {
       client.write(payload);
     } catch (error) {
-      log.debug("web/serve", `SSE client write failed: ${error.message}`);
+      log.debug("web/serve", `SSE client write failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
 }
 
-function sseStream(req) {
+function sseStream(req: Request): Response {
   let closed = false;
   const body = new ReadableStream({
     start(controller) {
       const encoder = new TextEncoder();
       const client = {
-        write(data) {
+        write(data: string): void {
           if (!closed) controller.enqueue(encoder.encode(data));
         },
       };
@@ -128,7 +131,7 @@ function sseStream(req) {
       req.signal.addEventListener("abort", () => {
         closed = true;
         sseClients.delete(client);
-        try { controller.close(); } catch (e) { log.debug("web/serve", `SSE close failed: ${e.message}`); }
+        try { controller.close(); } catch (e) { log.debug("web/serve", `SSE close failed: ${e instanceof Error ? e.message : String(e)}`); }
       });
     },
     cancel() {
@@ -148,18 +151,18 @@ function sseStream(req) {
 // Hook log events into the SSE feed so the live panel works without touching
 // any call site. Called by web.start().
 function startLogFeed() {
-  log.subscribe((kind, scope, args) => {
+  log.subscribe((kind: string, scope: string, args: unknown[]) => {
     broadcastSSE("log", {
       kind,
       scope,
-      message: args.map((a) => (typeof a === "string" ? a : String(a))).join(" "),
+      message: args.map((a: unknown) => (typeof a === "string" ? a : String(a))).join(" "),
       time: Date.now(),
     });
   });
 }
 
 // Tick: broadcast vitals every 10s so the HUD updates without polling.
-let metricTimer = null;
+let metricTimer: ReturnType<typeof setInterval> | null = null;
 
 function startMetricTicks() {
   if (metricTimer) return;
@@ -168,12 +171,12 @@ function startMetricTicks() {
       const pulse = api.buildPulse();
       broadcastSSE("pulse", pulse);
     } catch (e) {
-      log.debug("web", `pulse broadcast failed: ${e.message}`);
+      log.debug("web", `pulse broadcast failed: ${e instanceof Error ? e.message : String(e)}`);
     }
     try {
       broadcastSSE("metric", { time: Date.now() });
     } catch (error) {
-      log.debug("web/serve", `metric SSE broadcast failed: ${error.message}`);
+      log.debug("web/serve", `metric SSE broadcast failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }, 10000);
   if (metricTimer.unref) metricTimer.unref();
@@ -181,7 +184,7 @@ function startMetricTicks() {
 
 /* ---------------------------------------------------------------- router -- */
 
-async function handleStatic(req) {
+async function handleStatic(req: Request): Promise<Response | null> {
   const url = new URL(req.url);
   let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
 
@@ -203,7 +206,7 @@ async function handleStatic(req) {
   return null;
 }
 
-async function handleScreenshots(req) {
+async function handleScreenshots(req: Request): Promise<Response | null | undefined> {
   const url = new URL(req.url);
 
   // Serve screenshots without auth (they're shared in Slack publicly anyway)
@@ -211,7 +214,7 @@ async function handleScreenshots(req) {
     const screenshotPath = url.pathname.slice("/screenshots/".length);
 
     // Prevent directory traversal
-    if (screenshotPath.includes("..")) return ;
+    if (screenshotPath.includes("..")) return;
 
     const fullPath = path.join(PUBLIC_DIR, "screenshots", screenshotPath);
 
@@ -223,7 +226,7 @@ async function handleScreenshots(req) {
   return null;
 }
 
-function renderLoginPage({ error, slackUrl } = {}) {
+function renderLoginPage({ error, slackUrl }: { error?: string; slackUrl?: string | null } = {}): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -372,7 +375,7 @@ function renderLoginPage({ error, slackUrl } = {}) {
 </html>`;
 }
 
-async function handleAuth(req) {
+async function handleAuth(req: Request): Promise<Response | null> {
   const url = new URL(req.url);
 
   if (url.pathname === "/login") {
@@ -386,7 +389,7 @@ async function handleAuth(req) {
     if (req.method === "POST") {
       try {
         const formData = await req.formData();
-        const passcode = formData.get("passcode");
+        const passcode = formData.get("passcode") as string | null;
         const expected = process.env.PIXIE_DASHBOARD_PASSCODE || "pixie";
         if (passcode && passcode.trim() === expected.trim()) {
           const cookieValue = auth.signSession("admin", "Admin", "admin");
@@ -420,7 +423,7 @@ async function handleAuth(req) {
   return null;
 }
 
-async function handleApi(req) {
+async function handleApi(req: Request): Promise<Response | null> {
   const url = new URL(req.url);
   const method = req.method.toUpperCase();
 
@@ -445,7 +448,7 @@ async function handleApi(req) {
   if (url.pathname === "/api/ask" && method === "POST") {
     // Debug probe over program knowledge and retrieval traces: admins only.
     if (adminResult.status) return json(adminResult.body, adminResult.status);
-    const body = await req.json().catch(() => ({}));
+      const body = await req.json().catch(() => ({})) as JsonObject;
     const result = await api.handleAsk(body.question || "");
     return json(result);
   }
@@ -469,7 +472,7 @@ async function handleApi(req) {
   if (url.pathname.startsWith("/api/queue/") && method === "PATCH") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const id = Number(url.pathname.split("/")[3]);
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     api.queueEdit(id, body.question, body.answer);
     return json({ ok: true });
   }
@@ -484,7 +487,7 @@ async function handleApi(req) {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const parts = url.pathname.split("/");
     const id = Number(parts[3]);
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     api.gapsMove(id, body.kind);
     return json({ ok: true });
   }
@@ -535,7 +538,7 @@ async function handleApi(req) {
   // Teach.
   if (url.pathname === "/api/teach" && method === "POST") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     const taught = api.handleTeach(body.question, body.answer, adminResult.session.userId, body.programId);
     if (taught && taught.error) return json(taught, 400);
     return json({ ok: true });
@@ -568,7 +571,7 @@ async function handleApi(req) {
 
   if (url.pathname === "/api/programs" && method === "POST") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     return json(api.programSave(body));
   }
 
@@ -581,7 +584,7 @@ async function handleApi(req) {
   if (url.pathname.startsWith("/api/programs/") && url.pathname.endsWith("/posture") && method === "PATCH") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const id = url.pathname.split("/")[3];
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     return json(api.programSetPosture(id, body.posture));
   }
 
@@ -596,7 +599,7 @@ async function handleApi(req) {
   if (/^\/api\/tickets\/\d+$/.test(url.pathname) && method === "PATCH") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const id = Number(url.pathname.split("/")[3]);
-    const body = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({})) as JsonObject;
     if (!body.status) return json({ error: "status required" }, 400);
     return json(api.ticketUpdate(id, body.status, body.assigneeId, adminResult.session?.userId || null));
   }
@@ -945,7 +948,7 @@ async function handleApi(req) {
     // another tenant's rows); writes reuse the helper-membership 403s.
     {
       const dashboardApi = require("./dashboardApi");
-      const dashNotFound = (res) => res && res.error === "unknown program" ? 404
+      const dashNotFound = (res: JsonObject) => res && res.error === "unknown program" ? 404
         : res && res.error === "ticket not found" ? 404
         : res && res.error === "helper not found" ? 404
         : null;
@@ -1015,7 +1018,7 @@ async function handleApi(req) {
   return null;
 }
 
-async function handleRequest(req) {
+async function handleRequest(req: Request): Promise<Response> {
   const url = new URL(req.url);
 
   try {
@@ -1047,7 +1050,7 @@ async function handleRequest(req) {
 
     return new Response("not found", { status: 404 });
   } catch (e) {
-    log.error("web", `request error: ${e.message}`);
+    log.error("web", `request error: ${e instanceof Error ? e.message : String(e)}`);
     return json({ error: "internal error" }, 500);
   }
 }
@@ -1073,4 +1076,4 @@ function start() {
   return server;
 }
 
-module.exports = { start, broadcastSSE, handleRequest };
+export = { start, broadcastSSE, handleRequest };

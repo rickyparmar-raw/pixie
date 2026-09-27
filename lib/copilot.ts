@@ -18,6 +18,10 @@ const rateLimit = require("./rateLimit");
 const { config } = require("./config");
 const respond = require("./respond");
 
+type Row = Record<string, any>;
+type ProgramRef = { id: string };
+type RankedChunk = { chunk: { source: string; heading?: string; text: string }; value: number };
+
 // One burst of drafts per minute per helper: generous for real triage,
 // tight enough that a stuck retry loop cannot burn the model budget.
 const COPILOT_WINDOW_MS = 60 * 1000;
@@ -45,19 +49,19 @@ const OPPOSITION = [
 const SIMILAR_SCAN_LIMIT = 200;
 const SIMILAR_RETURN_MAX = 10;
 
-function checkBudget(actorId) {
+function checkBudget(actorId: string): Row | null {
   const res = rateLimit.check(`copilot:${actorId}`, { windowMs: COPILOT_WINDOW_MS, max: COPILOT_MAX_PER_WINDOW });
   if (res.allowed) return null;
   return { error: "copilot rate limited — try again in a minute" };
 }
 
-function auditCopilot(programId, actorId, action, metadata = null) {
+function auditCopilot(programId: string, actorId: string | null, action: string, metadata: Row | null = null): void {
   audit.record({ programId, actorId, action: `copilot.${action}`, entityType: "copilot", entityId: null, metadata });
 }
 
 // Groundedness uses the same predicate as requester answers: a draft that is
 // not grounded is still returned (the helper decides), but flagged.
-function draftVerdict(result) {
+function draftVerdict(result: Row | null): Row {
   const grounded = respond.isGroundedAnswer(result);
   return {
     draft: result && result.answer ? result.answer : null,
@@ -69,18 +73,18 @@ function draftVerdict(result) {
   };
 }
 
-function threadContextFor(threadTs) {
+function threadContextFor(threadTs: string | null): string {
   if (!threadTs) return "";
   try {
     if (!context.getThreadContext) return "";
     return context.getThreadContext(threadTs) || "";
   } catch (e) {
-    log.warn("copilot", `failed to get thread context for ${threadTs}: ${e.message}`);
+    log.warn("copilot", `failed to get thread context for ${threadTs}: ${e instanceof Error ? e.message : String(e)}`);
     return "";
   }
 }
 
-async function draftReply({ program, question, threadTs = null }) {
+async function draftReply({ program, question, threadTs = null }: { program: ProgramRef | null; question: string; threadTs?: string | null }): Promise<Row> {
   const programId = program ? program.id : null;
   // Same pipeline, same corpus, same program scope as a requester answer —
   // including its silence rules. A null result means "no grounded answer",
@@ -89,12 +93,12 @@ async function draftReply({ program, question, threadTs = null }) {
   return { ...draftVerdict(result), programId };
 }
 
-async function ask({ program, question, threadTs = null }) {
+async function ask({ program, question, threadTs = null }: { program: ProgramRef | null; question: string; threadTs?: string | null }): Promise<Row> {
   const result = await lookup.answerOrChat(question, threadContextFor(threadTs), { program });
   return { ...draftVerdict(result), programId: program ? program.id : null };
 }
 
-async function completeHelper(prompt, maxTokens = 600) {
+async function completeHelper(prompt: string, maxTokens = 600): Promise<string> {
   const llm = require("./llm");
   const tier = config.answer;
   const res = await llm.complete(
@@ -114,14 +118,14 @@ async function completeHelper(prompt, maxTokens = 600) {
   return res.text.trim();
 }
 
-function factualTokens(text) {
-  const found = new Set();
+function factualTokens(text: string): Set<string> {
+  const found = new Set<string>();
   for (const m of String(text || "").matchAll(FACTUAL_TOKEN_RE)) found.add(m[0]);
   return found;
 }
 
-function tokenNotes(before, after) {
-  const notes = [];
+function tokenNotes(before: Set<string>, after: Set<string>): string[] {
+  const notes: string[] = [];
   for (const tok of after) {
     if (!before.has(tok)) notes.push(`added factual token: ${tok}`);
   }
@@ -131,7 +135,7 @@ function tokenNotes(before, after) {
   return notes;
 }
 
-async function improveReply({ text }) {
+async function improveReply({ text }: { text: string }): Promise<Row> {
   const clean = String(text || "").trim();
   if (!clean) return { error: "reply text required" };
   const before = factualTokens(clean);
@@ -141,30 +145,30 @@ async function improveReply({ text }) {
       `Rewrite this support reply for clarity, tone, and conciseness. Do NOT add facts, dates, numbers, or links that are not already present. Keep it short.\n\n${clean}`,
     );
   } catch (e) {
-    log.warn("copilot", `improve failed: ${e.message}`);
+    log.warn("copilot", `improve failed: ${e instanceof Error ? e.message : String(e)}`);
     return { improved: clean, notes: ["AI unavailable — returning the original text unchanged"], changed: false };
   }
   if (!improved) return { improved: clean, notes: ["AI returned nothing — original kept"], changed: false };
   return { improved, notes: tokenNotes(before, factualTokens(improved)), changed: improved !== clean };
 }
 
-function loadTranscript(messages, threadTs) {
+function loadTranscript(messages: Row[] | null, threadTs: string | null): Row[] {
   if (Array.isArray(messages) && messages.length > 0) return messages;
   if (!threadTs) return [];
   try {
     return db.getThreadMessages(threadTs) || [];
   } catch (e) {
-    log.warn("copilot", `failed to load transcript for thread ${threadTs}: ${e.message}`);
+    log.warn("copilot", `failed to load transcript for thread ${threadTs}: ${e instanceof Error ? e.message : String(e)}`);
     return [];
   }
 }
 
-function formatTranscriptLine(m) {
+function formatTranscriptLine(m: Row): string {
   const who = m.role === "assistant" ? "pixie" : m.user_id || m.role || "user";
   return `${who}: ${(m.content || "").slice(0, SUMMARY_LINE_CHARS)}`;
 }
 
-function extractiveSummary(ticket, transcript, timeline) {
+function extractiveSummary(ticket: Row | null, transcript: Row[], timeline: Row[]): string {
   const parts = [];
   if (ticket) {
     parts.push(`Question: ${ticket.question}`);
@@ -174,12 +178,12 @@ function extractiveSummary(ticket, transcript, timeline) {
   const lines = transcript.slice(-SUMMARY_TAIL).map(formatTranscriptLine);
   if (lines.length > 0) parts.push(`Recent thread:\n${lines.join("\n")}`);
   if (timeline.length > 0) {
-    parts.push(`Events: ${timeline.map((e) => `${e.event_type}${e.actor_id ? ` by <@${e.actor_id}>` : ""}`).join(", ")}`);
+    parts.push(`Events: ${timeline.map((e: Row) => `${e.event_type}${e.actor_id ? ` by <@${e.actor_id}>` : ""}`).join(", ")}`);
   }
   return parts.join("\n\n") || "No thread context available.";
 }
 
-async function summarizeThread({ program, ticket = null, threadTs = null, messages = null }) {
+async function summarizeThread({ program, ticket = null, threadTs = null, messages = null }: { program: ProgramRef | null; ticket?: Row | null; threadTs?: string | null; messages?: Row[] | null }): Promise<Row> {
   const transcript = loadTranscript(messages, threadTs);
   const timeline = ticket ? db.listTicketEvents(ticket.id, 50) : [];
   const extractive = extractiveSummary(ticket, transcript, timeline);
@@ -190,20 +194,20 @@ async function summarizeThread({ program, ticket = null, threadTs = null, messag
       SUMMARY_POLISH_TOKENS,
     );
   } catch (e) {
-    log.debug("copilot", `summarize polish failed: ${e.message}`);
+    log.debug("copilot", `summarize polish failed: ${e instanceof Error ? e.message : String(e)}`);
   }
   return { summary: polished || extractive, aiPolished: !!polished, programId: program ? program.id : null };
 }
 
-function splitSentences(text) {
+function splitSentences(text: string): string[] {
   return String(text || "")
     .split(/(?<=[.!?])\s+/)
     .map((s) => s.trim())
     .filter((s) => s.length > 3);
 }
 
-function evidenceFor(ranked) {
-  return ranked.slice(0, 2).map((r) => ({
+function evidenceFor(ranked: RankedChunk[]): Row[] {
+  return ranked.slice(0, 2).map((r: RankedChunk) => ({
     source: r.chunk.source,
     heading: r.chunk.heading || null,
     excerpt: r.chunk.text.slice(0, 200),
@@ -211,14 +215,14 @@ function evidenceFor(ranked) {
   }));
 }
 
-function findContradiction(sentence, excerpt) {
+function findContradiction(sentence: string, excerpt: string): boolean {
   for (const [pos, neg] of OPPOSITION) {
     if ((pos.test(sentence) && neg.test(excerpt)) || (neg.test(sentence) && pos.test(excerpt))) return true;
   }
   return false;
 }
 
-function checkSentence(index, sentence) {
+function checkSentence(index: Row, sentence: string): Row | null {
   const terms = retrieve.tokenize(sentence);
   if (terms.length === 0) return null;
   const ranked = retrieve.score(index, terms).slice(0, 3);
@@ -234,41 +238,41 @@ function checkSentence(index, sentence) {
   return { sentence, verdict: "contradiction", evidence, contradiction: { against: evidence[0] } };
 }
 
-async function factCheck({ program, text }) {
+async function factCheck({ program, text }: { program: ProgramRef | null; text: string }): Promise<Row> {
   const programId = program ? program.id : null;
   let index = null;
   try {
     index = knowledge.getIndex(programId);
   } catch (e) {
-    return { error: `no retrieval index for program: ${e.message}` };
+    return { error: `no retrieval index for program: ${e instanceof Error ? e.message : String(e)}` };
   }
   const verdicts = [];
   for (const sentence of splitSentences(text)) {
     const verdict = checkSentence(index, sentence);
     if (verdict) verdicts.push(verdict);
   }
-  const counts = verdicts.reduce((acc, v) => {
+  const counts = verdicts.reduce((acc: Record<string, number>, v: Row) => {
     acc[v.verdict] = (acc[v.verdict] || 0) + 1;
     return acc;
-  }, {});
+  }, {} as Record<string, number>);
   return { verdicts, counts, programId };
 }
 
-function clampLimit(limit) {
+function clampLimit(limit: number): number {
   return Math.min(Math.max(limit, 1), SIMILAR_RETURN_MAX);
 }
 
-function findSimilar({ programId, question, limit = 5 }) {
+function findSimilar({ programId, question, limit = 5 }: { programId: string; question: string; limit?: number }): Row {
   if (!programId || !question) return { error: "programId and question required" };
   let resolved = [];
   try {
     resolved = db.handle().query(`SELECT * FROM tickets WHERE program_id = ? AND status = 'resolved' ORDER BY resolved_at DESC LIMIT ${SIMILAR_SCAN_LIMIT}`).all(programId);
   } catch (e) {
-    return { error: e.message };
+    return { error: e instanceof Error ? e.message : String(e) };
   }
   const overlap = require("./gapClusters").pairOverlap;
-  const ranked = resolved
-    .map((t) => ({
+  const ranked = (resolved as Row[])
+    .map((t: Row) => ({
       ticketId: t.id,
       question: t.question,
       summary: t.summary,
@@ -277,13 +281,13 @@ function findSimilar({ programId, question, limit = 5 }) {
       resolvedAt: t.resolved_at,
       similarity: Number(overlap(question, `${t.question} ${t.summary || ""}`).toFixed(3)),
     }))
-    .filter((c) => c.similarity > 0)
-    .sort((a, b) => b.similarity - a.similarity)
+    .filter((c: Row) => c.similarity > 0)
+    .sort((a: Row, b: Row) => b.similarity - a.similarity)
     .slice(0, clampLimit(limit));
   return { candidates: ranked, programId };
 }
 
-module.exports = {
+export = {
   checkBudget,
   draftReply,
   improveReply,

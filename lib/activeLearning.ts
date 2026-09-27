@@ -6,9 +6,11 @@ const retrieve = require("./retrieve");
 const resolutionMemory = require("./resolutionMemory");
 const learn = require("./learn");
 
+type Row = Record<string, any>;
+
 const SIMILARITY_THRESHOLD = 0.6;
 const PROGRAM_OBJECT_TOKENS = new Set(["submission", "project", "ysw", "pixl", "review", "payout"]);
-const INTENT_GROUPS = [
+const INTENT_GROUPS: Array<[string, string[]]> = [
   ["location", ["where", "find", "locate"]],
   ["timing", ["when", "long", "arrive", "take", "timing"]],
   ["edit", ["edit", "change", "modify", "cancel"]],
@@ -17,11 +19,11 @@ const INTENT_GROUPS = [
 const CLOSED = new Set(["resolved", "closed"]);
 const EXCLUDED = new Set(["duplicate", "spam"]);
 
-function normalizeAnswer(value) {
+function normalizeAnswer(value: unknown): string {
   return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
 }
 
-function similarity(left, right) {
+function similarity(left: string, right: string): number {
   const a = new Set(retrieve.tokenize(left));
   const b = new Set(retrieve.tokenize(right));
   if (a.size === 0 || b.size === 0) return normalizeAnswer(left) === normalizeAnswer(right) ? 1 : 0;
@@ -30,37 +32,37 @@ function similarity(left, right) {
   return common / (a.size + b.size - common);
 }
 
-function intentGroups(question) {
+function intentGroups(question: string): Set<string> {
   const tokens = new Set(retrieve.tokenize(question));
   return new Set(INTENT_GROUPS.filter(([, words]) => words.some((word) => tokens.has(word))).map(([group]) => group));
 }
 
-function canSupersede(existingQuestion, nextQuestion) {
+function canSupersede(existingQuestion: string, nextQuestion: string): boolean {
   if (similarity(existingQuestion, nextQuestion) < SIMILARITY_THRESHOLD) return false;
   const existingIntent = intentGroups(existingQuestion);
   const nextIntent = intentGroups(nextQuestion);
   if (existingIntent.size > 0 || nextIntent.size > 0) {
     return [...existingIntent].some((group) => nextIntent.has(group));
   }
-  const existingTokens = new Set(retrieve.tokenize(existingQuestion));
-  const nextTokens = new Set(retrieve.tokenize(nextQuestion));
+  const existingTokens = new Set<string>(retrieve.tokenize(existingQuestion) as string[]);
+  const nextTokens = new Set<string>(retrieve.tokenize(nextQuestion) as string[]);
   const informativeShared = [...existingTokens].filter((token) => nextTokens.has(token) && !PROGRAM_OBJECT_TOKENS.has(token));
   return informativeShared.length >= 2;
 }
 
-function helperAnswered(ticket) {
+function helperAnswered(ticket: Row): boolean {
   const events = db.listTicketEvents(ticket.id, 100);
-  if (events.some((event) => event.event_type === "helper_reply")) return true;
+  if (events.some((event: Row) => event.event_type === "helper_reply")) return true;
   const requester = ticket.requester_id;
   return [ticket.assignee_id, ticket.resolved_by].some((id) => id && id !== requester);
 }
 
-function excludedTicket(ticket) {
+function excludedTicket(ticket: Row): boolean {
   if (!ticket || EXCLUDED.has(ticket.status) || ticket.duplicate_of) return true;
-  return db.listTicketEvents(ticket.id, 100).some((event) => EXCLUDED.has(event.event_type));
+  return db.listTicketEvents(ticket.id, 100).some((event: Row) => EXCLUDED.has(event.event_type));
 }
 
-function answerFromExtraction(extraction, ticket) {
+function answerFromExtraction(extraction: Row | null, ticket: Row): Row | null {
   if (!extraction) return null;
   const answer = [extraction.solution, extraction.cause ? `Cause: ${extraction.cause}` : null].filter(Boolean).join("\n").trim();
   if (!answer) return null;
@@ -71,12 +73,12 @@ function answerFromExtraction(extraction, ticket) {
   };
 }
 
-async function extractFact(ticket) {
+async function extractFact(ticket: Row): Promise<Row> {
   let extraction = null;
   try {
     extraction = await resolutionMemory.extractCandidate(ticket, db.listTicketEvents(ticket.id, 50));
   } catch (error) {
-    log.warn("active-learning", `extraction failed for #${ticket.id}: ${error.message}`);
+    log.warn("active-learning", `extraction failed for #${ticket.id}: ${error instanceof Error ? error.message : String(error)}`);
   }
   return answerFromExtraction(extraction, ticket) || {
     question: ticket.question,
@@ -85,7 +87,7 @@ async function extractFact(ticket) {
   };
 }
 
-async function learnFromResolution({ ticket, workerId = null }) {
+async function learnFromResolution({ ticket, workerId = null }: { ticket: Row; workerId?: string | null }): Promise<Row> {
   if (!ticket || !CLOSED.has(ticket.status) || excludedTicket(ticket) || !helperAnswered(ticket)) {
     return { ok: false, skipped: true };
   }
@@ -103,9 +105,9 @@ async function learnFromResolution({ ticket, workerId = null }) {
   const status = mode === "review" ? "candidate" : "approved";
   const overlaps = fact.category
     ? db.learnedFactsForOverlap(ticket.program_id, fact.category)
-      .filter((row) => canSupersede(row.question, fact.question))
+      .filter((row: Row) => canSupersede(row.question, fact.question))
     : [];
-  const same = overlaps.find((row) => normalizeAnswer(row.answer) === normalizeAnswer(fact.answer));
+  const same = overlaps.find((row: Row) => normalizeAnswer(row.answer) === normalizeAnswer(fact.answer));
   if (same) {
     db.refreshLearnedFact(same.id);
     learn.invalidateCorpus();
@@ -142,10 +144,10 @@ async function learnFromResolution({ ticket, workerId = null }) {
     entityId: id,
     metadata: { ticketId: ticket.id, resolverId: helperId, autoLearned: mode === "auto" },
   });
-  return { ok: true, fact: stored, autoLearned: mode === "auto", superseded: overlaps.map((row) => row.id) };
+  return { ok: true, fact: stored, autoLearned: mode === "auto", superseded: overlaps.map((row: Row) => row.id) };
 }
 
-module.exports = {
+export = {
   learnFromResolution,
   similarity,
   canSupersede,

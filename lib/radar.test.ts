@@ -1,5 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
+type TestRow = Record<string, any>;
+
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
 const db = require("./db");
@@ -15,7 +17,7 @@ after(() => {
   programs.invalidate();
 });
 
-function seedProgram(id, extra = {}) {
+function seedProgram(id: string, extra: TestRow = {}) {
   db.saveProgram({ id, name: id, helpChannel: `C-${id}`, channels: [`C-${id}`], ...extra });
   programs.invalidate();
 }
@@ -35,7 +37,7 @@ test("a suppressed signal stays suppressed through re-detection until it expires
   seedProgram("radar-b");
   const sig = radar.upsertSignal({ programId: "radar-b", type: "REOPEN_SPIKE", severity: "MEDIUM", title: "t", summary: "s", evidence: {}, fingerprint: "reopen", now: 1000 });
   radar.suppressSignal({ id: sig.id, actorId: "U1", duration: "1h" });
-  const suppressed = radar.getSignal(sig.id);
+  const suppressed = radar.getSignal(sig.id) as TestRow;
   assert.equal(suppressed.status, "suppressed");
 
   // Worsening re-detection before the window expires does not reactivate it.
@@ -53,7 +55,7 @@ test("acknowledgeSignal and resolveSignal are program-scoped through requireHelp
   seedProgram("radar-c1");
   seedProgram("radar-c2");
   const sig = radar.upsertSignal({ programId: "radar-c1", type: "ESCALATION_SPIKE", severity: "HIGH", title: "t", summary: "s", evidence: {}, fingerprint: "spike", now: 1000 });
-  const requireHelper = (programId) => programId === "radar-c1";
+  const requireHelper = (programId: string) => programId === "radar-c1";
 
   const denied = radar.acknowledgeSignal({ id: sig.id, actorId: "U1", requireHelper: () => false });
   assert.ok(denied.error);
@@ -137,7 +139,7 @@ test("detectSourceFailures reports nothing once a source has since succeeded", (
 /* lifecycle, and scoping as implemented. No LLM ever decides.        */
 /* ------------------------------------------------------------------ */
 
-function charTicket(programId, threadTs, ageMs, extra = {}) {
+function charTicket(programId: string, threadTs: string, ageMs: number, extra: TestRow = {}) {
   const id = db.createTicket({ programId, channel: `C-${programId}`, threadTs, requesterId: "U1", question: "q" });
   const sets = ["created_at = ?"];
   const params = [Date.now() - ageMs];
@@ -300,7 +302,7 @@ test("char: evaluateProgram is program-scoped — no cross-program leakage", () 
   assert.deepEqual(resB.signals, []);
   assert.deepEqual(radar.listSignals("char-leak-b"), []);
   const resA = radar.evaluateProgram("char-leak-a");
-  assert.ok(resA.signals.some((s) => s.type === "STALE_TICKETS" && s.program_id === "char-leak-a"));
+  assert.ok(resA.signals.some((s: TestRow) => s.type === "STALE_TICKETS" && s.program_id === "char-leak-a"));
   assert.deepEqual(radar.listSignals("char-leak-b"), []);
 });
 
@@ -308,7 +310,7 @@ test("char: KNOWLEDGE_GAP is a listed type no detector emits", () => {
   assert.ok(radar.TYPES.includes("KNOWLEDGE_GAP"));
   seedProgram("char-kg");
   const { signals } = radar.evaluateProgram("char-kg");
-  assert.ok(!signals.some((s) => s.type === "KNOWLEDGE_GAP"));
+  assert.ok(!signals.some((s: TestRow) => s.type === "KNOWLEDGE_GAP"));
 });
 
 test("char: startRadarLoop guards non-positive intervals", () => {
@@ -318,3 +320,4 @@ test("char: startRadarLoop guards non-positive intervals", () => {
   assert.ok(timer);
   clearInterval(timer);
 });
+export {};
