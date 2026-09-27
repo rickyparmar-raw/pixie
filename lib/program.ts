@@ -1,5 +1,5 @@
-
-
+// Program timing answers use UTC dates from program.json and decline to invent
+// a milestone when the question or source data is ambiguous.
 import fs = require("node:fs");
 import path = require("node:path");
 import log = require("./log");
@@ -86,11 +86,13 @@ function escapeRegex(str: UntypedInput) {
 }
 
 function parseDate(value: UntypedInput) {
+  // Invalid dates fall through to the normal docs path instead of producing fiction.
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
 function buildNamesRegexPattern(metadata: UntypedInput) {
+  // Escape configured names before placing them in the timing matcher.
   if (metadata === null || metadata === undefined) {
     return "pixl";
   }
@@ -164,6 +166,7 @@ function corpusSection(now = new Date(), dataOrMilestones = load(), metadata = n
 }
 
 function directAnswer(question: UntypedInput, now = new Date(), dataOrMilestones = load(), metadata = null) {
+  // Only a uniquely named or clearly program-level question gets a deterministic date answer.
   if (!isTimingQuestion(question, metadata)) return null;
 
   const milestones = extractMilestones(dataOrMilestones);

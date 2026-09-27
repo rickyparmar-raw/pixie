@@ -1,5 +1,5 @@
-
-
+// Retention deletes only terminal ticket data and keeps approved knowledge.
+// Audit retention cannot fall below the platform floor, even when a program asks for less.
 import db = require("./db");
 import audit = require("./audit");
 
@@ -35,6 +35,7 @@ function toPositiveDays(value: UntypedInput, fallback: UntypedInput) {
 }
 
 function policyFor(programId: UntypedInput) {
+  // Invalid or missing per-program values use safe defaults rather than disabling cleanup.
   const row = db.handle().query<RetentionRow, [string]>(
     `SELECT retention_context_days, retention_tickets_days,
             retention_traces_days, retention_analytics_days, retention_audit_days
@@ -66,6 +67,7 @@ function validatePolicy(patch: Record<string, UntypedInput> = {}) {
 }
 
 function eligibleTicketIds(h: UntypedInput, programId: UntypedInput, ticketCutoff: UntypedInput) {
+  // Open and active tickets are never eligible for a retention sweep.
   const placeholders = SWEEPABLE_STATUSES.map(() => "?").join(",");
   return h.query(
     `SELECT id FROM tickets WHERE program_id = ? AND created_at < ? AND status IN (${placeholders})`,

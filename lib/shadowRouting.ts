@@ -1,5 +1,5 @@
-
-
+// Shadow routing records recommendations without paging helpers or changing live ownership.
+// The snapshot is taken at escalation time so later helper state cannot rewrite history.
 import db = require("./db");
 import helperRoute = require("./helperRoute");
 

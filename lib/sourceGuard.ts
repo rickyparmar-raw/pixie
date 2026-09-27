@@ -1,5 +1,5 @@
-
-
+// Organizer-configured URLs are validated before every request and every redirect hop.
+// DNS results are checked as a set so one private address cannot hide among public ones.
 import dnsModule = require("node:dns");
 import net = require("node:net");
 import axios = require("axios");
@@ -52,6 +52,7 @@ function isPublicAddress(address: string) {
 }
 
 async function validateUrl(rawUrl: string) {
+  // The scheme, hostname, and every resolved address are boundary checks before axios runs.
   let parsed;
   try {
     parsed = new URL(rawUrl);
@@ -77,6 +78,7 @@ async function validateUrl(rawUrl: string) {
 }
 
 async function fetchSourceUrl(rawUrl: string, { timeout = DEFAULT_FETCH_TIMEOUT_MS }: { timeout?: number } = {}) {
+  // Redirects are manual so each destination is subject to the same SSRF checks.
   let current = await validateUrl(rawUrl);
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const res = await axios.get(current, { timeout, maxRedirects: 0, validateStatus: (s: number) => s >= 200 && s < 400 });

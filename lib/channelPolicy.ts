@@ -1,5 +1,5 @@
-
-
+// Channel ownership and role are resolved here. Handlers must not reconstruct
+// help/main/organizer behavior from separate environment lists.
 import programs = require("./programs");
 import programModel = require("./programModel");
 import configModule = require("./config");
@@ -28,10 +28,12 @@ function isOrganizerChannel(program: Program | null, channelId: string | null, w
 
 
 function organizerSettings(main: Record<string, unknown>) {
+  // Organizers receive ticket cards but are never an ambient reply or ticket target.
   return Object.freeze({ ...main, ambientProgramReplies: false, ticketsEnabled: false, helperEscalationEnabled: false });
 }
 
 function resolve(channelId: string, workspaceId: string | null = null, { isDm = false }: { isDm?: boolean } = {}) {
+  // DM role wins before channel lookup because DMs have no program channel ownership.
   const program = programs.forChannel(channelId, workspaceId);
   let role = "none";
   if (isDm) role = "dm";
@@ -46,6 +48,7 @@ function resolve(channelId: string, workspaceId: string | null = null, { isDm = 
       : role === "organizer" ? organizerSettings(behavior.main)
         : null;
 
+  // Paused programs remain resolvable for display but cannot answer through any role.
   if (settings && status === "paused") settings = Object.freeze({ ...settings, enabled: false });
   return { program, role, settings, behavior, status };
 }

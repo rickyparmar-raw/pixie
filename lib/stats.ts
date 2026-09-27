@@ -1,5 +1,4 @@
-
-
+// Both stats surfaces read these aggregates so command and App Home numbers stay aligned.
 import db = require("./db");
 import cache = require("./cache");
 import configModule = require("./config");
@@ -21,6 +20,7 @@ function relativeTime(ms: number | null | undefined) {
 }
 
 function coverageStats() {
+  // The answer rate measures corpus answers, while cache hits measure model calls avoided.
   const counts = Object.fromEntries((db.metricCounts() as MetricCount[]).map((r) => [r.kind, r.count]));
   const docs = counts.answer_docs || 0;
   const chat = counts.answer_chat || 0;

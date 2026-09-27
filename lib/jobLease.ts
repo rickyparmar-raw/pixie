@@ -1,5 +1,5 @@
-
-
+// Periodic jobs use database leases so only one replica performs a sweep at a time.
+// Expired leases are reclaimable; a live owner must not be stolen.
 import db = require("./db");
 import log = require("./log");
 import crypto = require("node:crypto");

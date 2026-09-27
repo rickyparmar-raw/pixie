@@ -1,6 +1,8 @@
-
+// Schema is the shared contract for local SQLite state. Migrations run after the
+// base tables, and post-migration indexes run only after their columns exist.
 
 const SCHEMA = `
+-- Base tables are created before migrations add hosted and tenant-scoped columns.
 CREATE TABLE IF NOT EXISTS answered_messages (
   ts          TEXT PRIMARY KEY,
   channel     TEXT,

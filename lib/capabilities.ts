@@ -5,7 +5,7 @@ import guides = require("./guides");
 type UntypedInput = any;
 const { isAdmin } = configModule;
 
-
+// This table is the help surface; entries must stay aligned with registered commands.
 const CAPABILITIES = Object.freeze([
   { suffix: "", label: "ask", description: "Private answer — help without cluttering the channel", usage: "[question]" },
   { suffix: "", label: "help", description: "Show commands available to you", usage: "help" },

@@ -1,5 +1,5 @@
-
-
+// Calculator answers are deterministic: arithmetic belongs here so the model does not
+// improvise payout, Restoration Energy, or shop-hour totals.
 import shop = require("./shop");
 
 type UntypedInput = any;
@@ -25,6 +25,7 @@ function isCalculatorQuery(text: UntypedInput) {
 }
 
 function directAnswer(question: UntypedInput, data = null) {
+  // A calculator response is eligible only after both numeric shape and intent match.
   if (!isCalculatorQuery(question)) return null;
 
   const currentShop = data || shop.current();

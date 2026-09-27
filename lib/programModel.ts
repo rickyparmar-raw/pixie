@@ -1,5 +1,5 @@
-
-
+// Behavior settings bridge persisted hosted values and legacy flags. Stored values
+// win per field, while absent fields retain the old deployment behavior.
 type UntypedInput = any;
 const STATUSES = ["sandbox", "live", "paused"];
 
@@ -28,6 +28,7 @@ const MAIN_KEYS = Object.keys(MAIN_DEFAULTS);
 const HELP_KEYS = Object.keys(HELP_DEFAULTS);
 
 function bool(value: UntypedInput, fallback: UntypedInput) {
+  // Configuration arrives from JSON, SQLite, and env, so accept their boolean forms.
   if (value === true || value === 1 || value === "1" || value === "true") return true;
   if (value === false || value === 0 || value === "0" || value === "false") return false;
   return fallback;
@@ -73,6 +74,7 @@ function resolveSection(defaults: Record<string, UntypedInput>, legacy: Record<s
 }
 
 function parseStoredBehavior(raw: UntypedInput) {
+  // Malformed persisted settings are ignored so one bad row does not disable routing.
   if (!raw) return null;
   if (typeof raw === "object") return raw;
   try {
@@ -126,6 +128,7 @@ function mergeBehavior(existing: UntypedInput, patch: UntypedInput) {
 
 
 function validateChannelRoles({ programs = [], legacyHelp = null, legacyMain = [], claims = [] }: Record<string, UntypedInput> = {}) {
+  // Compare configured and hosted ownership in the same workspace/channel namespace.
   const errors = [];
   const owners = new Map();
   const key = (ws: UntypedInput, ch: UntypedInput) => `${ws || "*"}::${ch}`;

@@ -1,5 +1,5 @@
-
-
+// Environment parsing, defaults, and provider-key rotation live in one place so
+// callers cannot silently disagree about which endpoint or credentials to use.
 import dotenv = require("dotenv");
 import type { WebClient } from "@slack/web-api";
 
@@ -35,6 +35,7 @@ function stripTrailingSlash(url: UntypedInput) {
 
 
 function normalizeBaseUrl(url: UntypedInput, fallback: UntypedInput) {
+  // Accept the documented chat/completions form while storing one base URL shape.
   if (!url) return fallback;
   return stripTrailingSlash(url).replace(/\/chat\/completions$/, "");
 }
@@ -44,6 +45,7 @@ const KEY_COOLDOWN_MS = 60 * 1000;
 const coolingUntil = new Map();
 
 function penalizeZenKey(key: UntypedInput, ms = KEY_COOLDOWN_MS) {
+  // Cooldown state is process-local and never exposes key material in the config object.
   if (!key) return;
   if (ms <= 0) {
     coolingUntil.delete(key);
@@ -54,6 +56,7 @@ function penalizeZenKey(key: UntypedInput, ms = KEY_COOLDOWN_MS) {
 
 
 function scanPool(keys: UntypedInput, coolingUntil: UntypedInput, state: UntypedInput) {
+  // Scan at most one full lap; an exhausted pool cannot spin in the event loop.
   for (let i = 0; i < keys.length; i++) {
     const idx = state.index % keys.length;
     state.index += 1;
@@ -65,6 +68,7 @@ function scanPool(keys: UntypedInput, coolingUntil: UntypedInput, state: Untyped
 
 
 function soonestRecovery(keys: string[], coolingUntil: Map<string, number>): string | undefined {
+  // A cooling key is still preferable to no key when every account is rate-limited.
   return keys.reduce((best: string, k: string) => ((coolingUntil.get(k) || 0) < (coolingUntil.get(best) || 0) ? k : best), keys[0]);
 }
 
@@ -84,6 +88,7 @@ const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_OPENROUTER_MODEL = "google/gemini-2.5-flash";
 
 function zenStandby(baseUrl: UntypedInput, model = DEFAULT_MODEL) {
+  // Never return the same endpoint as its caller's fallback: that would self-reference.
   if (baseUrl === ZEN_BASE_URL) return null;
   return {
     baseUrl: ZEN_BASE_URL,
@@ -94,6 +99,7 @@ function zenStandby(baseUrl: UntypedInput, model = DEFAULT_MODEL) {
 
 
 function standbyFallback(baseUrl: UntypedInput, defaultZenModel = DEFAULT_MODEL) {
+  // Prefer a different provider, then Zen's rotating pool, so fallback remains real.
   if (baseUrl === OPENROUTER_BASE_URL) return zenStandby(baseUrl, defaultZenModel);
   if (baseUrl === ZEN_BASE_URL && !process.env.OPENROUTER_API_KEY) return null;
 
@@ -110,6 +116,7 @@ function standbyFallback(baseUrl: UntypedInput, defaultZenModel = DEFAULT_MODEL)
 }
 
 function parseChannels(raw: UntypedInput) {
+  // Comma-separated settings are normalized once so every caller sees the same channel list.
   return (raw || "")
     .split(",")
     .map((c: UntypedInput) => c.trim())
@@ -122,6 +129,7 @@ function positiveNumber(raw: UntypedInput, fallback: UntypedInput) {
 }
 
 function envFlag(raw: UntypedInput, fallback = false) {
+  // Only explicit true values enable a flag; missing and arbitrary text stay at the fallback.
   if (raw === undefined || raw === null || raw === "") return fallback;
   return raw === "1" || String(raw).toLowerCase() === "true";
 }
@@ -136,6 +144,7 @@ const JEV_BASE_URL = "https://api.experientiallabs.ai/v1/systemone";
 const JEV_FREE_MODEL = "jev-latest:free";
 
 function jevConfig() {
+  // JEV is a bounded classifier call with one configured endpoint, not a provider pool.
   return {
     enabled: envFlag(process.env.JEV_ENABLED, false),
     provider: "experiential",
@@ -150,9 +159,11 @@ function jevConfig() {
 }
 
 const faqChannels = parseChannels(process.env.SLACK_FAQ_CHANNELS);
+// The first FAQ channel is the legacy ambient-answer channel.
 
 
 const stagingOnlyChannels = parseChannels(process.env.PIXIE_STAGING_ONLY_CHANNELS);
+// When set, every Slack event outside this allowlist is ignored before handling.
 
 
 const adminUserIds = parseChannels(process.env.PIXIE_ADMIN_USER_IDS);
@@ -175,6 +186,7 @@ function zenKeyOrder(name: UntypedInput) {
 
 
 function collectNumberedKeys(env: UntypedInput, prefix: UntypedInput) {
+  // Gaps are allowed so removing KEY_3 does not silently renumber another account.
   const pattern = new RegExp(`^${prefix}(_\\d+)?$`);
   return Object.keys(env)
     .filter((k: UntypedInput) => pattern.test(k))
@@ -399,6 +411,7 @@ async function resolveBotUserId(client: UntypedInput) {
 }
 
 function isAdmin(userId: UntypedInput) {
+  // An empty admin allowlist fails closed so an unconfigured deployment cannot mutate knowledge.
   return !!userId && config.slack.adminUserIds.includes(userId);
 }
 

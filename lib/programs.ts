@@ -8,6 +8,8 @@ import ticketCategory = require("./ticketCategory");
 type UntypedInput = any;
 const { config } = configModule;
 
+// Configuration precedence is env, then files, then persisted hosted state, with
+// legacy single-program settings as the final fallback.
 const PROGRAMS_FILE = path.join(__dirname, "..", "programs.json");
 const SOURCES_FILE = path.join(__dirname, "..", "sources.json");
 const PROGRAM_FILE = path.join(__dirname, "..", "program.json");
@@ -22,6 +24,7 @@ let cachedEnvRaw: string | null = null;
 let cachedEnvPrograms: UntypedInput = null;
 
 function readJsonFile(filePath: UntypedInput, fallback: UntypedInput = null) {
+  // A malformed optional file should fall back and keep the process serving questions.
   try {
     if (!fs.existsSync(filePath)) return fallback;
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
@@ -48,6 +51,7 @@ function alt(p: UntypedInput, ...keys: string[]) {
 }
 
 function normalizeProgram(p: UntypedInput) {
+  // Accept both camelCase config and snake_case database rows at this boundary.
   const ticketsEnabled = p.ticketsEnabled === false ? false : true;
   return {
     id: p.id,
@@ -92,6 +96,7 @@ function normalizeProgram(p: UntypedInput) {
 }
 
 function loadEnvPrograms() {
+  // Invalid env JSON is a configuration warning, not a crash-loop trigger.
   const raw = (process.env.PIXIE_PROGRAMS_JSON || "").trim();
   if (!raw) return null;
   if (cachedEnvRaw === raw) return cachedEnvPrograms;
@@ -125,6 +130,7 @@ function loadEnvPrograms() {
 }
 
 function legacyFallbackProgram() {
+  // Preserve the original single-workspace deployment when no program registry exists.
   const sources = readSourcesJson();
   const milestones = readProgramJsonMilestones();
   const helpChannel = config?.slack?.helpChannel || null;
@@ -149,6 +155,7 @@ function legacyFallbackProgram() {
 }
 
 function loadFilePrograms() {
+  // Empty files are treated as absent so legacy fallback remains available.
   const fileData = readJsonFile(PROGRAMS_FILE, null);
   if (!Array.isArray(fileData) || fileData.length === 0) {
     return null;
@@ -157,10 +164,12 @@ function loadFilePrograms() {
 }
 
 function loadConfiguredPrograms() {
+  // Env configuration wins over files to support hosted process-level overrides.
   return loadEnvPrograms() || loadFilePrograms();
 }
 
 function mergeSources(configured: UntypedInput, persisted: UntypedInput) {
+  // File sources remain available when the database has no copy; the key prevents duplicates.
   const merged = [];
   const seen = new Set();
   for (const source of [...(configured || []), ...(persisted || [])]) {
@@ -177,6 +186,7 @@ function all() {
   if (cachedPrograms) return cachedPrograms;
 
   const fileProgs = loadConfiguredPrograms();
+  // Database reads are best-effort so a transient state-store failure cannot hide file config.
   let dbProgs: ReturnType<typeof db.getDbPrograms> = [];
   try {
     dbProgs = db.getDbPrograms();
@@ -221,6 +231,7 @@ function all() {
 }
 
 function invalidate() {
+  // Clear both program and env caches after a reload or test environment change.
   cachedPrograms = null;
   cachedEnvRaw = null;
   cachedEnvPrograms = null;
@@ -243,6 +254,7 @@ function emptyShared() {
 }
 
 function shared() {
+  // Shared knowledge is explicit; program-scoped sources are never silently promoted.
   const envProgs = loadEnvPrograms();
   if (envProgs) {
     const fromEnv = envProgs.find((p: UntypedInput) => p.id === SHARED_PROGRAM_ID);
@@ -257,6 +269,7 @@ function shared() {
 }
 
 function get(id: UntypedInput) {
+  // The shared program is returned for missing ids so global docs remain available.
   if (!id || id === SHARED_PROGRAM_ID) return shared();
   return all().find((p: UntypedInput) => p.id === id) || null;
 }
@@ -281,6 +294,7 @@ function servesChannel(program: UntypedInput, channelId: UntypedInput, workspace
 }
 
 function forChannel(channelId: UntypedInput, workspaceId: string | null = null) {
+  // Hosted claims win before configured channel lists to prevent split ownership.
   if (!channelId) return shared();
 
   const claimed = claimedProgram(hostedClaim(workspaceId, channelId));

@@ -1,5 +1,5 @@
-
-
+// Repository validation is a classify step around a small set of GitHub fetches:
+// license, README instructions, demo evidence, and screenshots.
 import axios = require("axios");
 import log = require("./log");
 
@@ -29,6 +29,7 @@ function parseGithubUrl(text: UntypedInput) {
 }
 
 async function fetchRawFile(owner: UntypedInput, repo: UntypedInput, filename: UntypedInput) {
+  // Repositories commonly use either branch name; the first successful file wins.
   const branches = ["main", "master"];
   for (const branch of branches) {
     try {
