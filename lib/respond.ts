@@ -94,9 +94,9 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
 
-const MENTION_FALLBACK = "hmm not totally sure about that one — ask a helper if it's something specific :hii:";
-const ERROR_FALLBACK = "having trouble thinking rn, try again in a sec :sob-pray:";
-const RATE_LIMITED = "woah slow down a sec — gimme a minute to catch up :sob-pray:";
+const MENTION_FALLBACK = "hmm not totally sure about that one — ask a helper if it's something specific :wave:";
+const ERROR_FALLBACK = "having trouble thinking rn, try again in a sec :melting_face:";
+const RATE_LIMITED = "woah slow down a sec — gimme a minute to catch up :melting_face:";
 const UNCLEAR_MARKER = "UNCLEAR";
 
 const DOCS_ONLY: AnswerMode = "docs-only";
@@ -452,8 +452,8 @@ async function handleLookupFailure({
 function uncertaintyText(prog: ProgramLike | null, { escalated = false }: { escalated?: boolean } = {}) {
   const name = prog?.name ? `the ${prog.name} docs` : "the program docs";
   return escalated
-    ? `I couldn't verify that from ${name}, so I won't guess — I've flagged it for a helper :hii:`
-    : `I couldn't verify that from ${name}, so I won't guess. A helper or organizer can confirm it :hii:`;
+    ? `I couldn't verify that from ${name}, so I won't guess — I've flagged it for a helper :wave:`
+    : `I couldn't verify that from ${name}, so I won't guess. A helper or organizer can confirm it :wave:`;
 }
 
 function isDeterministicAnswer(result: AnswerResult | null) {

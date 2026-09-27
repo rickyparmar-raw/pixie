@@ -354,7 +354,7 @@ function reportLines(weeksAgo = 0, programId: string | null = null): string[] {
 
   lines.push("", "*the docs should answer these*");
   if (week.gaps.length === 0) {
-    lines.push("_nothing outstanding_ :yay:");
+    lines.push("_nothing outstanding_ :tada:");
   } else {
     for (const gap of week.gaps) {
       lines.push(`• *${gap.ask_count}×* — ${gap.question.slice(0, 150)}`);

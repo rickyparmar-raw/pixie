@@ -161,7 +161,7 @@ function errorMessage(error: unknown): string | undefined {
 
 const GAP_LIMIT = 15;
 const PENDING_LIMIT = 15;
-const NOT_ALLOWED = "that one's helpers-only :nono:";
+const NOT_ALLOWED = "that one's helpers-only :no_entry_sign:";
 
 function adminOnly(handler: (args: CommandArgs) => Promise<unknown>) {
   return async (args: CommandArgs): Promise<void> => {
@@ -320,7 +320,7 @@ async function reloadCommand({ ack, respond: sendEphemeral }: CommandArgs): Prom
     (db as typeof db & { clearCache: () => void }).clearCache();
     await sendEphemeral({
       response_type: "ephemeral",
-      text: "refreshed the docs and cleared the answer cache :yesyes:",
+      text: "refreshed the docs and cleared the answer cache :white_check_mark:",
     });
   } catch (e: unknown) {
     await sendEphemeral({ response_type: "ephemeral", text: `refresh failed: ${errorMessage(e)}` });
@@ -332,7 +332,7 @@ async function gapsCommand({ ack, respond: sendEphemeral }: CommandArgs): Promis
 
   const gaps = topGaps(GAP_LIMIT, undefined, { kind: report.DOCS });
   if (gaps.length === 0) {
-    await sendEphemeral({ response_type: "ephemeral", text: "no unanswered questions logged yet :yay:" });
+    await sendEphemeral({ response_type: "ephemeral", text: "no unanswered questions logged yet :tada:" });
     return;
   }
 
@@ -359,7 +359,7 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Co
   if (teachPolicy.role !== "main" && teachPolicy.role !== "help") {
     await sendEphemeral({
       response_type: "ephemeral",
-      text: "run this in one of the program's channels so i know which program it's for :nono:",
+      text: "run this in one of the program's channels so i know which program it's for :no_entry_sign:",
     });
     return;
   }
@@ -375,7 +375,7 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Co
     await sendEphemeral({
       response_type: "ephemeral",
       text: id
-        ? `got it, i'll use that from now on :yesyes:\n>*Q:* ${parsed.question}\n>*A:* ${parsed.answer}\n\n_#${id} — remove it with \`/pixie-forget ${id}\`_`
+        ? `got it, i'll use that from now on :white_check_mark:\n>*Q:* ${parsed.question}\n>*A:* ${parsed.answer}\n\n_#${id} — remove it with \`/pixie-forget ${id}\`_`
         : "couldn't save that one, try again",
     });
     return;
@@ -408,7 +408,7 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Co
         await sendEphemeral({
           response_type: "ephemeral",
           text: id
-            ? `🧚 Summarized and added this thread to active memory! :yesyes:\n>*Q:* ${threadResult.question}\n>*A:* ${threadResult.answer}\n\n_#${id} — remove with \`/pixie-forget ${id}\`_`
+            ? `🧚 Summarized and added this thread to active memory! :white_check_mark:\n>*Q:* ${threadResult.question}\n>*A:* ${threadResult.answer}\n\n_#${id} — remove with \`/pixie-forget ${id}\`_`
             : "already memorized this thread or couldn't save it",
         });
         return;
@@ -463,7 +463,7 @@ async function pendingCommand({ ack, respond: sendEphemeral }: CommandArgs): Pro
 
   const rows = learn.pending(PENDING_LIMIT);
   if (rows.length === 0) {
-    await sendEphemeral({ response_type: "ephemeral", text: "nothing waiting for review :yay:" });
+    await sendEphemeral({ response_type: "ephemeral", text: "nothing waiting for review :tada:" });
     return;
   }
 
@@ -525,7 +525,7 @@ async function approveCommand({ command, ack, respond: sendEphemeral }: CommandA
 
   await sendEphemeral({
     response_type: "ephemeral",
-    text: learn.approve(id) ? `approved #${id} — i'll use it from now on :yesyes:` : `couldn't find #${id}`,
+    text: learn.approve(id) ? `approved #${id} — i'll use it from now on :white_check_mark:` : `couldn't find #${id}`,
   });
 }
 
@@ -584,7 +584,7 @@ function welcomeText() {
   const links = prog?.links || {};
   const help = prog?.helpChannel ? `<#${prog.helpChannel}>` : "the help channel";
   return [
-    `hey! welcome to ${prog?.name || "this program"} :yay:`,
+    `hey! welcome to ${prog?.name || "this program"} :tada:`,
     "",
     `i'm ${brand.name()} — a helper bot for configured programs. you can:`,
     "• ping me in any channel",
@@ -595,7 +595,7 @@ function welcomeText() {
     ...(links.site ? [`• site: ${links.site}`] : []),
     ...(links.docs ? [`• docs: ${links.docs}`] : []),
     "",
-    `stuck on something a helper should see? post in ${help} :hii:`,
+    `stuck on something a helper should see? post in ${help} :wave:`,
   ].join("\n");
 }
 
@@ -651,7 +651,7 @@ async function programCommand({ command, ack, respond: sendEphemeral }: CommandA
       response_type: "ephemeral",
       text:
         val === "on"
-          ? `ticket auto-creation from this channel is back *on* :yesyes:`
+          ? `ticket auto-creation from this channel is back *on* :white_check_mark:`
           : `ticket auto-creation from this channel is *off* — Pixie will still answer, just won't open tickets here until this is turned back on.`,
     });
     return;
@@ -694,7 +694,7 @@ async function programCommand({ command, ack, respond: sendEphemeral }: CommandA
         progObj = { id, name, posture: "active" };
       }
       programs.saveProgram(progObj);
-      await sendEphemeral({ response_type: "ephemeral", text: `saved program \`${progObj.id}\` :yesyes:` });
+      await sendEphemeral({ response_type: "ephemeral", text: `saved program \`${progObj.id}\` :white_check_mark:` });
     } catch (e: unknown) {
       await sendEphemeral({ response_type: "ephemeral", text: `could not add program: ${errorMessage(e)}` });
     }
@@ -727,7 +727,10 @@ async function programCommand({ command, ack, respond: sendEphemeral }: CommandA
     }
     const updated = { ...existing, [field]: val };
     programs.saveProgram(updated);
-    await sendEphemeral({ response_type: "ephemeral", text: `updated \`${id}\` ${field} to \`${val}\` :yesyes:` });
+    await sendEphemeral({
+      response_type: "ephemeral",
+      text: `updated \`${id}\` ${field} to \`${val}\` :white_check_mark:`,
+    });
     return;
   }
 
@@ -738,7 +741,7 @@ async function programCommand({ command, ack, respond: sendEphemeral }: CommandA
       return;
     }
     programs.removeProgram(id);
-    await sendEphemeral({ response_type: "ephemeral", text: `removed program \`${id}\` :yesyes:` });
+    await sendEphemeral({ response_type: "ephemeral", text: `removed program \`${id}\` :white_check_mark:` });
     return;
   }
 

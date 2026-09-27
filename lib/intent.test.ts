@@ -33,7 +33,7 @@ test("worthClassifying drops messages that say nothing at all", () => {
 });
 
 test("worthClassifying looks past emoji, pings and links", () => {
-  assert.equal(worthClassifying(":yay: :sho: :pf:"), false);
+  assert.equal(worthClassifying(":tada: :sho: :pf:"), false);
   assert.equal(worthClassifying("<@U123>"), false);
   assert.equal(worthClassifying(":upvote: thanks"), false);
   assert.equal(worthClassifying("<@U123> my tileset wont render"), true);

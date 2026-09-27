@@ -70,7 +70,7 @@ function statsText() {
     `• fell back / stayed silent: *${fallback + silent}*`,
     `• errors: *${errors}*`,
     `• answers known cold: *${known}* — ${cacheHits} served instantly (${instant}%)`,
-    `• feedback: :${config.feedbackReactions[0] || "thumbs-up"}: ${votes.up || 0} / :nono: ${votes.down || 0}`,
+    `• feedback: :${config.feedbackReactions[0] || "thumbs-up"}: ${votes.up || 0} / :-1: ${votes.down || 0}`,
     p50 ? `• median answer latency: *${(p50 / 1000).toFixed(1)}s*` : "• median answer latency: _no data_",
     firstToken ? `• median time to first word: *${(firstToken / 1000).toFixed(1)}s*` : null,
     top.length > 0 ? `• asked most: ${top.map((r) => `_${r.question}_ (${r.ask_count}x)`).join(", ")}` : null,

@@ -8,7 +8,7 @@ const MAX_TOKENS = 500;
 const TIMEOUT_MS = 30000;
 const SLACK_FILE_HOST = "https://files.slack.com/";
 const SLACK_FETCH_TIMEOUT_MS = 10000;
-const DEFAULT_QUESTION = "what am i looking at here?";
+const DEFAULT_QUESTION = "can you help with this?";
 
 async function fetchSlackImageAsDataUri(imageUrl: string, slackToken: string | null) {
   const res = await axios.get(imageUrl, {
@@ -25,25 +25,31 @@ function needsSlackFetch(imageUrl: string, slackToken: string | null | undefined
   return imageUrl.startsWith(SLACK_FILE_HOST) && !!slackToken;
 }
 
-function visionSystemPrompt(context: string) {
+const SKIP = "SKIP";
+
+function visionSystemPrompt(context: string, docs = "") {
   return [
-    "You are pixie, helping debug code and answer questions about images.",
-    "Be direct and clear. Skip filler phrases like 'this looks like' or 'it appears to be'.",
-    "Start with the answer immediately. Use short sentences.",
-    "IMPORTANT: Only describe what you can actually see in the image. Don't guess or assume functionality.",
-    "If you can't tell exactly what something does from the visual alone, say what's visible without speculating.",
-    "For UI screenshots: describe the elements you see, not what you think they do unless it's explicitly labeled.",
-    "If it's an error screenshot, say what's wrong and how to fix it.",
-    "If it's a design mockup, say how to build it.",
-    "If it's pixel art, give technique feedback.",
-    "Use casual tone but stay concise — like explaining to a friend who's in a hurry.",
-    context ? `Context: ${context}` : "",
+    "You are pixie, a helper in a support channel. Someone shared an image.",
+    "Answer their question or fix the problem the image shows, like a friendly human helper would.",
+    "Never describe or summarize the image. Don't list what you see.",
+    "Keep it to one to three short, casual sentences. Plain words, no headings or bullet lists.",
+    "If it's an error, say what's wrong and the fix. If they asked something, answer it.",
+    "Program facts (deadlines, rules, prices, how things work) come only from the docs below. Never invent them.",
+    `If there's no clear question or problem, or you aren't confident you know the answer, reply with exactly ${SKIP}.`,
+    context ? `Conversation so far: ${context}` : "",
+    docs ? `Docs:\n${docs}` : "",
   ]
     .filter(Boolean)
     .join("\n");
 }
 
-async function analyzeImage(imageUrl: string, question: string, context = "", slackToken: string | null = null) {
+async function analyzeImage(
+  imageUrl: string,
+  question: string,
+  context = "",
+  slackToken: string | null = null,
+  docs = "",
+) {
   let finalImageUrl = imageUrl;
   if (needsSlackFetch(imageUrl, slackToken)) {
     try {
@@ -64,7 +70,7 @@ async function analyzeImage(imageUrl: string, question: string, context = "", sl
       maxTokens: MAX_TOKENS,
       timeout: TIMEOUT_MS,
       messages: [
-        { role: "system", content: visionSystemPrompt(context) },
+        { role: "system", content: visionSystemPrompt(context, docs) },
         {
           role: "user",
           content: [
@@ -78,7 +84,8 @@ async function analyzeImage(imageUrl: string, question: string, context = "", sl
   );
 
   const reply = text?.trim();
-  return reply ? normalizeEmoji(reply) : null;
+  if (!reply || reply.replace(/[.!\s]/g, "").toUpperCase() === SKIP) return null;
+  return normalizeEmoji(reply);
 }
 
 export = { analyzeImage, visionSystemPrompt };

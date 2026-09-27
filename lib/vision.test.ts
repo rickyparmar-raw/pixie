@@ -15,12 +15,21 @@ after(() => {
   axios.get = realGet;
 });
 
-test("system prompt embeds context and states the ground rules", () => {
-  const withCtx = vision.visionSystemPrompt("order #12 stuck");
+test("system prompt answers instead of describing, and allows skipping", () => {
+  const withCtx = vision.visionSystemPrompt("order #12 stuck", "Refunds take 5 days.");
   assert.match(withCtx, /order #12 stuck/);
-  assert.match(withCtx, /Only describe what you can actually see/i);
+  assert.match(withCtx, /Refunds take 5 days/);
+  assert.match(withCtx, /Never describe or summarize the image/);
+  assert.match(withCtx, /reply with exactly SKIP/);
   const bare = vision.visionSystemPrompt("");
-  assert.doesNotMatch(bare, /Context:/);
+  assert.doesNotMatch(bare, /Conversation so far:|Docs:/);
+});
+
+test("a SKIP reply means say nothing", async () => {
+  for (const content of ["SKIP", "skip.", " SKIP! "]) {
+    axios.post = async () => ({ data: { choices: [{ message: { content } }] } });
+    assert.equal(await vision.analyzeImage("https://example.com/a.png", "hmm"), null);
+  }
 });
 
 test("Slack fetch failure surfaces a friendly error, never the raw axios error", async () => {

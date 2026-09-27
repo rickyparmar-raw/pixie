@@ -142,7 +142,13 @@ interface HandlerWorkspace {
   workspaceOf(event: HandlerEvent): string | null;
 }
 interface HandlerVision {
-  analyzeImage(url?: string, question?: string, context?: string, token?: string): Promise<string | null>;
+  analyzeImage(
+    url?: string,
+    question?: string,
+    context?: string,
+    token?: string,
+    docs?: string,
+  ): Promise<string | null>;
 }
 interface HandlerLearn {
   parseTeach(text: string): { question: string; answer: string } | null;
@@ -261,7 +267,7 @@ function isDirectMessage(event: HandlerEvent): boolean {
   return event.channel_type === "im";
 }
 
-const DM_RATE_LIMIT_NOTICE = "woah slow down a sec — gimme a minute to catch up :sob-pray:";
+const DM_RATE_LIMIT_NOTICE = "woah slow down a sec — gimme a minute to catch up :melting_face:";
 
 async function checkDmRateLimit({
   event,
@@ -300,11 +306,13 @@ async function handleImage({ event, client, imageFile, program = null }: ImageAr
 
   try {
     context.addToThread(threadTs, "user", `[uploaded image] ${question}`, event.user, event.channel);
+    const docs = question ? require("./knowledge").getContext(question, program?.id || null) : "";
     const reply = await vision.analyzeImage(
       imageFile.url_private,
       question,
       context.getThreadContext(threadTs),
       config.slack.botToken,
+      docs,
     );
 
     if (reply) {
@@ -318,6 +326,8 @@ async function handleImage({ event, client, imageFile, program = null }: ImageAr
       context.addToThread(threadTs, "assistant", reply, null, event.channel);
       context.updateUserHistory(event.user, question || "image analysis", true);
       db.recordMetric("answer_vision");
+    } else {
+      db.recordMetric("silent", null, "vision_skip", program?.id || null);
     }
   } catch (e: unknown) {
     log.error("vision", "analysis failed:", errorMessage(e));
@@ -363,9 +373,9 @@ function stayOutOfHumanThread({
 }
 
 const HUMAN_ONLY_REPLY =
-  "That one needs a person to decide, so I won't guess. A helper or organizer can sort it out :hii:";
+  "That one needs a person to decide, so I won't guess. A helper or organizer can sort it out :wave:";
 const HUMAN_ONLY_PINGED_REPLY =
-  "That one needs a person to decide, so I won't guess. I've asked a helper to take a look :hii:";
+  "That one needs a person to decide, so I won't guess. I've asked a helper to take a look :wave:";
 
 async function escalateSensitive({
   event,
@@ -556,10 +566,10 @@ async function refuseUnauthorizedCommand({
   db.claimMessage(event.ts, event.channel);
   const text =
     verdict.reason === "commands_disabled"
-      ? "commands are switched off in this channel :nono:"
+      ? "commands are switched off in this channel :no_entry_sign:"
       : verdict.reason === "wrong_channel"
-        ? "that command doesn't work in this channel :nono:"
-        : "that one's helpers-only :nono:";
+        ? "that command doesn't work in this channel :no_entry_sign:"
+        : "that one's helpers-only :no_entry_sign:";
   await client.chat.postEphemeral({ channel: event.channel, user: event.user, text });
   return true;
 }
@@ -584,7 +594,7 @@ async function handleTeachRequest({
     await client.chat.postEphemeral({
       channel: event.channel,
       user: event.user,
-      text: "that one's helpers-only :nono:",
+      text: "that one's helpers-only :no_entry_sign:",
     });
     return true;
   }
@@ -606,7 +616,7 @@ async function handleTeachRequest({
       user: event.user,
       thread_ts: event.thread_ts,
       text: id
-        ? `🧚 Memorized for future questions! :yesyes:\n>*Q:* ${parsedDirect.question}\n>*A:* ${parsedDirect.answer}\n\n_#${id} — remove with \`${brand.cmd("forget")} ${id}\`_`
+        ? `🧚 Memorized for future questions! :white_check_mark:\n>*Q:* ${parsedDirect.question}\n>*A:* ${parsedDirect.answer}\n\n_#${id} — remove with \`${brand.cmd("forget")} ${id}\`_`
         : "already memorized or couldn't save it",
     });
     return true;
@@ -635,7 +645,7 @@ async function handleTeachRequest({
       user: event.user,
       thread_ts: event.thread_ts,
       text: id
-        ? `🧚 Memorized this thread for future questions! :yesyes:\n>*Q:* ${parsed.question}\n>*A:* ${parsed.answer}\n\n_#${id} — remove with \`${brand.cmd("forget")} ${id}\`_`
+        ? `🧚 Memorized this thread for future questions! :white_check_mark:\n>*Q:* ${parsed.question}\n>*A:* ${parsed.answer}\n\n_#${id} — remove with \`${brand.cmd("forget")} ${id}\`_`
         : "already memorized this thread!",
     });
     return true;
@@ -668,7 +678,7 @@ async function handleSumRequest({
     await client.chat.postEphemeral({
       channel: event.channel,
       user: event.user,
-      text: "that one's helpers-only :nono:",
+      text: "that one's helpers-only :no_entry_sign:",
     });
     return true;
   }
@@ -677,7 +687,7 @@ async function handleSumRequest({
     await client.chat.postEphemeral({
       channel: event.channel,
       user: event.user,
-      text: "!sum can only be used inside a thread :nono:",
+      text: "!sum can only be used inside a thread :no_entry_sign:",
     });
     return true;
   }
@@ -828,7 +838,7 @@ async function handleMacroTrigger({
   if (!actorRunsCommands(event.user, program)) {
     if (!macro || !macro.enabled) return false;
     if (!db.claimMessage(event.ts, event.channel)) return true;
-    await postMacroEphemeral(client, event, "that one's helpers-only :nono:");
+    await postMacroEphemeral(client, event, "that one's helpers-only :no_entry_sign:");
     return true;
   }
 

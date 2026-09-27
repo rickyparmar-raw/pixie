@@ -53,9 +53,34 @@ const answerFallbackWithHeadroom = config.answer.fallback
   ? { ...config.answer.fallback, maxTokens: FALLBACK_MAX_TOKENS }
   : null;
 
-const CASUAL_EMOJI =
-  ":yay: :hii: :byee: :thumbs-up: :yesyes: :hehehe: :awww: :lets-fucking-gooo: :upvote: :3c: :nyan: :shocked: :loll:";
-const UNCLOSED_EMOJI = /:3c(?!:)/g;
+const CASUAL_EMOJI = [
+  ":sparkles:",
+  ":tada:",
+  ":partying_face:",
+  ":eyes:",
+  ":rocket:",
+  ":fire:",
+  ":zap:",
+  ":raised_hands:",
+  ":wave:",
+  ":saluting_face:",
+  ":melting_face:",
+  ":pleading_face:",
+  ":face_with_peeking_eye:",
+  ":sweat_smile:",
+  ":grin:",
+  ":sunglasses:",
+  ":star-struck:",
+  ":brain:",
+  ":bulb:",
+  ":hammer_and_wrench:",
+  ":muscle:",
+  ":heart_hands:",
+  ":handshake:",
+  ":100:",
+  ":white_check_mark:",
+  ":thinking_face:",
+].join(" ");
 const MD_BOLD = /\*\*([^*\n]+)\*\*/g;
 const MD_UNDERSCORE_BOLD = /__([^_\n]+)__/g;
 
@@ -77,10 +102,7 @@ function linkifyHelpChannel(text: string, program: ProgramRef = null) {
 }
 
 function normalizeEmoji(text: string, program: ProgramRef = null) {
-  const normalized = (text || "")
-    .replace(UNCLOSED_EMOJI, ":3c:")
-    .replace(MD_BOLD, "*$1*")
-    .replace(MD_UNDERSCORE_BOLD, "_$1_");
+  const normalized = (text || "").replace(MD_BOLD, "*$1*").replace(MD_UNDERSCORE_BOLD, "_$1_");
 
   return linkifyHelpChannel(normalized, program);
 }
@@ -205,7 +227,7 @@ function timelineAuthorityRule(marker: string, alwaysLabel = "covered", program:
 const VOICE = [
   "Voice: you talk like a chill teenager texting in Slack, not like customer support copy. Casual, short, contractions, lowercase is fine. Never just reformat the FAQ answer into a stiff formal sentence — say it like a real person quickly typing a reply.",
   "Punctuation: never use dashes. No em dashes, no en dashes, no ' -- '. Where you'd reach for one, use a comma, a full stop, or start a new sentence. Ordinary hyphens inside words and inside commands are fine and must be left alone.",
-  `You can sprinkle in these custom Slack emoji where they genuinely fit — use 0-2 per reply, never force one in: ${CASUAL_EMOJI}`,
+  `Sprinkle in these Slack emoji where they genuinely fit: 0-2 per reply, vary them, never force one in: ${CASUAL_EMOJI}`,
 ];
 
 function systemPrompt(

@@ -3,8 +3,7 @@ const assert = require("node:assert/strict");
 const answer = require("./answer");
 const llm = require("./llm");
 
-test("normalizeEmoji closes custom emoji and converts markdown emphasis", () => {
-  assert.equal(answer.normalizeEmoji("nice :3c"), "nice :3c:");
+test("normalizeEmoji converts markdown emphasis", () => {
   assert.equal(answer.normalizeEmoji("**ready** and __set__"), "*ready* and _set_");
 });
 
@@ -26,9 +25,9 @@ test("parseReply rejects empty and instruction-like output", () => {
 });
 
 test("parseAnswerOrChat keeps ordinary conversational replies ungrounded", () => {
-  assert.deepEqual(answer.parseAnswerOrChat("not much, just vibing :3c"), {
+  assert.deepEqual(answer.parseAnswerOrChat("not much, just vibing :sparkles:"), {
     source: null,
-    answer: "not much, just vibing :3c:",
+    answer: "not much, just vibing :sparkles:",
   });
 });
 
@@ -67,7 +66,7 @@ test("whereYouAre distinguishes owned and unowned channels", () => {
 test("stream parsing emits only answer text", async () => {
   const original = llm.completeStream;
   llm.completeStream = async (_options: unknown, onDelta: (delta: string, text: string) => void) => {
-    const text = "SOURCE: Example docs\nANSWER: use the configured docs :3c:";
+    const text = "SOURCE: Example docs\nANSWER: use the configured docs :sparkles:";
     onDelta(text, text);
     return { text, stopped: false };
   };
@@ -76,8 +75,8 @@ test("stream parsing emits only answer text", async () => {
     const result = await answer.getAnswerOrChatStream("how do I start", "### Example docs\nsetup", "", {
       onText: (text: string) => seen.push(text),
     });
-    assert.deepEqual(result, { source: "Example docs", answer: "use the configured docs :3c:" });
-    assert.deepEqual(seen, ["use the configured docs :3c:"]);
+    assert.deepEqual(result, { source: "Example docs", answer: "use the configured docs :sparkles:" });
+    assert.deepEqual(seen, ["use the configured docs :sparkles:"]);
   } finally {
     llm.completeStream = original;
   }
