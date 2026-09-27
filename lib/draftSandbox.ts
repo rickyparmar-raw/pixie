@@ -1,3 +1,4 @@
+// Drafts have explicit bindings and never enter production program or channel claims.
 const db = require("./db");
 import type { SlackClient } from "./types";
 
@@ -52,6 +53,7 @@ function register(program: DraftProgram): DraftProgram | undefined {
 }
 
 function getForChannel(channelId: string, workspaceId: string | null = null): DraftBinding | null {
+  // Production may use the default workspace; an explicit channel binding remains safe to match.
   if (!channelId) return null;
   const exact = DRAFT_BINDINGS.get(`${workspaceId || "default"}:${channelId}`);
   if (exact && exact.enabled) return exact;

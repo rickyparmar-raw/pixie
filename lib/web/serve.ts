@@ -1,3 +1,4 @@
+// Bun web console: static assets, browser APIs, and the token-authenticated control plane.
 const path = require("path");
 const fs = require("fs");
 const log = require("../log");
@@ -53,6 +54,7 @@ function htmlResponse(html: string, extraHeaders: Record<string, string> = {}): 
 
 
 async function readJsonBody(req: Request, method: string): Promise<JsonObject> {
+  // Malformed bodies become validation errors; they must never crash the request handler.
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return {};
   try {
     return await req.json() as JsonObject;
@@ -68,12 +70,14 @@ function isTenantDenied(err: string | null | undefined): boolean {
   return !!err && (err.includes("not a helper") || err.includes("mismatch"));
 }
 function ticketWriteStatus(err: string | null | undefined): number {
+  // Tenant/helper denials are 403; other validation remains 400 for the dashboard contract.
   return isTenantDenied(err) ? 403 : 400;
 }
 function helperWriteStatus(err: string | null | undefined): number {
   return isHelperDenied(err) ? 403 : 400;
 }
 function copilotStatus(err: string | null | undefined): number {
+  // Rate-limit errors remain 429 so the dashboard can distinguish throttling from validation.
   if (isHelperDenied(err)) return 403;
   if (err && err.includes("rate limited")) return 429;
   return 400;
@@ -170,6 +174,7 @@ function startMetricTicks() {
 
 
 async function handleStatic(req: Request): Promise<Response | null> {
+  // Static traversal is rejected before path resolution; the root document still requires a session.
   const url = new URL(req.url);
   let filePath = url.pathname === "/" ? "/index.html" : url.pathname;
 
@@ -189,6 +194,7 @@ async function handleStatic(req: Request): Promise<Response | null> {
 }
 
 async function handleScreenshots(req: Request): Promise<Response | null | undefined> {
+  // Screenshots are intentionally public, but their path is still traversal-checked.
   const url = new URL(req.url);
 
   if (url.pathname.startsWith("/screenshots/")) {
@@ -403,6 +409,7 @@ async function handleAuth(req: Request): Promise<Response | null> {
 }
 
 async function handleApi(req: Request): Promise<Response | null> {
+  // Browser sessions and internal token auth are separate trust boundaries.
   const url = new URL(req.url);
   const method = req.method.toUpperCase();
 
@@ -964,6 +971,7 @@ async function handleApi(req: Request): Promise<Response | null> {
 }
 
 async function handleRequest(req: Request): Promise<Response> {
+  // Dispatch internal routes before the static fallback so the control plane is reachable.
   const url = new URL(req.url);
 
   try {
@@ -972,6 +980,7 @@ async function handleRequest(req: Request): Promise<Response> {
       if (res) return res;
     }
 
+    // Internal and browser APIs share this dispatcher but retain separate authentication.
     if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/internal/v1/") || url.pathname.startsWith("/internal/programs/")) {
       const res = await handleApi(req);
       if (res) return res;

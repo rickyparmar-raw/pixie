@@ -1,3 +1,5 @@
+// Support Radar turns stored telemetry into deterministic, explainable signals.
+// Re-evaluation updates the existing condition instead of creating duplicates.
 const crypto = require("crypto");
 const db = require("./db");
 const audit = require("./audit");
@@ -128,6 +130,7 @@ function listSignals(programId: string, { status = null, severity = null, limit 
 }
 
 function upsertSignal({ programId, type, severity, title, summary, evidence, fingerprint, now = Date.now() }: { programId: string; type: string; severity: string; title: string; summary?: string; evidence: RadarEvidence; fingerprint: string; now?: number }): RadarSignal | null {
+  // Suppression survives worsening re-detections until its explicit expiry.
   assertValid(type, severity);
   if (!programId || !fingerprint) throw new Error("programId and fingerprint required");
   const existing = db
@@ -250,6 +253,7 @@ function decideStaleTickets(openRows: TicketAgeRow[], now: number): RadarFinding
 }
 
 function detectStaleTickets(programId: string, now: number): RadarFinding | null {
+  // Owned or pending tickets still need action; only closed states leave the backlog.
   return decideStaleTickets(fetchOpenTickets(programId), now);
 }
 

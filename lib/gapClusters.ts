@@ -1,3 +1,5 @@
+// Deterministic FAQ-gap clustering turns repeated misses into review candidates.
+// It uses token overlap rather than embeddings so organizers can explain and split results.
 const db = require("./db");
 const retrieve = require("./retrieve");
 const audit = require("./audit");
@@ -103,6 +105,7 @@ function unionFind(count: number): { find: (x: number) => number; union: (a: num
 }
 
 function clusterQuestions(questions: string[], threshold = DEFAULT_THRESHOLD): string[][] {
+  // The threshold joins clear paraphrases without merging every question that starts with “how do I”.
   if (!Array.isArray(questions) || questions.length === 0) return [];
   const sets = tokenSetCache(questions);
   const { find, union } = unionFind(questions.length);
@@ -194,6 +197,7 @@ function summarizeCluster(members: string[], byQuestion: Map<string, QuestionGro
 }
 
 function clusterGaps({ programId, sinceMs = DEFAULT_SINCE_MS, minAskers = DEFAULT_MIN_ASKERS }: { programId?: string; sinceMs?: number; minAskers?: number } = {}): ClusterResponse {
+  // Legacy unscoped rows may contain another program's questions, so they never cross this boundary.
   if (!programId) return { error: "programId required" };
   let rows = [];
   try {
@@ -220,6 +224,7 @@ async function proposeFaq({ programId, actorId, question }: { programId: string;
   let draft = "";
   let grounded = false;
   try {
+    // Lazy loading avoids the knowledge -> learn -> copilot cycle at module initialization.
     const copilot = require("./copilot");
     const res = await copilot.ask({ program, question: clean });
     if (res.grounded && res.draft) {

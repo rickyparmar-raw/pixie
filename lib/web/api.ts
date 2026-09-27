@@ -1,3 +1,4 @@
+// Web handlers assemble existing modules; authorization and tenant checks stay at this boundary.
 const db = require("../db");
 const cache = require("../cache");
 const learn = require("../learn");
@@ -10,118 +11,88 @@ const { probe } = require("../probe");
 const { coverageStats, relativeTime } = require("../stats");
 import type { Program, ProgramSource, SlackClient, Ticket } from "../types";
 
-interface DbRow {
+interface LearnedFactRow {
   id: number;
-  program_id: string;
-  workspace_id: string | null;
-  channel: string | null;
-  thread_ts: string | null;
-  message_ts: string | null;
-  user_id: string | null;
   question: string;
   answer: string;
   author_id: string | null;
   source_ts: string | null;
-  status: string;
-  category: string | null;
-  resolution: string | null;
-  resolution_summary: string | null;
+  channel: string | null;
   created_at: number;
-  last_asked: number;
+  program_id: string | null;
+}
+
+interface GapRow {
+  id: number;
+  question: string;
+  user_id: string | null;
+  channel: string | null;
+  message_ts: string | null;
+  created_at: number;
   count: number;
-  detail: string | null;
-  kind: string;
-  question_hash: string;
-  source: string | null;
-  written_at: number;
-  helper_source: string;
-  role: string;
-  active: number;
-  ping_eligible: number;
-  userId: string;
-  resolved: number;
-  program?: Program;
-  name?: string;
-  type?: string;
-  url?: string;
+  last_asked: number;
+  detail?: string | null;
+}
+
+interface MetricCountRow { kind: string; count: number }
+interface MetricDetailRow { detail: string | null; count: number }
+interface SourceRow extends ProgramSource {
   fail_count?: number;
   last_success_at?: number | null;
   last_error?: string | null;
-  ticket_id?: number;
-  actor_id?: string | null;
-  n?: number;
-  at?: number;
-  data?: DbRow;
-  code?: string;
 }
+interface CacheEntryRow { question_hash: string; question: string; ask_count: number }
+interface ChannelCountRow { count: number }
+interface ChannelConfigRow { channelId: string; [key: string]: unknown }
+interface ChannelClaimRow { program_id: string; channel_id?: string; workspace_id?: string | null }
+interface HelperRow { user_id: string; helper_source: string; role: string; active: number; ping_eligible: number }
+interface AffectedReportRow { notified_at: number | null }
+interface MacroRow { id: number; program_id: string; [key: string]: unknown }
+interface DraftBindingRow { program_id: string; channel_id?: string; channelId?: string; [key: string]: unknown }
 
-interface ApiBody {
-  id?: string | number;
+interface ProgramSaveBody { id?: string; name?: string; [key: string]: unknown }
+interface ProgramSyncBody {
+  id?: string;
   name?: string;
-  question?: string;
-  answer?: string;
-  programId?: string | null;
   workspaceId?: string | null;
   actorId?: string | null;
-  authorId?: string;
-  channelId?: string;
-  field?: string;
-  value?: string | boolean | null;
-  isHelp?: boolean;
-  status?: string;
-  assigneeId?: string | null;
-  requesterId?: string | null;
-  category?: string | null;
-  priority?: string | null;
-  q?: string | null;
-  since?: string | number | null;
-  until?: string | number | null;
-  limit?: string | number;
-  offset?: string | number;
-  source?: string;
-  resolution?: string | null;
-  action?: string;
-  text?: string;
-  body?: string;
-  ticketId?: string | number;
-  threadTs?: string | null;
-  role?: string;
+  claimedBy?: string | null;
+  behavior?: Record<string, unknown> | null;
+  status?: string | null;
   channels?: string[];
   helpChannel?: string | null;
   organizerChannel?: string | null;
-  addressed?: boolean;
-  claimedBy?: string | null;
   programChannels?: Array<string | { id: string; kind?: string }>;
-  behavior?: Record<string, unknown> | null;
-  members?: string[];
-  pingIneligible?: string[];
-  reconcile?: boolean;
-  edits?: Record<string, unknown>;
-  ticketIds?: Array<string | number>;
-  selector?: string;
-  duration?: string;
-  title?: string;
-  description?: string | null;
-  publicMessage?: string | null;
-  resolutionMessage?: string | null;
-  onlyUnnotified?: string;
-  severity?: string;
-  days?: string | number;
-  categoryId?: string;
-  policy?: Record<string, unknown>;
-  from?: string | number;
-  bucket?: string;
-  operation?: string;
-  recentLimit?: string | number;
-  minAskers?: string | number;
-  sinceMs?: string | number;
-  enabledOnly?: string;
-  confirm?: boolean;
-  userId?: string;
-  tags?: string[];
-  draft?: Record<string, unknown>;
   [key: string]: unknown;
 }
+interface ChannelRoleBody { id: string; kind?: string }
+interface TestQuestionBody { question?: string; role?: string; channelId?: string; workspaceId?: string | null; addressed?: boolean }
+interface TicketSearchParams { programId?: string | null; status?: string | null; assigneeId?: string | null; requesterId?: string | null; category?: string | null; priority?: string | null; q?: string | null; since?: string | number | null; until?: string | number | null; sinceMs?: string | number | null; limit?: string | number; offset?: string | number }
+interface TicketActionBody { programId?: string | null; workspaceId?: string | null; actorId?: string | null; assigneeId?: string | null; resolution?: string | null; source?: string; text?: string; body?: string; until?: string | number; canonicalId?: string | number }
+interface ChannelToggleBody { programId?: string; channelId?: string; field?: string; value?: string | boolean | null }
+interface ChannelAddBody { programId?: string; channelId?: string; isHelp?: boolean }
+interface HelperSyncBody { actorId?: string | null; source?: string; members?: string[]; pingIneligible?: string[]; reconcile?: boolean }
+interface CopilotBody { programId?: string | null; actorId?: string | null; question?: string; threadTs?: string | null; text?: string; ticketId?: string | number; limit?: string | number }
+interface KnowledgeProposeBody { actorId?: string | null; ticketId?: string | number }
+interface CandidateActionBody { actorId?: string | null; action?: string; edits?: Record<string, unknown> }
+interface GapClusterQuery { sinceMs?: string | number; minAskers?: string | number }
+interface FaqProposeBody { actorId?: string | null; question?: string }
+interface MacroQuery { actorId?: string | null; enabledOnly?: string; q?: string | null; category?: string | null; limit?: string | number }
+interface MacroBody extends MacroQuery { id?: string | number; onSendTransition?: unknown; on_send_transition?: unknown; ticketId?: string | number; ticketIds?: Array<string | number>; selector?: string; duration?: string; action?: string; userId?: string; tags?: string[]; [key: string]: unknown }
+interface IncidentQuery { status?: string | null; limit?: string | number; onlyUnnotified?: string; severity?: string }
+interface IncidentBody { actorId?: string | null; action?: string; ticketId?: string | number; title?: string; description?: string | null; publicMessage?: string | null; resolutionMessage?: string | null }
+interface RadarQuery { status?: string | null; severity?: string | null; limit?: string | number }
+interface RadarActionBody { actorId?: string | null; action?: string; duration?: string }
+interface AnalyticsQuery { days?: string | number; from?: string | number; until?: string | number; bucket?: string; operation?: string | null; limit?: string | number; offset?: string | number; recentLimit?: string | number; since?: string | number; q?: string | null; category?: string | null; ticketId?: string | number }
+interface RoutingBody { actorId?: string | null; userId?: string; tags?: string[] }
+interface RetentionBody { actorId?: string | null; confirm?: boolean; policy?: Record<string, unknown> }
+interface DraftSyncBody { draft?: { id?: string; status?: string; privateSandboxOnly?: boolean; autoAssign?: boolean; ticketsEnabled?: boolean; workspaceId?: string; sandboxBindings?: Array<{ sandboxOnly?: boolean; enabled?: boolean; role?: string; channelId?: string }> } }
+interface TestQuestionSettings { aiReplies?: boolean; escalateUnknown?: boolean; [key: string]: unknown }
+interface EngagementResult { engage: boolean; intent: string | null; error: string | null; source: string | null }
+interface RetentionValues { [key: string]: number }
+interface UserInfoPublic { slackId: string; displayName?: string | null; realName?: string | null; username?: string | null; avatarUrl?: string | null }
+interface TicketEventRow { event_type: string; actor_id: string | null; [key: string]: unknown }
+interface NoteRow { id: number; body: string; author_id: string | null; created_at: number; [key: string]: unknown }
 
 interface ApiResponse {
   [key: string]: unknown;
@@ -134,8 +105,8 @@ interface ApiResponse {
   programId?: string;
   program?: Program | null;
   ticket?: Ticket | ApiResponse | null;
-  events?: DbRow[];
-  notes?: DbRow[];
+  events?: TicketEventRow[];
+  notes?: NoteRow[];
   rows?: Ticket[];
   sources?: string[] | Array<Record<string, unknown>>;
   metrics?: Record<string, number>;
@@ -145,11 +116,11 @@ interface ApiResponse {
   username?: string | null;
   slackId?: string;
   reason?: string;
-  fact?: DbRow | null;
-  candidate?: DbRow | null;
+  fact?: LearnedFactRow | null;
+  candidate?: LearnedFactRow | null;
   grounded?: boolean;
   changed?: boolean;
-  users?: Record<string, ApiResponse | null>;
+  users?: Record<string, UserInfoPublic | null>;
 }
 
 interface KnowledgeDoc { chunk: { source: string; heading?: string; text: string }; length: number }
@@ -199,7 +170,7 @@ async function handleAsk(question: string): Promise<ApiResponse> {
 
 function queueList(): ApiResponse[] {
   const pending = learn.pending(100);
-  return pending.map((row: ApiResponse) => ({
+  return pending.map((row: LearnedFactRow) => ({
     id: row.id,
     question: row.question,
     answer: row.answer,
@@ -220,6 +191,7 @@ function queueDrop(id: number): void {
 }
 
 function queueEdit(id: number, question: string, answer: string): void {
+  // Editing preserves the original program and Slack provenance; it cannot move a fact across tenants.
   if (!question || !answer) return;
   const original = db.getLearnedFactById(id);
   if (!original) return;
@@ -244,7 +216,7 @@ function gapsList() {
   const unjudged = db.handle()
     .query("SELECT id, question, user_id, channel, message_ts, created_at FROM doc_gaps WHERE kind IS NULL ORDER BY created_at DESC LIMIT 100")
     .all()
-    .map((r: ApiResponse) => ({
+    .map((r: GapRow) => ({
       id: r.id,
       question: r.question,
       userId: r.user_id,
@@ -261,9 +233,9 @@ function gapsList() {
       unjudged: counts.unjudged || 0,
     },
     columns: {
-      docs: docs.map((g: ApiResponse) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
-      transient: transient.map((g: ApiResponse) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
-      noise: noise.map((g: ApiResponse) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
+      docs: docs.map((g: GapRow) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
+      transient: transient.map((g: GapRow) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
+      noise: noise.map((g: GapRow) => ({ id: g.id, question: g.question, count: g.count, lastAsked: g.last_asked })),
       unjudged,
     },
   };
@@ -287,14 +259,14 @@ async function gapsRejudge(id: number): Promise<ApiResponse> {
 function silenceList(): ApiResponse {
   const details = db.metricDetails("silent");
   return {
-    breakdown: details.map((d: ApiResponse) => ({ reason: d.detail, count: d.count })),
+    breakdown: details.map((d: MetricDetailRow) => ({ reason: d.detail, count: d.count })),
     total: details.reduce((sum: number, d: { detail: string | null; count: number }) => sum + d.count, 0),
   };
 }
 
 
 function knowledgeInfo(): ApiResponse {
-  const sources = knowledge.loadSources().map((s: ApiResponse) => ({
+  const sources = knowledge.loadSources().map((s: SourceRow) => ({
     name: s.name,
     type: s.type,
     url: publicSourceUrl(s.url),
@@ -315,14 +287,15 @@ function knowledgeInfo(): ApiResponse {
 }
 
 function sourceHealthMetrics(): Record<string, number> {
-  const counts = Object.fromEntries(db.metricCounts().map((row: ApiResponse) => [row.kind, row.count]));
+  const counts = Object.fromEntries(db.metricCounts().map((row: MetricCountRow) => [row.kind, row.count]));
   return {
     sourceRefreshFailure: counts.source_refresh_failure || 0,
     staleDynamicSourceUsed: counts.stale_dynamic_source_used || 0,
   };
 }
 
-function sourceHealthShape(source: ApiResponse): ApiResponse {
+function sourceHealthShape(source: SourceRow): ApiResponse {
+  // Keep cache keys and fetch errors out of dashboard responses; knowledge owns those details.
   const health = knowledge.sourceEligibility(source);
   return {
     authority: health.authority,
@@ -349,12 +322,12 @@ function publicSourceUrl(value: unknown): string | null {
   }
 }
 
-function scopedSources(programId: string): ApiResponse[] | null {
+function scopedSources(programId: string): ProgramSource[] | null {
   const program = programs.get(programId);
   if (!program) return null;
   const shared = program.sharedSources === false ? [] : (programs.shared().sources || []);
   const seen = new Set<string>();
-  return [...(program.sources || []), ...shared].filter((source: ApiResponse) => {
+  return [...(program.sources || []), ...shared].filter((source: ProgramSource) => {
     const key = knowledge.sourceCacheKey(source);
     if (!key || seen.has(key)) return false;
     seen.add(key);
@@ -363,11 +336,12 @@ function scopedSources(programId: string): ApiResponse[] | null {
 }
 
 function internalKnowledgeHealth(programId: string): ApiResponse {
+  // This view is program-scoped; the global refresh set must not cross tenant boundaries.
   const sources = scopedSources(programId);
   if (!sources) return { error: "unknown program" };
   return {
     programId,
-    sources: sources.map((source: ApiResponse) => ({
+    sources: sources.map((source: ProgramSource) => ({
       name: source.name,
       type: source.type,
       url: publicSourceUrl(source.url),
@@ -392,11 +366,11 @@ function knowledgeCorpus(): ApiResponse {
 }
 
 async function knowledgeRefresh(): Promise<void> {
-  const before = new Map((knowledge.loadSources() as ApiResponse[]).map((source: ApiResponse) => [
+  const before = new Map((knowledge.loadSources() as SourceRow[]).map((source: SourceRow) => [
     knowledge.sourceCacheKey(source), knowledge.sourceFreshness(source).failCount,
   ]));
   await knowledge.refreshCorpus(true);
-  for (const source of knowledge.loadSources() as ApiResponse[]) {
+  for (const source of knowledge.loadSources() as SourceRow[]) {
     const key = knowledge.sourceCacheKey(source);
     const beforeFailures = before.get(key) || 0;
     const health = knowledge.sourceFreshness(source);
@@ -416,7 +390,7 @@ function cacheList(): ApiResponse {
 
   return {
     known: cache.cachedCount(),
-    stale: stale.map((r: ApiResponse) => ({
+    stale: stale.map((r: CacheEntryRow) => ({
       hash: r.question_hash,
       question: r.question,
       askCount: r.ask_count,
@@ -485,7 +459,7 @@ function programsList() {
   return programs.all();
 }
 
-function programSave(prog: ApiBody): ApiResponse {
+function programSave(prog: ProgramSaveBody): ApiResponse {
   if (!prog || !prog.id || !prog.name) return { error: "id and name are required" };
   programs.saveProgram(prog);
   return { ok: true, program: programs.get(prog.id) };
@@ -518,7 +492,7 @@ function ticketUpdate(id: number, status: string, assigneeId: string | null = nu
   const map: Record<string, string> = { claimed: "claim", unclaim: "unclaim", resolved: "resolve", reopen: "reopen", closed: "close" };
   const action = map[status];
   if (!action) return { error: `unknown status ${status}` };
-  const body: ApiBody = { actorId, assigneeId };
+  const body: TicketActionBody = { actorId, assigneeId };
   if (action === "claim") body.assigneeId = assigneeId || "admin";
   if (action === "resolve") body.resolution = "resolved via admin dashboard";
   const res = internalTicketAction(id, action, body);
@@ -529,7 +503,7 @@ function ticketUpdate(id: number, status: string, assigneeId: string | null = nu
 
 function channelsList() {
   const list = programs.getChannelsList();
-  return list.map((ch: ApiResponse) => {
+  return list.map((ch: ChannelConfigRow) => {
     let msgCount = 0;
     let ticketCount = 0;
     try {
@@ -546,7 +520,7 @@ function channelsList() {
   });
 }
 
-function channelToggle(body: ApiBody = {}): ApiResponse {
+function channelToggle(body: ChannelToggleBody = {}): ApiResponse {
   const { channelId, programId, field, value } = body;
   if (!channelId) return { error: "channelId required" };
 
@@ -566,7 +540,7 @@ function channelToggle(body: ApiBody = {}): ApiResponse {
   return { ok: true, channels: channelsList() };
 }
 
-function channelAdd(body: ApiBody = {}): ApiResponse {
+function channelAdd(body: ChannelAddBody = {}): ApiResponse {
   const { programId, channelId, isHelp } = body;
   if (!channelId) return { error: "channelId required" };
   const targetProgId = programId || "pixl";
@@ -584,6 +558,7 @@ function channelRemove(programId: string, channelId: string): ApiResponse {
 
 
 function internalAuth(req: Request): ApiResponse {
+  // The control plane uses its server-side token, never a browser session.
   const token = process.env.PIXIE_INTERNAL_TOKEN;
   if (!token) return { ok: false, status: 404, body: { error: "internal api disabled" } };
   const header = req.headers.get("authorization") || "";
@@ -624,12 +599,13 @@ function needProgram(programId: string): ApiResponse | null {
 }
 
 function needProgramActor(programId: string | null, actorId: string | null): ApiResponse | null {
+  // Every write re-resolves both tenant and actor instead of trusting request identifiers.
   if (!programs.get(programId)) return { error: "unknown program" };
   if (!ticketActorAllowed(programId as string, actorId)) return { error: "actor is not a helper of this program" };
   return null;
 }
 
-function ticketTenantError(ticket: ApiResponse, body: ApiBody = {}): string | null {
+function ticketTenantError(ticket: Ticket, body: TicketActionBody = {}): string | null {
   if (body.programId && body.programId !== ticket.program_id) return "program mismatch";
   if (body.workspaceId && ticket.workspace_id && body.workspaceId !== ticket.workspace_id) return "workspace mismatch";
   return null;
@@ -649,7 +625,8 @@ function ticketDetail(id: number): ApiResponse | null {
 
 const CHANNEL_KINDS = new Set(["help", "organizer", "discussion", "announcement"]);
 
-function internalProgramSync(id: string, body: ApiBody = {}): ApiResponse {
+function internalProgramSync(id: string, body: ProgramSyncBody = {}): ApiResponse {
+  // Channel-role validation runs before persistence so a conflict cannot create a partial sync.
   if (!id || !/^[a-z0-9][a-z0-9-]{1,60}[a-z0-9]$/.test(id)) {
     return { error: "invalid program id (lowercase slug, 3-62 chars)" };
   }
@@ -739,7 +716,8 @@ function internalProgramSync(id: string, body: ApiBody = {}): ApiResponse {
   return { ok: true, program: programs.get(id) };
 }
 
-function validateSyncChannelRoles(id: string, merged: ApiBody, channels: Array<string | ApiBody>, workspaceId: string | null): ApiResponse | null {
+function validateSyncChannelRoles(id: string, merged: ProgramSyncBody, channels: Array<string | ChannelRoleBody>, workspaceId: string | null): ApiResponse | null {
+  // Validate all channel roles before saving so conflicts cannot leave a partial program sync.
   const programModel = require("../programModel");
   const releases = new Set<string>();
   const toClaim = [];
@@ -765,10 +743,10 @@ function validateSyncChannelRoles(id: string, merged: ApiBody, channels: Array<s
   if (organizerChannel) mainChannels.delete(organizerChannel);
 
   const candidate = { id, workspaceId: merged.workspaceId || workspaceId || null, helpChannel, organizerChannel, channels: [...mainChannels] };
-  const rest = programs.all().filter((p: ApiResponse) => p && p.id !== id && p.id !== "ysws-global");
-  let claims: ApiResponse[] = [];
+  const rest = programs.all().filter((p: Program) => p && p.id !== id && p.id !== "ysws-global");
+  let claims: ChannelClaimRow[] = [];
   try {
-    claims = (db.listChannelClaims?.() || []).filter((c: ApiResponse) => c.program_id !== id);
+    claims = (db.listChannelClaims?.() || []).filter((c: ChannelClaimRow) => c.program_id !== id);
   } catch (_) {
     claims = [];
   }
@@ -797,7 +775,8 @@ function sourceNamesFromContextLegacy(context: string): string[] {
   return names;
 }
 
-function testQuestionExpectedAction({ program, role, settings, addressed = false, engagement, grounded, hasAnswer = false }: { program: ApiResponse; role: string; settings: ApiBody; addressed?: boolean; engagement: ApiResponse; grounded: boolean; hasAnswer?: boolean }): ApiResponse {
+function testQuestionExpectedAction({ program, role, settings, addressed = false, engagement, grounded, hasAnswer = false }: { program: Program; role: string; settings: TestQuestionSettings; addressed?: boolean; engagement: EngagementResult; grounded: boolean; hasAnswer?: boolean }): ApiResponse {
+  // The onboarding probe delegates to the same policy functions as the live message path.
   const messagePolicy = require("../pipeline/messagePolicy");
   const plan = messagePolicy.planEngagement({ role, settings, addressed, engagement });
   if (!plan.proceed) return { expectedAction: "silence", reason: plan.reason };
@@ -823,7 +802,7 @@ function sourceNamesFromContext(context: string): string[] {
   return names;
 }
 
-async function internalTestQuestion(programId: string, body: ApiBody = {}): Promise<ApiResponse> {
+async function internalTestQuestion(programId: string, body: TestQuestionBody = {}): Promise<ApiResponse> {
   const program = programs.get(programId);
   if (!program) return { error: "unknown program" };
   const question = String(body.question || "").trim();
@@ -889,7 +868,7 @@ async function internalTestQuestion(programId: string, body: ApiBody = {}): Prom
   };
 }
 
-function internalTicketSearch(params: ApiBody): ApiResponse {
+function internalTicketSearch(params: TicketSearchParams): ApiResponse {
   if (!params.programId) return { error: "programId required" };
   return db.searchTickets({
     programId: params.programId,
@@ -906,7 +885,7 @@ function internalTicketSearch(params: ApiBody): ApiResponse {
   });
 }
 
-function internalTicketAction(id: number, action: string, body: ApiBody = {}): ApiResponse {
+function internalTicketAction(id: number, action: string, body: TicketActionBody = {}): ApiResponse {
   const ticket = db.getTicket(id);
   if (!ticket) return { error: "ticket not found" };
   if (body.programId && body.programId !== ticket.program_id) {
@@ -960,7 +939,7 @@ function internalTicketAction(id: number, action: string, body: ApiBody = {}): A
   return { ok: true, ticket: ticketDetail(id) };
 }
 
-async function internalTicketReply(id: number, body: ApiBody = {}): Promise<ApiResponse> {
+async function internalTicketReply(id: number, body: TicketActionBody = {}): Promise<ApiResponse> {
   const ticket = db.getTicket(id);
   if (!ticket) return { error: "ticket not found" };
   if (body.programId && body.programId !== ticket.program_id) {
@@ -978,7 +957,7 @@ async function internalTicketReply(id: number, body: ApiBody = {}): Promise<ApiR
   return tickets.replyToTicket({ ticketId: id, authorId: actorId, text: body.text, client: slackClient, programId: body.programId, workspaceId: body.workspaceId, source: "dashboard" });
 }
 
-function internalTicketNote(id: number, body: ApiBody = {}): ApiResponse {
+function internalTicketNote(id: number, body: TicketActionBody = {}): ApiResponse {
   const ticket = db.getTicket(id);
   if (!ticket) return { error: "ticket not found" };
   if (body.programId && body.programId !== ticket.program_id) {
@@ -995,7 +974,7 @@ function internalTicketNote(id: number, body: ApiBody = {}): ApiResponse {
   return tickets.addInternalNote({ ticketId: id, authorId: actorId, body: body.body, programId: body.programId, workspaceId: body.workspaceId });
 }
 
-function internalHelpersSync(programId: string, body: ApiBody = {}): ApiResponse {
+function internalHelpersSync(programId: string, body: HelperSyncBody = {}): ApiResponse {
   if (!programs.get(programId)) return { error: "unknown program" };
   const actorId = body.actorId || null;
   const { isAdmin } = require("../config");
@@ -1015,7 +994,7 @@ function internalHelpersSync(programId: string, body: ApiBody = {}): ApiResponse
     for (const userId of seen) db.setHelperPingEligible({ programId, userId, eligible: !notPinged.has(userId) });
   }
   if (body.reconcile) {
-    for (const row of db.listHelpers(programId) as ApiResponse[]) {
+    for (const row of db.listHelpers(programId) as HelperRow[]) {
       const userId = row.user_id as string;
       if (row.helper_source === source && !seen.has(userId)) {
         db.removeHelper({ programId, userId });
@@ -1026,7 +1005,7 @@ function internalHelpersSync(programId: string, body: ApiBody = {}): ApiResponse
 }
 
 
-async function internalCopilot(action: string, body: ApiBody = {}): Promise<ApiResponse> {
+async function internalCopilot(action: string, body: CopilotBody = {}): Promise<ApiResponse> {
   const copilot = require("../copilot");
   const programId = body.programId || null;
   const actorId = body.actorId || null;
@@ -1086,7 +1065,7 @@ function internalKnowledgeCandidates(programId: string, status: string | null = 
   return memory.listCandidates(programId, status || memory.CANDIDATE, 50);
 }
 
-async function internalKnowledgePropose(programId: string, body: ApiBody = {}): Promise<ApiResponse> {
+async function internalKnowledgePropose(programId: string, body: KnowledgeProposeBody = {}): Promise<ApiResponse> {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   const memory = require("../resolutionMemory");
@@ -1095,7 +1074,7 @@ async function internalKnowledgePropose(programId: string, body: ApiBody = {}): 
   return memory.proposeFromTicket({ ticketId: ticket.id, actorId: body.actorId || null });
 }
 
-function internalKnowledgeCandidateAction(id: number, body: ApiBody = {}): ApiResponse {
+function internalKnowledgeCandidateAction(id: number, body: CandidateActionBody = {}): ApiResponse {
   const memory = require("../resolutionMemory");
   const actorId = body.actorId || null;
   const row = db.getLearnedFactById(Number(id));
@@ -1109,7 +1088,7 @@ function internalKnowledgeCandidateAction(id: number, body: ApiBody = {}): ApiRe
   return { error: `unknown action ${body.action}` };
 }
 
-function internalGapClusters(programId: string, query: ApiBody = {}): ApiResponse {
+function internalGapClusters(programId: string, query: GapClusterQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   const clusters = require("../gapClusters");
@@ -1120,14 +1099,14 @@ function internalGapClusters(programId: string, query: ApiBody = {}): ApiRespons
   });
 }
 
-async function internalFaqPropose(programId: string, body: ApiBody = {}): Promise<ApiResponse> {
+async function internalFaqPropose(programId: string, body: FaqProposeBody = {}): Promise<ApiResponse> {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   const clusters = require("../gapClusters");
   return clusters.proposeFaq({ programId, actorId: body.actorId || null, question: body.question });
 }
 
-function macroScope(id: number, actorId: string | null): { error: string; macro?: never } | { error?: never; macro: ApiResponse } {
+function macroScope(id: number, actorId: string | null): { error: string; macro?: never } | { error?: never; macro: MacroRow } {
   const macros = require("../macros");
   const macro = macros.get(Number(id));
   if (!macro) return { error: "macro not found" };
@@ -1137,14 +1116,14 @@ function macroScope(id: number, actorId: string | null): { error: string; macro?
   return { macro };
 }
 
-function internalMacrosList(programId: string, query: ApiBody = {}): ApiResponse {
+function internalMacrosList(programId: string, query: MacroQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   const macros = require("../macros");
   return macros.list(programId, { enabledOnly: query.enabledOnly === "1", q: query.q || null });
 }
 
-function internalMacroCreate(programId: string, body: ApiBody = {}): ApiResponse {
+function internalMacroCreate(programId: string, body: MacroBody = {}): ApiResponse {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   const macros = require("../macros");
@@ -1158,7 +1137,7 @@ function internalMacroCreate(programId: string, body: ApiBody = {}): ApiResponse
   });
 }
 
-function internalMacroUpdate(id: number, body: ApiBody = {}): ApiResponse {
+function internalMacroUpdate(id: number, body: MacroBody = {}): ApiResponse {
   const scoped = macroScope(id, body.actorId || null);
   if ("error" in scoped) return scoped;
   const { actorId, onSendTransition, on_send_transition, ...patch } = body;
@@ -1168,13 +1147,13 @@ function internalMacroUpdate(id: number, body: ApiBody = {}): ApiResponse {
   return require("../macros").update(Number(id), patch, actorId || null);
 }
 
-function internalMacroDelete(id: number, body: ApiBody = {}): ApiResponse {
+function internalMacroDelete(id: number, body: MacroBody = {}): ApiResponse {
   const scoped = macroScope(id, body.actorId || null);
   if ("error" in scoped) return scoped;
   return require("../macros").remove(Number(id), body.actorId || null);
 }
 
-async function internalMacroSend(id: number, body: ApiBody = {}): Promise<ApiResponse> {
+async function internalMacroSend(id: number, body: MacroBody = {}): Promise<ApiResponse> {
   const scoped = macroScope(id, body.actorId || null);
   if ("error" in scoped) return scoped;
   if (!body.ticketId) return { error: "ticketId required" };
@@ -1182,7 +1161,7 @@ async function internalMacroSend(id: number, body: ApiBody = {}): Promise<ApiRes
   return require("../macros").send({ id: Number(id), ticketId: Number(body.ticketId), actorId: body.actorId || null, client: slackClient });
 }
 
-async function internalMacroBulkSend(id: number, body: ApiBody = {}): Promise<ApiResponse> {
+async function internalMacroBulkSend(id: number, body: MacroBody = {}): Promise<ApiResponse> {
   const scoped = macroScope(id, body.actorId || null);
   if ("error" in scoped) return scoped;
   if (!slackClient) return { error: "slack client unavailable" };
@@ -1202,33 +1181,33 @@ async function internalMacroBulkSend(id: number, body: ApiBody = {}): Promise<Ap
   });
 }
 
-function internalMacroTemplates(programId: string, query: ApiBody = {}): ApiResponse {
+function internalMacroTemplates(programId: string, query: MacroQuery = {}): ApiResponse {
   const missing = needProgramActor(programId, query.actorId || null);
   if (missing) return missing;
   const macros = require("../macros");
   return { templates: macros.suggestedTemplates(), placeholders: macros.placeholderDocs() };
 }
 
-function internalMacroWaiting(programId: string, query: ApiBody = {}): ApiResponse {
+function internalMacroWaiting(programId: string, query: MacroQuery = {}): ApiResponse {
   const missing = needProgramActor(programId, query.actorId || null);
   if (missing) return missing;
   const ticketIds = require("../macros").waitingTicketIds({ programId, category: query.category || null });
   return { programId, category: query.category || null, ticketIds, count: ticketIds.length };
 }
 
-function internalMacroSuggest(programId: string, query: ApiBody = {}): ApiResponse {
+function internalMacroSuggest(programId: string, query: MacroQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../macros").suggestFor({ programId, question: query.q || "", limit: query.limit ? Number(query.limit) : 3 });
 }
 
-function internalRoutingRecommend(programId: string, query: ApiBody = {}): ApiResponse {
+function internalRoutingRecommend(programId: string, query: MacroQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../helperRoute").recommend({ programId, category: query.category || null, limit: query.limit ? Number(query.limit) : 3 });
 }
 
-function internalHelperStats(programId: string, query: ApiBody = {}): ApiResponse {
+function internalHelperStats(programId: string, query: AnalyticsQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   const stats = require("../helperStats").listHelperStats(programId, {
@@ -1246,38 +1225,38 @@ function internalHelperStats(programId: string, query: ApiBody = {}): ApiRespons
   };
 }
 
-function internalLeaderboard(programId: string, query: ApiBody = {}): ApiResponse {
+function internalLeaderboard(programId: string, query: AnalyticsQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   const days = Math.min(Math.max(Number(query.days) || 30, 1), 365);
   return { programId, days, leaderboard: require("../ticketMetrics").leaderboard(programId, { since: Date.now() - days * 86400000 }) };
 }
 
-function internalShadowRouting(programId: string, query: ApiBody = {}): ApiResponse {
+function internalShadowRouting(programId: string, query: MacroQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   return { programId, mode: "shadow", decisions: require("../shadowRouting").list(programId, query.limit) };
 }
 
-async function internalDraftSync(programId: string, body: ApiBody = {}): Promise<ApiResponse> {
+async function internalDraftSync(programId: string, body: DraftSyncBody = {}): Promise<ApiResponse> {
   const draft = body.draft || {};
   if (programId !== draft.id) return { error: "draft id mismatch" };
   if (draft.status !== "suspended" || draft.privateSandboxOnly !== true) return { error: "only private suspended drafts may sync" };
   if (draft.autoAssign === true || draft.ticketsEnabled === true) return { error: "draft safety flags invalid" };
   const bindings = Array.isArray(draft.sandboxBindings) ? draft.sandboxBindings : [];
   for (const binding of bindings) {
-    if (binding.sandboxOnly !== true || binding.enabled !== true || !["help", "ticket"].includes(binding.role)) return { error: "invalid sandbox binding" };
+    if (binding.sandboxOnly !== true || binding.enabled !== true || !["help", "ticket"].includes(binding.role as string)) return { error: "invalid sandbox binding" };
     if (db.getChannelOwner(draft.workspaceId || "default", binding.channelId)) return { error: `sandbox channel ${binding.channelId} has a production claim` };
   }
   try {
     const result = await require("../knowledge").ingestDraftSources(draft);
-    return { ok: true, programId, ...result, bindings: require("../draftSandbox").bindingRows().filter((row: ApiResponse) => row.program_id === programId) };
+    return { ok: true, programId, ...result, bindings: require("../draftSandbox").bindingRows().filter((row: DraftBindingRow) => row.program_id === programId) };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "draft ingestion failed" };
   }
 }
 
-function internalRoutingExpertise(programId: string, body: ApiBody = {}): ApiResponse {
+function internalRoutingExpertise(programId: string, body: RoutingBody = {}): ApiResponse {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   const actorId = body.actorId || null;
@@ -1291,7 +1270,7 @@ function internalRoutingExpertise(programId: string, body: ApiBody = {}): ApiRes
   return { ok: true, tags };
 }
 
-function internalDuplicates(programId: string, query: ApiBody = {}): ApiResponse {
+function internalDuplicates(programId: string, query: AnalyticsQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../incidents").suggestDuplicates({
@@ -1302,7 +1281,7 @@ function internalDuplicates(programId: string, query: ApiBody = {}): ApiResponse
   });
 }
 
-function internalIncidents(programId: string, query: ApiBody = {}): ApiResponse {
+function internalIncidents(programId: string, query: IncidentQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../incidents").listIncidents(programId, query.status || null, query.limit ? Math.min(Number(query.limit) || 50, 200) : 50);
@@ -1315,13 +1294,13 @@ function internalIncidentDetail(incidentId: number): ApiResponse {
   return { incident: inc, tickets: incidents.incidentTickets(Number(incidentId)) };
 }
 
-function internalIncidentDetect(programId: string, body: ApiBody = {}): ApiResponse {
+function internalIncidentDetect(programId: string, body: IncidentBody = {}): ApiResponse {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   return require("../incidents").detectBursts({ programId });
 }
 
-function internalIncidentCreate(programId: string, body: ApiBody = {}): ApiResponse {
+function internalIncidentCreate(programId: string, body: IncidentBody = {}): ApiResponse {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   return require("../incidents").createIncident({
@@ -1333,7 +1312,7 @@ function internalIncidentCreate(programId: string, body: ApiBody = {}): ApiRespo
   });
 }
 
-function internalIncidentAction(incidentId: number, body: ApiBody = {}): ApiResponse {
+function internalIncidentAction(incidentId: number, body: IncidentBody = {}): ApiResponse {
   const incidents = require("../incidents");
   const inc = incidents.getIncident(Number(incidentId));
   if (!inc) return { error: "incident not found" };
@@ -1354,7 +1333,7 @@ function internalIncidentAction(incidentId: number, body: ApiBody = {}): ApiResp
   return incidents.setIncidentStatus({ incidentId: Number(incidentId), status: body.action, actorId: body.actorId || null });
 }
 
-async function internalIncidentNotify(incidentId: number, body: ApiBody = {}): Promise<ApiResponse> {
+async function internalIncidentNotify(incidentId: number, body: IncidentBody = {}): Promise<ApiResponse> {
   const incidents = require("../incidents");
   const inc = incidents.getIncident(Number(incidentId));
   if (!inc) return { error: "incident not found" };
@@ -1370,28 +1349,28 @@ async function internalIncidentNotify(incidentId: number, body: ApiBody = {}): P
   });
 }
 
-function internalIncidentAffected(incidentId: number, query: ApiBody = {}): ApiResponse {
+function internalIncidentAffected(incidentId: number, query: IncidentQuery = {}): ApiResponse {
   const incidents = require("../incidents");
   const inc = incidents.getIncident(Number(incidentId));
   if (!inc) return { error: "incident not found" };
   const reports = incidents.affectedReports(Number(incidentId), query.onlyUnnotified === "1");
-  return { total: reports.length, unnotified: reports.filter((r: ApiResponse) => !r.notified_at).length, reports };
+  return { total: reports.length, unnotified: reports.filter((r: AffectedReportRow) => !r.notified_at).length, reports };
 }
 
 
-function internalRadarList(programId: string, query: ApiBody = {}): ApiResponse {
+function internalRadarList(programId: string, query: RadarQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   return { signals: require("../radar").listSignals(programId, { status: query.status || null, severity: query.severity || null, limit: query.limit }) };
 }
 
-function internalRadarEvaluate(programId: string, body: ApiBody = {}): ApiResponse {
+function internalRadarEvaluate(programId: string, body: CandidateActionBody = {}): ApiResponse {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   return require("../radar").evaluateProgram(programId);
 }
 
-function internalRadarAction(signalId: number, body: ApiBody = {}): ApiResponse {
+function internalRadarAction(signalId: number, body: RadarActionBody = {}): ApiResponse {
   const radar = require("../radar");
   const requireHelper = (programId: string, actorId: string | null) => ticketActorAllowed(programId, actorId);
   const actorId = body.actorId || null;
@@ -1407,25 +1386,25 @@ function internalHealthScore(programId: string): ApiResponse {
   return require("../programHealth").computeHealthScore(programId);
 }
 
-function internalWaitEstimate(programId: string, query: ApiBody = {}): ApiResponse {
+function internalWaitEstimate(programId: string, query: AnalyticsQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   return require("../waitTime").estimate({ programId, category: query.category || null, ticketId: query.ticketId ? Number(query.ticketId) : null });
 }
 
-function internalAnalytics(programId: string, query: ApiBody = {}): ApiResponse {
+function internalAnalytics(programId: string, query: AnalyticsQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   const days = Math.min(Math.max(Number(query.days) || 30, 1), 365);
   return require("../supportAnalytics").overview(programId, days * 86400000);
 }
 
-function internalUsage(query: ApiBody = {}): ApiResponse {
+function internalUsage(query: AnalyticsQuery = {}): ApiResponse {
   const days = Math.min(Math.max(Number(query.days) || 30, 1), 365);
   return { days, rows: db.llmUsageSummary(days * 86400000) };
 }
 
-function internalProgramUsage(programId: string, query: ApiBody = {}): ApiResponse {
+function internalProgramUsage(programId: string, query: AnalyticsQuery = {}): ApiResponse {
   const missing = needProgram(programId);
   if (missing) return missing;
   return db.llmUsageReport({
@@ -1451,11 +1430,11 @@ function internalRetentionPreview(programId: string): ApiResponse {
   return require("../retention").preview(programId);
 }
 
-function internalRetentionSweep(programId: string, body: ApiBody = {}): ApiResponse {
+function internalRetentionSweep(programId: string, body: RetentionBody = {}): ApiResponse {
   const actorId = body.actorId || null;
   if (!programs.get(programId)) return { error: "unknown program" };
   const { isAdmin } = require("../config");
-  const organizer = (db.listHelpers(programId) as ApiResponse[]).find((h: ApiResponse) => h.user_id === actorId && (h.role === "organizer" || h.role === "owner"));
+  const organizer = (db.listHelpers(programId) as HelperRow[]).find((h: HelperRow) => h.user_id === actorId && (h.role === "organizer" || h.role === "owner"));
   if (!(actorId && (isAdmin(actorId) || organizer))) {
     return { error: "retention sweeps require a program organizer" };
   }
@@ -1463,7 +1442,7 @@ function internalRetentionSweep(programId: string, body: ApiBody = {}): ApiRespo
   return require("../retention").sweepProgram(programId, { dryRun: false });
 }
 
-function internalRetentionPolicy(programId: string, body: ApiBody = {}): ApiResponse {
+function internalRetentionPolicy(programId: string, body: RetentionBody = {}): ApiResponse {
   const denied = needProgramActor(programId, body.actorId || null);
   if (denied) return denied;
   const problem = require("../retention").validatePolicy(body.policy || {});
@@ -1477,7 +1456,7 @@ function internalRetentionPolicy(programId: string, body: ApiBody = {}): ApiResp
     analyticsDays: "retention_analytics_days",
     auditDays: "retention_audit_days",
   };
-  const row: ApiBody = {};
+  const row: RetentionValues = {};
   for (const [key, col] of Object.entries(map)) {
     if (p[key] !== undefined) row[col] = Number(p[key]);
   }
@@ -1543,7 +1522,7 @@ const USER_INFO_BATCH_CAP = 200;
 
 async function internalUserInfoBatch(userIds: unknown): Promise<ApiResponse> {
   const ids = [...new Set((Array.isArray(userIds) ? userIds : []).filter((id: unknown): id is string => typeof id === "string" && Boolean(id)))].slice(0, USER_INFO_BATCH_CAP);
-  const users: Record<string, ApiResponse | null> = {};
+  const users: Record<string, UserInfoPublic | null> = {};
   await Promise.all(
     ids.map(async (id) => {
       try {
