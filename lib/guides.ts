@@ -5,6 +5,7 @@ import answer = require("./answer");
 import intent = require("./intent");
 import db = require("./db");
 import log = require("./log");
+import type { ActionsBlockElement, KnownBlock } from "@slack/types";
 
 const { config } = configModule;
 const { looksLikeHelpRequest } = intent;
@@ -18,8 +19,43 @@ const ADVANCE = "ADVANCE";
 const STUCK = "STUCK";
 const OTHER = "OTHER";
 const DONE = "DONE";
-interface Legacy {
-  [key: string]: any;
+interface GuideStep {
+  message: string;
+  checkNext?: string | null;
+  screenshot?: string | null;
+}
+interface Guide {
+  name: string;
+  steps: GuideStep[];
+  alternateSteps: Record<string, string>;
+}
+interface GuideState {
+  thread_ts: string;
+  guide_id: string;
+  current_step: number;
+  user_id?: string | null;
+}
+interface GuideResult {
+  message: string;
+  checkNext?: string | null;
+  screenshot?: string | null;
+  guideName?: string | null;
+  cancelled?: boolean;
+  completed?: boolean;
+  isAlternate?: boolean;
+}
+interface IntentTierRequest {
+  maxTokens: number;
+  temperature: number;
+  messages: Array<{ role: string; content: string }>;
+}
+interface GuideMenuEntry {
+  heading: string;
+  entries: Array<[string, Guide]>;
+}
+interface ClassifierResult {
+  kind: string;
+  alternateKey?: string;
 }
 
 function errorMessage(error: unknown): string | undefined {
@@ -35,7 +71,7 @@ interface GuideTrigger {
 const EXIT_PATTERN = /^\s*(?:stop|quit|exit|cancel|nvm|nevermind|never mind|forget it|no thanks|nah im good|nah i'm good)\b/i;
 
 // Guide text is user-facing content; detection and state transitions stay below it.
-const GUIDES: Record<string, Legacy> = {
+const GUIDES: Record<string, Guide> = {
   "create-hackpad": {
     name: "How to Build Your Own Hackpad (Macropad)",
     steps: [
@@ -849,12 +885,12 @@ const GUIDES: Record<string, Legacy> = {
   },
 };
 
-function availableFor(program: Legacy | null): Array<[string, Legacy]> {
+function availableFor(program: { guides?: string[] } | null): Array<[string, Guide]> {
   const ids = Array.isArray(program?.guides) ? program.guides : [];
   return ids.filter((id) => GUIDES[id]).map((id) => [id, GUIDES[id]]);
 }
 
-function isAvailable(program: Legacy | null, guideId: string): boolean {
+function isAvailable(program: { guides?: string[] } | null, guideId: string): boolean {
   return availableFor(program).some(([id]) => id === guideId);
 }
 
@@ -1091,7 +1127,7 @@ function guideChooserPrompt() {
   ].join("\n");
 }
 
-function intentTierRequest({ maxTokens, temperature, messages }: Legacy): Legacy {
+function intentTierRequest({ maxTokens, temperature, messages }: IntentTierRequest): Record<string, unknown> {
   return {
     baseUrl: config.intent.baseUrl,
     apiKey: config.intent.apiKey,
@@ -1106,10 +1142,10 @@ function intentTierRequest({ maxTokens, temperature, messages }: Legacy): Legacy
   };
 }
 
-function guideMenuBlocks({ heading, entries }: Legacy): Legacy[] {
+function guideMenuBlocks({ heading, entries }: GuideMenuEntry): KnownBlock[] {
   // Slack actions blocks allow five buttons here, so larger guide menus are chunked into separate blocks.
-  const blocks: Legacy[] = [{ type: "section", text: { type: "mrkdwn", text: heading } }];
-  const buttons = entries.map(([id, g]: [string, Legacy]) => ({
+  const blocks: KnownBlock[] = [{ type: "section", text: { type: "mrkdwn", text: heading } }];
+  const buttons: ActionsBlockElement[] = entries.map(([id, g]: [string, Guide]) => ({
     type: "button",
     text: { type: "plain_text", text: g.name.slice(0, 75) },
     value: id,
@@ -1183,7 +1219,7 @@ function isExitRequest(text: string): boolean {
   return EXIT_PATTERN.test(text || "");
 }
 
-function stepPayload(step: Legacy, guideName: string | null = null): Legacy {
+function stepPayload(step: GuideStep, guideName: string | null = null): GuideResult {
   return {
     message: step.message,
     checkNext: step.checkNext || null,
@@ -1192,12 +1228,12 @@ function stepPayload(step: Legacy, guideName: string | null = null): Legacy {
   };
 }
 
-function startGuide(guideId: string, threadTs: string, userId: string): Legacy | null {
+function startGuide(guideId: string, threadTs: string, userId: string): GuideResult | null {
   const guide = GUIDES[guideId];
   if (!guide) return null;
 
   // Only the starter may advance a guide; another participant gets normal routing.
-  const existing = db.getGuide(threadTs);
+  const existing = db.getGuide(threadTs) as GuideState | null;
   if (existing && existing.user_id && userId && existing.user_id !== userId) return null;
 
   db.saveGuide(threadTs, guideId, 0, userId);
@@ -1212,7 +1248,7 @@ function cancelGuide(threadTs: string): void {
   db.deleteGuide(threadTs);
 }
 
-function classifierPrompt(guide: Legacy, step: Legacy, alternateKeys: string[]): string {
+function classifierPrompt(guide: Guide, step: GuideStep, alternateKeys: string[]): string {
   const alternates = alternateKeys.map((k, i) => `STUCK_${i + 1}: they hit this specific problem — ${k}`).join("\n");
 
   return [
@@ -1233,7 +1269,7 @@ function classifierPrompt(guide: Legacy, step: Legacy, alternateKeys: string[]):
     .join("\n");
 }
 
-async function classifyStepReply(guide: Legacy, step: Legacy, alternateKeys: string[], userResponse: string): Promise<Legacy> {
+async function classifyStepReply(guide: Guide, step: GuideStep, alternateKeys: string[], userResponse: string): Promise<ClassifierResult> {
   try {
     const { text } = await llm.complete(
       intentTierRequest({
@@ -1266,7 +1302,7 @@ async function classifyStepReply(guide: Legacy, step: Legacy, alternateKeys: str
   }
 }
 
-function stuckAnswerPrompt(guide: Legacy, step: Legacy, alternateKey: string, canned: string, inHelpChannel: boolean): string {
+function stuckAnswerPrompt(guide: Guide, step: GuideStep, alternateKey: string, canned: string, inHelpChannel: boolean): string {
   return [
     `A user is being walked through: "${guide.name}".`,
     `The exact step they're currently on: "${step.message}"`,
@@ -1287,7 +1323,7 @@ function stuckAnswerPrompt(guide: Legacy, step: Legacy, alternateKey: string, ca
   ].join("\n");
 }
 
-async function answerStuckQuestion(guide: Legacy, step: Legacy, alternateKey: string, userResponse: string, inHelpChannel = false): Promise<string> {
+async function answerStuckQuestion(guide: Guide, step: GuideStep, alternateKey: string, userResponse: string, inHelpChannel = false): Promise<string> {
   const canned = guide.alternateSteps[alternateKey];
   try {
     const { text } = await llm.complete(
@@ -1317,7 +1353,7 @@ async function answerStuckQuestion(guide: Legacy, step: Legacy, alternateKey: st
   }
 }
 
-function advanceToNextStep(threadTs: string, state: Legacy, guide: Legacy): Legacy {
+function advanceToNextStep(threadTs: string, state: GuideState, guide: Guide): GuideResult {
   // Completion deletes the guide state; every intermediate advance stores the same starter ownership.
   const nextIndex = state.current_step + 1;
   if (nextIndex >= guide.steps.length) {
@@ -1329,7 +1365,7 @@ function advanceToNextStep(threadTs: string, state: Legacy, guide: Legacy): Lega
   return stepPayload(guide.steps[nextIndex]);
 }
 
-function advanceGuideByReaction(messageTsOrThreadTs: string | Legacy, userId: string): Legacy | null {
+function advanceGuideByReaction(messageTsOrThreadTs: string | { messageTs: string; userId?: string }, userId: string): GuideResult | null {
   let messageTs = null;
   let uid = userId;
   let state = null;
@@ -1344,20 +1380,21 @@ function advanceGuideByReaction(messageTsOrThreadTs: string | Legacy, userId: st
 
   if (!state) return null;
 
-  const guide = GUIDES[state.guide_id];
+  const guideState = state as GuideState;
+  const guide = GUIDES[guideState.guide_id];
   if (!guide) {
-    db.deleteGuide(state.thread_ts);
+    db.deleteGuide(guideState.thread_ts);
     return null;
   }
 
-  if (state.user_id && uid && state.user_id !== uid) return null;
+  if (guideState.user_id && uid && guideState.user_id !== uid) return null;
 
-  return advanceToNextStep(state.thread_ts, state, guide);
+  return advanceToNextStep(guideState.thread_ts, guideState, guide);
 }
 
-async function continueGuide(threadTs: string, userResponse: string, userId: string | null = null, inHelpChannel = false): Promise<Legacy | null> {
+async function continueGuide(threadTs: string, userResponse: string, userId: string | null = null, inHelpChannel = false): Promise<GuideResult | null> {
   // Only the starter advances a guide; off-topic replies return to ordinary message routing.
-  const state = db.getGuide(threadTs);
+  const state = db.getGuide(threadTs) as GuideState | null;
   if (!state) return null;
 
   const guide = GUIDES[state.guide_id];
@@ -1385,7 +1422,7 @@ return { message: "no worries, stopping there — ping me if you wanna pick it b
   if (verdict.kind === OTHER) return null;
 
   if (verdict.kind === STUCK) {
-    const message = await answerStuckQuestion(guide, step, verdict.alternateKey, userResponse, inHelpChannel);
+    const message = await answerStuckQuestion(guide, step, verdict.alternateKey || "", userResponse, inHelpChannel);
     return { message, checkNext: null, screenshot: null, isAlternate: true };
   }
 
@@ -1394,9 +1431,9 @@ return { message: "no worries, stopping there — ping me if you wanna pick it b
 
 const GUIDE_REACTION_HINT = "react :upvote: on this message when you're ready for the next step — or just tell me if you're stuck";
 
-function buildGuideBlocks(result: Legacy, baseUrl: string, { showReactionHint = false }: { showReactionHint?: boolean } = {}): Legacy[] {
+function buildGuideBlocks(result: GuideResult, baseUrl: string, { showReactionHint = false }: { showReactionHint?: boolean } = {}): KnownBlock[] {
   // Guide text is rendered into blocks separately from the plain fallback Slack also requires.
-  const blocks: Legacy[] = [];
+  const blocks: KnownBlock[] = [];
 
   if (result.screenshot) {
     blocks.push({

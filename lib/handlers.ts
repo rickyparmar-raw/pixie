@@ -17,12 +17,84 @@ import macrosModule = require("./macros");
 import channelPolicyModule = require("./channelPolicy");
 import workspaceModule = require("./workspace");
 import brand = require("./brand");
+import type { Program, SlackClient, Ticket } from "./types";
 
 const { config, isAdmin } = configModule;
 const { worthClassifying } = intent;
-interface Legacy {
-  [key: string]: any;
+interface SlackFile { mimetype?: string; url_private?: string }
+interface ReactionItem { channel: string; ts: string; type?: string }
+interface HandlerEvent {
+  ts: string;
+  channel: string;
+  user: string;
+  text: string;
+  thread_ts?: string;
+  parent_user_id?: string;
+  channel_type?: string;
+  subtype?: string;
+  bot_id?: string;
+  team?: string;
+  files?: SlackFile[];
+  item?: ReactionItem;
+  item_user?: string;
+  reaction?: string;
 }
+interface ReactionEvent extends HandlerEvent { item: ReactionItem }
+interface HandlerArgs { event: HandlerEvent; client: SlackClient }
+interface ImageArgs extends HandlerArgs { imageFile: SlackFile; program?: Program | null }
+interface ProgramPolicy { role: string; program: Program; settings?: { enabled?: boolean; commandsEnabled?: boolean } }
+interface MacroRow { id: number; trigger: string; enabled: boolean }
+interface TicketTarget { ticket: { id: number } | null; program: Program | null }
+interface MacroTrigger { trigger: string }
+interface ThreadCrowd { othersPresent: boolean; pixieIn: boolean }
+interface GuideStepResult { message: string; checkNext?: string | null; screenshot?: string | null; [key: string]: unknown }
+interface HandlerDb {
+  claimMessage(ts: string, channel?: string | null): boolean;
+  clearTakeover(threadTs: string): void;
+  getGuide(threadTs: string): { thread_ts: string; user_id?: string | null } | null;
+  getGuideByMessageTs(messageTs: string): { thread_ts: string; user_id?: string | null } | null;
+  getTicketByThreadTs(threadTs?: string, workspaceId?: string | null): (Pick<Ticket, "id" | "channel" | "program_id" | "status"> & { workspace_id?: string | null }) | null;
+  isHelper(programId: string, userId: string): boolean;
+  isTakeover(threadTs: string): boolean;
+  isThreadMuted(threadTs: string): boolean;
+  markTakeover(threadTs: string, channel: string, userId: string): void;
+  recordFeedback(messageTs: string, userId: string, vote: number | string): void;
+  recordGap(question: string, userId?: string | null, channel?: string | null, messageTs?: string | null, programId?: string | null): void;
+  recordMetric(name: string, latency?: number | null, detail?: string | null, programId?: string | null): void;
+  recordUserMessage(input: { userId: string; channel: string; threadTs: string; text: string }): void;
+  removeFeedback(messageTs: string, userId: string): void;
+  unmuteThread(threadTs: string): void;
+  wasAnswered(messageTs: string): boolean;
+}
+interface HandlerContext {
+  addToThread(threadTs: string, role: string, content: string, userId?: string | null, channel?: string | null): void;
+  fetchThreadCrowd(client: SlackClient, input: { channel: string; threadTs?: string; messageTs: string; userId: string; botUserId: string; parentUserId?: string | null }): Promise<ThreadCrowd>;
+  getThreadContext(threadTs: string): string;
+  hasSpokenInThread(threadTs: string): boolean;
+  updateUserHistory(userId: string, question: string, answered: boolean): void;
+}
+interface HandlerRespond {
+  ALWAYS: string;
+  ERROR_FALLBACK: string;
+  HELP_ONLY: string;
+  postGuideStep(args: object): Promise<unknown>;
+  respond(args: object): Promise<unknown>;
+}
+interface HandlerGuides { advanceGuideByReaction(message: string | { messageTs: string; userId: string }, userId?: string): GuideStepResult | null }
+interface HandlerPrograms { forChannel(channel: string | null | undefined, workspaceId?: string | null, options?: object): Program; get(id: string): Program | null; shared(): Program }
+interface HandlerMacros {
+  list(programId: string, options?: { enabledOnly?: boolean }): MacroRow[];
+  normalizeTrigger(value: string): string;
+  send(args: object): Promise<{ ok: boolean; error?: string }>;
+  sendToThread(args: object): Promise<{ ok: boolean; error?: string }>;
+}
+interface HandlerPolicy { resolve(channel: string, workspaceId?: string | null, options?: { isDm?: boolean }): ProgramPolicy }
+interface HandlerWorkspace { workspaceOf(event: HandlerEvent): string | null }
+interface HandlerVision { analyzeImage(url?: string, question?: string, context?: string, token?: string): Promise<string | null> }
+interface HandlerLearn { parseTeach(text: string): { question: string; answer: string } | null; teach(input: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }): number | null; }
+interface HandlerTeachThread { summarizeThread(input: { client: SlackClient; channel: string; threadTs: string }): Promise<{ question: string; answer: string } | null> }
+interface HandlerSumThread { summarizeThreadForHelper(input: { client: SlackClient; channel: string; threadTs: string }): Promise<string | null> }
+interface HandlerRateLimit { check(input: object, options: object): { allowed: boolean; reason?: string } }
 
 function errorMessage(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("message" in error)) return undefined;
@@ -35,19 +107,19 @@ function errorData(error: unknown): Record<string, unknown> | undefined {
   const data = (error as { data?: unknown }).data;
   return typeof data === "object" && data !== null ? data as Record<string, unknown> : undefined;
 }
-const context: Legacy = contextModule as Legacy;
-const vision: Legacy = visionModule as Legacy;
-const respond: Legacy = respondModule as Legacy;
-const guides: Legacy = guidesModule as Legacy;
-const learn: Legacy = learnModule as Legacy;
-const teachThread: Legacy = teachThreadModule as Legacy;
-const sumThread: Legacy = sumThreadModule as Legacy;
-const db: Legacy = dbModule as Legacy;
-const rateLimit: Legacy = rateLimitModule as Legacy;
-const programs: Legacy = programsModule as Legacy;
-const macros: Legacy = macrosModule as Legacy;
-const channelPolicy: Legacy = channelPolicyModule as Legacy;
-const workspace: Legacy = workspaceModule as Legacy;
+const context = contextModule as unknown as HandlerContext;
+const vision = visionModule as unknown as HandlerVision;
+const respond = respondModule as HandlerRespond;
+const guides = guidesModule as HandlerGuides;
+const learn = learnModule as unknown as HandlerLearn;
+const teachThread = teachThreadModule as unknown as HandlerTeachThread;
+const sumThread = sumThreadModule as unknown as HandlerSumThread;
+const db = dbModule as unknown as HandlerDb;
+const rateLimit = rateLimitModule as unknown as HandlerRateLimit;
+const programs = programsModule as unknown as HandlerPrograms;
+const macros = macrosModule as unknown as HandlerMacros;
+const channelPolicy = channelPolicyModule as unknown as HandlerPolicy;
+const workspace = workspaceModule as unknown as HandlerWorkspace;
 
 const DELETE_REACTIONS = new Set(["pixl-delete", "x", "heavy_multiplication_x"]);
 const UP_REACTIONS = new Set(["yay", "thumbs-up", "+1", "yesyes", "white_check_mark", "heavy_check_mark", "upvote", "sparkling_heart", "heart", "heart_eyes"]);
@@ -80,7 +152,7 @@ function stripTeachCommand(text: string, mentionOnly = false): string {
   return String(text || "").replace(teachPattern(mentionOnly), "").trim();
 }
 
-function actorRunsCommands(userId: string, prog: Legacy | null): boolean {
+function actorRunsCommands(userId: string, prog: Program | null): boolean {
   return isAdmin(userId) || (!!prog && db.isHelper(prog.id, userId));
 }
 
@@ -100,13 +172,13 @@ function stripBotMention(text: string): string {
   return require("./eligibility").stripBotMention(text, config.slack.botUserId);
 }
 
-function isDirectMessage(event: Legacy): boolean {
+function isDirectMessage(event: HandlerEvent): boolean {
   return event.channel_type === "im";
 }
 
 const DM_RATE_LIMIT_NOTICE = "woah slow down a sec — gimme a minute to catch up :sob-pray:";
 
-async function checkDmRateLimit({ event, client, program = null, threadTs = null }: Legacy): Promise<boolean> {
+async function checkDmRateLimit({ event, client, program = null, threadTs = null }: HandlerArgs & { program?: Program | null; threadTs?: string | null }): Promise<boolean> {
   if (!isDirectMessage(event)) return true;
 
   const limit = rateLimit.check(
@@ -130,13 +202,13 @@ async function checkDmRateLimit({ event, client, program = null, threadTs = null
 
 // Image and command entry points do not pass through respond(), so they reserve DM budget here.
 
-function findImage(event: Legacy): Legacy | null {
+function findImage(event: HandlerEvent): SlackFile | null {
   // Slack's private image URL is the only file shape the vision client can fetch safely.
   if (!event.files?.length) return null;
-  return event.files.find((f: Legacy) => f.mimetype?.startsWith("image/") && f.url_private) || null;
+  return event.files.find((f: SlackFile) => f.mimetype?.startsWith("image/") && f.url_private) || null;
 }
 
-async function handleImage({ event, client, imageFile, program = null }: Legacy): Promise<boolean | void> {
+async function handleImage({ event, client, imageFile, program = null }: ImageArgs): Promise<boolean | void> {
   const threadTs = event.thread_ts || event.ts;
   const question = stripBotMention(event.text);
 
@@ -166,21 +238,21 @@ async function handleImage({ event, client, imageFile, program = null }: Legacy)
 }
 
 
-async function untaggedThreadTurn({ event, client }: Legacy): Promise<string> {
+async function untaggedThreadTurn({ event, client }: HandlerArgs): Promise<string> {
   // A thread stays addressed while only Pixie and the asker are present; human chatter makes it ambient.
   const crowd = await context.fetchThreadCrowd(client, {
     channel: event.channel,
     threadTs: event.thread_ts,
     messageTs: event.ts,
     userId: event.user,
-    botUserId: config.slack.botUserId,
+    botUserId: config.slack.botUserId as unknown as string,
     parentUserId: event.parent_user_id || null,
   });
   if (crowd.othersPresent) return "humans_talking";
   return crowd.pixieIn ? "addressed" : "ambient";
 }
 
-function stayOutOfHumanThread({ event, threadTs, question, prog }: Legacy): void {
+function stayOutOfHumanThread({ event, threadTs, question, prog }: { event: HandlerEvent; threadTs: string; question: string; prog: Program }): void {
   log.debug("intent", "skipping thread reply — other people are talking and nobody called pixie");
   context.addToThread(threadTs, "user", question, event.user, event.channel);
   db.recordMetric("silent", null, "thread_humans_talking", prog.id);
@@ -189,7 +261,7 @@ function stayOutOfHumanThread({ event, threadTs, question, prog }: Legacy): void
 const HUMAN_ONLY_REPLY = "That one needs a person to decide, so I won't guess. A helper or organizer can sort it out :hii:";
 const HUMAN_ONLY_PINGED_REPLY = "That one needs a person to decide, so I won't guess. I've asked a helper to take a look :hii:";
 
-async function escalateSensitive({ event, client, prog, workspaceId, threadTs, question, addressed }: Legacy): Promise<void> {
+async function escalateSensitive({ event, client, prog, workspaceId, threadTs, question, addressed }: { event: HandlerEvent; client: SlackClient; prog: Program; workspaceId: string | null; threadTs: string; question: string; addressed: boolean }): Promise<void> {
   // Sensitive requests record the gap first, then try a ticket and helper handoff before replying.
   const tickets = require("./tickets");
   db.recordGap(question, event.user, event.channel, threadTs, prog.id);
@@ -219,11 +291,11 @@ async function escalateSensitive({ event, client, prog, workspaceId, threadTs, q
   db.recordMetric("fallback", null, "sensitive_unticketed", prog.id);
 }
 
-function threadRequiresMention(prog: Legacy | null): boolean {
-  return process.env.PIXIE_THREAD_REQUIRE_MENTION === "1" || Boolean(prog?.threadRequireMention);
+function threadRequiresMention(prog: Program | null): boolean {
+  return process.env.PIXIE_THREAD_REQUIRE_MENTION === "1" || Boolean((prog as (Program & { threadRequireMention?: boolean }) | null)?.threadRequireMention);
 }
 
-function shouldConsiderThreadReply(event: Legacy, prog: Legacy | null = null): boolean {
+function shouldConsiderThreadReply(event: HandlerEvent, prog: Program | null = null): boolean {
   // Muted threads still wake only for a direct invocation; otherwise mention, guide, and prior-speech rules apply.
   if (!event.thread_ts || event.thread_ts === event.ts) return true;
   if (db.isThreadMuted(event.thread_ts)) {
@@ -235,7 +307,7 @@ function shouldConsiderThreadReply(event: Legacy, prog: Legacy | null = null): b
   return context.hasSpokenInThread(event.thread_ts);
 }
 
-function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }: Legacy): string {
+function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }: { event: HandlerEvent; prog: Program; workspaceId: string | null; threadTs: string; question: string; isDm: boolean }): string {
   // An open ticket suppresses ambient room replies, while direct mentions still reach the eligibility gate.
   const elig = require("./eligibility");
   const isTopLevel = !event.thread_ts || event.thread_ts === event.ts;
@@ -291,7 +363,7 @@ function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }
   return "proceed";
 }
 
-async function refuseUnauthorizedCommand({ event, client, question, prog, policy }: Legacy): Promise<boolean> {
+async function refuseUnauthorizedCommand({ event, client, question, prog, policy }: { event: HandlerEvent; client: SlackClient; question: string; prog: Program; policy: ProgramPolicy }): Promise<boolean> {
   // Command identity and permission are decided before conversational routing can answer the same text.
   const commandRegistry = require("./commandRegistry");
   const hit = commandRegistry.match(question, { botUserId: config.slack.botUserId, botNames: [brand.name(), brand.slug()] });
@@ -314,7 +386,7 @@ async function refuseUnauthorizedCommand({ event, client, question, prog, policy
   return true;
 }
 
-async function handleTeachRequest({ event, client, question, prog, mentionOnly, claimFirst }: Legacy): Promise<boolean> {
+async function handleTeachRequest({ event, client, question, prog, mentionOnly, claimFirst }: { event: HandlerEvent; client: SlackClient; question: string; prog: Program; mentionOnly: boolean; claimFirst: boolean }): Promise<boolean> {
   // Teaching is a helper action and claims the message before writing shared memory when requested.
   if (!event.thread_ts || !teachPattern(mentionOnly).test(question)) return false;
   if (!actorRunsCommands(event.user, prog)) {
@@ -366,7 +438,7 @@ async function handleTeachRequest({ event, client, question, prog, mentionOnly, 
   }
 }
 
-async function handleSumRequest({ event, client, question, prog, mentionOnly, claimFirst }: Legacy): Promise<boolean> {
+async function handleSumRequest({ event, client, question, prog, mentionOnly, claimFirst }: { event: HandlerEvent; client: SlackClient; question: string; prog: Program; mentionOnly: boolean; claimFirst: boolean }): Promise<boolean> {
   // Summaries follow the same helper-only and single-claim boundary as direct teaching.
   if (!sumPattern(mentionOnly).test(question)) return false;
   if (!actorRunsCommands(event.user, prog)) {
@@ -463,7 +535,7 @@ function stagingBlocked(channel: string): boolean {
 
 const MACRO_NOTE_MAX_LENGTH = 280;
 
-function parseMacroTrigger(text: string): Legacy | null {
+function parseMacroTrigger(text: string): MacroTrigger | null {
   const match = /^(\S+)(?:\s+([\s\S]+))?$/.exec(String(text || "").trim());
   if (!match) return null;
   const trigger = macros.normalizeTrigger(match[1]);
@@ -471,7 +543,7 @@ function parseMacroTrigger(text: string): Legacy | null {
   return { trigger };
 }
 
-async function reactToMacroMessage(client: Legacy, event: Legacy, name: string): Promise<void> {
+async function reactToMacroMessage(client: SlackClient, event: HandlerEvent, name: string): Promise<void> {
   if (!client?.reactions?.add) return;
   try {
     await client.reactions.add({ channel: event.channel, timestamp: event.ts, name });
@@ -480,16 +552,16 @@ async function reactToMacroMessage(client: Legacy, event: Legacy, name: string):
   }
 }
 
-function findMacro(programId: string, trigger: string): Legacy | null {
+function findMacro(programId: string, trigger: string): MacroRow | null {
   const bare = trigger.slice(1);
-  const candidates = macros.list(programId).filter((row: Legacy) => String(row.trigger || "").slice(1) === bare);
-  return candidates.find((row: Legacy) => row.trigger === trigger && row.enabled)
-    || candidates.find((row: Legacy) => row.enabled)
+  const candidates = macros.list(programId).filter((row: MacroRow) => String(row.trigger || "").slice(1) === bare);
+  return candidates.find((row: MacroRow) => row.trigger === trigger && row.enabled)
+    || candidates.find((row: MacroRow) => row.enabled)
     || candidates[0]
     || null;
 }
 
-async function postMacroEphemeral(client: Legacy, event: Legacy, text: string): Promise<void> {
+async function postMacroEphemeral(client: SlackClient, event: HandlerEvent, text: string): Promise<void> {
   try {
     await client?.chat?.postEphemeral?.({ channel: event.channel, user: event.user, thread_ts: event.thread_ts, text });
   } catch (e: unknown) {
@@ -497,7 +569,7 @@ async function postMacroEphemeral(client: Legacy, event: Legacy, text: string): 
   }
 }
 
-function macroTargetFor(event: Legacy, workspaceId: string | null): Legacy {
+function macroTargetFor(event: HandlerEvent, workspaceId: string | null): TicketTarget {
   let ticket = db.getTicketByThreadTs(event.thread_ts, workspaceId);
   if (!ticket && workspaceId) ticket = db.getTicketByThreadTs(event.thread_ts);
   const foreign = ticket && (ticket.channel !== event.channel || (ticket.workspace_id && workspaceId && ticket.workspace_id !== workspaceId));
@@ -507,7 +579,7 @@ function macroTargetFor(event: Legacy, workspaceId: string | null): Legacy {
   return { ticket: null, program };
 }
 
-async function handleMacroTrigger({ event, client, workspaceId }: Legacy): Promise<boolean> {
+async function handleMacroTrigger({ event, client, workspaceId }: HandlerArgs & { workspaceId: string | null }): Promise<boolean> {
   // Macros are thread-only and resolve against the ticket or channel's program before permission checks.
   if (!event.thread_ts || event.thread_ts === event.ts || !event.user) return false;
   if (teachPattern(false).test(event.text) || sumPattern(false).test(event.text)) return false;
@@ -527,7 +599,7 @@ async function handleMacroTrigger({ event, client, workspaceId }: Legacy): Promi
   if (!db.claimMessage(event.ts, event.channel)) return true;
   if (!macro || !macro.enabled) {
     await reactToMacroMessage(client, event, "question");
-    const enabled = macros.list(program.id, { enabledOnly: true }).slice(0, 5).map((row: Legacy) => row.trigger);
+    const enabled = macros.list(program.id, { enabledOnly: true }).slice(0, 5).map((row: MacroRow) => row.trigger);
     const suggestion = enabled.length > 0 ? enabled.join(", ") : "none yet, add one on the Macros page";
     await postMacroEphemeral(client, event, `No macro \`${parsed.trigger}\` for ${program.name}. Try: ${suggestion}`);
     return true;
@@ -546,7 +618,7 @@ async function handleMacroTrigger({ event, client, workspaceId }: Legacy): Promi
 }
 
 // A channel must explicitly belong to Pixie before any reply, escalation, or learning path runs.
-async function onMessage({ event, client }: Legacy): Promise<void> {
+async function onMessage({ event, client }: HandlerArgs): Promise<void> {
   if (event.bot_id || event.subtype === "bot_message") return;
   if (stagingBlocked(event.channel)) return;
 
@@ -839,7 +911,7 @@ async function onMessage({ event, client }: Legacy): Promise<void> {
 }
 
 // app_mention is a second delivery of the same message; wasAnswered/claim state prevents duplicate work.
-async function onAppMention({ event, client }: Legacy): Promise<void> {
+async function onAppMention({ event, client }: HandlerArgs): Promise<void> {
   if (event.bot_id || event.subtype === "bot_message" || event.user === config.slack.botUserId) return;
   if (stagingBlocked(event.channel)) return;
   const workspaceId = workspace.workspaceOf(event);
@@ -925,7 +997,7 @@ async function onAppMention({ event, client }: Legacy): Promise<void> {
   });
 }
 
-async function messageAuthor(client: Legacy, channel: string, ts: string): Promise<string | null> {
+async function messageAuthor(client: SlackClient, channel: string, ts: string): Promise<string | null> {
   // Reaction payloads may omit item_user, so inspect replies and then history before giving up.
   try {
     const replies = await client.conversations?.replies?.({ channel, ts, limit: 1, inclusive: true });
@@ -942,7 +1014,7 @@ async function messageAuthor(client: Legacy, channel: string, ts: string): Promi
   }
 }
 
-async function onReactionAdded({ event, client }: Legacy): Promise<void> {
+async function onReactionAdded({ event, client }: { event: ReactionEvent; client: SlackClient }): Promise<void> {
   // Reaction targets carry their channel on item, so never fall back to the event channel when it is present.
   if (event.item && stagingBlocked(event.item.channel)) return;
   const channel = event.item?.channel || event.channel;
@@ -1002,7 +1074,7 @@ async function onReactionAdded({ event, client }: Legacy): Promise<void> {
   }
 }
 
-async function onReactionRemoved({ event }: Legacy): Promise<void> {
+async function onReactionRemoved({ event }: { event: ReactionEvent }): Promise<void> {
   const normReaction = (event.reaction || "").toLowerCase();
   if (UP_REACTIONS.has(normReaction) || DOWN_REACTIONS.has(normReaction)) {
     db.removeFeedback(event.item.ts, event.user);

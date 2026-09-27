@@ -3,9 +3,63 @@ import configModule = require("./config");
 import log = require("./log");
 
 const { config, jevConfig } = configModule;
-interface Legacy {
-  [key: string]: any;
+interface JevConfig {
+  enabled?: boolean;
+  experientialApiKeyPresent?: boolean;
+  model?: string;
+  baseUrl?: string;
+  timeoutMs?: number;
+  engageThreshold?: number;
 }
+interface JevStateInput {
+  message?: string;
+  conversationContext?: string;
+  program?: string | { id?: string; name?: string } | null;
+  channelPosture?: string;
+  addressed?: boolean;
+}
+interface JevState {
+  message: string | undefined;
+  conversationContext: string;
+  program: { id: string | null; name: string | null };
+  channelPosture: string;
+  addressed: boolean;
+}
+interface ProviderAnswer {
+  probability?: unknown;
+  choice?: unknown;
+  probabilities?: Record<string, unknown>;
+}
+interface ProviderResponse { answers?: { intent?: ProviderAnswer; shouldEngage?: ProviderAnswer } }
+interface Decision {
+  intent: string | null;
+  shouldEngage: boolean;
+  confidence: Record<string, number | undefined>;
+  probabilities: { shouldEngage?: number };
+  source: string;
+}
+interface BoolResult { value: boolean; confidence?: number }
+interface JevError {
+  name?: string;
+  message?: string;
+  code?: string;
+  status?: number | string;
+  statusCode?: number | string;
+  jevErrorKind?: string;
+  response?: { status?: number | string };
+}
+interface EvaluationArgs { state: JevState | unknown; questions: object | unknown; timeoutMs?: number; model: string }
+type EvaluateFn = (args: EvaluationArgs) => Promise<unknown>;
+interface EvaluationDeps {
+  config?: JevConfig;
+  model?: string;
+  questions?: object;
+  evaluateFn?: EvaluateFn;
+  httpPost?: unknown;
+  timeoutMs?: number;
+}
+interface SupportInput extends JevStateInput {}
+interface SupportOutcome { action: string; intent: string | null; shouldEngageP: number | null; reason: string; latencyMs: number; errorKind: string | null; cached?: boolean }
 
 const JEV_MODEL_DEFAULT = "jev-latest:free";
 const JEV_BASE_URL_DEFAULT = "https://api.experientiallabs.ai/v1/systemone";
@@ -18,7 +72,7 @@ function truncate(text: string, max: number): string {
   return `${s.slice(0, max)}…[truncated ${s.length - max} chars]`;
 }
 
-function effectiveConfig() {
+function effectiveConfig(): JevConfig {
   try {
     const live = typeof jevConfig === "function" ? jevConfig() : null;
     if (live) return live;
@@ -43,13 +97,13 @@ function isFreeModel(model: unknown): boolean {
   return typeof model === "string" && /[:-]free$/.test(model.trim());
 }
 
-function buildJevState({ message, conversationContext, program, channelPosture, addressed = false }: Legacy): Legacy {
+function buildJevState({ message, conversationContext = "", program, channelPosture = "main", addressed = false }: JevStateInput): JevState {
   const prog = program && typeof program === "object"
     ? { id: program.id || null, name: program.name || null }
     : { id: typeof program === "string" ? program : null, name: null };
   const posture = channelPosture === "help" || channelPosture === "dm" ? channelPosture : "main";
   return {
-    message: truncate(message, MAX_MESSAGE_CHARS),
+    message: truncate(message!, MAX_MESSAGE_CHARS),
     conversationContext: truncate(conversationContext, MAX_CONTEXT_CHARS),
     program: prog,
     channelPosture: posture,
@@ -91,20 +145,21 @@ function buildJevQuestions() {
   };
 }
 
-function probOf(answer: Legacy): number | null {
+function probOf(answer: ProviderAnswer | null | undefined): number | null {
   const p = answer && typeof answer.probability === "number" ? answer.probability : null;
   return typeof p === "number" && Number.isFinite(p) ? Math.min(1, Math.max(0, p)) : null;
 }
 
-function boolFrom(answer: Legacy): Legacy {
+function boolFrom(answer: ProviderAnswer | null | undefined): BoolResult {
   const p = probOf(answer);
   if (p === null) return { value: false, confidence: undefined };
   return { value: p >= 0.5, confidence: p >= 0.5 ? p : 1 - p };
 }
 
-function parseEvaluationResult(result: Legacy): Legacy {
+function parseEvaluationResult(result: ProviderResponse): Decision {
   const answers = (result && result.answers) || {};
   const engage = boolFrom(answers.shouldEngage);
+  const engageProbability = probOf(answers.shouldEngage);
   const intent = answers.intent && typeof answers.intent.choice === "string" && Object.hasOwn(INTENT_CHOICES, answers.intent.choice)
     ? answers.intent.choice : null;
   return {
@@ -114,16 +169,14 @@ function parseEvaluationResult(result: Legacy): Legacy {
       ...(engage.confidence !== undefined ? { shouldEngage: engage.confidence } : {}),
       ...(answers.intent ? { intent: maxProb(answers.intent.probabilities) } : {}),
     },
-    probabilities: {
-      ...(probOf(answers.shouldEngage) !== null ? { shouldEngage: probOf(answers.shouldEngage) } : {}),
-    },
+    probabilities: engageProbability === null ? {} : { shouldEngage: engageProbability },
     source: "jev",
   };
 }
 
-function maxProb(probs: Legacy): number | undefined {
+function maxProb(probs: Record<string, unknown> | undefined): number | undefined {
   if (!probs || typeof probs !== "object") return undefined;
-  const vals = Object.values(probs).filter((v) => typeof v === "number" && Number.isFinite(v));
+  const vals = Object.values(probs).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
   return vals.length > 0 ? Math.max(...vals) : undefined;
 }
 
@@ -141,29 +194,29 @@ const PROGRAM_INTENT = new Set(["support_question", "direct_program_question"]);
 const ADDRESSED_INTENT = new Set(["addressed_general_request", "addressed_smalltalk"]);
 const SILENT_INTENT = new Set(["unrelated_chatter", "human_conversation"]);
 
-function decideAction(decision: Legacy, cfg: Legacy = effectiveConfig(), state: Legacy = {}): { action: string; reason: string } {
+function decideAction(decision: Decision, cfg: JevConfig = effectiveConfig(), state: Partial<JevState> = {}): { action: string; reason: string } {
   if (!decision || decision.source === "existing") return { action: "existing", reason: "jev_disabled" };
   const engageP = decision.probabilities?.shouldEngage;
   const intent = decision.intent;
-  if (PROGRAM_INTENT.has(intent)) return { action: "engage", reason: "jev_program_intent" };
-  if (ADDRESSED_INTENT.has(intent)) {
+  if (intent && PROGRAM_INTENT.has(intent)) return { action: "engage", reason: "jev_program_intent" };
+  if (intent && ADDRESSED_INTENT.has(intent)) {
     return state.addressed ? { action: "engage", reason: "jev_addressed" } : { action: "silence", reason: "jev_unaddressed_general" };
   }
-  if (SILENT_INTENT.has(intent)) return { action: "silence", reason: "jev_chatter" };
+  if (intent && SILENT_INTENT.has(intent)) return { action: "silence", reason: "jev_chatter" };
   if (intent === "ambiguous_followup") {
     const hasContext = Boolean(String(state.conversationContext || "").trim());
     return hasContext && engageP !== undefined && engageP >= 0.5
       ? { action: "engage", reason: "jev_followup_with_referent" }
       : { action: "silence", reason: "jev_followup_no_referent" };
   }
-  const threshold = Number.isFinite(cfg.engageThreshold) ? cfg.engageThreshold : 0.7;
+  const threshold = Number.isFinite(cfg.engageThreshold) ? cfg.engageThreshold as number : 0.7;
   if (decision.shouldEngage && engageP !== undefined && engageP >= threshold) return { action: "engage", reason: "jev_engage" };
   return { action: "silence", reason: "jev_deny" };
 }
 
 const ERROR_KINDS = new Set(["auth", "quota", "rate_limit", "timeout", "bad_response", "unavailable", "network", "config", "unknown"]);
 
-function classifyError(err: Legacy): string {
+function classifyError(err: JevError | null | undefined): string {
   // Provider failures collapse into stable metric labels instead of leaking transport-specific details.
   if (!err) return "unknown";
   if (err.jevErrorKind && ERROR_KINDS.has(err.jevErrorKind)) return err.jevErrorKind;
@@ -175,7 +228,7 @@ function classifyError(err: Legacy): string {
   if (status === 401 || status === 403) return "auth";
   if (status === 402) return "quota";
   if (status === 429) return "rate_limit";
-  if (status >= 500) return "unavailable";
+  if (Number(status) >= 500) return "unavailable";
   if (/network|fetch|socket|econn|enotfound|eai_again/i.test(err.message || "") || err.code) {
     if (!status) return "network";
   }
@@ -198,7 +251,7 @@ function experientialApiKey() {
   return (process.env.JEV_API_KEY || process.env.EXPERIENTIAL_API_KEY || "").trim() || null;
 }
 
-function cacheKeyFor({ model, state }: Legacy): string {
+function cacheKeyFor({ model, state }: { model: string; state: JevState }): string {
   // Only context that can change the gate decision belongs in the cache fingerprint.
   const fingerprint = JSON.stringify({
     model,
@@ -220,7 +273,7 @@ function clearDecisionCache() {
   inflightEvaluations.clear();
 }
 
-function logDecision({ intent, shouldEngageP, action, reason, latencyMs, errorKind, enabled, model, keyHash }: Legacy): void {
+function logDecision({ intent, shouldEngageP, action, reason, latencyMs, errorKind, enabled, model, keyHash }: { intent: string | null; shouldEngageP: number | null; action: string; reason: string; latencyMs: number; errorKind: string | null; enabled: boolean; model: string; keyHash?: string | null }): void {
   const fmt = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(2) : "?");
   log.info(
     "jev",
@@ -231,9 +284,9 @@ function logDecision({ intent, shouldEngageP, action, reason, latencyMs, errorKi
 }
 
 async function evaluateSupportDecision(
-  { message, conversationContext = "", program = null, channelPosture = "main", addressed = false }: Legacy = {},
-  deps: Legacy = {},
-): Promise<Legacy> {
+  { message, conversationContext = "", program = null, channelPosture = "main", addressed = false }: SupportInput = {},
+  deps: EvaluationDeps = {},
+): Promise<SupportOutcome> {
   const cfg = deps.config || effectiveConfig();
   const startedAt = Date.now();
   if (!isEnabled(cfg)) {
@@ -262,7 +315,7 @@ async function evaluateSupportDecision(
   }
   const state = buildJevState({ message, conversationContext, program, channelPosture, addressed });
   const questions = deps.questions || buildJevQuestions();
-  const evaluateFn = deps.evaluateFn || ((args: Legacy) =>
+  const evaluateFn: EvaluateFn = deps.evaluateFn || ((args: EvaluationArgs) =>
     require("./jevExperiential").experientialEvaluate(
       {
         baseUrl: cfg.baseUrl || JEV_BASE_URL_DEFAULT,
@@ -299,10 +352,11 @@ async function evaluateSupportDecision(
         timeoutMs: deps.timeoutMs || cfg.timeoutMs,
         model,
       });
-      const decision = parseEvaluationResult(result);
+      const decision = parseEvaluationResult(result as ProviderResponse);
       const { action, reason } = decideAction(decision, cfg, state);
       const latencyMs = Date.now() - startedAt;
-      const shouldEngageP = Number.isFinite(decision.probabilities?.shouldEngage) ? decision.probabilities.shouldEngage : null;
+      const probability = decision.probabilities?.shouldEngage;
+      const shouldEngageP = typeof probability === "number" && Number.isFinite(probability) ? probability : null;
       logDecision({ intent: decision.intent, shouldEngageP, action, reason, latencyMs, errorKind: null, enabled: true, model, keyHash });
       try {
         require("./db").recordMetric("jev_decision", latencyMs, `${action}:${reason}`, state.program?.id || null);
@@ -323,7 +377,7 @@ async function evaluateSupportDecision(
   try {
     return await run;
   } catch (err) {
-    const errorKind = classifyError(err as Legacy);
+    const errorKind = classifyError(err as JevError);
     const latencyMs = Date.now() - startedAt;
     const reason = `jev_error_${errorKind}`;
     logDecision({ intent: null, shouldEngageP: null, action: "error", reason, latencyMs, errorKind, enabled: true, model, keyHash });
@@ -334,7 +388,7 @@ async function evaluateSupportDecision(
   }
 }
 
-async function evaluateCustomDecision({ state, questions }: Legacy = {}, deps: Legacy = {}): Promise<Legacy> {
+async function evaluateCustomDecision({ state, questions }: { state?: unknown; questions?: object } = {}, deps: EvaluationDeps = {}): Promise<{ status: string; latencyMs: number; result?: unknown; errorKind?: string }> {
   const cfg = deps.config || effectiveConfig();
   const startedAt = Date.now();
   if (!isEnabled(cfg)) return { status: "disabled", latencyMs: Date.now() - startedAt };
@@ -344,7 +398,7 @@ async function evaluateCustomDecision({ state, questions }: Legacy = {}, deps: L
     return { status: "error", errorKind: "config", latencyMs: Date.now() - startedAt };
   }
 
-  const evaluateFn = deps.evaluateFn || ((args: Legacy) =>
+  const evaluateFn: EvaluateFn = deps.evaluateFn || ((args: EvaluationArgs) =>
     require("./jevExperiential").experientialEvaluate(
       {
         baseUrl: cfg.baseUrl || JEV_BASE_URL_DEFAULT,
@@ -368,7 +422,7 @@ async function evaluateCustomDecision({ state, questions }: Legacy = {}, deps: L
     log.info("jev", `[jev] task=custom status=ok latency_ms=${latencyMs}`);
     return { status: "ok", result, latencyMs };
   } catch (err) {
-    const errorKind = classifyError(err as Legacy);
+    const errorKind = classifyError(err as JevError);
     const latencyMs = Date.now() - startedAt;
     log.info("jev", `[jev] task=custom status=error error=${errorKind} latency_ms=${latencyMs}`);
     return { status: "error", errorKind, latencyMs };
