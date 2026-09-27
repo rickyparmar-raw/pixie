@@ -24,7 +24,6 @@ const {
   DEFAULT_GROQ_MODEL,
 } = require("./config");
 
-
 test("isAdmin denies everyone when no allowlist is configured", () => {
   const saved = config.slack.adminUserIds;
   config.slack.adminUserIds = [];
@@ -49,7 +48,6 @@ test("isAdmin allows only listed users", () => {
   }
 });
 
-
 test("zenStandby is null when the call site already targets Zen", () => {
   assert.equal(zenStandby(ZEN_BASE_URL, "any-model"), null);
 });
@@ -59,7 +57,6 @@ test("zenStandby names Zen and the given model for a self-hosted gateway", () =>
   assert.equal(standby.baseUrl, ZEN_BASE_URL);
   assert.equal(standby.model, "deepseek-v4-flash-free");
 });
-
 
 test("the built-in model defaults are names Zen serves", () => {
   assert.ok(!DEFAULT_MODEL.includes("/"), `${DEFAULT_MODEL} is gateway-only`);
@@ -99,7 +96,6 @@ test("missingVars reports every absent required var at once", () => {
     Object.assign(process.env, saved);
   }
 });
-
 
 test("collectZenKeys finds bare and numbered keys in order, filtering blanks", () => {
   const mockEnv = {
@@ -206,7 +202,6 @@ test("config.answer has a real fallback, not null", () => {
 test("pingAnswer has a real fallback, not null", () => {
   assert.notEqual(config.pingAnswer.fallback, null);
 });
-
 
 test("collectHcaiKeys finds bare and numbered keys in order, filtering blanks", () => {
   const mockEnv = {
@@ -317,8 +312,7 @@ test("missingVars ignores Slack vars when Slack is not needed", () => {
   }
 });
 
-
-test("char: validate fails closed listing every missing var at once", () => {
+test("validate fails closed listing every missing var at once", () => {
   const saved = { ...process.env };
   delete process.env.OPENCODE_API_KEY;
   delete process.env.SLACK_BOT_TOKEN;
@@ -335,7 +329,7 @@ test("char: validate fails closed listing every missing var at once", () => {
   }
 });
 
-test("char: tier objects carry no secret strings — only thunks", () => {
+test("tier objects carry no secret strings — only thunks", () => {
   for (const tier of [config.answer, config.intent, config.vision, config.pingAnswer, config.helpAnswer]) {
     const blob = JSON.stringify(tier);
     assert.equal(/xoxb-/.test(blob), false, "slack token leaked into tier JSON");
@@ -344,12 +338,12 @@ test("char: tier objects carry no secret strings — only thunks", () => {
   assert.equal(typeof config.answer.apiKey, "function");
 });
 
-test("char: reportChannel defaults to null and never to a secret", () => {
+test("reportChannel defaults to null and never to a secret", () => {
   assert.ok(config.reportChannel === null || typeof config.reportChannel === "string");
   if (config.reportChannel) assert.equal(/xoxb-|sk-/.test(config.reportChannel), false);
 });
 
-test("char: refreshIntervalMin is a positive number", () => {
+test("refreshIntervalMin is a positive number", () => {
   assert.ok(Number.isFinite(config.refreshIntervalMin) && config.refreshIntervalMin > 0);
 });
 export {};

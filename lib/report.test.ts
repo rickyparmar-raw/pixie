@@ -1,9 +1,21 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-interface LlmMessage { content: string; }
-interface LlmOptions { model: string; messages: LlmMessage[]; }
-interface ThreadReply { channel: string; ts: string; }
-interface PostedMessage { channel?: string; text?: string; username?: string; }
+interface LlmMessage {
+  content: string;
+}
+interface LlmOptions {
+  model: string;
+  messages: LlmMessage[];
+}
+interface ThreadReply {
+  channel: string;
+  ts: string;
+}
+interface PostedMessage {
+  channel?: string;
+  text?: string;
+  username?: string;
+}
 type JudgeReply = (question: string) => string | Promise<string>;
 type JudgeCheck = (asked: string[]) => unknown | Promise<unknown>;
 
@@ -32,7 +44,6 @@ async function withJudge(reply: string | JudgeReply, fn: JudgeCheck) {
     llm.complete = original;
   }
 }
-
 
 test("judgeGap maps each verdict, however the model pads it", async () => {
   await withJudge("DOCS", async () => assert.equal(await report.judgeGap("who are pixl orgs"), report.DOCS));
@@ -72,7 +83,6 @@ test("the judge uses the cheap classifier model, not the answer model", async ()
   }
 });
 
-
 test("classifyGaps writes a verdict per gap and leaves unreadable ones alone", async () => {
   db.handle().query("DELETE FROM doc_gaps").run();
   db.recordGap("who are pixl orgs", "U1", "C1");
@@ -85,9 +95,12 @@ test("classifyGaps writes a verdict per gap and leaves unreadable ones alone", a
     "even sp[aces failed me": "???",
   };
 
-  await withJudge((q: string) => verdicts[q], async () => {
-    assert.equal(await report.classifyGaps({ limit: 10, spacingMs: 0 }), 2);
-  });
+  await withJudge(
+    (q: string) => verdicts[q],
+    async () => {
+      assert.equal(await report.classifyGaps({ limit: 10, spacingMs: 0 }), 2);
+    },
+  );
 
   const counts = db.gapCountsByKind();
   assert.equal(counts[report.DOCS], 1);
@@ -115,7 +128,6 @@ test("classifyGaps is a no-op with nothing pending", async () => {
     assert.deepEqual(asked, []);
   });
 });
-
 
 test("draftDoc returns the drafted text, trimmed", async () => {
   await withJudge("  export as PNG at native size, no upscaling  ", async () => {
@@ -314,17 +326,20 @@ test("an approved draft lands in the corpus like any other learned fact", async 
   assert.match(learn.corpusSection(), /unlock the next region/);
 });
 
-
 function seedGap(question: string, kind: string, agoMs = 0) {
   db.recordGap(question, "U1", "C1");
   const id = db.handle().query("SELECT MAX(id) AS id FROM doc_gaps").get().id;
-  db.handle().query("UPDATE doc_gaps SET kind = ?, created_at = ? WHERE id = ?").run(kind, Date.now() - agoMs, id);
+  db.handle()
+    .query("UPDATE doc_gaps SET kind = ?, created_at = ? WHERE id = ?")
+    .run(kind, Date.now() - agoMs, id);
 }
 
 function seedMetric(kind: string, agoMs = 0) {
   db.recordMetric(kind, 1000);
   const id = db.handle().query("SELECT MAX(id) AS id FROM metrics").get().id;
-  db.handle().query("UPDATE metrics SET created_at = ? WHERE id = ?").run(Date.now() - agoMs, id);
+  db.handle()
+    .query("UPDATE metrics SET created_at = ? WHERE id = ?")
+    .run(Date.now() - agoMs, id);
 }
 
 test("the report lists docs gaps and never the ones that aren't docs problems", () => {
@@ -380,7 +395,6 @@ test("an unjudged backlog is reported as unsorted rather than silently dropped",
   assert.match(report.reportText(0), /\*1\* not sorted yet/);
 });
 
-
 test("lastBoundary lands on the most recent Monday 09:00", () => {
   const boundary = new Date(report.lastBoundary(new Date(2026, 6, 29, 14, 30)));
   assert.equal(boundary.getDay(), 1);
@@ -416,7 +430,9 @@ test("a report is due once per week and not twice after a restart", async () => 
   await report.tick(client);
   assert.equal(posts.length, 1, "a restart must not repost the same week");
 
-  db.handle().query("UPDATE metrics SET created_at = ? WHERE kind = ?").run(Date.now() - 30 * 24 * 60 * 60 * 1000, report.SENT_METRIC);
+  db.handle()
+    .query("UPDATE metrics SET created_at = ? WHERE kind = ?")
+    .run(Date.now() - 30 * 24 * 60 * 60 * 1000, report.SENT_METRIC);
   assert.equal(report.isReportDue(), true);
 });
 
@@ -461,8 +477,7 @@ test("no trend is shown when the previous week has no data", () => {
   assert.doesNotMatch(text, /against 0 the week before/);
 });
 
-
-test("char: reportChannel prefers explicit config over the help channel", () => {
+test("reportChannel prefers explicit config over the help channel", () => {
   const savedReport = config.reportChannel;
   const savedHelp = config.slack.helpChannel;
   try {
@@ -477,7 +492,7 @@ test("char: reportChannel prefers explicit config over the help channel", () => 
   }
 });
 
-test("char: collect windows are exactly one week and coverage is docs/total", () => {
+test("collect windows are exactly one week and coverage is docs/total", () => {
   db.handle().query("DELETE FROM doc_gaps").run();
   db.handle().query("DELETE FROM metrics").run();
   seedMetric("answer_docs");
@@ -490,13 +505,13 @@ test("char: collect windows are exactly one week and coverage is docs/total", ()
   assert.equal(report.WEEK_MS, 7 * 24 * 60 * 60 * 1000);
 });
 
-test("char: judge verdicts are case/padding-insensitive, unknowns stay null", async () => {
+test("judge verdicts are case/padding-insensitive, unknowns stay null", async () => {
   await withJudge("  docs. ", async () => assert.equal(await report.judgeGap("q"), report.DOCS));
   await withJudge("Noise...", async () => assert.equal(await report.judgeGap("q"), report.NOISE));
   await withJudge("maybe transient-ish", async () => assert.equal(await report.judgeGap("q"), null));
 });
 
-test("char: draftSourceTs namespaces synthetic rows off the Slack ts space", () => {
+test("draftSourceTs namespaces synthetic rows off the Slack ts space", () => {
   assert.match(report.draftSourceTs(42), /^gap-draft:42$/);
   assert.doesNotMatch(report.draftSourceTs(42), /^\d+\.\d+$/);
 });

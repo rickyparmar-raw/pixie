@@ -139,7 +139,10 @@ export interface TestIncidentApi {
   notifyAffectedUsers(...args: unknown[]): Promise<{ ok?: boolean; error?: string; notified: number; failed: number }>;
   recordAffectedReport(...args: unknown[]): unknown;
   setIncidentStatus(...args: unknown[]): { ok?: boolean; error?: string; incident: TestIncident };
-  suggestDuplicates(...args: unknown[]): { candidates: Array<{ ticketId: number; question: string; similarity: number }>; error?: string };
+  suggestDuplicates(...args: unknown[]): {
+    candidates: Array<{ ticketId: number; question: string; similarity: number }>;
+    error?: string;
+  };
   unlinkTicket(...args: unknown[]): { ok?: boolean; error?: string };
 }
 
@@ -185,10 +188,14 @@ export interface TestResolutionPipeline {
 }
 
 export interface TestMemory {
-  proposeFromTicket(...args: unknown[]): Promise<TestActionResult & { candidate: TestRow; aiExtracted?: boolean; duplicate?: boolean }>;
+  proposeFromTicket(
+    ...args: unknown[]
+  ): Promise<TestActionResult & { candidate: TestRow; aiExtracted?: boolean; duplicate?: boolean }>;
   approveCandidate(...args: unknown[]): TestActionResult & { fact: TestRow };
   rejectCandidate(...args: unknown[]): TestActionResult;
-  validateExtraction(...args: unknown[]): { problem: string; solution: string; category?: string; cause?: string } | null;
+  validateExtraction(
+    ...args: unknown[]
+  ): { problem: string; solution: string; category?: string; cause?: string } | null;
   listCandidates(...args: unknown[]): TestRow[];
   CANDIDATE: string;
 }

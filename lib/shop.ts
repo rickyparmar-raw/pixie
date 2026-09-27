@@ -3,7 +3,10 @@
 import axios = require("axios");
 import log = require("./log");
 
-interface PayoutStep { re: number; usd: number }
+interface PayoutStep {
+  re: number;
+  usd: number;
+}
 interface ShopEconomy {
   pixelValueUsd: number;
   basePayoutUsd: number;
@@ -21,12 +24,17 @@ interface ShopItem {
   config_options?: { base_price?: number } | null;
 }
 
-interface ShopData { items: ShopItem[]; economy: ShopEconomy; fetchedAt?: number }
-interface AnswerContext { history?: string }
+interface ShopData {
+  items: ShopItem[];
+  economy: ShopEconomy;
+  fetchedAt?: number;
+}
+interface AnswerContext {
+  history?: string;
+}
 
 const CATALOGUE_URL = "https://server.pixl.hackclub.com/api/shop/items";
 const ECONOMY_URL = "https://raw.githubusercontent.com/hackclub/pixl/main/packages/config/pixl.json";
-
 
 const DEFAULT_ECONOMY: ShopEconomy = {
   pixelValueUsd: 0.07,
@@ -47,14 +55,12 @@ const DEFAULT_ECONOMY: ShopEconomy = {
 
 const TIER_NAMES = ["Spark", "Signal", "Grid", "Nexus"];
 
-
 function rePerHour(tier: number, economy: ShopEconomy = DEFAULT_ECONOMY) {
   // Clamp unknown tiers to the supported table instead of throwing or inventing a rate.
   const table = economy.tierRePerHour || DEFAULT_ECONOMY.tierRePerHour;
   const t = Math.min(Math.max(Math.trunc(tier) || 1, 1), table.length);
   return table[t - 1];
 }
-
 
 function payoutUsdPerHour(re: number, economy: ShopEconomy = DEFAULT_ECONOMY) {
   const steps = economy.payoutSteps || DEFAULT_ECONOMY.payoutSteps;
@@ -71,7 +77,6 @@ function pxPerHour(re: number, economy: ShopEconomy = DEFAULT_ECONOMY) {
   return payoutUsdPerHour(re, economy) / (economy.pixelValueUsd || DEFAULT_ECONOMY.pixelValueUsd);
 }
 
-
 function hoursRange(px: number, economy: ShopEconomy = DEFAULT_ECONOMY) {
   const floorUsd = economy.basePayoutUsd ?? DEFAULT_ECONOMY.basePayoutUsd;
   const capUsd = economy.maxPayoutUsd ?? DEFAULT_ECONOMY.maxPayoutUsd;
@@ -84,8 +89,14 @@ function hoursRange(px: number, economy: ShopEconomy = DEFAULT_ECONOMY) {
   };
 }
 
-
-function hoursForPixels(px: number, { tier = 4, startingRe = 0, economy = DEFAULT_ECONOMY }: { tier?: number; startingRe?: number; economy?: ShopEconomy } = {}) {
+function hoursForPixels(
+  px: number,
+  {
+    tier = 4,
+    startingRe = 0,
+    economy = DEFAULT_ECONOMY,
+  }: { tier?: number; startingRe?: number; economy?: ShopEconomy } = {},
+) {
   // Walk payout steps segment by segment because each shipped hour can raise the rate.
   const target = Math.max(Number(px) || 0, 0);
   if (target === 0) return 0;
@@ -95,7 +106,6 @@ function hoursForPixels(px: number, { tier = 4, startingRe = 0, economy = DEFAUL
   let remaining = target;
   let hours = 0;
   let re = Math.max(Number(startingRe) || 0, 0);
-
 
   for (let guard = 0; guard <= steps.length; guard += 1) {
     const rate = pxPerHour(re, economy);
@@ -112,7 +122,6 @@ function hoursForPixels(px: number, { tier = 4, startingRe = 0, economy = DEFAUL
   }
   return hours + remaining / pxPerHour(re, economy);
 }
-
 
 function parseTier(text: string) {
   const t = String(text || "").toLowerCase();
@@ -144,15 +153,69 @@ function normalize(text: string) {
 }
 
 const WEAK_TOKENS = new Set([
-  "the", "a", "an", "and", "or", "of", "for", "with", "plus", "new",
-  "pro", "max", "mini", "air", "neo", "ultimate", "standard", "edition", "limited",
-  "license", "licence", "grant", "grants", "kit", "kits", "starter", "set", "pack",
-  "digital", "wireless", "controller", "stackable", "gen", "small", "large",
-  "tb", "gb", "diy", "only", "your", "choice", "series",
-  "hardware", "software", "project", "projects", "code", "part", "parts",
-  "component", "components", "design", "designs", "item", "items", "build",
-  "board", "boards", "submission", "bom",
-  "pixl", "pixel", "pixels",
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "of",
+  "for",
+  "with",
+  "plus",
+  "new",
+  "pro",
+  "max",
+  "mini",
+  "air",
+  "neo",
+  "ultimate",
+  "standard",
+  "edition",
+  "limited",
+  "license",
+  "licence",
+  "grant",
+  "grants",
+  "kit",
+  "kits",
+  "starter",
+  "set",
+  "pack",
+  "digital",
+  "wireless",
+  "controller",
+  "stackable",
+  "gen",
+  "small",
+  "large",
+  "tb",
+  "gb",
+  "diy",
+  "only",
+  "your",
+  "choice",
+  "series",
+  "hardware",
+  "software",
+  "project",
+  "projects",
+  "code",
+  "part",
+  "parts",
+  "component",
+  "components",
+  "design",
+  "designs",
+  "item",
+  "items",
+  "build",
+  "board",
+  "boards",
+  "submission",
+  "bom",
+  "pixl",
+  "pixel",
+  "pixels",
 ]);
 
 const ALIASES: Array<[RegExp, string]> = [
@@ -259,8 +322,10 @@ const SHOP_WORD = /\b(?:shop|catalog(?:ue)?|store|shelves)\b/i;
 const ASKS_PRICE = /\b(?:price|prices|pricing|cost|costs|how much|afford)\b/i;
 const ASKS_QUANTITY = /\b(?:how many|how much)\b/i;
 const CURRENCY_WORD = /\b(?:px|pixel|pixels|hour|hours|hr|hrs)\b/i;
-const NON_PRICE_ATTRIBUTES = /\b(?:storage|space|capacity|gigabytes?|terabytes?|gb|tb|fps|hz|resolution|ram|memory|weight|color|controller drift|battery|specs|features|play|played|gameplay)\b/i;
-const EXPLICIT_PRICE_QUERY = /\b(?:how much (?:is|does|to (?:buy|get|earn|redeem|order)|for|in (?:the )?shop)|how many (?:pixels?|px|hours? (?:to (?:buy|get|earn|redeem|reach|unlock)|for|do i need|needed|require|required))|what(?:'s|s|\s+(?:is|are)) (?:the )?(?:price|prices|pricing|cost|costs)(?: of)?|(?:price|prices|cost|costs) of|what does .+ cost|in the shop|on the shelf|can i afford|how do i buy)\b/i;
+const NON_PRICE_ATTRIBUTES =
+  /\b(?:storage|space|capacity|gigabytes?|terabytes?|gb|tb|fps|hz|resolution|ram|memory|weight|color|controller drift|battery|specs|features|play|played|gameplay)\b/i;
+const EXPLICIT_PRICE_QUERY =
+  /\b(?:how much (?:is|does|to (?:buy|get|earn|redeem|order)|for|in (?:the )?shop)|how many (?:pixels?|px|hours? (?:to (?:buy|get|earn|redeem|reach|unlock)|for|do i need|needed|require|required))|what(?:'s|s|\s+(?:is|are)) (?:the )?(?:price|prices|pricing|cost|costs)(?: of)?|(?:price|prices|cost|costs) of|what does .+ cost|in the shop|on the shelf|can i afford|how do i buy)\b/i;
 
 function asksAboutPrice(text: string) {
   const t = String(text || "");
@@ -273,7 +338,6 @@ function asksAboutPrice(text: string) {
 function isShopQuestion(text: string) {
   return SHOP_WORD.test(String(text || "")) || asksAboutPrice(text);
 }
-
 
 function fmtPx(n: number) {
   return Math.round(n).toLocaleString("en-US");
@@ -288,7 +352,8 @@ function fmtUsd(usd: number) {
   return `$${Number.isInteger(usd) ? usd : usd.toFixed(2)}`;
 }
 
-const REGION_NOTE = "These are the US catalogue prices; the shop page shows your own region's if you're somewhere else.";
+const REGION_NOTE =
+  "These are the US catalogue prices; the shop page shows your own region's if you're somewhere else.";
 
 function priceLine(item: ShopItem) {
   if (isTrophy(item)) {
@@ -319,13 +384,10 @@ function tierLine(px: number, tier: number, economy: ShopEconomy) {
   );
 }
 
-
 function amountAnswer(px: number, tier: number | null, economy: ShopEconomy, everyTier: boolean) {
   const r = hoursRange(px, economy);
-  const opening =
-    `${fmtPx(px)} px is ${fmtHours(r.floorHours)}h at the floor rate of ${fmtPx(pxPerHour(0, economy))} px an hour.`;
-  const ceiling =
-    `Once your lifetime RE has you at the ${fmtUsd(r.capUsd)}/h cap it's ${fmtHours(r.capHours)}h instead.`;
+  const opening = `${fmtPx(px)} px is ${fmtHours(r.floorHours)}h at the floor rate of ${fmtPx(pxPerHour(0, economy))} px an hour.`;
+  const ceiling = `Once your lifetime RE has you at the ${fmtUsd(r.capUsd)}/h cap it's ${fmtHours(r.capHours)}h instead.`;
 
   if (tier && !everyTier) {
     const hours = hoursForPixels(px, { tier, economy });
@@ -363,7 +425,6 @@ function amountAnswer(px: number, tier: number | null, economy: ShopEconomy, eve
   ].join("\n\n");
 }
 
-
 function directAnswer(question: string, data: ShopData, { history = "" }: AnswerContext = {}) {
   // Matching decides whether this is a shop ask; formatting below only writes the answer.
   const items = data?.items || [];
@@ -372,38 +433,28 @@ function directAnswer(question: string, data: ShopData, { history = "" }: Answer
 
   const source = "Pixl Shop";
 
-
   const direct = true;
   const tier = parseTier(question);
   let matches = findItems(question, items);
 
   const asksPrice = asksAboutPrice(question);
 
-
   const bareTier = tier !== null && isBareTierReply(question);
 
   if (matches.length > 0) {
-
-
     if (!asksPrice) return null;
   } else if (bareTier && history) {
-
-
     matches = lastMentionedItems(history, items);
   }
-
 
   const amount = parsePixelAmount(question);
   if (matches.length === 0 && amount !== null && (asksPrice || /\bhow long\b/i.test(question))) {
     return { source, direct, answer: amountAnswer(amount, tier, economy, ASKS_EVERY_TIER.test(question)) };
   }
 
-
   if (matches.length === 0 && (tier === null || !asksPrice)) return null;
 
   if (matches.length > 1) {
-
-
     const SHOWN = 4;
     const named = matches
       .slice(0, SHOWN)
@@ -435,7 +486,6 @@ function directAnswer(question: string, data: ShopData, { history = "" }: Answer
   return { source, direct, answer: answerForSingleItem(item, tier, economy) };
 }
 
-
 function answerForSingleItem(item: ShopItem, tier: number | null, economy: ShopEconomy) {
   const lines = [priceLine(item)];
   if (!isTrophy(item) && !isUnpriced(item)) {
@@ -455,7 +505,6 @@ function answerForSingleItem(item: ShopItem, tier: number | null, economy: ShopE
   return lines.join("\n\n");
 }
 
-
 function corpusText(data: ShopData) {
   const items = data?.items || [];
   const economy = data?.economy || DEFAULT_ECONOMY;
@@ -466,7 +515,10 @@ function corpusText(data: ShopData) {
     "Live prices from the Pixl shop, in pixels (px), as the US catalogue lists them. Other regions get different stock and different prices. These are current; the docs do not list prices.",
     "",
     "Rate table, by lifetime Restoration Energy, showing what an hour of shipped work pays:",
-    ...steps.map((s) => `- ${fmtPx(s.re)} RE: ${fmtUsd(s.usd)} an hour = ${fmtPx(s.usd / (economy.pixelValueUsd || 0.07))} px an hour`),
+    ...steps.map(
+      (s) =>
+        `- ${fmtPx(s.re)} RE: ${fmtUsd(s.usd)} an hour = ${fmtPx(s.usd / (economy.pixelValueUsd || 0.07))} px an hour`,
+    ),
     "",
     `Tier decides how fast RE banks: ${(economy.tierRePerHour || DEFAULT_ECONOMY.tierRePerHour)
       .map((re: number, i: number) => `T${i + 1} ${TIER_NAMES[i]} ${re} RE/hour`)
@@ -502,13 +554,17 @@ function corpusText(data: ShopData) {
   for (const [category, group] of byCategory) {
     sections.push(`## ${category[0].toUpperCase()}${category.slice(1)}`);
     for (let i = 0; i < group.length; i += ITEMS_PER_PARAGRAPH) {
-      sections.push(group.slice(i, i + ITEMS_PER_PARAGRAPH).map(describe).join("\n"));
+      sections.push(
+        group
+          .slice(i, i + ITEMS_PER_PARAGRAPH)
+          .map(describe)
+          .join("\n"),
+      );
     }
   }
 
   return [header.join("\n"), ...sections].join("\n\n");
 }
-
 
 let snapshot = { items: [], economy: DEFAULT_ECONOMY, fetchedAt: 0 };
 const STORE_KEY = "Pixl Shop Data";
@@ -548,7 +604,10 @@ async function refresh() {
       economy = { ...DEFAULT_ECONOMY, ...data.economy };
     }
   } catch (e: unknown) {
-    log.warn("shop", `economy config fetch failed, keeping current rates: ${e instanceof Error ? e.message : String(e)}`);
+    log.warn(
+      "shop",
+      `economy config fetch failed, keeping current rates: ${e instanceof Error ? e.message : String(e)}`,
+    );
   }
 
   const res = await require("./sourceGuard").fetchSourceUrl(CATALOGUE_URL, { timeout: 10000 });

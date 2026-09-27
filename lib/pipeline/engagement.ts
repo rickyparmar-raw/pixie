@@ -57,16 +57,31 @@ function fromJev(res: JEVResult | null) {
   return { engage: res.action === "engage", intent: intentName, error: null, source: "jev" };
 }
 
-async function fromLegacyIntent({ message, program, userId, channel, addressed, threadMessages, recentMessages }: EngagementContext) {
+async function fromLegacyIntent({
+  message,
+  program,
+  userId,
+  channel,
+  addressed,
+  threadMessages,
+  recentMessages,
+}: EngagementContext) {
   // The legacy classifier remains the fallback when structured engagement is unavailable.
   const result = await intent
     .classifyIntentContext(message, program, { userId, channel, addressed, threadMessages, recentMessages })
     .catch(() => null);
   if (!result) return { engage: false, intent: null, error: "unavailable", source: "intent" };
   if (result.directedAtHuman) return { engage: false, intent: "human_conversation", error: null, source: "intent" };
-  if (result.verdict === intent.HELP_NEEDED) return { engage: true, intent: "support_question", error: null, source: "intent" };
-  if (result.verdict === intent.OFF_TOPIC) return { engage: false, intent: "unrelated_chatter", error: null, source: "intent" };
-  return { engage: false, intent: addressed ? "addressed_smalltalk" : "human_conversation", error: null, source: "intent" };
+  if (result.verdict === intent.HELP_NEEDED)
+    return { engage: true, intent: "support_question", error: null, source: "intent" };
+  if (result.verdict === intent.OFF_TOPIC)
+    return { engage: false, intent: "unrelated_chatter", error: null, source: "intent" };
+  return {
+    engage: false,
+    intent: addressed ? "addressed_smalltalk" : "human_conversation",
+    error: null,
+    source: "intent",
+  };
 }
 
 const RECENT_LINE_CHARS = 200;
@@ -81,7 +96,15 @@ function formatRecent(recentMessages: RecentMessage[] = [], userId: string | nul
     .join("\n");
 }
 
-function conversationContextFor({ threadContext, recentMessages, userId }: { threadContext?: string; recentMessages?: RecentMessage[]; userId?: string | null }) {
+function conversationContextFor({
+  threadContext,
+  recentMessages,
+  userId,
+}: {
+  threadContext?: string;
+  recentMessages?: RecentMessage[];
+  userId?: string | null;
+}) {
   const recent = formatRecent(recentMessages, userId);
   return [recent && `Recent channel messages:\n${recent}`, threadContext && `Thread:\n${threadContext}`]
     .filter(Boolean)
@@ -93,7 +116,17 @@ interface ClassifyOptions extends EngagementContext {
   role: ChannelRole;
 }
 
-async function classify({ message, threadContext = "", program, role, addressed = false, userId = null, channel = null, threadMessages = [], recentMessages = [] }: ClassifyOptions) {
+async function classify({
+  message,
+  threadContext = "",
+  program,
+  role,
+  addressed = false,
+  userId = null,
+  channel = null,
+  threadMessages = [],
+  recentMessages = [],
+}: ClassifyOptions) {
   // Use the structured classifier when enabled and fall back on unavailable decisions.
   if (addressed && isIdentityOrSmalltalk(message)) {
     return { engage: true, intent: "addressed_smalltalk", error: null, source: "heuristic" };

@@ -1,6 +1,9 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-interface FactRow { id: number; question: string; }
+interface FactRow {
+  id: number;
+  question: string;
+}
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -26,7 +29,6 @@ after(() => {
   config.slack.helpChannel = savedHelpChannel;
   llm.complete = realComplete;
 });
-
 
 test("parseTeach splits on the separator", () => {
   assert.deepEqual(learn.parseTeach("whats the prize :: a keyboard"), {
@@ -106,7 +108,6 @@ test("captureFromThread does not queue the same thread twice", () => {
   assert.equal(second, null);
 });
 
-
 test("isCaptureWorthy rejects short or noise-only replies", () => {
   assert.equal(learn.isCaptureWorthy("lol"), false);
   assert.equal(learn.isCaptureWorthy("same"), false);
@@ -116,10 +117,7 @@ test("isCaptureWorthy rejects short or noise-only replies", () => {
 });
 
 test("isCaptureWorthy accepts a real explanation", () => {
-  assert.equal(
-    learn.isCaptureWorthy("you need to run bun install first, then set your API key in .env"),
-    true,
-  );
+  assert.equal(learn.isCaptureWorthy("you need to run bun install first, then set your API key in .env"), true);
 });
 
 test("captureFromReply only fires on threads with a recorded gap", async () => {
@@ -203,7 +201,6 @@ test("captureFromReply only captures in the help channel", async () => {
   );
 });
 
-
 test("approve moves a pending fact into the corpus", async () => {
   const id = learn.captureFromThread({
     question: "what port does it run on",
@@ -263,13 +260,18 @@ test("teaching clears the answer cache", () => {
   assert.equal(cache.get("some question"), null);
 });
 
-
 test("teach stores APPROVED and captureFromThread defaults to PENDING", () => {
   const id1 = learn.teach({ question: "char approved q", answer: "char approved a", authorId: "U1" });
   const row1 = db.getLearnedFactById(id1);
   assert.equal(row1.status, "approved");
 
-  const id2 = learn.captureFromThread({ question: "char pending q", answer: "char pending answer here", authorId: "U1", threadTs: "char-thread-pending-1", channel: "C1" });
+  const id2 = learn.captureFromThread({
+    question: "char pending q",
+    answer: "char pending answer here",
+    authorId: "U1",
+    threadTs: "char-thread-pending-1",
+    channel: "C1",
+  });
   const row2 = db.getLearnedFactById(id2);
   assert.equal(row2.status, "pending");
   learn.forget(id1);
@@ -277,7 +279,14 @@ test("teach stores APPROVED and captureFromThread defaults to PENDING", () => {
 });
 
 test("captureFromThread with autoApprove stores APPROVED", () => {
-  const id = learn.captureFromThread({ question: "char auto q", answer: "char auto answer here", authorId: "U1", threadTs: "char-thread-auto-1", channel: "C1", autoApprove: true });
+  const id = learn.captureFromThread({
+    question: "char auto q",
+    answer: "char auto answer here",
+    authorId: "U1",
+    threadTs: "char-thread-auto-1",
+    channel: "C1",
+    autoApprove: true,
+  });
   assert.ok(id);
   assert.equal(db.getLearnedFactById(id).status, "approved");
   assert.match(learn.corpusSection(), /char auto q/);
@@ -287,7 +296,13 @@ test("captureFromThread with autoApprove stores APPROVED", () => {
 test("captureFromReply is hard-disabled and always returns null", async () => {
   db.recordGap("char disabled q", "U1", "C1", "char-disabled-thread-1");
   judgeVerdict = "YES";
-  const id = await learn.captureFromReply({ threadTs: "char-disabled-thread-1", replyText: "this is a long genuine answer explaining the fix step by step", authorId: "U2", channel: "C1", replyTs: "char-r1" });
+  const id = await learn.captureFromReply({
+    threadTs: "char-disabled-thread-1",
+    replyText: "this is a long genuine answer explaining the fix step by step",
+    authorId: "U2",
+    channel: "C1",
+    replyTs: "char-r1",
+  });
   assert.equal(id, null);
 });
 
@@ -298,7 +313,9 @@ test("judgeAnswer is fail-closed and exact", async () => {
   assert.equal(await learn.judgeAnswer("q?", "lol same"), false);
   judgeVerdict = "YES";
   const stub = llm.complete;
-  llm.complete = async () => { throw new Error("down"); };
+  llm.complete = async () => {
+    throw new Error("down");
+  };
   try {
     assert.equal(await learn.judgeAnswer("q?", "anything"), false);
   } finally {
@@ -316,11 +333,20 @@ test("corpusSection renders Q/A shape textFromJsonFaq can round-trip", () => {
   }
 });
 
-
 test("relevantCorpusSection includes the matching fact and drops the rest", () => {
   const ids = [
-    learn.teach({ question: "rel-ctx widget reset query", answer: "rel-ctx press the amber recalibration button", authorId: "U1", programId: "rel-ctx-a" }),
-    learn.teach({ question: "rel-ctx kiln firing schedules", answer: "rel-ctx cone six glaze needs a slow cool", authorId: "U1", programId: "rel-ctx-a" }),
+    learn.teach({
+      question: "rel-ctx widget reset query",
+      answer: "rel-ctx press the amber recalibration button",
+      authorId: "U1",
+      programId: "rel-ctx-a",
+    }),
+    learn.teach({
+      question: "rel-ctx kiln firing schedules",
+      answer: "rel-ctx cone six glaze needs a slow cool",
+      authorId: "U1",
+      programId: "rel-ctx-a",
+    }),
   ];
   try {
     const section = learn.relevantCorpusSection("how do I reset my widget", "rel-ctx-a");
@@ -332,7 +358,12 @@ test("relevantCorpusSection includes the matching fact and drops the rest", () =
 });
 
 test("relevantCorpusSection is empty when nothing shares vocabulary", () => {
-  const id = learn.teach({ question: "rel-ctx-empty kiln schedules", answer: "rel-ctx-empty slow cool glaze", authorId: "U1", programId: "rel-ctx-empty" });
+  const id = learn.teach({
+    question: "rel-ctx-empty kiln schedules",
+    answer: "rel-ctx-empty slow cool glaze",
+    authorId: "U1",
+    programId: "rel-ctx-empty",
+  });
   try {
     assert.equal(learn.relevantCorpusSection("zzzz qqqq widget reset", "rel-ctx-empty"), "");
     assert.equal(learn.relevantCorpusSection("", "rel-ctx-empty"), "");
@@ -344,12 +375,14 @@ test("relevantCorpusSection is empty when nothing shares vocabulary", () => {
 test("relevantFacts caps at five facts within the learned char budget", () => {
   const ids = [];
   for (let i = 0; i < 8; i++) {
-    ids.push(learn.teach({
-      question: `rel-ctx-cap widget reset note ${i} alpha`,
-      answer: `rel-ctx-cap recalibration detail ${i} ${"y".repeat(400)}`,
-      authorId: "U1",
-      programId: "rel-ctx-cap",
-    }));
+    ids.push(
+      learn.teach({
+        question: `rel-ctx-cap widget reset note ${i} alpha`,
+        answer: `rel-ctx-cap recalibration detail ${i} ${"y".repeat(400)}`,
+        authorId: "U1",
+        programId: "rel-ctx-cap",
+      }),
+    );
   }
   try {
     const { LEARNED_MAX_FACTS, LEARNED_BUDGET } = require("./retrieve");
@@ -364,7 +397,12 @@ test("relevantFacts caps at five facts within the learned char budget", () => {
 });
 
 test("relevantCorpusSection never serves another program's facts", () => {
-  const id = learn.teach({ question: "rel-ctx-scope widget reset", answer: "rel-ctx-scope only for A recalibration", authorId: "U1", programId: "rel-ctx-scope-a" });
+  const id = learn.teach({
+    question: "rel-ctx-scope widget reset",
+    answer: "rel-ctx-scope only for A recalibration",
+    authorId: "U1",
+    programId: "rel-ctx-scope-a",
+  });
   try {
     assert.match(learn.relevantCorpusSection("how do I reset my widget", "rel-ctx-scope-a"), /only for A/);
     assert.equal(learn.relevantCorpusSection("how do I reset my widget", "rel-ctx-scope-b"), "");

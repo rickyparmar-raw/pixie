@@ -4,17 +4,18 @@ import dotenv = require("dotenv");
 import type { WebClient } from "@slack/web-api";
 import type { ProviderTier } from "./types";
 
-interface KeyPoolState { index: number; now: number }
+interface KeyPoolState {
+  index: number;
+  now: number;
+}
 type RateLimitHandler = (key: string | undefined, ms?: number) => void;
 dotenv.config();
 
 const ZEN_BASE_URL = "https://opencode.ai/zen/v1";
 const DEFAULT_MODEL = "deepseek-v4-flash-free";
 
-
 const DEFAULT_VISION_MODEL = "mimo-v2.5-free";
 const DEFAULT_REFRESH_INTERVAL_MIN = 30;
-
 
 const NINE_ROUTER_BASE_URL = "http://pixie.railway.internal:20128/v1";
 const ANSWER_FALLBACK_MODEL = "gc/gemini-3.1-flash-lite-preview";
@@ -27,7 +28,6 @@ const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const DEFAULT_GROQ_MODEL = "qwen/qwen3.8-27b";
 const DEFAULT_GROQ_INTENT_MODEL = "qwen/qwen3.8-27b";
 
-
 const SLACK_VARS = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_HELP_CHANNEL", "SLACK_FAQ_CHANNELS"];
 const MODEL_VARS = ["OPENCODE_API_KEY"];
 
@@ -35,13 +35,11 @@ function stripTrailingSlash(url: string) {
   return url.replace(/\/+$/, "");
 }
 
-
 function normalizeBaseUrl(url: string | undefined, fallback: string) {
   // Accept the documented chat/completions form while storing one base URL shape.
   if (!url) return fallback;
   return stripTrailingSlash(url).replace(/\/chat\/completions$/, "");
 }
-
 
 const KEY_COOLDOWN_MS = 60 * 1000;
 const coolingUntil = new Map();
@@ -56,7 +54,6 @@ function penalizeZenKey(key: string | undefined, ms = KEY_COOLDOWN_MS) {
   }
 }
 
-
 function scanPool(keys: string[], coolingUntil: Map<string, number>, state: KeyPoolState) {
   // Scan at most one full lap; an exhausted pool cannot spin in the event loop.
   for (let i = 0; i < keys.length; i++) {
@@ -69,10 +66,12 @@ function scanPool(keys: string[], coolingUntil: Map<string, number>, state: KeyP
   return null;
 }
 
-
 function soonestRecovery(keys: string[], coolingUntil: Map<string, number>): string | undefined {
   // A cooling key is still preferable to no key when every account is rate-limited.
-  return keys.reduce((best: string, k: string) => ((coolingUntil.get(k) || 0) < (coolingUntil.get(best) || 0) ? k : best), keys[0]);
+  return keys.reduce(
+    (best: string, k: string) => ((coolingUntil.get(k) || 0) < (coolingUntil.get(best) || 0) ? k : best),
+    keys[0],
+  );
 }
 
 let zenKeyIndex = 0;
@@ -99,7 +98,6 @@ function zenStandby(baseUrl: string, model = DEFAULT_MODEL): ProviderTier | null
     model: DEFAULT_MODEL,
   };
 }
-
 
 function standbyFallback(baseUrl: string, defaultZenModel = DEFAULT_MODEL): ProviderTier | null {
   // Prefer a different provider, then Zen's rotating pool, so fallback remains real.
@@ -142,7 +140,6 @@ function probability(raw: string | undefined, fallback: number) {
   return Number.isFinite(n) && n >= 0 && n <= 1 ? n : fallback;
 }
 
-
 const JEV_BASE_URL = "https://api.experientiallabs.ai/v1/systemone";
 const JEV_FREE_MODEL = "jev-latest:free";
 
@@ -156,7 +153,6 @@ function jevConfig() {
     timeoutMs: positiveNumber(process.env.JEV_TIMEOUT_MS, 8000),
     engageThreshold: probability(process.env.JEV_ENGAGE_THRESHOLD, 0.7),
 
-
     experientialApiKeyPresent: Boolean((process.env.JEV_API_KEY || process.env.EXPERIENTIAL_API_KEY || "").trim()),
   };
 }
@@ -164,13 +160,10 @@ function jevConfig() {
 const faqChannels = parseChannels(process.env.SLACK_FAQ_CHANNELS);
 // The first FAQ channel is the legacy ambient-answer channel.
 
-
 const stagingOnlyChannels = parseChannels(process.env.PIXIE_STAGING_ONLY_CHANNELS);
 // When set, every Slack event outside this allowlist is ignored before handling.
 
-
 const adminUserIds = parseChannels(process.env.PIXIE_ADMIN_USER_IDS);
-
 
 const intentBaseUrl = normalizeBaseUrl(
   process.env.INTENT_CLASSIFIER_BASE_URL,
@@ -181,12 +174,10 @@ const visionBaseUrl = normalizeBaseUrl(
   ZEN_BASE_URL,
 );
 
-
 function zenKeyOrder(name: string) {
   const m = name.match(/_(\d+)$/);
   return m ? Number(m[1]) : 1;
 }
-
 
 function collectNumberedKeys(env: NodeJS.ProcessEnv, prefix: string) {
   // Gaps are allowed so removing KEY_3 does not silently renumber another account.
@@ -242,7 +233,6 @@ function hcaiTier(model: string): ProviderTier {
   };
 }
 
-
 function collectGroqKeys(env = process.env) {
   return collectNumberedKeys(env, "GROQ_API_KEY");
 }
@@ -261,7 +251,7 @@ function penalizeGroqKey(key: string | undefined, ms = KEY_COOLDOWN_MS) {
 }
 
 function nextGroqApiKey() {
-  const keys = (config && config.groqApiKeys && config.groqApiKeys.length > 0) ? config.groqApiKeys : groqApiKeys;
+  const keys = config && config.groqApiKeys && config.groqApiKeys.length > 0 ? config.groqApiKeys : groqApiKeys;
   if (!keys || keys.length === 0) return process.env.GROQ_API_KEY || undefined;
 
   const state = { index: groqKeyIndex, now: Date.now() };
@@ -275,16 +265,14 @@ const DEFAULT_PRIMARY_MODEL = "kr/claude-sonnet-4.5";
 const DEFAULT_FALLBACK_MODEL = "ag/gemini-3.6-flash-low";
 
 const nineRouterSecondaryFallbackTier = {
-  apiKey: () =>
-    process.env.PIXIE_ANSWER_API_KEY || process.env.INTENT_CLASSIFIER_API_KEY || process.env.VISION_API_KEY,
+  apiKey: () => process.env.PIXIE_ANSWER_API_KEY || process.env.INTENT_CLASSIFIER_API_KEY || process.env.VISION_API_KEY,
   baseUrl: normalizeBaseUrl(process.env.PIXIE_ANSWER_BASE_URL, NINE_ROUTER_BASE_URL),
   model: process.env.PIXIE_FALLBACK_MODEL || DEFAULT_FALLBACK_MODEL,
   fallback: standbyFallback(normalizeBaseUrl(process.env.PIXIE_ANSWER_BASE_URL, NINE_ROUTER_BASE_URL), DEFAULT_MODEL),
 };
 
 const nineRouterAnswerTier = {
-  apiKey: () =>
-    process.env.PIXIE_ANSWER_API_KEY || process.env.INTENT_CLASSIFIER_API_KEY || process.env.VISION_API_KEY,
+  apiKey: () => process.env.PIXIE_ANSWER_API_KEY || process.env.INTENT_CLASSIFIER_API_KEY || process.env.VISION_API_KEY,
   baseUrl: normalizeBaseUrl(process.env.PIXIE_ANSWER_BASE_URL, NINE_ROUTER_BASE_URL),
   model: process.env.PIXIE_MODEL || DEFAULT_PRIMARY_MODEL,
   fallback: process.env.OPENROUTER_API_KEY
@@ -308,7 +296,10 @@ const openRouterAnswerTier = process.env.OPENROUTER_API_KEY
 
 const nineRouterPingTier = {
   apiKey: () =>
-    process.env.PIXIE_PING_API_KEY || process.env.PIXIE_ANSWER_API_KEY || process.env.INTENT_CLASSIFIER_API_KEY || process.env.VISION_API_KEY,
+    process.env.PIXIE_PING_API_KEY ||
+    process.env.PIXIE_ANSWER_API_KEY ||
+    process.env.INTENT_CLASSIFIER_API_KEY ||
+    process.env.VISION_API_KEY,
   baseUrl: normalizeBaseUrl(process.env.PIXIE_PING_BASE_URL || process.env.PIXIE_ANSWER_BASE_URL, NINE_ROUTER_BASE_URL),
   model: process.env.PIXIE_PING_MODEL || process.env.PIXIE_MODEL || DEFAULT_PRIMARY_MODEL,
   fallback: openRouterAnswerTier,
@@ -333,15 +324,16 @@ const config = {
 
   pingAnswer: nineRouterPingTier,
   helpAnswer: nineRouterAnswerTier,
-  answer: hcaiApiKeys.length > 0
-    ? {
-        apiKey: () => nextHcaiApiKey(),
-        baseUrl: process.env.HCAI_BASE_URL || HCAI_BASE_URL,
-        model: process.env.HCAI_MODEL || DEFAULT_HCAI_MODEL,
-        onRateLimited: penalizeHcaiKey,
-        fallback: nineRouterAnswerTier,
-      }
-    : nineRouterAnswerTier,
+  answer:
+    hcaiApiKeys.length > 0
+      ? {
+          apiKey: () => nextHcaiApiKey(),
+          baseUrl: process.env.HCAI_BASE_URL || HCAI_BASE_URL,
+          model: process.env.HCAI_MODEL || DEFAULT_HCAI_MODEL,
+          onRateLimited: penalizeHcaiKey,
+          fallback: nineRouterAnswerTier,
+        }
+      : nineRouterAnswerTier,
   intent: {
     apiKey: () => {
       if (process.env.INTENT_CLASSIFIER_API_KEY) return process.env.INTENT_CLASSIFIER_API_KEY;
@@ -351,7 +343,7 @@ const config = {
     baseUrl: intentBaseUrl,
     model:
       process.env.INTENT_CLASSIFIER_MODEL ||
-      (intentBaseUrl === GROQ_BASE_URL ? (process.env.GROQ_MODEL || DEFAULT_GROQ_INTENT_MODEL) : DEFAULT_MODEL),
+      (intentBaseUrl === GROQ_BASE_URL ? process.env.GROQ_MODEL || DEFAULT_GROQ_INTENT_MODEL : DEFAULT_MODEL),
     fallback: standbyFallback(intentBaseUrl, DEFAULT_MODEL),
     onRateLimited: intentBaseUrl === GROQ_BASE_URL ? penalizeGroqKey : penalizeZenKey,
   },
@@ -372,15 +364,16 @@ const config = {
     baseUrl: process.env.PIXIE_WEB_BASE_URL || `http://localhost:${process.env.PIXIE_WEB_PORT || 4100}`,
   },
 
-
   escalateReaction: (process.env.PIXIE_ESCALATE_REACTION || "").replace(/:/g, "").trim() || null,
 
-
   ticketOpenReaction:
-    process.env.PIXIE_TICKET_REACTION === "" ? null : (process.env.PIXIE_TICKET_REACTION || "ticket").replace(/:/g, "").trim() || null,
+    process.env.PIXIE_TICKET_REACTION === ""
+      ? null
+      : (process.env.PIXIE_TICKET_REACTION || "ticket").replace(/:/g, "").trim() || null,
   ticketResolvedReaction:
-    process.env.PIXIE_TICKET_REACTION === "" ? null : (process.env.PIXIE_TICKET_RESOLVED_REACTION || "white_check_mark").replace(/:/g, "").trim() || null,
-
+    process.env.PIXIE_TICKET_REACTION === ""
+      ? null
+      : (process.env.PIXIE_TICKET_RESOLVED_REACTION || "white_check_mark").replace(/:/g, "").trim() || null,
 
   feedbackReactions: (process.env.PIXIE_FEEDBACK_REACTIONS ?? "")
     .split(",")
@@ -389,7 +382,6 @@ const config = {
 
   jev: jevConfig(),
 };
-
 
 function missingVars({ needsSlack }: { needsSlack: boolean }) {
   const required = needsSlack ? [...MODEL_VARS, ...SLACK_VARS] : MODEL_VARS;

@@ -77,26 +77,17 @@ test("shouldConsiderThreadReply allows all top-level messages", () => {
 });
 
 test("shouldConsiderThreadReply skips threads pixie has not spoken in", () => {
-  assert.equal(
-    handlers.shouldConsiderThreadReply({ ts: "2.2", thread_ts: "1.1", text: "lol same" }),
-    false,
-  );
+  assert.equal(handlers.shouldConsiderThreadReply({ ts: "2.2", thread_ts: "1.1", text: "lol same" }), false);
 });
 
 test("shouldConsiderThreadReply allows a thread reply that names or pings pixie", () => {
   assert.equal(handlers.shouldConsiderThreadReply({ ts: "2.2", thread_ts: "1.1", text: "pixie help" }), true);
-  assert.equal(
-    handlers.shouldConsiderThreadReply({ ts: "2.2", thread_ts: "1.1", text: "<@U0PIXIE> help" }),
-    true,
-  );
+  assert.equal(handlers.shouldConsiderThreadReply({ ts: "2.2", thread_ts: "1.1", text: "<@U0PIXIE> help" }), true);
 });
 
 test("shouldConsiderThreadReply allows a thread pixie already replied in", () => {
   context.addToThread("thread-spoken", "assistant", "here you go", null, "C1");
-  assert.equal(
-    handlers.shouldConsiderThreadReply({ ts: "3.3", thread_ts: "thread-spoken", text: "thanks" }),
-    true,
-  );
+  assert.equal(handlers.shouldConsiderThreadReply({ ts: "3.3", thread_ts: "thread-spoken", text: "thanks" }), true);
 });
 
 test("shouldConsiderThreadReply skips unaddressed thread when PIXIE_THREAD_REQUIRE_MENTION is set", () => {
@@ -137,7 +128,6 @@ test("findImage picks the first image with a private URL", () => {
   const image = { mimetype: "image/png", url_private: "https://files.slack.com/x.png" };
   assert.equal(handlers.findImage({ files: [{ mimetype: "text/plain" }, image] }), image);
 });
-
 
 test("onAppMention analyses an attached image instead of replying blind", async () => {
   const savedRespond = respond.respond;
@@ -200,7 +190,6 @@ test("onAppMention still uses the text path when there is no image", async () =>
   assert.equal(calls[0].addressedHow, "mention");
 });
 
-
 const HELP_CHANNEL = "C0HELP";
 
 async function routeHelpMessage(event: any) {
@@ -254,8 +243,17 @@ test("explicit human review requests escalate once without calling the provider"
   };
   programs.forChannel = () => program;
   programs.isHelpChannel = (channel: any) => channel === HELP_CHANNEL;
-  respond.respond = async () => { throw new Error("terminal human review must not call provider"); };
-  const client = { chat: { postMessage: async (args: any) => { posted.push(args); return { ts: `posted-${posted.length}` }; } } };
+  respond.respond = async () => {
+    throw new Error("terminal human review must not call provider");
+  };
+  const client = {
+    chat: {
+      postMessage: async (args: any) => {
+        posted.push(args);
+        return { ts: `posted-${posted.length}` };
+      },
+    },
+  };
   const event = {
     ts: "human-escalation-1",
     channel: HELP_CHANNEL,
@@ -296,9 +294,19 @@ test("a casual help-channel root stays silent and does not open a ticket", async
   programs.forChannel = () => program;
   programs.isHelpChannel = (channel: any) => channel === HELP_CHANNEL;
   let responded = false;
-  respond.respond = async () => { responded = true; };
+  respond.respond = async () => {
+    responded = true;
+  };
   const posts: any[] = [];
-  const client = { chat: { postMessage: async (a: any) => { posts.push(a); return { ts: `qg-${posts.length}` }; } }, reactions: { add: async () => ({}) } };
+  const client = {
+    chat: {
+      postMessage: async (a: any) => {
+        posts.push(a);
+        return { ts: `qg-${posts.length}` };
+      },
+    },
+    reactions: { add: async () => ({}) },
+  };
   const event = { ts: "qg-1", channel: HELP_CHANNEL, user: "U0ASKER", team: "T-QG", text: "hi" };
   try {
     await handlers.onMessage({ event, client });
@@ -322,7 +330,13 @@ test("a substantive help-channel root routes through respond and owns ticket cre
   config.slack.helpChannel = HELP_CHANNEL;
   respond.respond = async (args: any) => void calls.push(args);
   learn.captureFromReply = async () => null;
-  const event = { ts: "support-root-1", channel: HELP_CHANNEL, user: "U-SUPPORT", team: "T-SUPPORT", text: "how do I submit my project?" };
+  const event = {
+    ts: "support-root-1",
+    channel: HELP_CHANNEL,
+    user: "U-SUPPORT",
+    team: "T-SUPPORT",
+    text: "how do I submit my project?",
+  };
   try {
     await handlers.onMessage({ event, client: {} });
   } finally {
@@ -344,9 +358,16 @@ test("isolated app_mention ignores bot and self events", async () => {
   try {
     for (const event of [
       { ts: "mention-bot", channel: HELP_CHANNEL, user: "U-other", bot_id: "B-other", text: "<@U0PIXIE> help" },
-      { ts: "mention-subtype", channel: HELP_CHANNEL, user: "U-other", subtype: "bot_message", text: "<@U0PIXIE> help" },
+      {
+        ts: "mention-subtype",
+        channel: HELP_CHANNEL,
+        user: "U-other",
+        subtype: "bot_message",
+        text: "<@U0PIXIE> help",
+      },
       { ts: "mention-self", channel: HELP_CHANNEL, user: "U0PIXIE", text: "<@U0PIXIE> help" },
-    ]) await handlers.onAppMention({ event, client: {} });
+    ])
+      await handlers.onAppMention({ event, client: {} });
   } finally {
     config.slack.helpChannel = savedHelp;
     respond.respond = savedRespond;
@@ -389,8 +410,6 @@ test("help channel answers a thread reply that names pixie", async () => {
   assert.equal(calls[0].threadTs, "400.1");
   assert.ok(calls[0].seedClient);
 });
-
-
 
 test("help channel hands an unnamed thread reply to the gate once pixie has spoken there", async () => {
   context.addToThread("700.1", "assistant", "try reinstalling the extension", null, HELP_CHANNEL);
@@ -522,7 +541,6 @@ test("onMessage records what people say even when it stays quiet", async () => {
   );
 });
 
-
 test("onReactionAdded advances a guide when :upvote: lands on its own tracked message", async () => {
   const guides = require("./guides");
   guides.startGuide("submit-ysws-guidelines", "thread-reaction-advance", "U-owner");
@@ -536,7 +554,14 @@ test("onReactionAdded advances a guide when :upvote: lands on its own tracked me
       item: { type: "message", channel: "C0GUIDE", ts: "700.1" },
       item_user: "U0PIXIE",
     },
-    client: { chat: { postMessage: async (args: any) => { posted.push(args); return { ts: "700.2" }; } } },
+    client: {
+      chat: {
+        postMessage: async (args: any) => {
+          posted.push(args);
+          return { ts: "700.2" };
+        },
+      },
+    },
   });
 
   assert.equal(posted.length, 1, "the next step should have been posted");
@@ -557,7 +582,14 @@ test("onReactionAdded ignores :upvote: from someone other than the guide's owner
       item: { type: "message", channel: "C0GUIDE", ts: "701.1" },
       item_user: "U0PIXIE",
     },
-    client: { chat: { postMessage: async (args: any) => { posted.push(args); return { ts: "701.2" }; } } },
+    client: {
+      chat: {
+        postMessage: async (args: any) => {
+          posted.push(args);
+          return { ts: "701.2" };
+        },
+      },
+    },
   });
 
   assert.equal(posted.length, 0, "a bystander's reaction must not advance someone else's guide");
@@ -586,7 +618,6 @@ test("onReactionAdded still records ordinary feedback when :upvote: lands on a n
   assert.deepEqual(calls, [["702.1", "U-fan", 1]]);
 });
 
-
 test("onReactionAdded deletes pixie's own message on :pixl-delete:", async () => {
   const deleted: any[] = [];
   await handlers.onReactionAdded({
@@ -602,7 +633,12 @@ test("onReactionAdded deletes pixie's own message on :pixl-delete:", async () =>
           return { messages: [{ user: "U0PIXIE", ts: "800.1" }] };
         },
       },
-      chat: { delete: async (args: any) => { deleted.push(args); return { ok: true }; } },
+      chat: {
+        delete: async (args: any) => {
+          deleted.push(args);
+          return { ok: true };
+        },
+      },
     },
   });
 
@@ -626,7 +662,12 @@ test("onReactionAdded deletes pixie's own message on :x:", async () => {
           return { messages: [{ user: "U0PIXIE", ts: "800.2" }] };
         },
       },
-      chat: { delete: async (args: any) => { deleted.push(args); return { ok: true }; } },
+      chat: {
+        delete: async (args: any) => {
+          deleted.push(args);
+          return { ok: true };
+        },
+      },
     },
   });
 
@@ -645,7 +686,12 @@ test("onReactionAdded does not delete a message pixie did not write", async () =
     },
     client: {
       conversations: { history: async () => ({ messages: [{ user: "U-human", ts: "801.1" }] }) },
-      chat: { delete: async (args: any) => { deleted.push(args); return { ok: true }; } },
+      chat: {
+        delete: async (args: any) => {
+          deleted.push(args);
+          return { ok: true };
+        },
+      },
     },
   });
 
@@ -665,7 +711,14 @@ test("onReactionAdded posts the next guide step to the item's channel", async ()
       item: { type: "message", channel: "C0GUIDE", ts: "802.1" },
       item_user: "U0PIXIE",
     },
-    client: { chat: { postMessage: async (args: any) => { posted.push(args); return { ts: "802.2" }; } } },
+    client: {
+      chat: {
+        postMessage: async (args: any) => {
+          posted.push(args);
+          return { ts: "802.2" };
+        },
+      },
+    },
   });
 
   assert.equal(posted.length, 1);
@@ -682,8 +735,17 @@ test("onReactionAdded deletes a threaded reply using item_user, with no history 
       item_user: "U0PIXIE",
     },
     client: {
-      conversations: { history: async () => { throw new Error("history must not be called"); } },
-      chat: { delete: async (args: any) => { deleted.push(args); return { ok: true }; } },
+      conversations: {
+        history: async () => {
+          throw new Error("history must not be called");
+        },
+      },
+      chat: {
+        delete: async (args: any) => {
+          deleted.push(args);
+          return { ok: true };
+        },
+      },
     },
   });
 
@@ -702,8 +764,17 @@ test("onReactionAdded ignores :pixl-delete: on a message item_user says is not p
       item_user: "U-human",
     },
     client: {
-      conversations: { history: async () => { throw new Error("history must not be called"); } },
-      chat: { delete: async (args: any) => { deleted.push(args); return { ok: true }; } },
+      conversations: {
+        history: async () => {
+          throw new Error("history must not be called");
+        },
+      },
+      chat: {
+        delete: async (args: any) => {
+          deleted.push(args);
+          return { ok: true };
+        },
+      },
     },
   });
 
@@ -726,8 +797,24 @@ test("a broadcast can never file a second ticket for its thread", async () => {
   const tickets = require("./tickets");
   const nope = { chat: { postMessage: async () => ({ ts: "card-1" }) } };
   const prog = { id: "bc", name: "Bc", posture: "active", helpChannel: "C-BC" };
-  const first = await tickets.escalateTicket({ program: prog, channel: "C-BC", threadTs: "bc-1", requesterId: "U1", question: "help", client: nope, workspaceId: "TBC" });
-  const second = await tickets.escalateTicket({ program: prog, channel: "C-BC", threadTs: "bc-1", requesterId: "U1", question: "help", client: nope, workspaceId: "TBC" });
+  const first = await tickets.escalateTicket({
+    program: prog,
+    channel: "C-BC",
+    threadTs: "bc-1",
+    requesterId: "U1",
+    question: "help",
+    client: nope,
+    workspaceId: "TBC",
+  });
+  const second = await tickets.escalateTicket({
+    program: prog,
+    channel: "C-BC",
+    threadTs: "bc-1",
+    requesterId: "U1",
+    question: "help",
+    client: nope,
+    workspaceId: "TBC",
+  });
   assert.equal(first.id, second.id);
 });
 
@@ -781,7 +868,13 @@ test("onAppMention answers once in a muted thread without clearing the mute", as
   db.muteThread("810.1", "C0MENTION");
   try {
     await handlers.onAppMention({
-      event: { ts: "810.2", thread_ts: "810.1", channel: "C0MENTION", user: "U0ASKER", text: "<@U0PIXIE> is pcbway allowed?" },
+      event: {
+        ts: "810.2",
+        thread_ts: "810.1",
+        channel: "C0MENTION",
+        user: "U0ASKER",
+        text: "<@U0PIXIE> is pcbway allowed?",
+      },
       client: {},
     });
     assert.equal(calls.length, 1);
@@ -821,7 +914,11 @@ test("staging allowlist drops non-sandbox channels before any handling", async (
   try {
     const prod = await routeHelpMessage({ ts: "950.1", channel: "C0PIXEL", text: "pixie how do i submit my project" });
     assert.equal(prod.length, 0, "production channel event must not be handled in staging");
-    const sandbox = await routeHelpMessage({ ts: "950.2", channel: "C0C04LB6VA5", text: "pixie how do i submit my project" });
+    const sandbox = await routeHelpMessage({
+      ts: "950.2",
+      channel: "C0C04LB6VA5",
+      text: "pixie how do i submit my project",
+    });
     assert.equal(sandbox.length, 1, "sandbox channel event is handled");
   } finally {
     config.slack.stagingOnlyChannels = saved;
@@ -829,15 +926,24 @@ test("staging allowlist drops non-sandbox channels before any handling", async (
   }
 });
 
-
 test("a plain message naming Pixie in an unclaimed channel gets total silence", async () => {
   const savedRespond = respond.respond;
   const posted: any[] = [];
   respond.respond = async (args: any) => void posted.push(args);
   try {
     await handlers.onMessage({
-      event: { ts: "990.1", channel: "C0RANDOM-UNCLAIMED", user: "U0ASKER", text: "pixie, what do you think about this pcb layout?" },
-      client: { chat: { postMessage: async (args: any) => void posted.push(args), postEphemeral: async (args: any) => void posted.push(args) } },
+      event: {
+        ts: "990.1",
+        channel: "C0RANDOM-UNCLAIMED",
+        user: "U0ASKER",
+        text: "pixie, what do you think about this pcb layout?",
+      },
+      client: {
+        chat: {
+          postMessage: async (args: any) => void posted.push(args),
+          postEphemeral: async (args: any) => void posted.push(args),
+        },
+      },
     });
   } finally {
     respond.respond = savedRespond;
@@ -851,8 +957,18 @@ test("an @-mention in an unclaimed channel gets total silence, even a sensitive 
   respond.respond = async (args: any) => void posted.push(args);
   try {
     await handlers.onAppMention({
-      event: { ts: "991.1", channel: "C0RANDOM-UNCLAIMED-2", user: "U0ASKER", text: "<@U0PIXIE> is anyone else having thoughts of self harm" },
-      client: { chat: { postMessage: async (args: any) => void posted.push(args), postEphemeral: async (args: any) => void posted.push(args) } },
+      event: {
+        ts: "991.1",
+        channel: "C0RANDOM-UNCLAIMED-2",
+        user: "U0ASKER",
+        text: "<@U0PIXIE> is anyone else having thoughts of self harm",
+      },
+      client: {
+        chat: {
+          postMessage: async (args: any) => void posted.push(args),
+          postEphemeral: async (args: any) => void posted.push(args),
+        },
+      },
     });
   } finally {
     respond.respond = savedRespond;
@@ -867,7 +983,13 @@ test("a DM still works — the scope gate is channel-only, not global", async ()
   respond.respond = async (args: any) => void calls.push(args);
   try {
     await handlers.onMessage({
-      event: { ts: "992.1", channel: "D0DM-CHANNEL", channel_type: "im", user: "U0ASKER", text: "how do i submit my project" },
+      event: {
+        ts: "992.1",
+        channel: "D0DM-CHANNEL",
+        channel_type: "im",
+        user: "U0ASKER",
+        text: "how do i submit my project",
+      },
       client: {},
     });
   } finally {
@@ -885,7 +1007,10 @@ test("normal DM passes explicit identity and is reserved by the DM limiter", asy
   const calls: any[] = [];
   const checks: any[] = [];
   respond.respond = async (args: any) => void calls.push(args);
-  rateLimit.check = (...args: any[]) => { checks.push(args); return { allowed: true, reason: "reserved" }; };
+  rateLimit.check = (...args: any[]) => {
+    checks.push(args);
+    return { allowed: true, reason: "reserved" };
+  };
   try {
     await handlers.onMessage({
       event: { ts: "dm-limit-1", channel: "D0LIMIT", channel_type: "im", user: "U-LIMIT", text: "expensive ask" },
@@ -915,7 +1040,9 @@ test("DM image is rate limited before vision and emits a metric", async () => {
     assert.equal(options.dm, true);
     return { allowed: false, reason: "limit" };
   };
-  vision.analyzeImage = async () => { visionCalled = true; };
+  vision.analyzeImage = async () => {
+    visionCalled = true;
+  };
   db.recordMetric = (...args: any[]) => metrics.push(args);
   try {
     await handlers.handleImage({
@@ -944,12 +1071,41 @@ test("DM teach and sum are rate limited before their model paths", async () => {
   let sumCalled = false;
   rateLimit.check = () => ({ allowed: false, reason: "limit" });
   db.isHelper = () => true;
-  teachThread.summarizeThread = async () => { teachCalled = true; };
-  sumThread.summarizeThreadForHelper = async () => { sumCalled = true; };
-  const client = { chat: { postEphemeral: async (args: any) => posted.push(args), postMessage: async (args: any) => posted.push(args) } };
+  teachThread.summarizeThread = async () => {
+    teachCalled = true;
+  };
+  sumThread.summarizeThreadForHelper = async () => {
+    sumCalled = true;
+  };
+  const client = {
+    chat: {
+      postEphemeral: async (args: any) => posted.push(args),
+      postMessage: async (args: any) => posted.push(args),
+    },
+  };
   try {
-    await handlers.handleTeachRequest({ event: { ts: "teach-limit", channel: "D0COMMAND", channel_type: "im", user: "U-COMMAND", thread_ts: "teach-thread" }, client, question: "!teach thread", prog: { id: "p" }, mentionOnly: false, claimFirst: false });
-    await handlers.handleSumRequest({ event: { ts: "sum-limit", channel: "D0COMMAND", channel_type: "im", user: "U-COMMAND", thread_ts: "sum-thread" }, client, question: "!sum thread", prog: { id: "p" }, mentionOnly: false, claimFirst: false });
+    await handlers.handleTeachRequest({
+      event: {
+        ts: "teach-limit",
+        channel: "D0COMMAND",
+        channel_type: "im",
+        user: "U-COMMAND",
+        thread_ts: "teach-thread",
+      },
+      client,
+      question: "!teach thread",
+      prog: { id: "p" },
+      mentionOnly: false,
+      claimFirst: false,
+    });
+    await handlers.handleSumRequest({
+      event: { ts: "sum-limit", channel: "D0COMMAND", channel_type: "im", user: "U-COMMAND", thread_ts: "sum-thread" },
+      client,
+      question: "!sum thread",
+      prog: { id: "p" },
+      mentionOnly: false,
+      claimFirst: false,
+    });
   } finally {
     rateLimit.check = savedCheck;
     teachThread.summarizeThread = savedTeach;
@@ -979,7 +1135,6 @@ test("DMs without a user identity fail closed without calling respond", async ()
   assert.equal(posted.length, 1);
   assert.match(posted[0].text, /slow down/);
 });
-
 
 test("handleTeachRequest lets a program roster helper teach", async () => {
   const prog = { id: "teachgate", name: "TeachGate" };
@@ -1019,14 +1174,15 @@ test("handleTeachRequest bounces a non-helper who is not a global admin", async 
   assert.match(posted[0].text, /helpers-only/);
 });
 
-
-test("CHAR: onAppMention routes to respond ALWAYS addressed (mention path parity)", async () => {
+test("onAppMention routes to respond ALWAYS addressed (mention path parity)", async () => {
   const savedRespond = respond.respond;
   const calls: any[] = [];
   respond.respond = async (args: any) => void calls.push(args);
   const programs = require("./programs");
   const saved = process.env.PIXIE_PROGRAMS_JSON;
-  process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([{ id: "charmen", name: "CharMen", helpChannel: "C-CHARMEN", channels: ["C-CHARMEN"], guides: [] }]);
+  process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([
+    { id: "charmen", name: "CharMen", helpChannel: "C-CHARMEN", channels: ["C-CHARMEN"], guides: [] },
+  ]);
   programs.invalidate();
   try {
     await handlers.onAppMention({
@@ -1052,15 +1208,35 @@ test("!sum and !teach from a helper still run in a taken-over help thread", asyn
   let sumCalled = false;
   let taught: any = null;
   db.isHelper = () => true;
-  learn.teach = (fact: any) => { taught = fact; return 77; };
-  sumThread.summarizeThreadForHelper = async () => { sumCalled = true; return "summary"; };
+  learn.teach = (fact: any) => {
+    taught = fact;
+    return 77;
+  };
+  sumThread.summarizeThreadForHelper = async () => {
+    sumCalled = true;
+    return "summary";
+  };
   config.slack.helpChannel = HELP_CHANNEL;
   const posted: any[] = [];
-  const client = { chat: { postEphemeral: async (a: any) => void posted.push(a), postMessage: async (a: any) => void posted.push(a) } };
+  const client = {
+    chat: { postEphemeral: async (a: any) => void posted.push(a), postMessage: async (a: any) => void posted.push(a) },
+  };
   db.markTakeover("830.1", HELP_CHANNEL, "U0HELPER");
   try {
-    await handlers.onMessage({ event: { channel: HELP_CHANNEL, user: "U0HELPER", ts: "830.2", thread_ts: "830.1", text: "!sum" }, client });
-    await handlers.onMessage({ event: { channel: HELP_CHANNEL, user: "U0HELPER", ts: "830.3", thread_ts: "830.1", text: "!teach when is launch :: august 18" }, client });
+    await handlers.onMessage({
+      event: { channel: HELP_CHANNEL, user: "U0HELPER", ts: "830.2", thread_ts: "830.1", text: "!sum" },
+      client,
+    });
+    await handlers.onMessage({
+      event: {
+        channel: HELP_CHANNEL,
+        user: "U0HELPER",
+        ts: "830.3",
+        thread_ts: "830.1",
+        text: "!teach when is launch :: august 18",
+      },
+      client,
+    });
   } finally {
     learn.teach = savedTeach;
     sumThread.summarizeThreadForHelper = savedSum;
@@ -1087,7 +1263,11 @@ test("untagged thread message: addressed while it is just Pixie and the asker; s
     { user: "UPIXIE", ts: "7200.1", text: "restoration energy comes from restoring pixels" },
   ];
   const client = { conversations: { replies: async () => ({ messages: thread }) } };
-  const send = (ts: any, user: any, text: any) => handlers.onMessage({ event: { ts, thread_ts: "crowd-thread", channel: FAQ_CHANNEL, user, text, parent_user_id: "U0CROWDASK" }, client });
+  const send = (ts: any, user: any, text: any) =>
+    handlers.onMessage({
+      event: { ts, thread_ts: "crowd-thread", channel: FAQ_CHANNEL, user, text, parent_user_id: "U0CROWDASK" },
+      client,
+    });
   try {
     await send("7200.2", "U0CROWDASK", "whats your favourite colour");
     thread = [...thread, { user: "U0CROWDASK", ts: "7200.2" }];
@@ -1103,7 +1283,11 @@ test("untagged thread message: addressed while it is just Pixie and the asker; s
   assert.equal(calls[0].addressed, true);
   assert.equal(calls[0].addressedHow, "thread");
   assert.equal(calls[0].mode, respond.ALWAYS);
-  assert.match(context.getThreadContext("crowd-thread") || "", /what else can i try/, "silent turns still join the transcript");
+  assert.match(
+    context.getThreadContext("crowd-thread") || "",
+    /what else can i try/,
+    "silent turns still join the transcript",
+  );
 });
 
 test("untagged chatter in a two-person Pixie thread produces no Slack post", async () => {
@@ -1116,14 +1300,22 @@ test("untagged chatter in a two-person Pixie thread produces no Slack post", asy
   intent.classifyIntentContext = async () => ({ directedAtHuman: true, verdict: intent.CASUAL_CHAT });
   const client = {
     chat: {
-      postMessage: async (message: any) => { posted.push(message); return { ts: "offtopic-post" }; },
-      update: async (message: any) => { posted.push(message); return {}; },
+      postMessage: async (message: any) => {
+        posted.push(message);
+        return { ts: "offtopic-post" };
+      },
+      update: async (message: any) => {
+        posted.push(message);
+        return {};
+      },
     },
     conversations: {
-      replies: async () => ({ messages: [
-        { user: "U0ASKER", ts: "7400.0", text: "what is restoration energy?" },
-        { user: "U0PIXIE", ts: "7400.1", text: "restoration energy comes from restoring pixels" },
-      ] }),
+      replies: async () => ({
+        messages: [
+          { user: "U0ASKER", ts: "7400.0", text: "what is restoration energy?" },
+          { user: "U0PIXIE", ts: "7400.1", text: "restoration energy comes from restoring pixels" },
+        ],
+      }),
     },
   };
 
@@ -1159,9 +1351,19 @@ test("a pinged sensitive message with no ticket possible still gets a reply", as
   tickets.escalateTicket = async () => null;
   tickets.handOffToHelper = async () => null;
   const posted: any[] = [];
-  const client = { chat: { postMessage: async (m: any) => { posted.push(m); return { ok: true, ts: "sens" }; } } };
+  const client = {
+    chat: {
+      postMessage: async (m: any) => {
+        posted.push(m);
+        return { ok: true, ts: "sens" };
+      },
+    },
+  };
   try {
-    await handlers.onMessage({ event: { ts: "7300.1", channel: FAQ_CHANNEL, user: "U0SENS", text: "<@UPIXIE> can a human look at my account?" }, client });
+    await handlers.onMessage({
+      event: { ts: "7300.1", channel: FAQ_CHANNEL, user: "U0SENS", text: "<@UPIXIE> can a human look at my account?" },
+      client,
+    });
   } finally {
     config.slack.faqChannels = savedFaq;
     config.slack.botUserId = savedBot;
@@ -1188,21 +1390,46 @@ test("a helper trigger sends one interpolated macro and dedupes Slack redelivery
     name: "Need info",
     content: "Hi {requester}, ticket {ticket_id} has {queue_depth} waiting ({typical_wait}); you are #{position}.",
   }).macro;
-  const ticketId = db.createTicket({ programId, workspaceId: "T-HANDLER", channel, threadTs, requesterId, question: "help" });
+  const ticketId = db.createTicket({
+    programId,
+    workspaceId: "T-HANDLER",
+    channel,
+    threadTs,
+    requesterId,
+    question: "help",
+  });
   const posts: any[] = [];
   const ephemerals: any[] = [];
   const reactions: any[] = [];
   const client = {
     chat: {
-      postMessage: async (payload: any) => { posts.push(payload); return { ts: "macro-reply-1" }; },
-      postEphemeral: async (payload: any) => { ephemerals.push(payload); },
+      postMessage: async (payload: any) => {
+        posts.push(payload);
+        return { ts: "macro-reply-1" };
+      },
+      postEphemeral: async (payload: any) => {
+        ephemerals.push(payload);
+      },
     },
-    reactions: { add: async (payload: any) => { reactions.push(payload); } },
+    reactions: {
+      add: async (payload: any) => {
+        reactions.push(payload);
+      },
+    },
   };
   const savedRespond = respond.respond;
   const responded: any[] = [];
-  respond.respond = async (args: any) => { responded.push(args); };
-  const event = { ts: "handler-macro-message", team: "T-HANDLER", channel, thread_ts: threadTs, user: helperId, text: "?NEED-INFO please check" };
+  respond.respond = async (args: any) => {
+    responded.push(args);
+  };
+  const event = {
+    ts: "handler-macro-message",
+    team: "T-HANDLER",
+    channel,
+    thread_ts: threadTs,
+    user: helperId,
+    text: "?NEED-INFO please check",
+  };
   try {
     await handlers.onMessage({ event, client });
     await handlers.onMessage({ event, client });
@@ -1229,17 +1456,49 @@ test("typing !need-info sends a macro that was saved as ?need-info", async () =>
   programs.invalidate();
   db.syncHelper({ programId, userId: helperId, source: "manual", role: "helper" });
   macros.create({ programId, trigger: "?need-info", name: "Need info", content: "please share more" });
-  const ticketId = db.createTicket({ programId, workspaceId: "T-HANDLER", channel, threadTs, requesterId: "U-REQ-SIGIL", question: "help" });
+  const ticketId = db.createTicket({
+    programId,
+    workspaceId: "T-HANDLER",
+    channel,
+    threadTs,
+    requesterId: "U-REQ-SIGIL",
+    question: "help",
+  });
   const posts: any[] = [];
   const reactions: any[] = [];
   const client = {
-    chat: { postMessage: async (payload: any) => { posts.push(payload); return { ts: "sigil-reply" }; }, postEphemeral: async () => { throw new Error("unexpected ephemeral"); } },
-    reactions: { add: async (payload: any) => { reactions.push(payload); } },
+    chat: {
+      postMessage: async (payload: any) => {
+        posts.push(payload);
+        return { ts: "sigil-reply" };
+      },
+      postEphemeral: async () => {
+        throw new Error("unexpected ephemeral");
+      },
+    },
+    reactions: {
+      add: async (payload: any) => {
+        reactions.push(payload);
+      },
+    },
   };
-  await handlers.onMessage({ event: { ts: "handler-sigil-message", team: "T-HANDLER", channel, thread_ts: threadTs, user: helperId, text: "!need-info" }, client });
+  await handlers.onMessage({
+    event: {
+      ts: "handler-sigil-message",
+      team: "T-HANDLER",
+      channel,
+      thread_ts: threadTs,
+      user: helperId,
+      text: "!need-info",
+    },
+    client,
+  });
   assert.equal(posts.length, 1);
   assert.match(posts[0].text, /please share more/);
-  assert.deepEqual(reactions.map((r: any) => r.name), ["white_check_mark"]);
+  assert.deepEqual(
+    reactions.map((r: any) => r.name),
+    ["white_check_mark"],
+  );
   assert.equal(db.listTicketEvents(ticketId).filter((row: any) => row.event_type === "macro_sent").length, 1);
 });
 
@@ -1253,19 +1512,42 @@ test("unknown macro triggers stay private and list only enabled macros", async (
   db.syncHelper({ programId, userId: helperId, source: "manual" });
   macros.create({ programId, trigger: "?need-info", name: "Need info", content: "info" });
   macros.create({ programId, trigger: "?disabled", name: "Disabled", content: "no", enabled: false });
-  const ticketId = db.createTicket({ programId, workspaceId: "T-HANDLER-UNKNOWN", channel, threadTs, requesterId: "U-REQUESTER", question: "help" });
+  const ticketId = db.createTicket({
+    programId,
+    workspaceId: "T-HANDLER-UNKNOWN",
+    channel,
+    threadTs,
+    requesterId: "U-REQUESTER",
+    question: "help",
+  });
   const posts: any[] = [];
   const ephemerals: any[] = [];
   const reactions: any[] = [];
   const client = {
     chat: {
-      postMessage: async (payload: any) => { posts.push(payload); return { ts: "unexpected" }; },
-      postEphemeral: async (payload: any) => { ephemerals.push(payload); },
+      postMessage: async (payload: any) => {
+        posts.push(payload);
+        return { ts: "unexpected" };
+      },
+      postEphemeral: async (payload: any) => {
+        ephemerals.push(payload);
+      },
     },
-    reactions: { add: async (payload: any) => { reactions.push(payload); } },
+    reactions: {
+      add: async (payload: any) => {
+        reactions.push(payload);
+      },
+    },
   };
   await handlers.onMessage({
-    event: { ts: "handler-unknown-message", team: "T-HANDLER-UNKNOWN", channel, thread_ts: threadTs, user: helperId, text: "?need-inf" },
+    event: {
+      ts: "handler-unknown-message",
+      team: "T-HANDLER-UNKNOWN",
+      channel,
+      thread_ts: threadTs,
+      user: helperId,
+      text: "?need-inf",
+    },
     client,
   });
   assert.equal(ticketId > 0, true);
@@ -1286,35 +1568,90 @@ test("macros work in any program thread for helpers, like !sum", async () => {
   const helperId = "U-HANDLER-GATE-HELPER";
   db.syncHelper({ programId, userId: helperId, source: "manual" });
   macros.create({ programId, trigger: "!gate", name: "Gate", content: "hi {requester}, gate" });
-  db.createTicket({ programId, workspaceId: "T-HANDLER-GATES", channel, threadTs: "handler-gate-ticket", requesterId: "U-REQUESTER", question: "help" });
+  db.createTicket({
+    programId,
+    workspaceId: "T-HANDLER-GATES",
+    channel,
+    threadTs: "handler-gate-ticket",
+    requesterId: "U-REQUESTER",
+    question: "help",
+  });
   const posts: any[] = [];
   const reactions: any[] = [];
   const ephemerals: any[] = [];
   const client = {
     chat: {
-      postMessage: async (payload: any) => { posts.push(payload); return { ts: `p${posts.length}` }; },
-      postEphemeral: async (payload: any) => { ephemerals.push(payload); },
+      postMessage: async (payload: any) => {
+        posts.push(payload);
+        return { ts: `p${posts.length}` };
+      },
+      postEphemeral: async (payload: any) => {
+        ephemerals.push(payload);
+      },
     },
-    reactions: { add: async (payload: any) => { reactions.push(payload); } },
-    conversations: { replies: async () => ({ messages: [{ ts: "handler-no-ticket", user: "U-THREAD-STARTER", text: "q" }] }) },
+    reactions: {
+      add: async (payload: any) => {
+        reactions.push(payload);
+      },
+    },
+    conversations: {
+      replies: async () => ({ messages: [{ ts: "handler-no-ticket", user: "U-THREAD-STARTER", text: "q" }] }),
+    },
   };
   const savedRespond = respond.respond;
   respond.respond = async () => {};
   try {
-    await handlers.onMessage({ event: { ts: "handler-gate-nonhelper", team: "T-HANDLER-GATES", channel, thread_ts: "handler-gate-ticket", user: "U-STRANGER", text: "!gate" }, client });
+    await handlers.onMessage({
+      event: {
+        ts: "handler-gate-nonhelper",
+        team: "T-HANDLER-GATES",
+        channel,
+        thread_ts: "handler-gate-ticket",
+        user: "U-STRANGER",
+        text: "!gate",
+      },
+      client,
+    });
     assert.equal(posts.length, 0);
     assert.equal(ephemerals.length, 1);
     assert.match(ephemerals[0].text, /helpers-only/);
 
-    await handlers.onMessage({ event: { ts: "handler-gate-chatter", team: "T-HANDLER-GATES", channel, thread_ts: "handler-gate-ticket", user: "U-STRANGER", text: "!important the site is down" }, client });
+    await handlers.onMessage({
+      event: {
+        ts: "handler-gate-chatter",
+        team: "T-HANDLER-GATES",
+        channel,
+        thread_ts: "handler-gate-ticket",
+        user: "U-STRANGER",
+        text: "!important the site is down",
+      },
+      client,
+    });
     assert.equal(ephemerals.length, 1);
-    assert.equal(db.claimMessage("handler-gate-chatter", channel), true, "the chatter message was left for normal handling");
+    assert.equal(
+      db.claimMessage("handler-gate-chatter", channel),
+      true,
+      "the chatter message was left for normal handling",
+    );
 
-    await handlers.onMessage({ event: { ts: "handler-gate-nonticket", team: "T-HANDLER-GATES", channel, thread_ts: "handler-no-ticket", user: helperId, text: "!gate" }, client });
+    await handlers.onMessage({
+      event: {
+        ts: "handler-gate-nonticket",
+        team: "T-HANDLER-GATES",
+        channel,
+        thread_ts: "handler-no-ticket",
+        user: helperId,
+        text: "!gate",
+      },
+      client,
+    });
     assert.equal(posts.length, 1);
     assert.equal(posts[0].thread_ts, "handler-no-ticket");
     assert.equal(posts[0].text, "hi <@U-THREAD-STARTER>, gate");
-    assert.deepEqual(reactions.map((r: any) => r.name), ["white_check_mark"]);
+    assert.deepEqual(
+      reactions.map((r: any) => r.name),
+      ["white_check_mark"],
+    );
     assert.equal(db.listAuditEvents({ programId }).filter((row: any) => row.action === "macro.sent").length, 1);
   } finally {
     respond.respond = savedRespond;
@@ -1323,11 +1660,32 @@ test("macros work in any program thread for helpers, like !sum", async () => {
 
 test("macro triggers in channels no program claims fall through", async () => {
   const posts: any[] = [];
-  const client = { chat: { postMessage: async (p: any) => { posts.push(p); return { ts: "x" }; }, postEphemeral: async (p: any) => { posts.push(p); } }, reactions: { add: async () => {} } };
+  const client = {
+    chat: {
+      postMessage: async (p: any) => {
+        posts.push(p);
+        return { ts: "x" };
+      },
+      postEphemeral: async (p: any) => {
+        posts.push(p);
+      },
+    },
+    reactions: { add: async () => {} },
+  };
   const savedRespond = respond.respond;
   respond.respond = async () => {};
   try {
-    await handlers.onMessage({ event: { ts: "handler-unclaimed-msg", team: "T-NONE", channel: "C-UNCLAIMED-MACRO", thread_ts: "handler-unclaimed-thread", user: "U-ANYONE", text: "!need-info" }, client });
+    await handlers.onMessage({
+      event: {
+        ts: "handler-unclaimed-msg",
+        team: "T-NONE",
+        channel: "C-UNCLAIMED-MACRO",
+        thread_ts: "handler-unclaimed-thread",
+        user: "U-ANYONE",
+        text: "!need-info",
+      },
+      client,
+    });
   } finally {
     respond.respond = savedRespond;
   }
@@ -1342,13 +1700,40 @@ test("a resolved macro trigger uses the canonical resolve transition", async () 
   db.saveProgram({ id: programId, name: "Resolve Pixl", helpChannel: channel, channels: [channel] });
   programs.invalidate();
   db.syncHelper({ programId, userId: helperId, source: "manual" });
-  macros.create({ programId, trigger: "!done", name: "Done", content: "done {ticket_id}", onSendTransition: "resolved" });
-  const ticketId = db.createTicket({ programId, workspaceId: "T-HANDLER-RESOLVE", channel, threadTs, requesterId: "U-REQUESTER", question: "help" });
+  macros.create({
+    programId,
+    trigger: "!done",
+    name: "Done",
+    content: "done {ticket_id}",
+    onSendTransition: "resolved",
+  });
+  const ticketId = db.createTicket({
+    programId,
+    workspaceId: "T-HANDLER-RESOLVE",
+    channel,
+    threadTs,
+    requesterId: "U-REQUESTER",
+    question: "help",
+  });
   const client = {
-    chat: { postMessage: async () => ({ ts: "resolve-reply" }), update: async () => ({}), postEphemeral: async () => ({}) },
+    chat: {
+      postMessage: async () => ({ ts: "resolve-reply" }),
+      update: async () => ({}),
+      postEphemeral: async () => ({}),
+    },
     reactions: { add: async () => ({}), remove: async () => ({}) },
   };
-  await handlers.onMessage({ event: { ts: "handler-resolve-message", team: "T-HANDLER-RESOLVE", channel, thread_ts: threadTs, user: helperId, text: "!DONE" }, client });
+  await handlers.onMessage({
+    event: {
+      ts: "handler-resolve-message",
+      team: "T-HANDLER-RESOLVE",
+      channel,
+      thread_ts: threadTs,
+      user: helperId,
+      text: "!DONE",
+    },
+    client,
+  });
   assert.equal(db.getTicket(ticketId).status, "resolved");
   assert.ok(db.listTicketEvents(ticketId).some((row: any) => row.event_type === "resolved"));
   assert.ok(db.listTicketEvents(ticketId).some((row: any) => row.event_type === "macro_sent"));

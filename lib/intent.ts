@@ -10,7 +10,10 @@ import type { Program } from "./types";
 const { config } = configModule;
 const { looksLikeCode } = answer;
 const recordMetric = db.recordMetric as (...args: unknown[]) => unknown;
-const recentUserMessages = db.recentUserMessages as (userId: string, options: { channel?: string; limit: number }) => Array<{ text?: string }>;
+const recentUserMessages = db.recentUserMessages as (
+  userId: string,
+  options: { channel?: string; limit: number },
+) => Array<{ text?: string }>;
 
 interface ContextMessageInput {
   text: string;
@@ -52,7 +55,10 @@ const PROGRAM_RELEVANCE = new Set(["relevant", "unrelated", "unclear"]);
 
 const HISTORY_LIMIT = 3;
 
-function intentSystemPrompt(program: Program | string | null = null, { scoped = false }: { scoped?: boolean } = {}): string {
+function intentSystemPrompt(
+  program: Program | string | null = null,
+  { scoped = false }: { scoped?: boolean } = {},
+): string {
   const name = typeof program === "string" ? program : program?.name || "Hack Club YSWS";
 
   const scopeRule = scoped
@@ -113,10 +119,20 @@ function contextMessage(message: unknown): ContextItem | null {
 
 function boundedContext(messages: unknown[]): ContextItem[] {
   if (!Array.isArray(messages)) return [];
-  return messages.slice(-CONTEXT_LIMIT).map(contextMessage).filter((item): item is ContextItem => item !== null);
+  return messages
+    .slice(-CONTEXT_LIMIT)
+    .map(contextMessage)
+    .filter((item): item is ContextItem => item !== null);
 }
 
-function buildUserPrompt(message: string, history: unknown[] = [], { threadMessages = [], recentMessages = null }: { threadMessages?: unknown[]; recentMessages?: unknown[] | null } = {}): string {
+function buildUserPrompt(
+  message: string,
+  history: unknown[] = [],
+  {
+    threadMessages = [],
+    recentMessages = null,
+  }: { threadMessages?: unknown[]; recentMessages?: unknown[] | null } = {},
+): string {
   // Put the message under judgement last so the model does not grade the surrounding context.
   const lines = [];
 
@@ -135,7 +151,11 @@ function buildUserPrompt(message: string, history: unknown[] = [], { threadMessa
     lines.push("They have not said anything recently — no context available.");
   }
 
-  lines.push("", "The message to judge (human, not context):", `[human] ${String(message).slice(0, CONTEXT_TEXT_LIMIT)}`);
+  lines.push(
+    "",
+    "The message to judge (human, not context):",
+    `[human] ${String(message).slice(0, CONTEXT_TEXT_LIMIT)}`,
+  );
   return lines.join("\n");
 }
 
@@ -158,20 +178,40 @@ function parseContextResult(text: unknown, { scoped = false }: { scoped?: boolea
   const json = extractJsonObject(text);
   if (json === null) return null;
   let value: unknown;
-  try { value = JSON.parse(json); } catch (_) { return null; }
-  const expected = ["addressedToPixie", "directedAtHuman", "programRelevance", "recentPixieParticipation", "verdict"].sort();
+  try {
+    value = JSON.parse(json);
+  } catch (_) {
+    return null;
+  }
+  const expected = [
+    "addressedToPixie",
+    "directedAtHuman",
+    "programRelevance",
+    "recentPixieParticipation",
+    "verdict",
+  ].sort();
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const record = value as Record<string, unknown>;
   const keys = Object.keys(record).sort();
   if (keys.length !== expected.length || keys.some((key, i) => key !== expected[i])) return null;
   const verdicts = scoped ? [HELP_NEEDED, CASUAL_CHAT, OFF_TOPIC] : [HELP_NEEDED, CASUAL_CHAT];
-  if (typeof record.verdict !== "string" || !verdicts.includes(record.verdict) || typeof record.addressedToPixie !== "boolean" ||
-      typeof record.directedAtHuman !== "boolean" || typeof record.recentPixieParticipation !== "boolean" ||
-      typeof record.programRelevance !== "string" || !PROGRAM_RELEVANCE.has(record.programRelevance)) return null;
+  if (
+    typeof record.verdict !== "string" ||
+    !verdicts.includes(record.verdict) ||
+    typeof record.addressedToPixie !== "boolean" ||
+    typeof record.directedAtHuman !== "boolean" ||
+    typeof record.recentPixieParticipation !== "boolean" ||
+    typeof record.programRelevance !== "string" ||
+    !PROGRAM_RELEVANCE.has(record.programRelevance)
+  )
+    return null;
   return record as ContextResult;
 }
 
-function enrichContextResult(result: ContextResult | null, { addressed = false }: { addressed?: boolean } = {}): (ContextResult & { directedAtPixie: boolean; needsHelp: boolean; shouldAttemptAnswer: boolean }) | null {
+function enrichContextResult(
+  result: ContextResult | null,
+  { addressed = false }: { addressed?: boolean } = {},
+): (ContextResult & { directedAtPixie: boolean; needsHelp: boolean; shouldAttemptAnswer: boolean }) | null {
   if (!result) return null;
   const directedAtPixie = addressed || result.addressedToPixie === true;
   const directedAtHuman = result.directedAtHuman === true;
@@ -184,16 +224,22 @@ function enrichContextResult(result: ContextResult | null, { addressed = false }
   };
 }
 
-function normalizeIntentResult(result: ContextResult | string | null, { addressed = false }: { addressed?: boolean } = {}) {
+function normalizeIntentResult(
+  result: ContextResult | string | null,
+  { addressed = false }: { addressed?: boolean } = {},
+) {
   if (!result) return null;
   if (typeof result === "string") {
-    return enrichContextResult({
-      verdict: result,
-      addressedToPixie: addressed,
-      directedAtHuman: false,
-      recentPixieParticipation: false,
-      programRelevance: "unclear",
-    }, { addressed });
+    return enrichContextResult(
+      {
+        verdict: result,
+        addressedToPixie: addressed,
+        directedAtHuman: false,
+        recentPixieParticipation: false,
+        programRelevance: "unclear",
+      },
+      { addressed },
+    );
   }
   return enrichContextResult(result, { addressed });
 }
@@ -225,7 +271,15 @@ function scopedFor(program: Program | null, addressed = false): boolean {
 async function classifyIntent(
   message: string,
   program: Program | null = null,
-  { userId = null, channel = null, history = null, addressed = false, threadMessages = [], recentMessages = null, returnContext = false }: IntentOptions = {},
+  {
+    userId = null,
+    channel = null,
+    history = null,
+    addressed = false,
+    threadMessages = [],
+    recentMessages = null,
+    returnContext = false,
+  }: IntentOptions = {},
 ): Promise<string | ContextResult | null> {
   // Short inputs fail soft: callers treat null as silence rather than paying for a weak classification.
   if (!message || message.length < MIN_LENGTH) return null;
@@ -258,7 +312,12 @@ async function classifyIntent(
     if (!parsed && typeof text === "string" && text.trim()) {
       log.warn("intent", `unparseable classifier output: ${text.slice(0, 120).replace(/\s+/g, " ")}`);
       try {
-        recordMetric("intent_parse_failure", null, scoped ? "scoped" : "open", program && program.id ? program.id : null);
+        recordMetric(
+          "intent_parse_failure",
+          null,
+          scoped ? "scoped" : "open",
+          program && program.id ? program.id : null,
+        );
       } catch (error) {
         const failure = error instanceof Error ? error : new Error(String(error));
         log.debug("intent", `could not record classifier parse failure: ${failure.message}`);
@@ -279,12 +338,12 @@ async function classifyIntent(
   }
 }
 
-
 const REACTION_ONLY = new Set(
-  ("lol lmao lmfao lmaoo lmaooo rofl haha hahaha hehe ok okay okey k kk yeah yea ye yep yup nah nope no yes" +
+  (
+    "lol lmao lmfao lmaoo lmaooo rofl haha hahaha hehe ok okay okey k kk yeah yea ye yep yup nah nope no yes" +
     " same fr frfr ngl bruh bro yo hi hey hello sup wsg gm gn ty thx thanks tysm np gg ggs w l true real" +
-    " nice cool sick based goated damn oof rip wow yay lets go letsgo bet sheesh finally done exactly this")
-    .split(" "),
+    " nice cool sick based goated damn oof rip wow yay lets go letsgo bet sheesh finally done exactly this"
+  ).split(" "),
 );
 
 function stripDecoration(text: string): string {
@@ -322,7 +381,6 @@ function worthClassifying(text: string): boolean {
   return true;
 }
 
-
 const PROBLEM_WORD =
   /\b(?:broke|broken|breaks|breaking|error|errors|fail(?:s|ed|ing)?|stuck|bug|bugged|issue|crash(?:ed|ing|es)?|glitch\w*|not working|no idea|confused)\b/i;
 
@@ -350,9 +408,10 @@ function looksLikeHelpRequest(text: string): boolean {
 const api = {
   classifyIntent,
   classifyIntentContext: async (message: string, program: Program | null = null, options: IntentOptions = {}) => {
-    const result = api.classifyIntent !== classifyIntent
-      ? await api.classifyIntent(message, program, options)
-      : await classifyIntent(message, program, { ...options, returnContext: true });
+    const result =
+      api.classifyIntent !== classifyIntent
+        ? await api.classifyIntent(message, program, options)
+        : await classifyIntent(message, program, { ...options, returnContext: true });
     return normalizeIntentResult(result, options);
   },
   parseContextResult,

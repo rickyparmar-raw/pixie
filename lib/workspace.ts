@@ -9,7 +9,6 @@ interface SlackBody {
   team?: { id?: string };
 }
 
-
 const DEFAULT_WORKSPACE = "default";
 
 function configuredWorkspaceId() {
@@ -22,7 +21,6 @@ function teamOfBody(body: SlackBody = {}): string | null {
   if (body.team && body.team.id) return body.team.id;
   return null;
 }
-
 
 function workspaceOf(event: SlackBody = {}, body: SlackBody = {}): string | null {
   if (event && typeof event.team === "string") return event.team;

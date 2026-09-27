@@ -13,12 +13,34 @@ const respond = require("./respond");
 import type { Program, Ticket } from "./types";
 
 interface ProgramRef extends Pick<Program, "id"> {}
-interface AnswerResult { source: string | null; answer: string | null }
-interface TranscriptMessage { role?: string; user_id?: string; content?: string }
-interface TicketEvent { event_type: string; actor_id: string | null }
-interface RetrievalIndex { docs: Array<{ chunk: { source: string; heading?: string; text: string }; length: number }> }
-interface Verdict { sentence: string; verdict: string; evidence: Evidence[]; contradiction?: { against: Evidence } }
-interface Evidence { source: string; heading: string | null; excerpt: string; score: number }
+interface AnswerResult {
+  source: string | null;
+  answer: string | null;
+}
+interface TranscriptMessage {
+  role?: string;
+  user_id?: string;
+  content?: string;
+}
+interface TicketEvent {
+  event_type: string;
+  actor_id: string | null;
+}
+interface RetrievalIndex {
+  docs: Array<{ chunk: { source: string; heading?: string; text: string }; length: number }>;
+}
+interface Verdict {
+  sentence: string;
+  verdict: string;
+  evidence: Evidence[];
+  contradiction?: { against: Evidence };
+}
+interface Evidence {
+  source: string;
+  heading: string | null;
+  excerpt: string;
+  score: number;
+}
 interface SimilarCandidate {
   ticketId: number;
   question: string;
@@ -76,7 +98,12 @@ function checkBudget(actorId: string): { error: string } | null {
   return { error: "copilot rate limited — try again in a minute" };
 }
 
-function auditCopilot(programId: string, actorId: string | null, action: string, metadata: Record<string, unknown> | null = null): void {
+function auditCopilot(
+  programId: string,
+  actorId: string | null,
+  action: string,
+  metadata: Record<string, unknown> | null = null,
+): void {
   audit.record({ programId, actorId, action: `copilot.${action}`, entityType: "copilot", entityId: null, metadata });
 }
 
@@ -103,14 +130,30 @@ function threadContextFor(threadTs: string | null): string {
   }
 }
 
-async function draftReply({ program, question, threadTs = null }: { program: ProgramRef | null; question: string; threadTs?: string | null }): Promise<CopilotResponse> {
+async function draftReply({
+  program,
+  question,
+  threadTs = null,
+}: {
+  program: ProgramRef | null;
+  question: string;
+  threadTs?: string | null;
+}): Promise<CopilotResponse> {
   // A null grounded answer is a signal to escalate, not an invitation to improvise.
   const programId = program ? program.id : null;
   const result = await lookup.answerOrChat(question, threadContextFor(threadTs), { program });
   return { ...draftVerdict(result), programId };
 }
 
-async function ask({ program, question, threadTs = null }: { program: ProgramRef | null; question: string; threadTs?: string | null }): Promise<CopilotResponse> {
+async function ask({
+  program,
+  question,
+  threadTs = null,
+}: {
+  program: ProgramRef | null;
+  question: string;
+  threadTs?: string | null;
+}): Promise<CopilotResponse> {
   const result = await lookup.answerOrChat(question, threadContextFor(threadTs), { program });
   return { ...draftVerdict(result), programId: program ? program.id : null };
 }
@@ -175,7 +218,10 @@ function loadTranscript(messages: TranscriptMessage[] | null, threadTs: string |
   try {
     return db.getThreadMessages(threadTs) || [];
   } catch (e) {
-    log.warn("copilot", `failed to load transcript for thread ${threadTs}: ${e instanceof Error ? e.message : String(e)}`);
+    log.warn(
+      "copilot",
+      `failed to load transcript for thread ${threadTs}: ${e instanceof Error ? e.message : String(e)}`,
+    );
     return [];
   }
 }
@@ -195,12 +241,24 @@ function extractiveSummary(ticket: Ticket | null, transcript: TranscriptMessage[
   const lines = transcript.slice(-SUMMARY_TAIL).map(formatTranscriptLine);
   if (lines.length > 0) parts.push(`Recent thread:\n${lines.join("\n")}`);
   if (timeline.length > 0) {
-    parts.push(`Events: ${timeline.map((e: TicketEvent) => `${e.event_type}${e.actor_id ? ` by <@${e.actor_id}>` : ""}`).join(", ")}`);
+    parts.push(
+      `Events: ${timeline.map((e: TicketEvent) => `${e.event_type}${e.actor_id ? ` by <@${e.actor_id}>` : ""}`).join(", ")}`,
+    );
   }
   return parts.join("\n\n") || "No thread context available.";
 }
 
-async function summarizeThread({ program, ticket = null, threadTs = null, messages = null }: { program: ProgramRef | null; ticket?: Ticket | null; threadTs?: string | null; messages?: TranscriptMessage[] | null }): Promise<CopilotResponse> {
+async function summarizeThread({
+  program,
+  ticket = null,
+  threadTs = null,
+  messages = null,
+}: {
+  program: ProgramRef | null;
+  ticket?: Ticket | null;
+  threadTs?: string | null;
+  messages?: TranscriptMessage[] | null;
+}): Promise<CopilotResponse> {
   const transcript = loadTranscript(messages, threadTs);
   const timeline = ticket ? db.listTicketEvents(ticket.id, 50) : [];
   const extractive = extractiveSummary(ticket, transcript, timeline);
@@ -265,10 +323,13 @@ async function factCheck({ program, text }: { program: ProgramRef | null; text: 
     const verdict = checkSentence(index, sentence);
     if (verdict) verdicts.push(verdict);
   }
-  const counts = verdicts.reduce((acc: Record<string, number>, v: Verdict) => {
-    acc[v.verdict] = (acc[v.verdict] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const counts = verdicts.reduce(
+    (acc: Record<string, number>, v: Verdict) => {
+      acc[v.verdict] = (acc[v.verdict] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
   return { verdicts, counts, programId };
 }
 
@@ -276,11 +337,24 @@ function clampLimit(limit: number): number {
   return Math.min(Math.max(limit, 1), SIMILAR_RETURN_MAX);
 }
 
-function findSimilar({ programId, question, limit = 5 }: { programId: string; question: string; limit?: number }): CopilotResponse {
+function findSimilar({
+  programId,
+  question,
+  limit = 5,
+}: {
+  programId: string;
+  question: string;
+  limit?: number;
+}): CopilotResponse {
   if (!programId || !question) return { error: "programId and question required" };
   let resolved = [];
   try {
-    resolved = db.handle().query(`SELECT * FROM tickets WHERE program_id = ? AND status = 'resolved' ORDER BY resolved_at DESC LIMIT ${SIMILAR_SCAN_LIMIT}`).all(programId);
+    resolved = db
+      .handle()
+      .query(
+        `SELECT * FROM tickets WHERE program_id = ? AND status = 'resolved' ORDER BY resolved_at DESC LIMIT ${SIMILAR_SCAN_LIMIT}`,
+      )
+      .all(programId);
   } catch (e) {
     return { error: e instanceof Error ? e.message : String(e) };
   }

@@ -3,18 +3,9 @@ const assert = require("node:assert/strict");
 const link = require("./link");
 
 test("extractUrl unwraps Slack formatted links and extracts the first http(s) URL", () => {
-  assert.equal(
-    link.extractUrl("check this out: <https://www.pixl.rsvp/docs|Pixl Docs>"),
-    "https://www.pixl.rsvp/docs",
-  );
-  assert.equal(
-    link.extractUrl("see <https://example.com/page> for details."),
-    "https://example.com/page",
-  );
-  assert.equal(
-    link.extractUrl("pixie how does this look? https://example.org/test"),
-    "https://example.org/test",
-  );
+  assert.equal(link.extractUrl("check this out: <https://www.pixl.rsvp/docs|Pixl Docs>"), "https://www.pixl.rsvp/docs");
+  assert.equal(link.extractUrl("see <https://example.com/page> for details."), "https://example.com/page");
+  assert.equal(link.extractUrl("pixie how does this look? https://example.org/test"), "https://example.org/test");
   assert.equal(link.extractUrl("no links in this message"), null);
 });
 
@@ -60,26 +51,25 @@ test("fetchUrlContent returns blocked response for local or internal hosts", asy
   assert.match(result.reason, /pixie can only open public URLs/);
 });
 
-
-test("char: extractUrl strips trailing punctuation and handles empties", () => {
+test("extractUrl strips trailing punctuation and handles empties", () => {
   assert.equal(link.extractUrl("see https://example.com/page."), "https://example.com/page");
   assert.equal(link.extractUrl(""), null);
   assert.equal(link.extractUrl(null), null);
 });
 
-test("char: private IP forms are all treated as blocked", () => {
+test("private IP forms are all treated as blocked", () => {
   assert.equal(link.isPrivateOrLoopbackIp("0.0.0.0"), true);
   assert.equal(link.isPrivateOrLoopbackIp("999.1.1.1"), true);
   assert.equal(link.isPrivateOrLoopbackIp(""), false);
   assert.equal(link.isPrivateOrLoopbackIp(null), false);
 });
 
-test("char: invalid URLs and schemes are blocked without DNS", async () => {
+test("invalid URLs and schemes are blocked without DNS", async () => {
   assert.equal(await link.isBlockedHost("not a url"), true);
   assert.equal(await link.isBlockedHost("javascript:alert(1)"), true);
 });
 
-test("char: MAX_TEXT_BUDGET bounds fetched text", () => {
+test("MAX_TEXT_BUDGET bounds fetched text", () => {
   assert.ok(link.MAX_TEXT_BUDGET > 0 && link.MAX_TEXT_BUDGET <= 20000);
 });
 export {};

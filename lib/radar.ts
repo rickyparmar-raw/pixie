@@ -55,10 +55,27 @@ interface TicketAgeRow {
   created_at: number;
   reopen_count?: number;
 }
-interface ConfidenceRow { category: string; ai_confidence: number; status: string }
-interface SourceHealthRow { name: string; fail_count: number; last_error: string | null; last_success_at: number | null }
-interface IncidentCandidate { title: string; linked: number; incidentId: number }
-interface IncidentRow { id: number; title: string; started_at: number }
+interface ConfidenceRow {
+  category: string;
+  ai_confidence: number;
+  status: string;
+}
+interface SourceHealthRow {
+  name: string;
+  fail_count: number;
+  last_error: string | null;
+  last_success_at: number | null;
+}
+interface IncidentCandidate {
+  title: string;
+  linked: number;
+  incidentId: number;
+}
+interface IncidentRow {
+  id: number;
+  title: string;
+  started_at: number;
+}
 interface RadarFinding {
   type: string;
   severity: string;
@@ -127,7 +144,14 @@ function row(id: number): RadarSignal | null {
   return db.handle().query("SELECT * FROM radar_signals WHERE id = ?").get(id) as RadarSignal | null;
 }
 
-function listSignals(programId: string, { status = null, severity = null, limit = 100 }: { status?: string | null; severity?: string | null; limit?: number } = {}): RadarSignal[] | { error: string } {
+function listSignals(
+  programId: string,
+  {
+    status = null,
+    severity = null,
+    limit = 100,
+  }: { status?: string | null; severity?: string | null; limit?: number } = {},
+): RadarSignal[] | { error: string } {
   if (!programId) return { error: "programId required" };
   const clauses = ["program_id = ?"];
   const params: Array<string | number> = [programId];
@@ -144,11 +168,35 @@ function listSignals(programId: string, { status = null, severity = null, limit 
     .query(`SELECT * FROM radar_signals WHERE ${clauses.join(" AND ")} ORDER BY last_detected_at DESC LIMIT ?`)
     .all(...params, Math.min(Math.max(Number(limit) || 100, 1), 500));
   return (rows as RadarSignal[])
-    .map((r: RadarSignal) => ({ ...r, evidence: r.evidence ? JSON.parse(r.evidence as string) as RadarEvidence : null }))
-    .sort((a: RadarSignal, b: RadarSignal) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || b.last_detected_at - a.last_detected_at);
+    .map((r: RadarSignal) => ({
+      ...r,
+      evidence: r.evidence ? (JSON.parse(r.evidence as string) as RadarEvidence) : null,
+    }))
+    .sort(
+      (a: RadarSignal, b: RadarSignal) =>
+        SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || b.last_detected_at - a.last_detected_at,
+    );
 }
 
-function upsertSignal({ programId, type, severity, title, summary, evidence, fingerprint, now = Date.now() }: { programId: string; type: string; severity: string; title: string; summary?: string; evidence: RadarEvidence; fingerprint: string; now?: number }): RadarSignal | null {
+function upsertSignal({
+  programId,
+  type,
+  severity,
+  title,
+  summary,
+  evidence,
+  fingerprint,
+  now = Date.now(),
+}: {
+  programId: string;
+  type: string;
+  severity: string;
+  title: string;
+  summary?: string;
+  evidence: RadarEvidence;
+  fingerprint: string;
+  now?: number;
+}): RadarSignal | null {
   // Suppression survives worsening re-detections until its explicit expiry.
   assertValid(type, severity);
   if (!programId || !fingerprint) throw new Error("programId and fingerprint required");
@@ -171,12 +219,16 @@ function upsertSignal({ programId, type, severity, title, summary, evidence, fin
 
   if (existing.status === "suppressed" && existing.suppressed_until && existing.suppressed_until > now) {
     db.handle()
-      .query("UPDATE radar_signals SET severity = ?, title = ?, summary = ?, evidence = ?, last_detected_at = ?, updated_at = ? WHERE id = ?")
+      .query(
+        "UPDATE radar_signals SET severity = ?, title = ?, summary = ?, evidence = ?, last_detected_at = ?, updated_at = ? WHERE id = ?",
+      )
       .run(severity, title, summary || null, evidenceJson, now, now, existing.id);
     return row(existing.id);
   }
 
-  const wasClosed = existing.status === "resolved" || (existing.status === "suppressed" && existing.suppressed_until && existing.suppressed_until <= now);
+  const wasClosed =
+    existing.status === "resolved" ||
+    (existing.status === "suppressed" && existing.suppressed_until && existing.suppressed_until <= now);
   const nextStatus = existing.status === "acknowledged" ? "acknowledged" : "active";
   const firstDetectedAt = wasClosed ? now : existing.first_detected_at;
   db.handle()
@@ -184,57 +236,136 @@ function upsertSignal({ programId, type, severity, title, summary, evidence, fin
       `UPDATE radar_signals SET severity = ?, status = ?, title = ?, summary = ?, evidence = ?,
        first_detected_at = ?, last_detected_at = ?, resolved_at = ?, suppressed_until = ?, updated_at = ? WHERE id = ?`,
     )
-    .run(severity, nextStatus, title, summary || null, evidenceJson, firstDetectedAt, now, wasClosed ? null : existing.resolved_at, wasClosed ? null : existing.suppressed_until, now, existing.id);
+    .run(
+      severity,
+      nextStatus,
+      title,
+      summary || null,
+      evidenceJson,
+      firstDetectedAt,
+      now,
+      wasClosed ? null : existing.resolved_at,
+      wasClosed ? null : existing.suppressed_until,
+      now,
+      existing.id,
+    );
   return row(existing.id);
 }
 
 function autoResolveMissing(programId: string, type: string, seenFingerprints: Set<string>, now = Date.now()): void {
   const stale = db
     .handle()
-    .query("SELECT id, fingerprint FROM radar_signals WHERE program_id = ? AND type = ? AND status IN ('active','acknowledged')")
+    .query(
+      "SELECT id, fingerprint FROM radar_signals WHERE program_id = ? AND type = ? AND status IN ('active','acknowledged')",
+    )
     .all(programId, type);
   for (const s of stale) {
     if (seenFingerprints.has(s.fingerprint)) continue;
-    db.handle().query("UPDATE radar_signals SET status = 'resolved', resolved_at = ?, updated_at = ? WHERE id = ?").run(now, now, s.id);
+    db.handle()
+      .query("UPDATE radar_signals SET status = 'resolved', resolved_at = ?, updated_at = ? WHERE id = ?")
+      .run(now, now, s.id);
   }
 }
 
-function programScoped(id: number, actorId: string | null, requireHelper: ((programId: string, actorId: string | null) => boolean) | null): { error: string } | { signal: RadarSignal } {
+function programScoped(
+  id: number,
+  actorId: string | null,
+  requireHelper: ((programId: string, actorId: string | null) => boolean) | null,
+): { error: string } | { signal: RadarSignal } {
   const inc = row(id);
   if (!inc) return { error: "signal not found" };
-  if (requireHelper && !requireHelper(inc.program_id, actorId)) return { error: "actor is not a helper of this program" };
+  if (requireHelper && !requireHelper(inc.program_id, actorId))
+    return { error: "actor is not a helper of this program" };
   return { signal: inc };
 }
 
-function acknowledgeSignal({ id, actorId = null, requireHelper = null }: { id: number; actorId?: string | null; requireHelper?: ((programId: string, actorId: string | null) => boolean) | null } = { id: 0 }): RadarResult {
+function acknowledgeSignal(
+  {
+    id,
+    actorId = null,
+    requireHelper = null,
+  }: {
+    id: number;
+    actorId?: string | null;
+    requireHelper?: ((programId: string, actorId: string | null) => boolean) | null;
+  } = { id: 0 },
+): RadarResult {
   const scoped = programScoped(id, actorId, requireHelper);
   if ("error" in scoped) return scoped;
   const now = Date.now();
-  db.handle().query("UPDATE radar_signals SET status = 'acknowledged', acknowledged_at = ?, acknowledged_by = ?, updated_at = ? WHERE id = ?").run(now, actorId, now, id);
-  audit.record({ programId: scoped.signal.program_id, actorId, action: "radar.acknowledged", entityType: "radar_signal", entityId: id });
+  db.handle()
+    .query(
+      "UPDATE radar_signals SET status = 'acknowledged', acknowledged_at = ?, acknowledged_by = ?, updated_at = ? WHERE id = ?",
+    )
+    .run(now, actorId, now, id);
+  audit.record({
+    programId: scoped.signal.program_id,
+    actorId,
+    action: "radar.acknowledged",
+    entityType: "radar_signal",
+    entityId: id,
+  });
   return { ok: true, signal: row(id) };
 }
 
-function resolveSignal({ id, actorId = null, requireHelper = null }: { id: number; actorId?: string | null; requireHelper?: ((programId: string, actorId: string | null) => boolean) | null } = { id: 0 }): RadarResult {
+function resolveSignal(
+  {
+    id,
+    actorId = null,
+    requireHelper = null,
+  }: {
+    id: number;
+    actorId?: string | null;
+    requireHelper?: ((programId: string, actorId: string | null) => boolean) | null;
+  } = { id: 0 },
+): RadarResult {
   const scoped = programScoped(id, actorId, requireHelper);
   if ("error" in scoped) return scoped;
   const now = Date.now();
-  db.handle().query("UPDATE radar_signals SET status = 'resolved', resolved_at = ?, updated_at = ? WHERE id = ?").run(now, now, id);
-  audit.record({ programId: scoped.signal.program_id, actorId, action: "radar.resolved", entityType: "radar_signal", entityId: id });
+  db.handle()
+    .query("UPDATE radar_signals SET status = 'resolved', resolved_at = ?, updated_at = ? WHERE id = ?")
+    .run(now, now, id);
+  audit.record({
+    programId: scoped.signal.program_id,
+    actorId,
+    action: "radar.resolved",
+    entityType: "radar_signal",
+    entityId: id,
+  });
   return { ok: true, signal: row(id) };
 }
 
-function suppressSignal({ id, actorId = null, duration, requireHelper = null }: { id: number; actorId?: string | null; duration?: string; requireHelper?: ((programId: string, actorId: string | null) => boolean) | null } = { id: 0 }): RadarResult {
+function suppressSignal(
+  {
+    id,
+    actorId = null,
+    duration,
+    requireHelper = null,
+  }: {
+    id: number;
+    actorId?: string | null;
+    duration?: string;
+    requireHelper?: ((programId: string, actorId: string | null) => boolean) | null;
+  } = { id: 0 },
+): RadarResult {
   const scoped = programScoped(id, actorId, requireHelper);
   if ("error" in scoped) return scoped;
   const durationMs = duration ? SUPPRESS_DURATIONS_MS[duration as keyof typeof SUPPRESS_DURATIONS_MS] : undefined;
   if (!durationMs) return { error: `duration must be one of ${Object.keys(SUPPRESS_DURATIONS_MS).join(", ")}` };
   const now = Date.now();
-  db.handle().query("UPDATE radar_signals SET status = 'suppressed', suppressed_until = ?, updated_at = ? WHERE id = ?").run(now + durationMs, now, id);
-  audit.record({ programId: scoped.signal.program_id, actorId, action: "radar.suppressed", entityType: "radar_signal", entityId: id, metadata: { duration } });
+  db.handle()
+    .query("UPDATE radar_signals SET status = 'suppressed', suppressed_until = ?, updated_at = ? WHERE id = ?")
+    .run(now + durationMs, now, id);
+  audit.record({
+    programId: scoped.signal.program_id,
+    actorId,
+    action: "radar.suppressed",
+    entityType: "radar_signal",
+    entityId: id,
+    metadata: { duration },
+  });
   return { ok: true, signal: row(id) };
 }
-
 
 function staleSeverity(oldestMs: number): string {
   return oldestMs > STALE_HIGH_MS ? "HIGH" : "MEDIUM";
@@ -252,7 +383,9 @@ function fetchOpenTickets(programId: string): TicketAgeRow[] {
 
 function decideStaleTickets(openRows: TicketAgeRow[], now: number): RadarFinding | null {
   if (openRows.length === 0) return null;
-  const stale = openRows.filter((t: TicketAgeRow) => now - t.created_at > STALE_WARN_MS).sort((a: TicketAgeRow, b: TicketAgeRow) => a.created_at - b.created_at);
+  const stale = openRows
+    .filter((t: TicketAgeRow) => now - t.created_at > STALE_WARN_MS)
+    .sort((a: TicketAgeRow, b: TicketAgeRow) => a.created_at - b.created_at);
   if (stale.length === 0) return null;
   const oldestMs = now - stale[0].created_at;
   const hours = Math.round(oldestMs / 3600000);
@@ -282,7 +415,10 @@ function escalationSeverity(ratio: number): string {
   return "MEDIUM";
 }
 
-function decideEscalationSpike(recent: number, baselineTotal: number): { baselinePerWindow: number; severity: string } | null {
+function decideEscalationSpike(
+  recent: number,
+  baselineTotal: number,
+): { baselinePerWindow: number; severity: string } | null {
   if (recent < ESCALATION_MIN_RECENT) return null;
   const baselineBuckets = ESCALATION_BASELINE_WINDOW_MS / ESCALATION_WINDOW_MS;
   const baselinePerWindow = baselineTotal / baselineBuckets;
@@ -295,8 +431,14 @@ function decideEscalationSpike(recent: number, baselineTotal: number): { baselin
 function detectEscalationSpike(programId: string, now: number): RadarFinding | null {
   const recentCutoff = now - ESCALATION_WINDOW_MS;
   const baselineCutoff = now - ESCALATION_BASELINE_WINDOW_MS;
-  const recent = db.handle().query("SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND created_at > ?").get(programId, recentCutoff).n;
-  const baselineTotal = db.handle().query("SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND created_at > ? AND created_at <= ?").get(programId, baselineCutoff, recentCutoff).n;
+  const recent = db
+    .handle()
+    .query("SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND created_at > ?")
+    .get(programId, recentCutoff).n;
+  const baselineTotal = db
+    .handle()
+    .query("SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND created_at > ? AND created_at <= ?")
+    .get(programId, baselineCutoff, recentCutoff).n;
   const decided = decideEscalationSpike(recent, baselineTotal);
   if (!decided) return null;
   return {
@@ -305,7 +447,11 @@ function detectEscalationSpike(programId: string, now: number): RadarFinding | n
     title: `${recent} new tickets in the last hour`,
     summary: `Baseline is ~${decided.baselinePerWindow.toFixed(1)}/hour over the prior 6h.`,
     fingerprint: "spike",
-    evidence: { recentCount: recent, baselinePerWindow: Number(decided.baselinePerWindow.toFixed(2)), windowMs: ESCALATION_WINDOW_MS },
+    evidence: {
+      recentCount: recent,
+      baselinePerWindow: Number(decided.baselinePerWindow.toFixed(2)),
+      windowMs: ESCALATION_WINDOW_MS,
+    },
   };
 }
 
@@ -320,14 +466,29 @@ function faqFingerprint(representative: string): string {
 function detectFaqClusters(programId: string): RadarFinding[] {
   const { clusters, error } = gapClusters.clusterGaps({ programId, sinceMs: FAQ_WINDOW_MS, minAskers: FAQ_MIN_ASKERS });
   if (error || !clusters) return [];
-  return clusters.map((c: { askers: number; representative: string; askCount: number; covered: boolean; escalated: number; threads: Array<{ channel: string; messageTs: string }> }) => ({
-    type: "FAQ_CLUSTER",
-    severity: faqSeverity(c.askers),
-    title: `${c.askers} askers about "${c.representative.slice(0, 80)}"`,
-    summary: `${c.askCount} question${c.askCount === 1 ? "" : "s"} in 24h${c.covered ? " (docs already cover this)" : ""}.`,
-    fingerprint: faqFingerprint(c.representative),
-    evidence: { askers: c.askers, askCount: c.askCount, escalated: c.escalated, covered: c.covered, sampleThreads: c.threads },
-  }));
+  return clusters.map(
+    (c: {
+      askers: number;
+      representative: string;
+      askCount: number;
+      covered: boolean;
+      escalated: number;
+      threads: Array<{ channel: string; messageTs: string }>;
+    }) => ({
+      type: "FAQ_CLUSTER",
+      severity: faqSeverity(c.askers),
+      title: `${c.askers} askers about "${c.representative.slice(0, 80)}"`,
+      summary: `${c.askCount} question${c.askCount === 1 ? "" : "s"} in 24h${c.covered ? " (docs already cover this)" : ""}.`,
+      fingerprint: faqFingerprint(c.representative),
+      evidence: {
+        askers: c.askers,
+        askCount: c.askCount,
+        escalated: c.escalated,
+        covered: c.covered,
+        sampleThreads: c.threads,
+      },
+    }),
+  );
 }
 
 function lowConfidenceSeverity(mean: number): string {
@@ -384,7 +545,9 @@ function detectSourceFailures(programId: string): RadarFinding[] {
   const sources = prog && Array.isArray(prog.sources) ? prog.sources : [];
   if (sources.length === 0) return [];
   const knowledge = require("./knowledge");
-  const keyed = sources.map((s: { name: string }) => ({ source: s, key: knowledge.sourceCacheKey(s) || s.name })).filter((x: { key: string }) => x.key);
+  const keyed = sources
+    .map((s: { name: string }) => ({ source: s, key: knowledge.sourceCacheKey(s) || s.name }))
+    .filter((x: { key: string }) => x.key);
   const health = db.getSourceHealth(keyed.map((x: { key: string }) => x.key));
   const byKey = new Map((health as SourceHealthRow[]).map((h: SourceHealthRow) => [h.name, h]));
   const out = [];
@@ -393,14 +556,21 @@ function detectSourceFailures(programId: string): RadarFinding[] {
     if (!h || h.fail_count === 0) continue;
     const neverSucceeded = !h.last_success_at;
     const lastSuccessAt = h.last_success_at;
-    const staleness = neverSucceeded ? "never had a successful refresh" : `last succeeded ${Math.round((Date.now() - (lastSuccessAt || 0)) / 3600000)}h ago`;
+    const staleness = neverSucceeded
+      ? "never had a successful refresh"
+      : `last succeeded ${Math.round((Date.now() - (lastSuccessAt || 0)) / 3600000)}h ago`;
     out.push({
       type: "SOURCE_FAILURE",
       severity: sourceSeverity(h.fail_count, neverSucceeded),
       title: `Source "${source.name}" failed to refresh`,
       summary: `${h.fail_count} consecutive failure${h.fail_count === 1 ? "" : "s"}, ${staleness}.`,
       fingerprint: key,
-      evidence: { source: source.name, failCount: h.fail_count, lastError: h.last_error, lastSuccessAt: h.last_success_at },
+      evidence: {
+        source: source.name,
+        failCount: h.fail_count,
+        lastError: h.last_error,
+        lastSuccessAt: h.last_success_at,
+      },
     });
   }
   return out;
@@ -428,7 +598,10 @@ function decideReopenSpike(rows: TicketAgeRow[]): RadarFinding | null {
 
 function detectReopenSpike(programId: string, now: number): RadarFinding | null {
   const cutoff = now - REOPEN_WINDOW_MS;
-  const rows = db.handle().query("SELECT reopen_count FROM tickets WHERE program_id = ? AND created_at > ?").all(programId, cutoff);
+  const rows = db
+    .handle()
+    .query("SELECT reopen_count FROM tickets WHERE program_id = ? AND created_at > ?")
+    .all(programId, cutoff);
   return decideReopenSpike(rows);
 }
 
@@ -452,7 +625,10 @@ function detectIncidentSignals(programId: string): RadarFinding[] {
   }
   const active = incidents.listIncidents(programId, "confirmed", ACTIVE_INCIDENT_LIST_LIMIT);
   for (const inc of active as IncidentRow[]) {
-    const affected = db.handle().query("SELECT COUNT(*) AS n FROM incident_reports WHERE incident_id = ?").get(inc.id).n;
+    const affected = db
+      .handle()
+      .query("SELECT COUNT(*) AS n FROM incident_reports WHERE incident_id = ?")
+      .get(inc.id).n;
     const startedAgoMin = Math.round((Date.now() - inc.started_at) / 60000);
     out.push({
       type: "ACTIVE_INCIDENT",
@@ -493,23 +669,30 @@ function evaluateProgram(programId: string): { error: string } | { signals: Arra
   return { signals };
 }
 
-function startRadarLoop(intervalMin = Number(process.env.PIXIE_RADAR_CHECK_MIN || RADAR_LOOP_DEFAULT_MIN)): ReturnType<typeof setInterval> | null {
+function startRadarLoop(
+  intervalMin = Number(process.env.PIXIE_RADAR_CHECK_MIN || RADAR_LOOP_DEFAULT_MIN),
+): ReturnType<typeof setInterval> | null {
   if (!intervalMin || intervalMin <= 0) return null;
   const log = require("./log");
   const lease = require("./jobLease");
-  const timer = setInterval(() => {
-    lease.runOnce(RADAR_LEASE_NAME, intervalMin * 60 * 1000, async () => {
-      const programs = require("./programs");
-      for (const prog of programs.all()) {
-        if (!prog || prog.id === SKIPPED_PROGRAM_ID) continue;
-        try {
-          evaluateProgram(prog.id);
-        } catch (e) {
-          log.warn("radar", `evaluate failed for ${prog.id}: ${e instanceof Error ? e.message : String(e)}`);
-        }
-      }
-    }).catch((e: unknown) => log.error("radar", `loop failed: ${e instanceof Error ? e.message : String(e)}`));
-  }, intervalMin * 60 * 1000);
+  const timer = setInterval(
+    () => {
+      lease
+        .runOnce(RADAR_LEASE_NAME, intervalMin * 60 * 1000, async () => {
+          const programs = require("./programs");
+          for (const prog of programs.all()) {
+            if (!prog || prog.id === SKIPPED_PROGRAM_ID) continue;
+            try {
+              evaluateProgram(prog.id);
+            } catch (e) {
+              log.warn("radar", `evaluate failed for ${prog.id}: ${e instanceof Error ? e.message : String(e)}`);
+            }
+          }
+        })
+        .catch((e: unknown) => log.error("radar", `loop failed: ${e instanceof Error ? e.message : String(e)}`));
+    },
+    intervalMin * 60 * 1000,
+  );
   if (timer.unref) timer.unref();
   return timer;
 }

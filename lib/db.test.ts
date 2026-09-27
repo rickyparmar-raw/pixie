@@ -65,7 +65,12 @@ test("a refresh updates the answer without counting as an ask", () => {
   cache.getCachedAnswer("hash-refresh");
   const before = countOf("how do i submit");
 
-  cache.putCachedAnswer("hash-refresh", "how do i submit", { source: "Pixl Docs", answer: "new answer" }, { refreshed: true });
+  cache.putCachedAnswer(
+    "hash-refresh",
+    "how do i submit",
+    { source: "Pixl Docs", answer: "new answer" },
+    { refreshed: true },
+  );
 
   assert.equal(countOf("how do i submit"), before, "a refresh is pixie updating itself, not somebody asking");
   assert.equal(cache.getCachedAnswer("hash-refresh").answer, "new answer");
@@ -77,8 +82,12 @@ test("sweep keeps a question people still ask and drops one nobody does", () => 
   cache.putCachedAnswer("hash-popular", "how do i join", { source: "Pixl FAQ", answer: "sign up" });
   cache.putCachedAnswer("hash-forgotten", "some one-off thing", { source: "Pixl Docs", answer: "whatever" });
 
-  db.handle().query("UPDATE answer_cache SET created_at = ?, last_asked_at = ? WHERE question_hash = ?").run(old, old, "hash-forgotten");
-  db.handle().query("UPDATE answer_cache SET created_at = ?, last_asked_at = ? WHERE question_hash = ?").run(old, Date.now(), "hash-popular");
+  db.handle()
+    .query("UPDATE answer_cache SET created_at = ?, last_asked_at = ? WHERE question_hash = ?")
+    .run(old, old, "hash-forgotten");
+  db.handle()
+    .query("UPDATE answer_cache SET created_at = ?, last_asked_at = ? WHERE question_hash = ?")
+    .run(old, Date.now(), "hash-popular");
 
   db.sweep();
 
@@ -180,7 +189,6 @@ test("rate limit counts only requests inside the window", () => {
   assert.equal(db.countRecentRequests("U9", -1), 0);
 });
 
-
 test("recentUserMessages returns the newest N, oldest first", () => {
   for (const t of ["one", "two", "three", "four"]) {
     db.recordUserMessage({ userId: "U-recent", channel: "C-recent", text: t });
@@ -266,7 +274,6 @@ test("loadSourceText returns null for a source that has never been fetched", () 
   assert.equal(db.loadSourceText("Never Fetched"), null);
 });
 
-
 test("topGaps requires at least two distinct askers, not just two asks", () => {
   db.handle().query("DELETE FROM doc_gaps").run();
 
@@ -278,10 +285,14 @@ test("topGaps requires at least two distinct askers, not just two asks", () => {
   const gaps = db.topGaps(10);
   const questionText = (g: TestAny) => g.question;
 
-  assert.ok(!gaps.some((g: TestAny) => questionText(g) === "does pixie have a boyfriend"),
-    "one asker is not a gap regardless of how many times they ask");
-  assert.ok(gaps.some((g: TestAny) => questionText(g) === "how do i submit my project"),
-    "eight distinct askers is a gap");
+  assert.ok(
+    !gaps.some((g: TestAny) => questionText(g) === "does pixie have a boyfriend"),
+    "one asker is not a gap regardless of how many times they ask",
+  );
+  assert.ok(
+    gaps.some((g: TestAny) => questionText(g) === "how do i submit my project"),
+    "eight distinct askers is a gap",
+  );
 });
 
 test("topGaps ranks by askers, not by raw asks", () => {
@@ -306,8 +317,10 @@ test("a question a maintainer has dropped stays out of the auto-ranked list", ()
   db.recordGapRejection("how do i submit my project");
 
   const gaps = db.topGaps(10);
-  assert.ok(!gaps.some((g: TestAny) => g.question === "how do i submit my project"),
-    "a human-rejected question should be hidden from the auto-ranked list");
+  assert.ok(
+    !gaps.some((g: TestAny) => g.question === "how do i submit my project"),
+    "a human-rejected question should be hidden from the auto-ranked list",
+  );
 });
 
 test("clearing a rejection brings a question back into the list", () => {
@@ -335,34 +348,89 @@ test("a rejection is keyed on the normalized question, so wording doesn't matter
 test("learned facts are strictly program-scoped; legacy unowned rows get their channel's program", () => {
   const h = db.handle();
   h.query("DELETE FROM learned_facts").run();
-  db.addLearnedFact({ question: "pixl q", answer: "pixl a", authorId: "U1", status: "approved", channel: "C_PIXL", programId: null });
-  db.addLearnedFact({ question: "orphan q", answer: "orphan a", authorId: "U1", status: "approved", channel: "C_GONE", programId: null });
-  db.addLearnedFact({ question: "b2b q", answer: "b2b a", authorId: "U1", status: "approved", channel: "C_B2B", programId: "b2b" });
+  db.addLearnedFact({
+    question: "pixl q",
+    answer: "pixl a",
+    authorId: "U1",
+    status: "approved",
+    channel: "C_PIXL",
+    programId: null,
+  });
+  db.addLearnedFact({
+    question: "orphan q",
+    answer: "orphan a",
+    authorId: "U1",
+    status: "approved",
+    channel: "C_GONE",
+    programId: null,
+  });
+  db.addLearnedFact({
+    question: "b2b q",
+    answer: "b2b a",
+    authorId: "U1",
+    status: "approved",
+    channel: "C_B2B",
+    programId: "b2b",
+  });
 
-  assert.deepEqual(db.approvedFacts(50, "b2b").map((f: TestAny) => f.question), ["b2b q"]);
-  assert.deepEqual(db.approvedFacts(50, "pixl").map((f: TestAny) => f.question), []);
+  assert.deepEqual(
+    db.approvedFacts(50, "b2b").map((f: TestAny) => f.question),
+    ["b2b q"],
+  );
+  assert.deepEqual(
+    db.approvedFacts(50, "pixl").map((f: TestAny) => f.question),
+    [],
+  );
 
   const res = db.assignUnownedLearnedFacts((ch: TestAny) => (ch === "C_PIXL" ? "pixl" : null));
   assert.deepEqual(res, { unowned: 2, assigned: 1, remaining: 1 });
-  assert.deepEqual(db.approvedFacts(50, "pixl").map((f: TestAny) => f.question), ["pixl q"]);
-  assert.deepEqual(db.approvedFacts(50, "b2b").map((f: TestAny) => f.question), ["b2b q"]);
-  assert.deepEqual(db.assignUnownedLearnedFacts(() => "b2b"), { unowned: 1, assigned: 1, remaining: 0 });
-  assert.deepEqual(db.approvedFacts(50, "pixl").map((f: TestAny) => f.question), ["pixl q"]);
+  assert.deepEqual(
+    db.approvedFacts(50, "pixl").map((f: TestAny) => f.question),
+    ["pixl q"],
+  );
+  assert.deepEqual(
+    db.approvedFacts(50, "b2b").map((f: TestAny) => f.question),
+    ["b2b q"],
+  );
+  assert.deepEqual(
+    db.assignUnownedLearnedFacts(() => "b2b"),
+    { unowned: 1, assigned: 1, remaining: 0 },
+  );
+  assert.deepEqual(
+    db.approvedFacts(50, "pixl").map((f: TestAny) => f.question),
+    ["pixl q"],
+  );
 });
 
 test("a corpus with no program never sees another program's taught facts", () => {
   db.handle().query("DELETE FROM learned_facts").run();
   db.addLearnedFact({ question: "a q", answer: "a a", authorId: "U1", status: "approved", programId: "prog-a" });
   db.addLearnedFact({ question: "unowned q", answer: "u a", authorId: "U1", status: "approved", programId: null });
-  assert.deepEqual(db.approvedFacts(50, null).map((f: TestAny) => f.question), ["unowned q"]);
-  assert.deepEqual(db.approvedFacts(50, "prog-a").map((f: TestAny) => f.question), ["a q"]);
+  assert.deepEqual(
+    db.approvedFacts(50, null).map((f: TestAny) => f.question),
+    ["unowned q"],
+  );
+  assert.deepEqual(
+    db.approvedFacts(50, "prog-a").map((f: TestAny) => f.question),
+    ["a q"],
+  );
 });
 
 test("channel-less legacy facts go to whatever the resolver names for them", () => {
   db.handle().query("DELETE FROM learned_facts").run();
-  db.addLearnedFact({ question: "era q", answer: "era a", authorId: "U1", status: "approved", channel: null, programId: null });
+  db.addLearnedFact({
+    question: "era q",
+    answer: "era a",
+    authorId: "U1",
+    status: "approved",
+    channel: null,
+    programId: null,
+  });
   const res = db.assignUnownedLearnedFacts((ch: TestAny) => (ch ? null : "pixl"));
   assert.deepEqual(res, { unowned: 1, assigned: 1, remaining: 0 });
-  assert.deepEqual(db.approvedFacts(50, "pixl").map((f: TestAny) => f.question), ["era q"]);
+  assert.deepEqual(
+    db.approvedFacts(50, "pixl").map((f: TestAny) => f.question),
+    ["era q"],
+  );
 });
 export {};

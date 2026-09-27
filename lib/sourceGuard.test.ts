@@ -3,7 +3,16 @@ const assert = require("node:assert/strict");
 const guard = require("./sourceGuard");
 
 test("private IPv4 ranges are not public", () => {
-  for (const ip of ["10.0.0.1", "127.0.0.1", "169.254.169.254", "172.16.0.1", "172.31.255.255", "192.168.1.1", "0.0.0.0", "224.0.0.1"]) {
+  for (const ip of [
+    "10.0.0.1",
+    "127.0.0.1",
+    "169.254.169.254",
+    "172.16.0.1",
+    "172.31.255.255",
+    "192.168.1.1",
+    "0.0.0.0",
+    "224.0.0.1",
+  ]) {
     assert.equal(guard.isPublicV4(ip), false, ip);
   }
   assert.equal(guard.isPublicV4("8.8.8.8"), true);
@@ -37,7 +46,6 @@ test("ingestion rejects blocked URLs before any fetch", async () => {
     /blocked source URL/,
   );
 });
-
 
 test("redirect budget pins at five hops", () => {
   assert.equal(guard.MAX_REDIRECTS, 5);

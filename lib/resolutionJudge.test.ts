@@ -16,7 +16,10 @@ test("resolution judge sends a bounded typed resolution task and returns Jev con
     {
       evaluateDecision: async (input) => {
         request = input;
-        return { status: "ok", result: { answers: { resolution: { choice: "resolved", probabilities: { resolved: 0.93 } } } } };
+        return {
+          status: "ok",
+          result: { answers: { resolution: { choice: "resolved", probabilities: { resolved: 0.93 } } } },
+        };
       },
     },
   );
@@ -28,8 +31,18 @@ test("resolution judge sends a bounded typed resolution task and returns Jev con
 });
 
 test("resolution judge fails closed on Jev errors and malformed labels", async () => {
-  const error = await judgeResolution({ ticket: { question: "q" }, transcript: [] }, { evaluateDecision: async () => { throw new Error("timeout"); } });
-  const malformed = await judgeResolution({ ticket: { question: "q" }, transcript: [] }, { evaluateDecision: async () => ({ status: "ok", result: { answers: { resolution: { choice: "maybe" } } } }) });
+  const error = await judgeResolution(
+    { ticket: { question: "q" }, transcript: [] },
+    {
+      evaluateDecision: async () => {
+        throw new Error("timeout");
+      },
+    },
+  );
+  const malformed = await judgeResolution(
+    { ticket: { question: "q" }, transcript: [] },
+    { evaluateDecision: async () => ({ status: "ok", result: { answers: { resolution: { choice: "maybe" } } } }) },
+  );
   assert.deepEqual(error, { verdict: "unknown" });
   assert.deepEqual(malformed, { verdict: "unknown" });
 });

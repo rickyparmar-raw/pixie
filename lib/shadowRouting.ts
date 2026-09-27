@@ -18,14 +18,21 @@ interface Recommendation {
   role: string;
 }
 
-interface ExpertiseRow { tag: string; solved_count: number }
+interface ExpertiseRow {
+  tag: string;
+  solved_count: number;
+}
 interface ShadowCandidate extends Recommendation {
   rank: number;
   openLoad: number;
   expertiseMatches: string[];
   observedCategoryResolutions: number;
 }
-interface ShadowDetail { mode?: string; category?: string; candidates?: ShadowCandidate[] }
+interface ShadowDetail {
+  mode?: string;
+  category?: string;
+  candidates?: ShadowCandidate[];
+}
 interface ShadowRow {
   event_id: number;
   ticket_id: number;
@@ -55,7 +62,8 @@ function snapshotForTicket(ticket: ShadowTicket | null) {
   const recommendations: Recommendation[] = helperRoute.recommend({ programId: ticket.program_id, category, limit: 5 });
   const candidates = recommendations.map((candidate, index) => {
     const expertise = helperRoute.getExpertise(ticket.program_id, candidate.userId);
-    const categoryMatch = expertise.find((entry: ExpertiseRow) => entry.tag === String(category).trim().toLowerCase()) || null;
+    const categoryMatch =
+      expertise.find((entry: ExpertiseRow) => entry.tag === String(category).trim().toLowerCase()) || null;
     return {
       userId: candidate.userId,
       rank: index + 1,
@@ -68,7 +76,12 @@ function snapshotForTicket(ticket: ShadowTicket | null) {
     };
   });
   const detail = { mode: "shadow", category, candidates };
-  const eventId = db.addTicketEvent({ ticketId: ticket.id, programId: ticket.program_id, eventType: EVENT_TYPE, detail });
+  const eventId = db.addTicketEvent({
+    ticketId: ticket.id,
+    programId: ticket.program_id,
+    eventType: EVENT_TYPE,
+    detail,
+  });
   return eventId ? { eventId, detail } : null;
 }
 
@@ -81,12 +94,15 @@ function parseDetail(detail: string | null): ShadowDetail {
 }
 
 function list(programId = "pixl", limit = 20) {
-  const rows = db.handle().query(
-    `SELECT e.id AS event_id, e.ticket_id, e.program_id, e.detail, e.created_at AS recommended_at,
+  const rows = db
+    .handle()
+    .query(
+      `SELECT e.id AS event_id, e.ticket_id, e.program_id, e.detail, e.created_at AS recommended_at,
             t.category, t.created_at, t.assignee_id, t.resolved_by, t.resolved_at, t.reopen_count, t.status
        FROM ticket_events e JOIN tickets t ON t.id = e.ticket_id AND t.program_id = e.program_id
       WHERE e.program_id = ? AND e.event_type = ? ORDER BY e.created_at DESC, e.id DESC LIMIT ?`,
-  ).all(programId, EVENT_TYPE, Math.min(Math.max(Number(limit) || 20, 1), 100)) as ShadowRow[];
+    )
+    .all(programId, EVENT_TYPE, Math.min(Math.max(Number(limit) || 20, 1), 100)) as ShadowRow[];
   return rows.map((row: ShadowRow) => {
     const events = db.listTicketEvents(row.ticket_id).filter((event) => event.program_id === programId);
     const replies = events.filter((event) => event.event_type === "helper_reply" && event.actor_id);
@@ -105,7 +121,12 @@ function list(programId = "pixl", limit = 20) {
       actualResponder: replies.at(-1)?.actor_id || null,
       actualResolver: resolved.at(-1)?.actor_id || row.resolved_by || null,
       top1MatchedResolver: Boolean(top && (resolved.at(-1)?.actor_id || row.resolved_by) === top.userId),
-      top3ContainsResolver: Boolean((resolved.at(-1)?.actor_id || row.resolved_by) && detail.candidates?.slice(0, 3).some((candidate) => candidate.userId === (resolved.at(-1)?.actor_id || row.resolved_by))),
+      top3ContainsResolver: Boolean(
+        (resolved.at(-1)?.actor_id || row.resolved_by) &&
+        detail.candidates
+          ?.slice(0, 3)
+          .some((candidate) => candidate.userId === (resolved.at(-1)?.actor_id || row.resolved_by)),
+      ),
       resolvedAt: row.resolved_at,
       reopened: (row.reopen_count || 0) > 0,
       status: row.status,

@@ -25,19 +25,19 @@ interface Row {
   [key: string]: unknown;
 }
 
-// WHY: one shared "same report" line so duplicates, bursts, and live matching
+// One shared "same report" line so duplicates, bursts, and live matching
 // agree — three thresholds would let a pair count as duplicate but not incident.
 const SIMILARITY_THRESHOLD = 0.35;
-// WHY: duplicates triage recent work, not archaeology — a month bounds the
+// Duplicates triage recent work, not archaeology — a month bounds the
 // scan to tickets a helper could still act on.
 const DUPLICATE_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-// WHY: an outage is a tight spike in time — one hour catches it without
+// An outage is a tight spike in time — one hour catches it without
 // sweeping the whole day's unrelated questions into one candidate.
 const INCIDENT_WINDOW_MS = 60 * 60 * 1000;
-// WHY: four similar tickets in an hour is the smallest spike worth a human
+// Four similar tickets in an hour is the smallest spike worth a human
 // look; fewer is routine coincidence.
 const INCIDENT_THRESHOLD = 4;
-// WHY: one outage must stay one incident — later tickets in the same burst
+// One outage must stay one incident — later tickets in the same burst
 // link to the live candidate instead of opening a second row for the same shape.
 const INCIDENT_COOLDOWN_MS = 6 * 60 * 60 * 1000;
 
@@ -45,17 +45,17 @@ function similarityScore(a: string, b: string): number {
   return gapClusters.pairOverlap(a, b);
 }
 
-// WHY: threshold lives in one place so the three call sites cannot drift apart.
+// Threshold lives in one place so the three call sites cannot drift apart.
 function isSimilar(a: string, b: string, threshold = SIMILARITY_THRESHOLD): boolean {
   return similarityScore(a, b) >= threshold;
 }
 
-// WHY: unbounded limits let one question dump the whole table into a response.
+// Unbounded limits let one question dump the whole table into a response.
 function clampLimit(limit: number): number {
   return Math.min(Math.max(limit, 1), 10);
 }
 
-// WHY: rounding is part of the contract — callers display this number, so it
+// Rounding is part of the contract — callers display this number, so it
 // must equal the scored value rather than a longer float.
 function scoreDuplicate(question: string, row: Row): number {
   return Number(similarityScore(question, String(row.question || "")).toFixed(3));
@@ -91,12 +91,32 @@ function pickBestIncident(question: string, active: Row[]): Row | null {
   return best;
 }
 
-const OUTAGE_LANGUAGE = /\b(?:down|offline|unavailable|broken|inaccessible|failing|failed|failure|error|issue|problem|outage|crash(?:ing)?|500)\b|\b(?:blank(?:\s+page)?|page\s+is\s+blank|not\s+(?:loading|load|working)|(?:isn'?t|is\s+not|can not|cannot|cant|can't|won't|wont|unable\s+to)\s+(?:load|open|access|reach|work))\b/i;
+const OUTAGE_LANGUAGE =
+  /\b(?:down|offline|unavailable|broken|inaccessible|failing|failed|failure|error|issue|problem|outage|crash(?:ing)?|500)\b|\b(?:blank(?:\s+page)?|page\s+is\s+blank|not\s+(?:loading|load|working)|(?:isn'?t|is\s+not|can not|cannot|cant|can't|won't|wont|unable\s+to)\s+(?:load|open|access|reach|work))\b/i;
 const ACCESS_LANGUAGE = /\b(?:site|website|webpage|page|portal|app|service|dashboard|load|open|access|reach)\b/i;
 const INCIDENT_NOISE = new Set([
-  "down", "offline", "unavailable", "broken", "inaccessible", "failing", "failed", "failure",
-  "error", "outage", "crashing", "crash", "access", "open", "load", "loading", "reach", "working",
-  "work", "currently", "right", "now",
+  "down",
+  "offline",
+  "unavailable",
+  "broken",
+  "inaccessible",
+  "failing",
+  "failed",
+  "failure",
+  "error",
+  "outage",
+  "crashing",
+  "crash",
+  "access",
+  "open",
+  "load",
+  "loading",
+  "reach",
+  "working",
+  "work",
+  "currently",
+  "right",
+  "now",
 ]);
 
 function incidentTerms(text: unknown): Set<string> {
@@ -125,7 +145,7 @@ function incidentSimilarity(question: string, incident: Row): number {
   return score;
 }
 
-// WHY: confidence grows with corroboration but never claims certainty from wording alone.
+// Confidence grows with corroboration but never claims certainty from wording alone.
 function burstConfidence(count: number): number {
   return Math.min(0.5 + count * 0.05, 0.95);
 }
@@ -143,32 +163,41 @@ function defaultResolutionText(title: string): string {
 }
 
 function fetchDuplicateRows(programId: string, cutoff: number): Row[] {
-  return db.handle().query(
-    `SELECT id, question, summary, status, created_at FROM tickets
+  return db
+    .handle()
+    .query(
+      `SELECT id, question, summary, status, created_at FROM tickets
      WHERE program_id = ? AND created_at > ? AND status IN ('open','waiting_for_helper','assigned','claimed','escalated','reopened','resolved')
      ORDER BY created_at DESC LIMIT 200`,
-  ).all(programId, cutoff) as Row[];
+    )
+    .all(programId, cutoff) as Row[];
 }
 
 function fetchRecentTickets(programId: string, cutoff: number): Row[] {
-  return db.handle().query(
-    `SELECT id, question, thread_ts, created_at FROM tickets
+  return db
+    .handle()
+    .query(
+      `SELECT id, question, thread_ts, created_at FROM tickets
      WHERE program_id = ? AND created_at > ? AND status NOT IN ('closed','spam','duplicate')
      ORDER BY created_at ASC LIMIT 300`,
-  ).all(programId, cutoff) as Row[];
+    )
+    .all(programId, cutoff) as Row[];
 }
 
 function fetchLiveIncidents(programId: string, now: number): Row[] {
-  return db.handle().query(
-    "SELECT * FROM program_incidents WHERE program_id = ? AND status IN ('candidate','confirmed') AND created_at > ? ORDER BY created_at DESC LIMIT 10",
-  ).all(programId, now - INCIDENT_COOLDOWN_MS) as Row[];
+  return db
+    .handle()
+    .query(
+      "SELECT * FROM program_incidents WHERE program_id = ? AND status IN ('candidate','confirmed') AND created_at > ? ORDER BY created_at DESC LIMIT 10",
+    )
+    .all(programId, now - INCIDENT_COOLDOWN_MS) as Row[];
 }
 
 function findCooldownIncident(live: Row[], representative: string): Row | undefined {
   return live.find((inc) => isSimilar(String(inc.title || ""), representative));
 }
 
-// WHY: position-keyed so identical questions from different tickets never
+// Position-keyed so identical questions from different tickets never
 // collapse onto the first row sharing that text.
 function buildQuestionIndex(rows: Row[]): Map<string, number[]> {
   const index = new Map<string, number[]>();
@@ -181,7 +210,12 @@ function buildQuestionIndex(rows: Row[]): Map<string, number[]> {
   return index;
 }
 
-function resolveBurstMembers(rows: Row[], members: string[], questionIndex: Map<string, number[]>, used: Set<number>): Row[] {
+function resolveBurstMembers(
+  rows: Row[],
+  members: string[],
+  questionIndex: Map<string, number[]>,
+  used: Set<number>,
+): Row[] {
   const memberRows: Row[] = [];
   for (const q of members) {
     const idx = (questionIndex.get(q) || []).find((i) => !used.has(i));
@@ -195,23 +229,61 @@ function resolveBurstMembers(rows: Row[], members: string[], questionIndex: Map<
 function linkRowsToIncident(incidentId: number, memberRows: Row[], programId: string, now: number): number {
   let linked = 0;
   for (const r of memberRows) {
-    const res = db.handle().query("INSERT OR IGNORE INTO incident_tickets (incident_id, ticket_id, program_id, linked_at) VALUES (?, ?, ?, ?)")
+    const res = db
+      .handle()
+      .query(
+        "INSERT OR IGNORE INTO incident_tickets (incident_id, ticket_id, program_id, linked_at) VALUES (?, ?, ?, ?)",
+      )
       .run(incidentId, r.id, programId, now);
     linked += res.changes;
   }
   return linked;
 }
 
-function insertCandidate({ programId, representative, memberRows, windowMs, startedAt, now }: { programId: string; representative: string; memberRows: Row[]; windowMs: number; startedAt: number; now: number }): { incidentId: number; title: string } {
+function insertCandidate({
+  programId,
+  representative,
+  memberRows,
+  windowMs,
+  startedAt,
+  now,
+}: {
+  programId: string;
+  representative: string;
+  memberRows: Row[];
+  windowMs: number;
+  startedAt: number;
+  now: number;
+}): { incidentId: number; title: string } {
   const title = truncateTitle(representative);
-  const res = db.handle().query(
-    `INSERT INTO program_incidents (program_id, title, status, reason, confidence, started_at, created_at)
+  const res = db
+    .handle()
+    .query(
+      `INSERT INTO program_incidents (program_id, title, status, reason, confidence, started_at, created_at)
      VALUES (?, ?, 'candidate', ?, ?, ?, ?)`,
-  ).run(programId, title, burstReason(memberRows.length, windowMs), burstConfidence(memberRows.length), startedAt, now);
+    )
+    .run(
+      programId,
+      title,
+      burstReason(memberRows.length, windowMs),
+      burstConfidence(memberRows.length),
+      startedAt,
+      now,
+    );
   return { incidentId: Number(res.lastInsertRowid), title };
 }
 
-function suggestDuplicates({ programId, ticketId = null, question, limit = 5 }: { programId?: string; ticketId?: number | null; question?: string; limit?: number }): Row {
+function suggestDuplicates({
+  programId,
+  ticketId = null,
+  question,
+  limit = 5,
+}: {
+  programId?: string;
+  ticketId?: number | null;
+  question?: string;
+  limit?: number;
+}): Row {
   if (!programId || !question) return { error: "programId and question required" };
   const rows = fetchDuplicateRows(programId, Date.now() - DUPLICATE_WINDOW_MS);
   return { candidates: rankDuplicateCandidates(question, rows, ticketId, limit) };
@@ -223,18 +295,31 @@ function getIncident(id: number): Row | null {
 
 function listIncidents(programId: string, status: string | null = null, limit = 50): Row[] {
   if (status) {
-    return db.handle().query("SELECT * FROM program_incidents WHERE program_id = ? AND status = ? ORDER BY created_at DESC LIMIT ?").all(programId, status, limit) as Row[];
+    return db
+      .handle()
+      .query("SELECT * FROM program_incidents WHERE program_id = ? AND status = ? ORDER BY created_at DESC LIMIT ?")
+      .all(programId, status, limit) as Row[];
   }
-  return db.handle().query("SELECT * FROM program_incidents WHERE program_id = ? ORDER BY created_at DESC LIMIT ?").all(programId, limit) as Row[];
+  return db
+    .handle()
+    .query("SELECT * FROM program_incidents WHERE program_id = ? ORDER BY created_at DESC LIMIT ?")
+    .all(programId, limit) as Row[];
 }
 
 function incidentTickets(incidentId: number): Row[] {
-  return db.handle().query(
-    `SELECT t.* FROM tickets t JOIN incident_tickets it ON it.ticket_id = t.id WHERE it.incident_id = ? ORDER BY t.created_at ASC`,
-  ).all(incidentId) as Row[];
+  return db
+    .handle()
+    .query(
+      `SELECT t.* FROM tickets t JOIN incident_tickets it ON it.ticket_id = t.id WHERE it.incident_id = ? ORDER BY t.created_at ASC`,
+    )
+    .all(incidentId) as Row[];
 }
 
-function detectBursts({ programId, windowMs = INCIDENT_WINDOW_MS, threshold = INCIDENT_THRESHOLD }: { programId?: string; windowMs?: number; threshold?: number } = {}): Row {
+function detectBursts({
+  programId,
+  windowMs = INCIDENT_WINDOW_MS,
+  threshold = INCIDENT_THRESHOLD,
+}: { programId?: string; windowMs?: number; threshold?: number } = {}): Row {
   if (!programId) return { error: "programId required" };
   const now = Date.now();
   const rows = fetchRecentTickets(programId, now - windowMs);
@@ -249,7 +334,9 @@ function detectBursts({ programId, windowMs = INCIDENT_WINDOW_MS, threshold = IN
     const memberRows = resolveBurstMembers(rows, members, questionIndex, used);
     if (memberRows.length < threshold) continue;
     const startedAt = Math.min(...memberRows.map((r) => Number(r.created_at)));
-    const representative = String(memberRows.sort((a, b) => Number(a.created_at) - Number(b.created_at))[0].question || "");
+    const representative = String(
+      memberRows.sort((a, b) => Number(a.created_at) - Number(b.created_at))[0].question || "",
+    );
     const same = findCooldownIncident(fetchLiveIncidents(programId, now), representative);
     if (same) {
       const linked = linkRowsToIncident(Number(same.id), memberRows, programId, now);
@@ -263,19 +350,50 @@ function detectBursts({ programId, windowMs = INCIDENT_WINDOW_MS, threshold = IN
   return { candidates: out };
 }
 
-function declareIncident({ incidentId, actorId = null, description = null, publicMessage = null }: { incidentId: number; actorId?: string | null; description?: string | null; publicMessage?: string | null }): Row {
+function declareIncident({
+  incidentId,
+  actorId = null,
+  description = null,
+  publicMessage = null,
+}: {
+  incidentId: number;
+  actorId?: string | null;
+  description?: string | null;
+  publicMessage?: string | null;
+}): Row {
   const inc = getIncident(incidentId);
   if (!inc) return { error: "incident not found" };
   const t = Date.now();
   db.handle()
-    .query("UPDATE program_incidents SET status = 'confirmed', confirmed_at = ?, description = ?, declared_by = ?, public_message = ? WHERE id = ?")
+    .query(
+      "UPDATE program_incidents SET status = 'confirmed', confirmed_at = ?, description = ?, declared_by = ?, public_message = ? WHERE id = ?",
+    )
     .run(t, description || null, actorId, publicMessage || null, incidentId);
   const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
-  recordAudit({ programId: inc.program_id, actorId, action: "incident.declared", entityType: "incident", entityId: incidentId, metadata: { description, publicMessage } });
+  recordAudit({
+    programId: inc.program_id,
+    actorId,
+    action: "incident.declared",
+    entityType: "incident",
+    entityId: incidentId,
+    metadata: { description, publicMessage },
+  });
   return { ok: true, incident: getIncident(incidentId) };
 }
 
-function createIncident({ programId, title, description = null, publicMessage = null, actorId = null }: { programId?: string; title?: string; description?: string | null; publicMessage?: string | null; actorId?: string | null }): Row {
+function createIncident({
+  programId,
+  title,
+  description = null,
+  publicMessage = null,
+  actorId = null,
+}: {
+  programId?: string;
+  title?: string;
+  description?: string | null;
+  publicMessage?: string | null;
+  actorId?: string | null;
+}): Row {
   if (!programId) return { error: "programId required" };
   if (!programs.get(programId)) return { error: "unknown program" };
   const cleanTitle = String(title || "").trim();
@@ -283,11 +401,23 @@ function createIncident({ programId, title, description = null, publicMessage = 
   const cleanDescription = description ? String(description).trim() : null;
   const cleanPublicMessage = publicMessage ? String(publicMessage).trim() : null;
   const now = Date.now();
-  const result = db.handle().query(
-    `INSERT INTO program_incidents
+  const result = db
+    .handle()
+    .query(
+      `INSERT INTO program_incidents
       (program_id, title, status, started_at, created_at, confirmed_at, description, declared_by, public_message)
      VALUES (?, ?, 'confirmed', ?, ?, ?, ?, ?, ?)`,
-  ).run(programId, truncateTitle(cleanTitle), now, now, now, cleanDescription || null, actorId, cleanPublicMessage || null);
+    )
+    .run(
+      programId,
+      truncateTitle(cleanTitle),
+      now,
+      now,
+      now,
+      cleanDescription || null,
+      actorId,
+      cleanPublicMessage || null,
+    );
   const incidentId = Number(result.lastInsertRowid);
   const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({
@@ -308,21 +438,53 @@ function matchActiveIncident({ programId, question }: { programId?: string; ques
   return pickBestIncident(question, active);
 }
 
-function recordAffectedReport({ incidentId, programId, ticketId = null, requesterId, channel, threadTs }: { incidentId: number; programId: string; ticketId?: number | null; requesterId?: string | null; channel: string; threadTs: string }): Row {
-  const already = db.handle().query("SELECT 1 FROM incident_reports WHERE incident_id = ? AND channel = ? AND thread_ts = ?").get(incidentId, channel, threadTs);
+function recordAffectedReport({
+  incidentId,
+  programId,
+  ticketId = null,
+  requesterId,
+  channel,
+  threadTs,
+}: {
+  incidentId: number;
+  programId: string;
+  ticketId?: number | null;
+  requesterId?: string | null;
+  channel: string;
+  threadTs: string;
+}): Row {
+  const already = db
+    .handle()
+    .query("SELECT 1 FROM incident_reports WHERE incident_id = ? AND channel = ? AND thread_ts = ?")
+    .get(incidentId, channel, threadTs);
   if (already) return { ok: true, deduped: true };
   db.handle()
-    .query("INSERT INTO incident_reports (incident_id, program_id, ticket_id, requester_id, channel, thread_ts, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .query(
+      "INSERT INTO incident_reports (incident_id, program_id, ticket_id, requester_id, channel, thread_ts, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
     .run(incidentId, programId, ticketId, requesterId || null, channel, threadTs, Date.now());
   return { ok: true, deduped: false };
 }
 
 function affectedReports(incidentId: number, onlyUnnotified = false): Row[] {
   const clause = onlyUnnotified ? "AND notified_at IS NULL" : "";
-  return db.handle().query(`SELECT * FROM incident_reports WHERE incident_id = ? ${clause} ORDER BY created_at ASC`).all(incidentId) as Row[];
+  return db
+    .handle()
+    .query(`SELECT * FROM incident_reports WHERE incident_id = ? ${clause} ORDER BY created_at ASC`)
+    .all(incidentId) as Row[];
 }
 
-async function notifyAffectedUsers({ incidentId, actorId = null, client, resolutionMessage = null }: { incidentId: number; actorId?: string | null; client?: SlackClient; resolutionMessage?: string | null }): Promise<Row> {
+async function notifyAffectedUsers({
+  incidentId,
+  actorId = null,
+  client,
+  resolutionMessage = null,
+}: {
+  incidentId: number;
+  actorId?: string | null;
+  client?: SlackClient;
+  resolutionMessage?: string | null;
+}): Promise<Row> {
   const inc = getIncident(incidentId);
   if (!inc) return { error: "incident not found" };
   if (!client) return { error: "slack client unavailable" };
@@ -333,7 +495,13 @@ async function notifyAffectedUsers({ incidentId, actorId = null, client, resolut
   const errors = [];
   for (const r of pending) {
     try {
-      await slackMessages.sendProgramMessage({ client, program: prog, channel: String(r.channel || ""), threadTs: r.thread_ts || null, text });
+      await slackMessages.sendProgramMessage({
+        client,
+        program: prog,
+        channel: String(r.channel || ""),
+        threadTs: r.thread_ts || null,
+        text,
+      });
       db.handle().query("UPDATE incident_reports SET notified_at = ? WHERE id = ?").run(Date.now(), r.id);
       notified += 1;
     } catch (e: any) {
@@ -341,29 +509,61 @@ async function notifyAffectedUsers({ incidentId, actorId = null, client, resolut
     }
   }
   const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
-  recordAudit({ programId: inc.program_id, actorId, action: "incident.notified_affected", entityType: "incident", entityId: incidentId, metadata: { notified, failed: errors.length } });
+  recordAudit({
+    programId: inc.program_id,
+    actorId,
+    action: "incident.notified_affected",
+    entityType: "incident",
+    entityId: incidentId,
+    metadata: { notified, failed: errors.length },
+  });
   return { ok: true, notified, failed: errors.length, errors };
 }
 
-function setIncidentStatus({ incidentId, status, actorId = null }: { incidentId: number; status: string; actorId?: string | null }): Row {
+function setIncidentStatus({
+  incidentId,
+  status,
+  actorId = null,
+}: {
+  incidentId: number;
+  status: string;
+  actorId?: string | null;
+}): Row {
   const inc = getIncident(incidentId);
   if (!inc) return { error: "incident not found" };
   if (!["candidate", "confirmed", "dismissed", "resolved"].includes(status)) return { error: "invalid status" };
   const t = Date.now();
   const extra = status === "confirmed" ? ", confirmed_at = ?" : status === "resolved" ? ", resolved_at = ?" : "";
   const params = status === "candidate" || status === "dismissed" ? [status, incidentId] : [status, t, incidentId];
-  db.handle().query(`UPDATE program_incidents SET status = ?${extra} WHERE id = ?`).run(...params);
+  db.handle()
+    .query(`UPDATE program_incidents SET status = ?${extra} WHERE id = ?`)
+    .run(...params);
   const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
-  recordAudit({ programId: inc.program_id, actorId, action: `incident.${status}`, entityType: "incident", entityId: incidentId });
+  recordAudit({
+    programId: inc.program_id,
+    actorId,
+    action: `incident.${status}`,
+    entityType: "incident",
+    entityId: incidentId,
+  });
   return { ok: true, incident: getIncident(incidentId) };
 }
 
-function linkTicket({ incidentId, ticketId, actorId = null }: { incidentId: number; ticketId: number; actorId?: string | null }): Row {
+function linkTicket({
+  incidentId,
+  ticketId,
+  actorId = null,
+}: {
+  incidentId: number;
+  ticketId: number;
+  actorId?: string | null;
+}): Row {
   const inc = getIncident(incidentId);
   const ticket = db.getTicket(ticketId);
   if (!inc || !ticket) return { error: "incident or ticket not found" };
   if (inc.program_id !== ticket.program_id) return { error: "program mismatch" };
-  db.handle().query("INSERT OR IGNORE INTO incident_tickets (incident_id, ticket_id, program_id, linked_at) VALUES (?, ?, ?, ?)")
+  db.handle()
+    .query("INSERT OR IGNORE INTO incident_tickets (incident_id, ticket_id, program_id, linked_at) VALUES (?, ?, ?, ?)")
     .run(incidentId, ticketId, inc.program_id, Date.now());
   return { ok: true };
 }

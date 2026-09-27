@@ -150,7 +150,7 @@ async function handleCallback(req: AuthRequest): Promise<AuthResult> {
       }),
     });
 
-    const tokenData = await tokenRes.json() as SlackTokenResponse;
+    const tokenData = (await tokenRes.json()) as SlackTokenResponse;
     if (!tokenData.ok) {
       log.error("auth", `token exchange failed: ${tokenData.error}`);
       return { status: 401, body: { error: "auth failed" } };
@@ -159,7 +159,7 @@ async function handleCallback(req: AuthRequest): Promise<AuthResult> {
     const userRes = await fetch("https://slack.com/api/openid.connect.userInfo", {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
-    const userData = await userRes.json() as SlackUserInfoResponse;
+    const userData = (await userRes.json()) as SlackUserInfoResponse;
     if (!userData.ok) {
       log.error("auth", `userinfo failed: ${userData.error}`);
       return { status: 401, body: { error: "auth failed" } };

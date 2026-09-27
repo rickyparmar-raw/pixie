@@ -21,14 +21,7 @@ test("uses integer cents and rounds a fractional cent deterministically", () => 
 
 test("accepts ordinary money formatting but no arbitrary syntax", () => {
   assert.equal(arithmetic.calculateMoney("7.5% of $1,200.00"), "90.00");
-  for (const expression of [
-    "459 + 82.62",
-    "Math.max(1, 2)",
-    "process.exit()",
-    "18 % of 459",
-    "459 * 1.18 + 2",
-    "",
-  ]) {
+  for (const expression of ["459 + 82.62", "Math.max(1, 2)", "process.exit()", "18 % of 459", "459 * 1.18 + 2", ""]) {
     assert.throws(() => arithmetic.calculate(expression), /unsupported|expression/);
   }
 });

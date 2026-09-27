@@ -75,26 +75,49 @@ test("hosted loop end to end for Highway and Pixl", async () => {
   };
   try {
     await respond.respond({
-      client, channel: "C-E2E-HWY", threadTs: "e2e-t1", userId: "U-asker",
-      question: "when is the deadline", mode: respond.ALWAYS, workspaceId: "TE2E",
+      client,
+      channel: "C-E2E-HWY",
+      threadTs: "e2e-t1",
+      userId: "U-asker",
+      question: "when is the deadline",
+      mode: respond.ALWAYS,
+      workspaceId: "TE2E",
     });
   } finally {
     lookup.answerOrChat = realAnswer;
   }
   assert.ok(posts.length >= 1);
-  assert.ok(posts.some((p: TestRow) => p.username === "Highway Help"), "answer carries program branding");
+  assert.ok(
+    posts.some((p: TestRow) => p.username === "Highway Help"),
+    "answer carries program branding",
+  );
 
   const realAnswer2 = lookup.answerOrChat;
   lookup.answerOrChat = async () => ({ source: null, answer: null });
   const posts2: TestRow[] = [];
-  const client2 = { chat: { postMessage: async (p: TestRow) => { posts2.push(p); return { ts: "x" }; }, update: async () => ({}), delete: async () => ({}) }, reactions: { add: async () => ({}) } };
+  const client2 = {
+    chat: {
+      postMessage: async (p: TestRow) => {
+        posts2.push(p);
+        return { ts: "x" };
+      },
+      update: async () => ({}),
+      delete: async () => ({}),
+    },
+    reactions: { add: async () => ({}) },
+  };
   const intent = require("./intent");
   const realClassify = intent.classifyIntent;
   intent.classifyIntent = async () => intent.HELP_NEEDED;
   try {
     await respond.respond({
-      client: client2, channel: "C-E2E-HWY", threadTs: "e2e-t2", userId: "U-asker",
-      question: "can I get a private extension on my grant", mode: respond.HELP_ONLY, workspaceId: "TE2E",
+      client: client2,
+      channel: "C-E2E-HWY",
+      threadTs: "e2e-t2",
+      userId: "U-asker",
+      question: "can I get a private extension on my grant",
+      mode: respond.HELP_ONLY,
+      workspaceId: "TE2E",
     });
   } finally {
     lookup.answerOrChat = realAnswer2;
@@ -107,7 +130,12 @@ test("hosted loop end to end for Highway and Pixl", async () => {
   db.syncHelper({ programId: "e2e-hwy", userId: "U-helper", source: "manual" });
   assert.equal(api.internalTicketAction(ticket.id, "claim", { programId: "e2e-hwy", actorId: "U-helper" }).ok, true);
   const tickets = require("./tickets");
-  const replyRes = await tickets.replyToTicket({ ticketId: ticket.id, authorId: "U-helper", text: "looking into it", client });
+  const replyRes = await tickets.replyToTicket({
+    ticketId: ticket.id,
+    authorId: "U-helper",
+    text: "looking into it",
+    client,
+  });
   assert.equal(replyRes.ok, true);
   assert.equal(api.internalTicketAction(ticket.id, "resolve", { programId: "e2e-hwy", actorId: "U-helper" }).ok, true);
   assert.equal(db.getTicket(ticket.id).status, "resolved");

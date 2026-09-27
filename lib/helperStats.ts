@@ -78,33 +78,42 @@ function rate(numerator: number, denominator: number): number | null {
 function detail(row: DbRow | null | undefined): Detail {
   if (!row) return {};
   try {
-    return row.detail ? JSON.parse(String(row.detail)) as Detail : {};
+    return row.detail ? (JSON.parse(String(row.detail)) as Detail) : {};
   } catch (_) {
     return {};
   }
 }
 
-function helperStats(programId: string, userId: string, { recentLimit = 20, since = 0 }: HelperStatsOptions = {}): HelperStatsResult | null {
+function helperStats(
+  programId: string,
+  userId: string,
+  { recentLimit = 20, since = 0 }: HelperStatsOptions = {},
+): HelperStatsResult | null {
   const helper = (db.listHelpers(programId, false) as HelperRow[]).find((row) => row.user_id === userId) || null;
   if (!helper) return null;
   const limit = Number.isInteger(recentLimit) && recentLimit > 0 ? Math.min(recentLimit, 100) : 20;
   const totals = ticketMetrics.helperTotals(programId, userId, { since });
   const tickets = db.handle().query("SELECT * FROM tickets WHERE program_id = ?").all(programId) as DbRow[];
   const byId = new Map(tickets.map((ticket) => [ticket.id, ticket]));
-  const events = db.handle().query(
-    "SELECT * FROM ticket_events WHERE program_id = ? ORDER BY created_at ASC, id ASC",
-  ).all(programId) as DbRow[];
+  const events = db
+    .handle()
+    .query("SELECT * FROM ticket_events WHERE program_id = ? ORDER BY created_at ASC, id ASC")
+    .all(programId) as DbRow[];
   const normalizedEvents = events.map((event: DbRow) => ({ ...event, detail: detail(event) }));
-  const assignments = normalizedEvents.filter((event) =>
-    (event.event_type === "claimed" && event.actor_id === userId) ||
-    (event.event_type === "assigned" && event.detail?.to === userId),
+  const assignments = normalizedEvents.filter(
+    (event) =>
+      (event.event_type === "claimed" && event.actor_id === userId) ||
+      (event.event_type === "assigned" && event.detail?.to === userId),
   );
   const replies = normalizedEvents.filter((event) => event.event_type === "helper_reply" && event.actor_id === userId);
-  const resolutions = db.handle().query(
-    `SELECT t.* FROM tickets t
+  const resolutions = db
+    .handle()
+    .query(
+      `SELECT t.* FROM tickets t
      WHERE t.program_id = ? AND t.status = 'resolved' AND t.resolved_at IS NOT NULL
        AND t.resolved_at >= ? AND ${ticketMetrics.CREDIT_SQL} = ?`,
-  ).all(programId, Number(since) || 0, userId) as DbRow[];
+    )
+    .all(programId, Number(since) || 0, userId) as DbRow[];
   const involvedIds = new Set([
     ...assignments.map((event) => event.ticket_id),
     ...replies.map((event) => event.ticket_id),
@@ -121,7 +130,10 @@ function helperStats(programId: string, userId: string, { recentLimit = 20, sinc
   for (const reply of replies) {
     const messageTs = reply.detail?.ts;
     if (!messageTs) continue;
-    const rows = db.handle().query("SELECT user_id, vote FROM feedback WHERE message_ts = ?").all(messageTs) as Array<{ user_id: string; vote: number }>;
+    const rows = db.handle().query("SELECT user_id, vote FROM feedback WHERE message_ts = ?").all(messageTs) as Array<{
+      user_id: string;
+      vote: number;
+    }>;
     for (const row of rows) {
       const key = `${messageTs}:${row.user_id}`;
       if (feedbackKeys.has(key)) continue;
@@ -135,7 +147,9 @@ function helperStats(programId: string, userId: string, { recentLimit = 20, sinc
     if (!firstReplies.has(reply.ticket_id)) firstReplies.set(reply.ticket_id, reply);
   }
   const categoryResolved = totals.categoryResolved;
-  const recentTickets = [...involvedIds].map((id) => byId.get(id)).filter((ticket): ticket is DbRow => Boolean(ticket))
+  const recentTickets = [...involvedIds]
+    .map((id) => byId.get(id))
+    .filter((ticket): ticket is DbRow => Boolean(ticket))
     .sort((a, b) => (b.updated_at || b.created_at) - (a.updated_at || a.created_at))
     .slice(0, limit)
     .map((ticket: DbRow) => ({
@@ -147,7 +161,9 @@ function helperStats(programId: string, userId: string, { recentLimit = 20, sinc
       resolvedAt: resolutions.find((resolved) => resolved.id === ticket.id)?.resolved_at || null,
       reopened: (ticket.reopen_count || 0) > 0,
     }));
-  const lastActivity = normalizedEvents.filter((event) => event.actor_id === userId || assignments.includes(event)).at(-1)?.created_at || null;
+  const lastActivity =
+    normalizedEvents.filter((event) => event.actor_id === userId || assignments.includes(event)).at(-1)?.created_at ||
+    null;
 
   const accept = assignmentLifecycle.helperAcceptStats(programId, userId);
 
@@ -156,10 +172,13 @@ function helperStats(programId: string, userId: string, { recentLimit = 20, sinc
     userId,
     role: helper.role,
     active: Boolean(helper.active),
-    expertise: db.handle().query(
-      `SELECT tag, solved_count, reply_count FROM helper_expertise
+    expertise: db
+      .handle()
+      .query(
+        `SELECT tag, solved_count, reply_count FROM helper_expertise
        WHERE program_id = ? AND user_id = ? ORDER BY solved_count DESC, reply_count DESC, tag ASC`,
-    ).all(programId, userId),
+      )
+      .all(programId, userId),
     categoryResolved,
     totals: {
       assigned: totals.assigned,
@@ -189,8 +208,13 @@ function helperStats(programId: string, userId: string, { recentLimit = 20, sinc
   };
 }
 
-function listHelperStats(programId: string, { recentLimit = 20, since = 0 }: HelperStatsOptions = {}): Array<HelperStatsResult | null> {
-  return (db.listHelpers(programId, false) as HelperRow[]).map((helper) => helperStats(programId, helper.user_id, { recentLimit, since }));
+function listHelperStats(
+  programId: string,
+  { recentLimit = 20, since = 0 }: HelperStatsOptions = {},
+): Array<HelperStatsResult | null> {
+  return (db.listHelpers(programId, false) as HelperRow[]).map((helper) =>
+    helperStats(programId, helper.user_id, { recentLimit, since }),
+  );
 }
 
 export = { helperStats, listHelperStats, median, rate };

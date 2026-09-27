@@ -21,8 +21,13 @@ const { Database } = sqlite;
 const { SCHEMA, MIGRATIONS, POST_MIGRATION_SCHEMA } = schema;
 
 type DbValue = string | number | boolean | null | Uint8Array;
-interface SqlRow { [key: string]: unknown }
-interface TopicRow { topic: string; was_helpful: number }
+interface SqlRow {
+  [key: string]: unknown;
+}
+interface TopicRow {
+  topic: string;
+  was_helpful: number;
+}
 interface GapSummaryRow {
   id: number;
   question: string;
@@ -107,8 +112,13 @@ interface ProgramDbRow extends SqlRow {
   updated_at: number;
 }
 
-interface MetricCountRow { kind: string; count: number }
-interface LatencyRow { latency_ms: number }
+interface MetricCountRow {
+  kind: string;
+  count: number;
+}
+interface LatencyRow {
+  latency_ms: number;
+}
 
 interface ThreadMessage {
   role: string;
@@ -127,8 +137,21 @@ interface UserMessage {
 type PersistedProgram = Partial<Program> & {
   id: string;
   name: string;
-  sla?: { unassignedMs?: number | null; assignedMs?: number | null; waitingMs?: number | null; targetMs?: number | null; notifyChannel?: string | null };
-  retention?: { contextDays?: number | null; ticketsDays?: number | null; notesDays?: number | null; tracesDays?: number | null; analyticsDays?: number | null; auditDays?: number | null };
+  sla?: {
+    unassignedMs?: number | null;
+    assignedMs?: number | null;
+    waitingMs?: number | null;
+    targetMs?: number | null;
+    notifyChannel?: string | null;
+  };
+  retention?: {
+    contextDays?: number | null;
+    ticketsDays?: number | null;
+    notesDays?: number | null;
+    tracesDays?: number | null;
+    analyticsDays?: number | null;
+    auditDays?: number | null;
+  };
 };
 
 interface CreateTicketOptions {
@@ -181,13 +204,11 @@ interface HistoryImportPatch {
 
 const DEFAULT_PATH = path.join(__dirname, "..", "pixie.db");
 
-
 const ANSWERED_TTL_MS = 24 * 60 * 60 * 1000;
 const THREAD_TTL_MS = 60 * 60 * 1000;
 const HISTORY_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const GUIDE_TTL_MS = 30 * 60 * 1000;
 const SWEEP_INTERVAL_MS = 10 * 60 * 1000;
-
 
 const CACHE_FRESH_MS = 6 * 60 * 60 * 1000;
 const CACHE_IDLE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -195,11 +216,9 @@ const CACHE_IDLE_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_THREAD_MESSAGES = 20;
 const MAX_USER_TOPICS = 10;
 
-
 const MAX_USER_MESSAGES = 12;
 const USER_MESSAGE_WINDOW_MS = 2 * 60 * 60 * 1000;
 const USER_MESSAGE_TTL_MS = 6 * 60 * 60 * 1000;
-
 
 let db: DatabaseType | null = null;
 let sweepTimer: ReturnType<typeof setInterval> | null = null;
@@ -220,14 +239,11 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-
 function migrate(database: DatabaseType) {
   // Each migration checks its own table or column before executing, so startup is repeatable.
   for (const [table, column, sql] of MIGRATIONS) {
     if (sql.startsWith("CREATE TABLE")) {
-      const exists = database
-        .query("SELECT name FROM sqlite_master WHERE type = ? AND name = ?")
-        .get("table", table);
+      const exists = database.query("SELECT name FROM sqlite_master WHERE type = ? AND name = ?").get("table", table);
       if (exists) continue;
     } else {
       const columns = database.query<{ name: string }, []>(`PRAGMA table_info(${table})`).all();
@@ -292,11 +308,13 @@ function now() {
   return Date.now();
 }
 
-
 function claimMessage(ts: DbValue, channel = null) {
   // INSERT OR IGNORE makes the check and claim one atomic operation across replicas.
-  const changes = query("INSERT OR IGNORE INTO answered_messages (ts, channel, answered_at) VALUES (?, ?, ?)")
-    .run(ts, channel, now());
+  const changes = query("INSERT OR IGNORE INTO answered_messages (ts, channel, answered_at) VALUES (?, ?, ?)").run(
+    ts,
+    channel,
+    now(),
+  );
   return changes.changes > 0;
 }
 
@@ -304,10 +322,9 @@ function wasAnswered(ts: DbValue) {
   return !!query("SELECT 1 FROM answered_messages WHERE ts = ?").get(ts);
 }
 
-
 function touchThread(threadTs: string, channel: string | null = null, fields: Record<string, unknown> = {}) {
   query(
-      `INSERT INTO threads (thread_ts, channel, seeded, pixie_spoke, helper_pinged, updated_at)
+    `INSERT INTO threads (thread_ts, channel, seeded, pixie_spoke, helper_pinged, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(thread_ts) DO UPDATE SET
          channel       = COALESCE(excluded.channel, threads.channel),
@@ -315,8 +332,7 @@ function touchThread(threadTs: string, channel: string | null = null, fields: Re
          pixie_spoke   = MAX(threads.pixie_spoke, excluded.pixie_spoke),
          helper_pinged = MAX(threads.helper_pinged, excluded.helper_pinged),
          updated_at    = excluded.updated_at`,
-    )
-    .run(threadTs, channel, fields.seeded ? 1 : 0, fields.pixieSpoke ? 1 : 0, fields.helperPinged ? 1 : 0, now());
+  ).run(threadTs, channel, fields.seeded ? 1 : 0, fields.pixieSpoke ? 1 : 0, fields.helperPinged ? 1 : 0, now());
 }
 
 function getThread(threadTs: string) {
@@ -334,12 +350,22 @@ function addThreadMessage(threadTs: string, role: string, content: string, userI
 
 function getThreadMessages(threadTs: string) {
   const cutoff = now() - THREAD_TTL_MS;
-  return (ephemeralThreadMessages.get(threadTs) || []).filter((row: ThreadMessage) => row.created_at > cutoff)
+  return (ephemeralThreadMessages.get(threadTs) || [])
+    .filter((row: ThreadMessage) => row.created_at > cutoff)
     .map(({ role, content, user_id }: ThreadMessage) => ({ role, content, user_id }));
 }
 
-
-function recordUserMessage({ userId, channel = null, threadTs = null, text }: { userId: string; channel?: string | null; threadTs?: string | null; text: string }) {
+function recordUserMessage({
+  userId,
+  channel = null,
+  threadTs = null,
+  text,
+}: {
+  userId: string;
+  channel?: string | null;
+  threadTs?: string | null;
+  text: string;
+}) {
   // Keep only a bounded recent window; this buffer is not a user-history archive.
   const body = text.trim();
   if (!userId || !body) return;
@@ -352,57 +378,61 @@ function recordUserMessage({ userId, channel = null, threadTs = null, text }: { 
   ephemeralUserMessages.set(userId, list);
 }
 
-function recentUserMessages(userId: string, { channel = null, limit = 3 }: { channel?: string | null; limit?: number } = {}) {
+function recentUserMessages(
+  userId: string,
+  { channel = null, limit = 3 }: { channel?: string | null; limit?: number } = {},
+) {
   // The short window distinguishes an active debugging thread from unrelated older chat.
   if (!userId) return [];
   const cutoff = now() - USER_MESSAGE_WINDOW_MS;
-  const list = (ephemeralUserMessages.get(userId) || [])
-    .filter((m: UserMessage) => m.created_at > cutoff && (!channel || m.channel === channel));
+  const list = (ephemeralUserMessages.get(userId) || []).filter(
+    (m: UserMessage) => m.created_at > cutoff && (!channel || m.channel === channel),
+  );
   return list.slice(-limit);
 }
-
 
 function recordTopic(userId: string, topic: string, wasHelpful = true) {
   if (!userId || !topic) return;
   query(
-      `INSERT INTO user_topics (user_id, topic, was_helpful, created_at) VALUES (?, ?, ?, ?)
+    `INSERT INTO user_topics (user_id, topic, was_helpful, created_at) VALUES (?, ?, ?, ?)
        ON CONFLICT(user_id, topic) DO UPDATE SET created_at = excluded.created_at, was_helpful = excluded.was_helpful`,
-    )
-    .run(userId, topic, wasHelpful ? 1 : 0, now());
+  ).run(userId, topic, wasHelpful ? 1 : 0, now());
 
   query(
-      `DELETE FROM user_topics
+    `DELETE FROM user_topics
        WHERE user_id = ? AND topic NOT IN (
          SELECT topic FROM user_topics WHERE user_id = ? ORDER BY created_at DESC LIMIT ?
        )`,
-    )
-    .run(userId, userId, MAX_USER_TOPICS);
+  ).run(userId, userId, MAX_USER_TOPICS);
 }
 
 function getTopics(userId: string): TopicRow[] {
   // Topics are bounded by the same history window used by other user context.
   if (!userId) return [];
   const cutoff = now() - HISTORY_TTL_MS;
-  return query<TopicRow>("SELECT topic, was_helpful FROM user_topics WHERE user_id = ? AND created_at > ? ORDER BY created_at DESC")
-    .all(userId, cutoff);
+  return query<TopicRow>(
+    "SELECT topic, was_helpful FROM user_topics WHERE user_id = ? AND created_at > ? ORDER BY created_at DESC",
+  ).all(userId, cutoff);
 }
-
 
 function recordGap(question: string, userId = null, channel = null, messageTs = null, programId = null) {
   // Normalize only whitespace/case here; topGaps performs the grouping used for ranking.
-  query("INSERT INTO doc_gaps (question, user_id, channel, message_ts, program_id, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(normalizeQuestion(question), userId, channel, messageTs, programId, now());
+  query(
+    "INSERT INTO doc_gaps (question, user_id, channel, message_ts, program_id, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(normalizeQuestion(question), userId, channel, messageTs, programId, now());
 }
 
 function normalizeQuestion(question: string) {
-  return String(question || "").toLowerCase().replace(/\s+/g, " ").trim();
+  return String(question || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function recordGapRejection(question: string) {
   const normalized = normalizeQuestion(question);
   if (!normalized) return;
-  query("INSERT OR REPLACE INTO gap_rejections (question, created_at) VALUES (?, ?)")
-    .run(normalized, now());
+  query("INSERT OR REPLACE INTO gap_rejections (question, created_at) VALUES (?, ?)").run(normalized, now());
 }
 
 function clearGapRejection(question: string) {
@@ -414,19 +444,24 @@ function clearGapRejection(question: string) {
 function gapForThread(messageTs: string, sinceMs = 7 * 24 * 60 * 60 * 1000) {
   if (!messageTs) return null;
   return (
-    query("SELECT question, user_id FROM doc_gaps WHERE message_ts = ? AND created_at > ? ORDER BY created_at DESC LIMIT 1")
-      .get(messageTs, now() - sinceMs) || null
+    query(
+      "SELECT question, user_id FROM doc_gaps WHERE message_ts = ? AND created_at > ? ORDER BY created_at DESC LIMIT 1",
+    ).get(messageTs, now() - sinceMs) || null
   );
 }
 
-function topGaps(limit = 20, sinceMs = 30 * 24 * 60 * 60 * 1000, {
-  // Gap ranking counts distinct askers so one noisy user cannot manufacture demand.
-  kind = null,
-  untilMs = null,
-  programId = null,
-  minAskers = 2,
-  excludeRejected = true,
-} = {}) {
+function topGaps(
+  limit = 20,
+  sinceMs = 30 * 24 * 60 * 60 * 1000,
+  {
+    // Gap ranking counts distinct askers so one noisy user cannot manufacture demand.
+    kind = null,
+    untilMs = null,
+    programId = null,
+    minAskers = 2,
+    excludeRejected = true,
+  } = {},
+) {
   const clauses = ["created_at > ?"];
   const params = [now() - sinceMs];
 
@@ -464,8 +499,7 @@ function topGaps(limit = 20, sinceMs = 30 * 24 * 60 * 60 * 1000, {
 }
 
 function unclassifiedGaps(limit = 5) {
-  return query("SELECT id, question FROM doc_gaps WHERE kind IS NULL ORDER BY created_at DESC LIMIT ?")
-    .all(limit);
+  return query("SELECT id, question FROM doc_gaps WHERE kind IS NULL ORDER BY created_at DESC LIMIT ?").all(limit);
 }
 
 function setGapKind(id: number, kind: string) {
@@ -474,11 +508,10 @@ function setGapKind(id: number, kind: string) {
 
 function gapThreads(question: string, limit = 2, sinceMs = 30 * 24 * 60 * 60 * 1000) {
   return query(
-      `SELECT DISTINCT channel, message_ts FROM doc_gaps
+    `SELECT DISTINCT channel, message_ts FROM doc_gaps
        WHERE LOWER(TRIM(question)) = LOWER(TRIM(?)) AND created_at > ? AND channel IS NOT NULL AND message_ts IS NOT NULL
        ORDER BY created_at DESC LIMIT ?`,
-    )
-    .all(question, now() - sinceMs, limit);
+  ).all(question, now() - sinceMs, limit);
 }
 
 function gapCountsByKind(sinceMs = 7 * 24 * 60 * 60 * 1000, untilMs = null, programId = null) {
@@ -492,10 +525,10 @@ function gapCountsByKind(sinceMs = 7 * 24 * 60 * 60 * 1000, untilMs = null, prog
 
   return Object.fromEntries(
     query<{ kind: string; count: number }>(
-        `SELECT COALESCE(kind, 'unjudged') AS kind, COUNT(DISTINCT LOWER(TRIM(question))) AS count
+      `SELECT COALESCE(kind, 'unjudged') AS kind, COUNT(DISTINCT LOWER(TRIM(question))) AS count
          FROM doc_gaps WHERE ${clauses.join(" AND ")}
          GROUP BY COALESCE(kind, 'unjudged')`,
-      )
+    )
       .all(...params)
       .map((r) => [r.kind, r.count]),
   );
@@ -504,10 +537,9 @@ function gapCountsByKind(sinceMs = 7 * 24 * 60 * 60 * 1000, untilMs = null, prog
 function recordFeedback(messageTs: string, userId: string, vote: number) {
   // One user's latest vote replaces the earlier vote for the same answer message.
   query(
-      `INSERT INTO feedback (message_ts, user_id, vote, created_at) VALUES (?, ?, ?, ?)
+    `INSERT INTO feedback (message_ts, user_id, vote, created_at) VALUES (?, ?, ?, ?)
        ON CONFLICT(message_ts, user_id) DO UPDATE SET vote = excluded.vote, created_at = excluded.created_at`,
-    )
-    .run(messageTs, userId, vote, now());
+  ).run(messageTs, userId, vote, now());
 }
 
 function removeFeedback(messageTs: string, userId: string) {
@@ -515,21 +547,42 @@ function removeFeedback(messageTs: string, userId: string) {
 }
 
 function feedbackTotals() {
-  return (
-    query("SELECT SUM(vote > 0) AS up, SUM(vote < 0) AS down FROM feedback")
-      .get() || { up: 0, down: 0 }
-  );
+  return query("SELECT SUM(vote > 0) AS up, SUM(vote < 0) AS down FROM feedback").get() || { up: 0, down: 0 };
 }
 
-
-function addLearnedFact({ question, answer, authorId = null, status = "pending", sourceTs = null, channel = null, programId = null, category = null, ticketId = null, resolverId = null, autoLearned = false }: Record<string, unknown>) {
+function addLearnedFact({
+  question,
+  answer,
+  authorId = null,
+  status = "pending",
+  sourceTs = null,
+  channel = null,
+  programId = null,
+  category = null,
+  ticketId = null,
+  resolverId = null,
+  autoLearned = false,
+}: Record<string, unknown>) {
   // Program ownership is stored with the fact; approved knowledge must not cross tenants.
   const result = query(
-      `INSERT OR IGNORE INTO learned_facts (question, answer, author_id, status, source_ts, channel, program_id, category, ticket_id, resolver_id, verified_at, support_count, last_supported_at, auto_learned, created_at)
+    `INSERT OR IGNORE INTO learned_facts (question, answer, author_id, status, source_ts, channel, program_id, category, ticket_id, resolver_id, verified_at, support_count, last_supported_at, auto_learned, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)`,
-    )
-    .run(question, answer, authorId, status, sourceTs, channel, programId, category, ticketId, resolverId,
-      status === "approved" ? now() : null, now(), autoLearned ? 1 : 0, now());
+  ).run(
+    question,
+    answer,
+    authorId,
+    status,
+    sourceTs,
+    channel,
+    programId,
+    category,
+    ticketId,
+    resolverId,
+    status === "approved" ? now() : null,
+    now(),
+    autoLearned ? 1 : 0,
+    now(),
+  );
   return result.changes > 0 ? Number(result.lastInsertRowid) : null;
 }
 
@@ -548,83 +601,98 @@ function assignUnownedLearnedFacts(ownerOfChannel: (channel: string | null) => s
 function listLearnedFacts(status: string, limit = 25, programId = null): LearnedFactRow[] {
   const statusClause = status === "approved" ? "status = ? AND superseded_by IS NULL" : "status = ?";
   if (programId) {
-    return query<LearnedFactRow>(`SELECT * FROM learned_facts WHERE ${statusClause} AND program_id = ? ORDER BY created_at ASC LIMIT ?`)
-      .all(status, programId, limit);
+    return query<LearnedFactRow>(
+      `SELECT * FROM learned_facts WHERE ${statusClause} AND program_id = ? ORDER BY created_at ASC LIMIT ?`,
+    ).all(status, programId, limit);
   }
-  return query<LearnedFactRow>(`SELECT * FROM learned_facts WHERE ${statusClause} ORDER BY created_at ASC LIMIT ?`)
-    .all(status, limit);
+  return query<LearnedFactRow>(`SELECT * FROM learned_facts WHERE ${statusClause} ORDER BY created_at ASC LIMIT ?`).all(
+    status,
+    limit,
+  );
 }
 
 function listReviewableLearnedFacts(programId: string, limit = 50) {
   return query(
-      `SELECT * FROM learned_facts
+    `SELECT * FROM learned_facts
        WHERE program_id = ? AND (status = 'candidate' OR (status = 'approved' AND auto_learned = 1))
        ORDER BY COALESCE(last_supported_at, created_at) DESC LIMIT ?`,
-    )
-    .all(programId, limit);
+  ).all(programId, limit);
 }
 
 function learnedFactsForOverlap(programId: string, category: string, limit = 100) {
   return query(
-      `SELECT * FROM learned_facts
+    `SELECT * FROM learned_facts
        WHERE program_id = ? AND category = ? AND status NOT IN ('superseded', 'rejected')
        ORDER BY COALESCE(last_supported_at, created_at) DESC LIMIT ?`,
-    )
-    .all(programId, category, limit);
+  ).all(programId, category, limit);
 }
 
 function learnedFactForTicket(ticketId: number) {
-  return query("SELECT * FROM learned_facts WHERE ticket_id = ? ORDER BY id DESC LIMIT 1")
-    .get(ticketId) || null;
+  return query("SELECT * FROM learned_facts WHERE ticket_id = ? ORDER BY id DESC LIMIT 1").get(ticketId) || null;
 }
 
 function refreshLearnedFact(id: number) {
   // Support updates recency and count without reviving rejected or superseded facts.
   const t = now();
-  return query("UPDATE learned_facts SET support_count = COALESCE(support_count, 0) + 1, last_supported_at = ?, created_at = ? WHERE id = ? AND status NOT IN ('superseded', 'rejected')")
-    .run(t, t, id).changes > 0;
+  return (
+    query(
+      "UPDATE learned_facts SET support_count = COALESCE(support_count, 0) + 1, last_supported_at = ?, created_at = ? WHERE id = ? AND status NOT IN ('superseded', 'rejected')",
+    ).run(t, t, id).changes > 0
+  );
 }
 
 function supersedeLearnedFact(id: number, supersededBy: unknown) {
-  return query("UPDATE learned_facts SET status = 'superseded', superseded_by = ?, superseded_at = ? WHERE id = ? AND status NOT IN ('superseded', 'rejected')")
-    .run(supersededBy, now(), id).changes > 0;
+  return (
+    query(
+      "UPDATE learned_facts SET status = 'superseded', superseded_by = ?, superseded_at = ? WHERE id = ? AND status NOT IN ('superseded', 'rejected')",
+    ).run(supersededBy, now(), id).changes > 0
+  );
 }
 
 function getLearnedFactById(id: number): LearnedFactRow | null {
-  return (
-    query<LearnedFactRow>("SELECT * FROM learned_facts WHERE id = ?")
-      .get(id) || null
-  );
+  return query<LearnedFactRow>("SELECT * FROM learned_facts WHERE id = ?").get(id) || null;
 }
 
 function approvedFacts(limit = 50, programId = null) {
   // Approved facts are returned oldest-first for stable corpus assembly.
   if (programId) {
-    return query("SELECT question, answer, category, created_at, last_supported_at, support_count FROM learned_facts WHERE status = 'approved' AND superseded_by IS NULL AND program_id = ? ORDER BY COALESCE(last_supported_at, created_at) DESC LIMIT ?")
+    return query(
+      "SELECT question, answer, category, created_at, last_supported_at, support_count FROM learned_facts WHERE status = 'approved' AND superseded_by IS NULL AND program_id = ? ORDER BY COALESCE(last_supported_at, created_at) DESC LIMIT ?",
+    )
       .all(programId, limit)
       .reverse();
   }
-  return query("SELECT question, answer, category, created_at, last_supported_at, support_count FROM learned_facts WHERE status = 'approved' AND superseded_by IS NULL AND program_id IS NULL ORDER BY COALESCE(last_supported_at, created_at) DESC LIMIT ?")
+  return query(
+    "SELECT question, answer, category, created_at, last_supported_at, support_count FROM learned_facts WHERE status = 'approved' AND superseded_by IS NULL AND program_id IS NULL ORDER BY COALESCE(last_supported_at, created_at) DESC LIMIT ?",
+  )
     .all(limit)
     .reverse();
 }
 
 function setLearnedStatus(id: number, status: string) {
   // Verification time is recorded only when a fact becomes approved.
-  const result = status === "approved"
-    ? query("UPDATE learned_facts SET status = ?, verified_at = ? WHERE id = ?").run(status, now(), id)
-    : query("UPDATE learned_facts SET status = ? WHERE id = ?").run(status, id);
+  const result =
+    status === "approved"
+      ? query("UPDATE learned_facts SET status = ?, verified_at = ? WHERE id = ?").run(status, now(), id)
+      : query("UPDATE learned_facts SET status = ? WHERE id = ?").run(status, id);
   return result.changes > 0;
 }
 
-function updateLearnedFact(id: number, { question = null, answer = null, category = null }: Record<string, unknown> = {}) {
-  return query(
-    `UPDATE learned_facts SET question = COALESCE(?, question), answer = COALESCE(?, answer), category = COALESCE(?, category) WHERE id = ?`,
-  ).run(question, answer, category, id).changes > 0;
+function updateLearnedFact(
+  id: number,
+  { question = null, answer = null, category = null }: Record<string, unknown> = {},
+) {
+  return (
+    query(
+      `UPDATE learned_facts SET question = COALESCE(?, question), answer = COALESCE(?, answer), category = COALESCE(?, category) WHERE id = ?`,
+    ).run(question, answer, category, id).changes > 0
+  );
 }
 
 function candidateForTicket(ticketId: number) {
-  return query("SELECT * FROM learned_facts WHERE ticket_id = ? AND status = 'candidate' LIMIT 1").get(ticketId) || null;
+  return (
+    query("SELECT * FROM learned_facts WHERE ticket_id = ? AND status = 'candidate' LIMIT 1").get(ticketId) || null
+  );
 }
 
 function deleteLearnedFact(id: number) {
@@ -644,32 +712,32 @@ function deleteLearnedRange(fromId: number, toId: number) {
 
 function pendingCountForQuestion(question: string) {
   return (
-    query("SELECT COUNT(*) AS count FROM learned_facts WHERE status = 'pending' AND LOWER(TRIM(question)) = LOWER(TRIM(?))")
-      .get(question)?.count || 0
+    query(
+      "SELECT COUNT(*) AS count FROM learned_facts WHERE status = 'pending' AND LOWER(TRIM(question)) = LOWER(TRIM(?))",
+    ).get(question)?.count || 0
   );
 }
 
 function hasCapturedSource(sourceTs: string) {
   if (!sourceTs) return false;
-  return Boolean(
-    query("SELECT 1 FROM learned_facts WHERE source_ts = ? LIMIT 1").get(sourceTs),
-  );
+  return Boolean(query("SELECT 1 FROM learned_facts WHERE source_ts = ? LIMIT 1").get(sourceTs));
 }
-
 
 function saveGuide(threadTs: string, guideId: string, currentStep: number, userId: string) {
   // One active guide per thread makes repeated guide steps idempotent.
   query(
-      `INSERT INTO active_guides (thread_ts, guide_id, current_step, user_id, started_at) VALUES (?, ?, ?, ?, ?)
+    `INSERT INTO active_guides (thread_ts, guide_id, current_step, user_id, started_at) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(thread_ts) DO UPDATE SET guide_id = excluded.guide_id, current_step = excluded.current_step`,
-    )
-    .run(threadTs, guideId, currentStep, userId, now());
+  ).run(threadTs, guideId, currentStep, userId, now());
 }
 
 function getGuide(threadTs: string): ActiveGuideRow | null {
   // Expired guides are invisible so a stale interactive prompt cannot advance.
   const cutoff = now() - GUIDE_TTL_MS;
-  return query<ActiveGuideRow>("SELECT * FROM active_guides WHERE thread_ts = ? AND started_at > ?").get(threadTs, cutoff) || null;
+  return (
+    query<ActiveGuideRow>("SELECT * FROM active_guides WHERE thread_ts = ? AND started_at > ?").get(threadTs, cutoff) ||
+    null
+  );
 }
 
 function setGuideMessageTs(threadTs: string, messageTs: string) {
@@ -679,8 +747,10 @@ function setGuideMessageTs(threadTs: string, messageTs: string) {
 function getGuideByMessageTs(messageTs: string): ActiveGuideRow | null {
   const cutoff = now() - GUIDE_TTL_MS;
   return (
-    query<ActiveGuideRow>("SELECT * FROM active_guides WHERE message_ts = ? AND started_at > ?").get(messageTs, cutoff) ||
-    null
+    query<ActiveGuideRow>("SELECT * FROM active_guides WHERE message_ts = ? AND started_at > ?").get(
+      messageTs,
+      cutoff,
+    ) || null
   );
 }
 
@@ -688,10 +758,12 @@ function deleteGuide(threadTs: string) {
   query("DELETE FROM active_guides WHERE thread_ts = ?").run(threadTs);
 }
 
-
 function muteThread(threadTs: string, channel = null) {
-  query("INSERT OR REPLACE INTO muted_threads (thread_ts, channel, muted_at) VALUES (?, ?, ?)")
-    .run(threadTs, channel, now());
+  query("INSERT OR REPLACE INTO muted_threads (thread_ts, channel, muted_at) VALUES (?, ?, ?)").run(
+    threadTs,
+    channel,
+    now(),
+  );
 }
 
 function isThreadMuted(threadTs: string) {
@@ -708,8 +780,12 @@ function unmuteThread(threadTs: string) {
 function markTakeover(threadTs: string, channel = null, byUser = null) {
   // Takeover is sticky until explicitly cleared; the normal context sweeper does not expire it.
   if (!threadTs) return;
-  query("INSERT OR REPLACE INTO thread_takeover (thread_ts, channel, by_user, created_at) VALUES (?, ?, ?, ?)")
-    .run(threadTs, channel, byUser, now());
+  query("INSERT OR REPLACE INTO thread_takeover (thread_ts, channel, by_user, created_at) VALUES (?, ?, ?, ?)").run(
+    threadTs,
+    channel,
+    byUser,
+    now(),
+  );
 }
 
 function isTakeover(threadTs: string) {
@@ -723,9 +799,14 @@ function clearTakeover(threadTs: string) {
   query("DELETE FROM thread_takeover WHERE thread_ts = ?").run(threadTs);
 }
 
-
 function recordMetric(kind: string, latencyMs = null, detail = null, programId = null) {
-  query("INSERT INTO metrics (kind, latency_ms, detail, program_id, created_at) VALUES (?, ?, ?, ?, ?)").run(kind, latencyMs, detail, programId, now());
+  query("INSERT INTO metrics (kind, latency_ms, detail, program_id, created_at) VALUES (?, ?, ?, ?, ?)").run(
+    kind,
+    latencyMs,
+    detail,
+    programId,
+    now(),
+  );
 }
 
 function recordLlmUsage(entry: Record<string, unknown> = {}) {
@@ -736,11 +817,27 @@ function recordLlmUsage(entry: Record<string, unknown> = {}) {
          prompt_tokens, cached_prompt_tokens, completion_tokens, total_tokens, cost_usd, latency_ms, error_kind, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
-      entry.operation || "unknown", entry.provider || null, entry.programId || null, entry.channel || null,
-      entry.requestId || null, entry.eventId || null, entry.model || null, entry.status || "error",
-      entry.result || entry.status || "error", entry.httpStatus || null, entry.rateLimited ? 1 : 0, entry.attempt || 1, entry.retryCount || 0,
-      entry.promptTokens ?? null, entry.cachedPromptTokens ?? null, entry.completionTokens ?? null, entry.totalTokens ?? null,
-      entry.costUsd ?? null, entry.latencyMs ?? null, entry.errorKind || null, entry.createdAt || now(),
+      entry.operation || "unknown",
+      entry.provider || null,
+      entry.programId || null,
+      entry.channel || null,
+      entry.requestId || null,
+      entry.eventId || null,
+      entry.model || null,
+      entry.status || "error",
+      entry.result || entry.status || "error",
+      entry.httpStatus || null,
+      entry.rateLimited ? 1 : 0,
+      entry.attempt || 1,
+      entry.retryCount || 0,
+      entry.promptTokens ?? null,
+      entry.cachedPromptTokens ?? null,
+      entry.completionTokens ?? null,
+      entry.totalTokens ?? null,
+      entry.costUsd ?? null,
+      entry.latencyMs ?? null,
+      entry.errorKind || null,
+      entry.createdAt || now(),
     );
   } catch (e: unknown) {
     log.debug("db", `llm telemetry write failed: ${errorMessage(e)}`);
@@ -786,7 +883,15 @@ function parseUsageTime(value: string | number | null | undefined, fallback: num
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function llmUsageReport({ programId, from, until, bucket = "day", operation = null, limit = 50, offset = 0 }: LlmUsageOptions = {}) {
+function llmUsageReport({
+  programId,
+  from,
+  until,
+  bucket = "day",
+  operation = null,
+  limit = 50,
+  offset = 0,
+}: LlmUsageOptions = {}) {
   if (!programId) return { error: "programId required" };
   if (!USAGE_BUCKETS.has(bucket)) return { error: "bucket must be hour or day" };
   if (operation !== null && !USAGE_OPERATIONS.has(operation)) return { error: "invalid operation" };
@@ -797,7 +902,10 @@ function llmUsageReport({ programId, from, until, bucket = "day", operation = nu
   const safeOffset = Math.max(Number(offset) || 0, 0);
   const clauses = ["program_id = ?", "created_at >= ?", "created_at < ?"];
   const params: Array<string | number> = [programId, start, end];
-  if (operation) { clauses.push("operation = ?"); params.push(operation); }
+  if (operation) {
+    clauses.push("operation = ?");
+    params.push(operation);
+  }
   const where = clauses.join(" AND ");
   const d = bucket === "hour" ? "%Y-%m-%dT%H:00:00Z" : "%Y-%m-%dT00:00:00Z";
   const base = `FROM llm_usage WHERE ${where}`;
@@ -812,41 +920,127 @@ function llmUsageReport({ programId, from, until, bucket = "day", operation = nu
   const timeseries = query<UsageRow>(`SELECT strftime('${d}', created_at / 1000, 'unixepoch') bucket,
     COUNT(DISTINCT COALESCE(request_id, 'event:' || id)) requests, COALESCE(SUM(total_tokens),0) total_tokens,
     SUM(cost_usd) cost_usd FROM llm_usage WHERE ${where} GROUP BY bucket ORDER BY bucket`).all(...params);
-  const grouped = (column: "operation" | "provider" | "model" | "channel") => query<UsageRow>(`SELECT ${column} value, MAX(provider) provider, COUNT(DISTINCT COALESCE(request_id, 'event:' || id)) requests,
+  const grouped = (column: "operation" | "provider" | "model" | "channel") =>
+    query<UsageRow>(`SELECT ${column} value, MAX(provider) provider, COUNT(DISTINCT COALESCE(request_id, 'event:' || id)) requests,
      COALESCE(SUM(prompt_tokens),0) prompt_tokens, COALESCE(SUM(cached_prompt_tokens),0) cached_prompt_tokens,
      COALESCE(SUM(completion_tokens),0) completion_tokens, COALESCE(SUM(total_tokens),0) total_tokens,
-     SUM(cost_usd) cost_usd, AVG(latency_ms) latency_ms FROM llm_usage WHERE ${where} GROUP BY ${column} ORDER BY requests DESC LIMIT 100`).all(...params);
-  const totalActivity = Number((query<{ n: number }>(`SELECT COUNT(*) n ${base}`).get(...params)).n);
-  const recent = query<UsageRow>(`SELECT created_at, operation, provider, model, channel, request_id, event_id, status, result, http_status, attempt, retry_count, latency_ms, rate_limited
+     SUM(cost_usd) cost_usd, AVG(latency_ms) latency_ms FROM llm_usage WHERE ${where} GROUP BY ${column} ORDER BY requests DESC LIMIT 100`).all(
+      ...params,
+    );
+  const totalActivity = Number(query<{ n: number }>(`SELECT COUNT(*) n ${base}`).get(...params).n);
+  const recent =
+    query<UsageRow>(`SELECT created_at, operation, provider, model, channel, request_id, event_id, status, result, http_status, attempt, retry_count, latency_ms, rate_limited
     ${base} ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(...params, safeLimit, safeOffset);
-  const metric = (row: UsageRow) => ({ requests: Number(row.requests || 0), inputTokens: Number(row.prompt_tokens || 0), outputTokens: Number(row.completion_tokens || 0), cachedInputTokens: Number(row.cached_prompt_tokens || 0), costCents: row.cost_usd == null ? null : Number((row.cost_usd * 100).toFixed(2)) });
-  const rowsFor = (column: "operation" | "provider" | "model" | "channel") => grouped(column).map((row) => ({ ...metric(row), name: row.value || "unknown", ...(column === "model" ? { provider: row.provider || "unknown" } : {}) }));
+  const metric = (row: UsageRow) => ({
+    requests: Number(row.requests || 0),
+    inputTokens: Number(row.prompt_tokens || 0),
+    outputTokens: Number(row.completion_tokens || 0),
+    cachedInputTokens: Number(row.cached_prompt_tokens || 0),
+    costCents: row.cost_usd == null ? null : Number((row.cost_usd * 100).toFixed(2)),
+  });
+  const rowsFor = (column: "operation" | "provider" | "model" | "channel") =>
+    grouped(column).map((row) => ({
+      ...metric(row),
+      name: row.value || "unknown",
+      ...(column === "model" ? { provider: row.provider || "unknown" } : {}),
+    }));
   const summary = metric(totals);
-  return { programId, from: new Date(start).toISOString(), to: new Date(end).toISOString(), bucket,
-    precision: totals.cost_usd == null ? "unavailable" : "exact", requests: summary.requests, inputTokens: summary.inputTokens,
-    outputTokens: summary.outputTokens, cachedInputTokens: summary.cachedInputTokens, costCents: summary.costCents,
-    summary: { ...summary, latencyMs: totals.latency_ms == null ? null : Number(totals.latency_ms), errors: Number(totals.errors || 0), rateLimited: Number(totals.rate_limited || 0), groundedAnswers: Number(totals.grounded_answers || 0), fallbacks: Number(totals.fallbacks || 0), suppressed: Number(totals.suppressed || 0), rate_limited: Number(totals.rate_limited || 0), cost_usd: totals.cost_usd },
-    timeseries: timeseries.map((row) => ({ ...metric(row), at: `${row.bucket}` })), operation: rowsFor("operation"), provider: rowsFor("provider"), model: rowsFor("model"),
+  return {
+    programId,
+    from: new Date(start).toISOString(),
+    to: new Date(end).toISOString(),
+    bucket,
+    precision: totals.cost_usd == null ? "unavailable" : "exact",
+    requests: summary.requests,
+    inputTokens: summary.inputTokens,
+    outputTokens: summary.outputTokens,
+    cachedInputTokens: summary.cachedInputTokens,
+    costCents: summary.costCents,
+    summary: {
+      ...summary,
+      latencyMs: totals.latency_ms == null ? null : Number(totals.latency_ms),
+      errors: Number(totals.errors || 0),
+      rateLimited: Number(totals.rate_limited || 0),
+      groundedAnswers: Number(totals.grounded_answers || 0),
+      fallbacks: Number(totals.fallbacks || 0),
+      suppressed: Number(totals.suppressed || 0),
+      rate_limited: Number(totals.rate_limited || 0),
+      cost_usd: totals.cost_usd,
+    },
+    timeseries: timeseries.map((row) => ({ ...metric(row), at: `${row.bucket}` })),
+    operation: rowsFor("operation"),
+    provider: rowsFor("provider"),
+    model: rowsFor("model"),
     topConsumers: rowsFor("channel").map((row) => ({ ...row, consumerId: row.name })),
-    recent: recent.map(({ created_at, operation: op, provider, model, channel, request_id, status, latency_ms, rate_limited, retry_count }) => ({
-      at: new Date(created_at).toISOString(),
-      operation: op,
-      provider: provider || "unknown",
-      model: model || "unknown",
-      consumerId: channel || null,
-      requestId: request_id || null,
-      status: status || "unknown",
-      latencyMs: latency_ms == null ? null : Number(latency_ms),
-      rateLimited: !!rate_limited,
-      retryCount: Number(retry_count || 0),
-    })),
-    recentActivity: recent.map(({ created_at, operation: op, provider, model, request_id, event_id, status, result, http_status, attempt, retry_count, latency_ms, rate_limited }) => ({ createdAt: created_at, operation: op, provider, model, requestId: request_id, eventId: event_id, status, result, httpStatus: http_status, attempt, retryCount: retry_count, latencyMs: latency_ms, rateLimited: !!rate_limited })),
-    pagination: { limit: safeLimit, offset: safeOffset, total: totalActivity, hasMore: safeOffset + recent.length < totalActivity } };
+    recent: recent.map(
+      ({
+        created_at,
+        operation: op,
+        provider,
+        model,
+        channel,
+        request_id,
+        status,
+        latency_ms,
+        rate_limited,
+        retry_count,
+      }) => ({
+        at: new Date(created_at).toISOString(),
+        operation: op,
+        provider: provider || "unknown",
+        model: model || "unknown",
+        consumerId: channel || null,
+        requestId: request_id || null,
+        status: status || "unknown",
+        latencyMs: latency_ms == null ? null : Number(latency_ms),
+        rateLimited: !!rate_limited,
+        retryCount: Number(retry_count || 0),
+      }),
+    ),
+    recentActivity: recent.map(
+      ({
+        created_at,
+        operation: op,
+        provider,
+        model,
+        request_id,
+        event_id,
+        status,
+        result,
+        http_status,
+        attempt,
+        retry_count,
+        latency_ms,
+        rate_limited,
+      }) => ({
+        createdAt: created_at,
+        operation: op,
+        provider,
+        model,
+        requestId: request_id,
+        eventId: event_id,
+        status,
+        result,
+        httpStatus: http_status,
+        attempt,
+        retryCount: retry_count,
+        latencyMs: latency_ms,
+        rateLimited: !!rate_limited,
+      }),
+    ),
+    pagination: {
+      limit: safeLimit,
+      offset: safeOffset,
+      total: totalActivity,
+      hasMore: safeOffset + recent.length < totalActivity,
+    },
+  };
 }
 
 function metricCounts(sinceMs = 7 * 24 * 60 * 60 * 1000, untilMs = null): MetricCountRow[] {
-  return query<MetricCountRow>("SELECT kind, COUNT(*) AS count FROM metrics WHERE created_at > ? AND created_at <= ? GROUP BY kind")
-    .all(now() - sinceMs, untilMs === null ? now() : untilMs);
+  return query<MetricCountRow>(
+    "SELECT kind, COUNT(*) AS count FROM metrics WHERE created_at > ? AND created_at <= ? GROUP BY kind",
+  ).all(now() - sinceMs, untilMs === null ? now() : untilMs);
 }
 
 function lastMetricAt(kind: string) {
@@ -854,27 +1048,30 @@ function lastMetricAt(kind: string) {
 }
 
 function metricDetails(kind: string, sinceMs = 7 * 24 * 60 * 60 * 1000) {
-  return query("SELECT detail, COUNT(*) AS count FROM metrics WHERE kind = ? AND detail IS NOT NULL AND created_at > ? GROUP BY detail ORDER BY count DESC")
-    .all(kind, now() - sinceMs);
+  return query(
+    "SELECT detail, COUNT(*) AS count FROM metrics WHERE kind = ? AND detail IS NOT NULL AND created_at > ? GROUP BY detail ORDER BY count DESC",
+  ).all(kind, now() - sinceMs);
 }
 
 function medianLatency(kind: string, sinceMs = 7 * 24 * 60 * 60 * 1000): number | null {
-  const rows = query<LatencyRow>("SELECT latency_ms FROM metrics WHERE kind = ? AND latency_ms IS NOT NULL AND created_at > ? ORDER BY latency_ms")
-    .all(kind, now() - sinceMs);
+  const rows = query<LatencyRow>(
+    "SELECT latency_ms FROM metrics WHERE kind = ? AND latency_ms IS NOT NULL AND created_at > ? ORDER BY latency_ms",
+  ).all(kind, now() - sinceMs);
   if (rows.length === 0) return null;
   return rows[Math.floor(rows.length / 2)].latency_ms;
 }
 
 function countRecentRequests(userId: string, windowMs: number) {
-  const row = query("SELECT COUNT(*) AS count FROM rate_limits WHERE user_id = ? AND created_at > ?")
-    .get(userId, now() - windowMs);
+  const row = query("SELECT COUNT(*) AS count FROM rate_limits WHERE user_id = ? AND created_at > ?").get(
+    userId,
+    now() - windowMs,
+  );
   return row?.count || 0;
 }
 
 function recordRequest(userId: string) {
   query("INSERT INTO rate_limits (user_id, created_at) VALUES (?, ?)").run(userId, now());
 }
-
 
 function sweep() {
   const t = now();
@@ -915,15 +1112,13 @@ function close() {
   ephemeralThreadMessages.clear();
 }
 
-
 function saveSourceText(name: string, text: string) {
   const t = now();
   query(
-      "INSERT INTO source_cache (name, text, fetched_at, fail_count, last_success_at, last_error) VALUES (?, ?, ?, 0, ?, NULL)" +
-        " ON CONFLICT(name) DO UPDATE SET text = excluded.text, fetched_at = excluded.fetched_at," +
-        " fail_count = 0, last_success_at = excluded.last_success_at, last_error = NULL",
-    )
-    .run(name, text, t, t);
+    "INSERT INTO source_cache (name, text, fetched_at, fail_count, last_success_at, last_error) VALUES (?, ?, ?, 0, ?, NULL)" +
+      " ON CONFLICT(name) DO UPDATE SET text = excluded.text, fetched_at = excluded.fetched_at," +
+      " fail_count = 0, last_success_at = excluded.last_success_at, last_error = NULL",
+  ).run(name, text, t, t);
 }
 
 function loadSourceText(name: string) {
@@ -935,17 +1130,17 @@ function loadSourceText(name: string) {
 function recordSourceFailure(name: string, error: unknown) {
   const t = now();
   query(
-      "INSERT INTO source_cache (name, text, fetched_at, fail_count, last_error) VALUES (?, '', ?, 1, ?)" +
-        " ON CONFLICT(name) DO UPDATE SET fail_count = fail_count + 1, last_error = excluded.last_error",
-    )
-    .run(name, t, String(error || "").slice(0, 500));
+    "INSERT INTO source_cache (name, text, fetched_at, fail_count, last_error) VALUES (?, '', ?, 1, ?)" +
+      " ON CONFLICT(name) DO UPDATE SET fail_count = fail_count + 1, last_error = excluded.last_error",
+  ).run(name, t, String(error || "").slice(0, 500));
 }
 
 function getSourceHealth(names: unknown) {
   if (!Array.isArray(names) || names.length === 0) return [];
   const placeholders = names.map(() => "?").join(",");
-  return query(`SELECT name, fetched_at, fail_count, last_success_at, last_error FROM source_cache WHERE name IN (${placeholders})`)
-    .all(...names);
+  return query(
+    `SELECT name, fetched_at, fail_count, last_success_at, last_error FROM source_cache WHERE name IN (${placeholders})`,
+  ).all(...names);
 }
 
 function safeJson(text: string) {
@@ -977,7 +1172,8 @@ function getDbPrograms() {
     helperPing: !!r.helper_ping_enabled,
     shadowMode: !!r.shadow_mode,
     incidentMode: r.incident_mode || "ANSWER_AND_TRACK",
-    publicTicketsEnabled: r.public_tickets_enabled === null || r.public_tickets_enabled === undefined ? true : !!r.public_tickets_enabled,
+    publicTicketsEnabled:
+      r.public_tickets_enabled === null || r.public_tickets_enabled === undefined ? true : !!r.public_tickets_enabled,
     sharedSources: r.id === "ysws-global" ? true : false,
     sla: {
       unassignedMs: r.sla_unassigned_ms || null,
@@ -1022,7 +1218,12 @@ function saveProgram(p: PersistedProgram) {
   const links = p.links ? JSON.stringify(p.links) : null;
   const categories = p.categories ? JSON.stringify(p.categories) : null;
   const ticketVisibility = p.ticketVisibility || null;
-  const behavior = p.behavior && typeof p.behavior === "object" ? JSON.stringify(p.behavior) : (typeof p.behavior === "string" ? p.behavior : null);
+  const behavior =
+    p.behavior && typeof p.behavior === "object"
+      ? JSON.stringify(p.behavior)
+      : typeof p.behavior === "string"
+        ? p.behavior
+        : null;
   const status = p.status && ["sandbox", "live", "paused"].includes(p.status) ? p.status : null;
   const learning = p.learning === "review" ? "review" : "auto";
   const sensitive = p.sensitiveCategories ? JSON.stringify(p.sensitiveCategories) : null;
@@ -1075,7 +1276,7 @@ function saveProgram(p: PersistedProgram) {
 
   if (existing) {
     query(
-        `UPDATE programs SET name = ?, posture = ?, scope = ?, workspace_id = ?,
+      `UPDATE programs SET name = ?, posture = ?, scope = ?, workspace_id = ?,
          deployment_mode = ?, support_name = ?, icon_url = ?, reply_signature = ?,
          ai_answers = ?, tickets_enabled = ?, auto_escalate = ?,
          sensitive_categories = ?, support_active = ?, auto_assign = ?, helper_ping_enabled = ?, shadow_mode = ?, incident_mode = ?, public_tickets_enabled = ?,
@@ -1083,18 +1284,16 @@ function saveProgram(p: PersistedProgram) {
          retention_context_days = ?, retention_tickets_days = ?, retention_notes_days = ?, retention_traces_days = ?, retention_analytics_days = ?, retention_audit_days = ?,
          help_channel = ?, channels = ?, helper_group = ?,
          sources = ?, milestones = ?, guides = ?, links = ?, categories = ?, ticket_visibility = ?, behavior = ?, status = ?, learning = ?, updated_at = ? WHERE id = ?`,
-      )
-      .run(...values, p.id);
+    ).run(...values, p.id);
   } else {
     query(
-        `INSERT INTO programs (id, name, posture, scope, workspace_id, deployment_mode, support_name, icon_url, reply_signature,
+      `INSERT INTO programs (id, name, posture, scope, workspace_id, deployment_mode, support_name, icon_url, reply_signature,
          ai_answers, tickets_enabled, auto_escalate, sensitive_categories, support_active, auto_assign, helper_ping_enabled, shadow_mode, incident_mode, public_tickets_enabled,
          sla_unassigned_ms, sla_assigned_ms, sla_waiting_ms, sla_target_ms, sla_notify_channel,
          retention_context_days, retention_tickets_days, retention_notes_days, retention_traces_days, retention_analytics_days, retention_audit_days,
          help_channel, channels, helper_group, sources, milestones, guides, links, categories, ticket_visibility, behavior, status, learning, updated_at, created_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(p.id, ...values, nowTs);
+    ).run(p.id, ...values, nowTs);
   }
 }
 
@@ -1102,23 +1301,46 @@ function deleteProgram(id: string | number) {
   return query("DELETE FROM programs WHERE id = ?").run(id).changes > 0;
 }
 
-
 function toJson(value: unknown) {
   if (value === null || value === undefined) return null;
   return typeof value === "string" ? value : JSON.stringify(value);
 }
 
-function createTicket({ programId, workspaceId = null, channel, threadTs, requesterId, question, category = null, priority = null, summary = null, createdAt = null, visibility = null }: CreateTicketOptions): number | null {
+function createTicket({
+  programId,
+  workspaceId = null,
+  channel,
+  threadTs,
+  requesterId,
+  question,
+  category = null,
+  priority = null,
+  summary = null,
+  createdAt = null,
+  visibility = null,
+}: CreateTicketOptions): number | null {
   // The unique thread key makes duplicate event delivery idempotent; the lookup handles conflicts.
   const t = createdAt === null || createdAt === undefined ? now() : Number(createdAt);
   try {
     const result = query(
-        `INSERT OR IGNORE INTO tickets (program_id, workspace_id, channel, thread_ts, requester_id, question, category, category_source, priority, summary, visibility, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
-      )
-      .run(programId, workspaceId, channel, threadTs, requesterId, question, category, category ? "human" : null, priority, summary, visibility, t, t);
+      `INSERT OR IGNORE INTO tickets (program_id, workspace_id, channel, thread_ts, requester_id, question, category, category_source, priority, summary, visibility, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
+    ).run(
+      programId,
+      workspaceId,
+      channel,
+      threadTs,
+      requesterId,
+      question,
+      category,
+      category ? "human" : null,
+      priority,
+      summary,
+      visibility,
+      t,
+      t,
+    );
     if (result.changes > 0) return Number(result.lastInsertRowid);
-  } catch (_: unknown) {
-  }
+  } catch (_: unknown) {}
   const existing = getTicketByThreadTs(threadTs, workspaceId, programId);
   if (existing) return existing.id;
   return null;
@@ -1128,15 +1350,33 @@ function getTicket(id: number): TicketRow | null {
   return query<TicketRow>("SELECT * FROM tickets WHERE id = ?").get(id) || null;
 }
 
-function getTicketByThreadTs(threadTs: string, workspaceId: string | null = null, programId: string | null = null): TicketRow | null {
+function getTicketByThreadTs(
+  threadTs: string,
+  workspaceId: string | null = null,
+  programId: string | null = null,
+): TicketRow | null {
   if (workspaceId) {
     if (programId) {
-      return query<TicketRow>("SELECT * FROM tickets WHERE thread_ts = ? AND workspace_id = ? AND program_id = ? LIMIT 1").get(threadTs, workspaceId, programId) || null;
+      return (
+        query<TicketRow>(
+          "SELECT * FROM tickets WHERE thread_ts = ? AND workspace_id = ? AND program_id = ? LIMIT 1",
+        ).get(threadTs, workspaceId, programId) || null
+      );
     }
-    return query<TicketRow>("SELECT * FROM tickets WHERE thread_ts = ? AND workspace_id = ? LIMIT 1").get(threadTs, workspaceId) || null;
+    return (
+      query<TicketRow>("SELECT * FROM tickets WHERE thread_ts = ? AND workspace_id = ? LIMIT 1").get(
+        threadTs,
+        workspaceId,
+      ) || null
+    );
   }
   if (programId) {
-    return query<TicketRow>("SELECT * FROM tickets WHERE thread_ts = ? AND program_id = ? LIMIT 1").get(threadTs, programId) || null;
+    return (
+      query<TicketRow>("SELECT * FROM tickets WHERE thread_ts = ? AND program_id = ? LIMIT 1").get(
+        threadTs,
+        programId,
+      ) || null
+    );
   }
   return query<TicketRow>("SELECT * FROM tickets WHERE thread_ts = ? LIMIT 1").get(threadTs) || null;
 }
@@ -1145,16 +1385,27 @@ function getTicketByChannelThreadTs(channel: string | null, threadTs: string, wo
   if (!channel || !threadTs) return null;
   const clauses = ["channel = ?", "thread_ts = ?"];
   const params = [channel, threadTs];
-  if (workspaceId) { clauses.push("workspace_id = ?"); params.push(workspaceId); }
-  if (programId) { clauses.push("program_id = ?"); params.push(programId); }
+  if (workspaceId) {
+    clauses.push("workspace_id = ?");
+    params.push(workspaceId);
+  }
+  if (programId) {
+    clauses.push("program_id = ?");
+    params.push(programId);
+  }
   return query(`SELECT * FROM tickets WHERE ${clauses.join(" AND ")} LIMIT 1`).get(...params) || null;
 }
 
-function enrichTicket(id: number, { requesterId = null, question = null, visibility = null }: Record<string, unknown> = {}) {
+function enrichTicket(
+  id: number,
+  { requesterId = null, question = null, visibility = null }: Record<string, unknown> = {},
+) {
   if (!id) return false;
-  return query(
-    `UPDATE tickets SET requester_id = COALESCE(NULLIF(requester_id, ''), ?), question = COALESCE(NULLIF(question, ''), ?), visibility = COALESCE(visibility, ?), updated_at = ? WHERE id = ?`,
-  ).run(requesterId, question, visibility, now(), id).changes > 0;
+  return (
+    query(
+      `UPDATE tickets SET requester_id = COALESCE(NULLIF(requester_id, ''), ?), question = COALESCE(NULLIF(question, ''), ?), visibility = COALESCE(visibility, ?), updated_at = ? WHERE id = ?`,
+    ).run(requesterId, question, visibility, now(), id).changes > 0
+  );
 }
 
 function updateTicketCardTs(id: number, cardTs: string) {
@@ -1162,28 +1413,34 @@ function updateTicketCardTs(id: number, cardTs: string) {
 }
 
 function updatePublicAckTs(id: number, ackTs: string) {
-  return query("UPDATE tickets SET public_ack_ts = ? WHERE id = ? AND public_ack_ts IS NULL").run(ackTs, id).changes > 0;
+  return (
+    query("UPDATE tickets SET public_ack_ts = ? WHERE id = ? AND public_ack_ts IS NULL").run(ackTs, id).changes > 0
+  );
 }
 
 function claimTicket(id: number, assigneeId: string) {
   return (
-    query("UPDATE tickets SET status = 'claimed', assignee_id = ?, claimed_at = ?, assigned_at = ?, updated_at = ? WHERE id = ? AND status IN ('open', 'waiting_for_helper')")
-      .run(assigneeId, now(), now(), now(), id).changes > 0
+    query(
+      "UPDATE tickets SET status = 'claimed', assignee_id = ?, claimed_at = ?, assigned_at = ?, updated_at = ? WHERE id = ? AND status IN ('open', 'waiting_for_helper')",
+    ).run(assigneeId, now(), now(), now(), id).changes > 0
   );
 }
 
 function assignTicket(id: number, assigneeId: string) {
   const t = now();
   return (
-    query("UPDATE tickets SET status = 'assigned', assignee_id = ?, assigned_at = ?, updated_at = ? WHERE id = ? AND status IN ('open', 'claimed', 'assigned', 'waiting_for_helper', 'escalated', 'reopened')")
-      .run(assigneeId, t, t, id).changes > 0
+    query(
+      "UPDATE tickets SET status = 'assigned', assignee_id = ?, assigned_at = ?, updated_at = ? WHERE id = ? AND status IN ('open', 'claimed', 'assigned', 'waiting_for_helper', 'escalated', 'reopened')",
+    ).run(assigneeId, t, t, id).changes > 0
   );
 }
 
 function unclaimTicket(id: number) {
   return (
-    query("UPDATE tickets SET status = 'open', assignee_id = NULL, claimed_at = NULL, updated_at = ? WHERE id = ?")
-      .run(now(), id).changes > 0
+    query("UPDATE tickets SET status = 'open', assignee_id = NULL, claimed_at = NULL, updated_at = ? WHERE id = ?").run(
+      now(),
+      id,
+    ).changes > 0
   );
 }
 
@@ -1191,38 +1448,57 @@ function resolveTicket(id: number, resolution = "resolved", resolvedBy = null, r
   const t = resolvedAt === null || resolvedAt === undefined ? now() : Number(resolvedAt);
   const updated = now();
   return (
-    query("UPDATE tickets SET status = 'resolved', resolution = ?, resolved_by = ?, resolved_at = ?, updated_at = ?, first_response_at = COALESCE(first_response_at, ?) WHERE id = ? AND status NOT IN ('resolved', 'closed')")
-      .run(resolution, resolvedBy, t, updated, t, id).changes > 0
+    query(
+      "UPDATE tickets SET status = 'resolved', resolution = ?, resolved_by = ?, resolved_at = ?, updated_at = ?, first_response_at = COALESCE(first_response_at, ?) WHERE id = ? AND status NOT IN ('resolved', 'closed')",
+    ).run(resolution, resolvedBy, t, updated, t, id).changes > 0
   );
 }
 
 function reopenTicket(id: number, reopenedBy = null) {
   const t = now();
   return (
-    query("UPDATE tickets SET status = 'reopened', resolution = NULL, resolved_at = NULL, resolved_by = NULL, reopened_by = ?, reopened_at = ?, reopen_count = COALESCE(reopen_count, 0) + 1, updated_at = ? WHERE id = ?")
-      .run(reopenedBy, t, t, id).changes > 0
+    query(
+      "UPDATE tickets SET status = 'reopened', resolution = NULL, resolved_at = NULL, resolved_by = NULL, reopened_by = ?, reopened_at = ?, reopen_count = COALESCE(reopen_count, 0) + 1, updated_at = ? WHERE id = ?",
+    ).run(reopenedBy, t, t, id).changes > 0
   );
 }
 
 function reopenResolvedTicket(id: number, reopenedBy = null) {
   const t = now();
   return (
-    query("UPDATE tickets SET status = 'reopened', resolution = NULL, resolved_at = NULL, resolved_by = NULL, reopened_by = ?, reopened_at = ?, reopen_count = COALESCE(reopen_count, 0) + 1, updated_at = ? WHERE id = ? AND status IN ('resolved', 'closed')")
-      .run(reopenedBy, t, t, id).changes > 0
+    query(
+      "UPDATE tickets SET status = 'reopened', resolution = NULL, resolved_at = NULL, resolved_by = NULL, reopened_by = ?, reopened_at = ?, reopen_count = COALESCE(reopen_count, 0) + 1, updated_at = ? WHERE id = ? AND status IN ('resolved', 'closed')",
+    ).run(reopenedBy, t, t, id).changes > 0
   );
 }
 
 function closeTicket(id: number, resolution = null, closedAt = null) {
   const t = closedAt === null || closedAt === undefined ? now() : Number(closedAt);
-  return query("UPDATE tickets SET status = 'closed', resolution = COALESCE(?, resolution), resolved_at = ?, updated_at = ? WHERE id = ? AND status NOT IN ('resolved', 'closed')").run(resolution, t, now(), id).changes > 0;
+  return (
+    query(
+      "UPDATE tickets SET status = 'closed', resolution = COALESCE(?, resolution), resolved_at = ?, updated_at = ? WHERE id = ? AND status NOT IN ('resolved', 'closed')",
+    ).run(resolution, t, now(), id).changes > 0
+  );
 }
 
 function snoozeTicket(id: number, untilMs: number) {
-  return query("UPDATE tickets SET status = 'snoozed', snoozed_until = ?, updated_at = ? WHERE id = ?").run(untilMs, now(), id).changes > 0;
+  return (
+    query("UPDATE tickets SET status = 'snoozed', snoozed_until = ?, updated_at = ? WHERE id = ?").run(
+      untilMs,
+      now(),
+      id,
+    ).changes > 0
+  );
 }
 
 function markDuplicateTicket(id: number, canonicalId: number) {
-  return query("UPDATE tickets SET status = 'duplicate', duplicate_of = ?, updated_at = ? WHERE id = ?").run(canonicalId, now(), id).changes > 0;
+  return (
+    query("UPDATE tickets SET status = 'duplicate', duplicate_of = ?, updated_at = ? WHERE id = ?").run(
+      canonicalId,
+      now(),
+      id,
+    ).changes > 0
+  );
 }
 
 function escalateTicketStatus(id: number) {
@@ -1230,26 +1506,43 @@ function escalateTicketStatus(id: number) {
 }
 
 function markTicketWaitingForHelper(id: number) {
-  return query("UPDATE tickets SET status = 'waiting_for_helper', updated_at = ? WHERE id = ? AND status IN ('open', 'reopened', 'escalated')")
-    .run(now(), id).changes > 0;
+  return (
+    query(
+      "UPDATE tickets SET status = 'waiting_for_helper', updated_at = ? WHERE id = ? AND status IN ('open', 'reopened', 'escalated')",
+    ).run(now(), id).changes > 0
+  );
 }
 
-function setTicketTriage(id: number, { category = null, categorySource = null, priority = null, summary = null, aiConfidence = null, aiDecision = null }: Record<string, unknown> = {}) {
+function setTicketTriage(
+  id: number,
+  {
+    category = null,
+    categorySource = null,
+    priority = null,
+    summary = null,
+    aiConfidence = null,
+    aiDecision = null,
+  }: Record<string, unknown> = {},
+) {
   const decision = toJson(aiDecision);
   const source = category !== null && category !== undefined && categorySource === null ? "human" : categorySource;
-  return query(
-    `UPDATE tickets SET category = COALESCE(?, category), category_source = COALESCE(?, category_source), priority = COALESCE(?, priority), summary = COALESCE(?, summary),
+  return (
+    query(
+      `UPDATE tickets SET category = COALESCE(?, category), category_source = COALESCE(?, category_source), priority = COALESCE(?, priority), summary = COALESCE(?, summary),
      ai_confidence = COALESCE(?, ai_confidence), ai_decision = COALESCE(?, ai_decision), updated_at = ? WHERE id = ?`,
-  ).run(category, source, priority, summary, aiConfidence, decision, now(), id).changes > 0;
+    ).run(category, source, priority, summary, aiConfidence, decision, now(), id).changes > 0
+  );
 }
 
 function setResolutionSummary(id: number, summary: string) {
   const clean = String(summary || "").trim();
   if (!clean) return false;
   const t = now();
-  return query(
-    "UPDATE tickets SET resolution_summary = ?, resolution_summary_at = ?, updated_at = ? WHERE id = ? AND resolution_summary IS NULL",
-  ).run(clean, t, t, id).changes > 0;
+  return (
+    query(
+      "UPDATE tickets SET resolution_summary = ?, resolution_summary_at = ?, updated_at = ? WHERE id = ? AND resolution_summary IS NULL",
+    ).run(clean, t, t, id).changes > 0
+  );
 }
 
 function getResolutionSummary(id: number) {
@@ -1259,35 +1552,79 @@ function getResolutionSummary(id: number) {
 function recordFirstResponse(id: number, human = false, at = null) {
   const t = at === null || at === undefined ? now() : Number(at);
   if (human) {
-    return query(
-      "UPDATE tickets SET first_response_at = COALESCE(first_response_at, ?), first_human_response_at = COALESCE(first_human_response_at, ?), updated_at = ? WHERE id = ?",
-    ).run(t, t, t, id).changes > 0;
+    return (
+      query(
+        "UPDATE tickets SET first_response_at = COALESCE(first_response_at, ?), first_human_response_at = COALESCE(first_human_response_at, ?), updated_at = ? WHERE id = ?",
+      ).run(t, t, t, id).changes > 0
+    );
   }
-  return query(
-    "UPDATE tickets SET first_response_at = COALESCE(first_response_at, ?), updated_at = ? WHERE id = ? AND first_response_at IS NULL",
-  ).run(t, t, id).changes > 0;
+  return (
+    query(
+      "UPDATE tickets SET first_response_at = COALESCE(first_response_at, ?), updated_at = ? WHERE id = ? AND first_response_at IS NULL",
+    ).run(t, t, id).changes > 0
+  );
 }
 
 function getTicketsForProgram(programId: string, status = null): TicketRow[] {
   if (status) {
-    return query<TicketRow>("SELECT * FROM tickets WHERE program_id = ? AND status = ? ORDER BY created_at DESC")
-      .all(programId, status);
+    return query<TicketRow>("SELECT * FROM tickets WHERE program_id = ? AND status = ? ORDER BY created_at DESC").all(
+      programId,
+      status,
+    );
   }
-  return query<TicketRow>("SELECT * FROM tickets WHERE program_id = ? ORDER BY created_at DESC")
-    .all(programId);
+  return query<TicketRow>("SELECT * FROM tickets WHERE program_id = ? ORDER BY created_at DESC").all(programId);
 }
 
-function searchTickets({ programId, status = null, assigneeId = null, requesterId = null, category = null, priority = null, q = null, sinceMs = null, untilMs = null, limit = 50, offset = 0 }: Record<string, unknown> = {}) {
+function searchTickets({
+  programId,
+  status = null,
+  assigneeId = null,
+  requesterId = null,
+  category = null,
+  priority = null,
+  q = null,
+  sinceMs = null,
+  untilMs = null,
+  limit = 50,
+  offset = 0,
+}: Record<string, unknown> = {}) {
   const clauses = ["program_id = ?"];
   const params = [programId];
-  if (status) { clauses.push("status = ?"); params.push(status); }
-  if (assigneeId) { clauses.push("assignee_id = ?"); params.push(assigneeId); }
-  if (requesterId) { clauses.push("requester_id = ?"); params.push(requesterId); }
-  if (category) { clauses.push("category = ?"); params.push(category); }
-  if (priority) { clauses.push("priority = ?"); params.push(priority); }
-  if (sinceMs !== null && sinceMs !== undefined) { clauses.push("created_at > ?"); params.push(sinceMs); }
-  if (untilMs !== null && untilMs !== undefined) { clauses.push("created_at <= ?"); params.push(untilMs); }
-  if (q) { clauses.push("(question LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')"); params.push(`%${String(q).replace(/[\\%_]/g, (c: unknown) => `\\${c}`)}%`, `%${String(q).replace(/[\\%_]/g, (c: unknown) => `\\${c}`)}%`); }
+  if (status) {
+    clauses.push("status = ?");
+    params.push(status);
+  }
+  if (assigneeId) {
+    clauses.push("assignee_id = ?");
+    params.push(assigneeId);
+  }
+  if (requesterId) {
+    clauses.push("requester_id = ?");
+    params.push(requesterId);
+  }
+  if (category) {
+    clauses.push("category = ?");
+    params.push(category);
+  }
+  if (priority) {
+    clauses.push("priority = ?");
+    params.push(priority);
+  }
+  if (sinceMs !== null && sinceMs !== undefined) {
+    clauses.push("created_at > ?");
+    params.push(sinceMs);
+  }
+  if (untilMs !== null && untilMs !== undefined) {
+    clauses.push("created_at <= ?");
+    params.push(untilMs);
+  }
+  if (q) {
+    clauses.push("(question LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')");
+    params.push(
+      `%${String(q).replace(/[\\%_]/g, (c: unknown) => `\\${c}`)}%`,
+      `%${String(q).replace(/[\\%_]/g, (c: unknown) => `\\${c}`)}%`,
+    );
+  }
   const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 200);
   const safeOffset = Math.max(Number(offset) || 0, 0);
   const total = query(`SELECT COUNT(*) AS n FROM tickets WHERE ${clauses.join(" AND ")}`).get(...params)?.n || 0;
@@ -1297,14 +1634,23 @@ function searchTickets({ programId, status = null, assigneeId = null, requesterI
   return { total, rows };
 }
 
-
-function claimProgramChannel({ workspaceId = null, channelId, programId, kind = "help", claimedBy = null }: Record<string, unknown>) {
+function claimProgramChannel({
+  workspaceId = null,
+  channelId,
+  programId,
+  kind = "help",
+  claimedBy = null,
+}: Record<string, unknown>) {
   // The database uniqueness constraint is the authority when two activations race.
   const ws = workspaceId || "default";
-  const res = query("INSERT OR IGNORE INTO program_channels (workspace_id, channel_id, program_id, kind, claimed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(ws, channelId, programId, kind, claimedBy, now());
+  const res = query(
+    "INSERT OR IGNORE INTO program_channels (workspace_id, channel_id, program_id, kind, claimed_by, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(ws, channelId, programId, kind, claimedBy, now());
   if (res.changes > 0) return { ok: true, programId };
-  const owner = query("SELECT program_id, kind FROM program_channels WHERE workspace_id = ? AND channel_id = ?").get(ws, channelId);
+  const owner = query("SELECT program_id, kind FROM program_channels WHERE workspace_id = ? AND channel_id = ?").get(
+    ws,
+    channelId,
+  );
   if (owner && owner.program_id === programId) {
     if (owner.kind !== kind) {
       query("UPDATE program_channels SET kind = ? WHERE workspace_id = ? AND channel_id = ?").run(kind, ws, channelId);
@@ -1317,13 +1663,24 @@ function claimProgramChannel({ workspaceId = null, channelId, programId, kind = 
 function releaseProgramChannel({ workspaceId = null, channelId, programId = null }: Record<string, unknown>) {
   const ws = workspaceId || "default";
   if (programId) {
-    return query("DELETE FROM program_channels WHERE workspace_id = ? AND channel_id = ? AND program_id = ?").run(ws, channelId, programId).changes > 0;
+    return (
+      query("DELETE FROM program_channels WHERE workspace_id = ? AND channel_id = ? AND program_id = ?").run(
+        ws,
+        channelId,
+        programId,
+      ).changes > 0
+    );
   }
   return query("DELETE FROM program_channels WHERE workspace_id = ? AND channel_id = ?").run(ws, channelId).changes > 0;
 }
 
 function getChannelOwner(workspaceId: string | null = null, channelId: string): ChannelClaimRow | null {
-  return query<ChannelClaimRow>("SELECT * FROM program_channels WHERE workspace_id = ? AND channel_id = ?").get(workspaceId || "default", channelId) || null;
+  return (
+    query<ChannelClaimRow>("SELECT * FROM program_channels WHERE workspace_id = ? AND channel_id = ?").get(
+      workspaceId || "default",
+      channelId,
+    ) || null
+  );
 }
 
 function listChannelClaims() {
@@ -1331,27 +1688,58 @@ function listChannelClaims() {
 }
 
 function listProgramChannels(programId: string): ChannelClaimRow[] {
-  return query<ChannelClaimRow>("SELECT * FROM program_channels WHERE program_id = ? ORDER BY created_at ASC").all(programId);
+  return query<ChannelClaimRow>("SELECT * FROM program_channels WHERE program_id = ? ORDER BY created_at ASC").all(
+    programId,
+  );
 }
 
-function addTicketEvent({ ticketId, programId, actorId = null, eventType, detail = null, createdAt = null }: Record<string, unknown>) {
-  const d = detail === null || detail === undefined ? null : (typeof detail === "string" ? detail : JSON.stringify(detail));
-  const res = query("INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)")
-    .run(ticketId, programId, actorId, eventType, d, createdAt === null || createdAt === undefined ? now() : Number(createdAt));
+function addTicketEvent({
+  ticketId,
+  programId,
+  actorId = null,
+  eventType,
+  detail = null,
+  createdAt = null,
+}: Record<string, unknown>) {
+  const d =
+    detail === null || detail === undefined ? null : typeof detail === "string" ? detail : JSON.stringify(detail);
+  const res = query(
+    "INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, detail, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+  ).run(
+    ticketId,
+    programId,
+    actorId,
+    eventType,
+    d,
+    createdAt === null || createdAt === undefined ? now() : Number(createdAt),
+  );
   return res.changes > 0 ? Number(res.lastInsertRowid) : null;
 }
 
 function listTicketEvents(ticketId: number, limit = 100): TicketEventRow[] {
-  return query<TicketEventRow>("SELECT * FROM ticket_events WHERE ticket_id = ? ORDER BY created_at ASC LIMIT ?").all(ticketId, limit);
+  return query<TicketEventRow>("SELECT * FROM ticket_events WHERE ticket_id = ? ORDER BY created_at ASC LIMIT ?").all(
+    ticketId,
+    limit,
+  );
 }
 
 function getHistoryImportProgress(programId: string, channelId: string): HistoryImportRow | null;
 function getHistoryImportProgress(programId: string, channelId?: null): HistoryImportRow[];
-function getHistoryImportProgress(programId: string, channelId: string | null = null): HistoryImportRow | HistoryImportRow[] | null {
+function getHistoryImportProgress(
+  programId: string,
+  channelId: string | null = null,
+): HistoryImportRow | HistoryImportRow[] | null {
   if (channelId) {
-    return query<HistoryImportRow>("SELECT * FROM history_import_progress WHERE program_id = ? AND channel_id = ?").get(programId, channelId) || null;
+    return (
+      query<HistoryImportRow>("SELECT * FROM history_import_progress WHERE program_id = ? AND channel_id = ?").get(
+        programId,
+        channelId,
+      ) || null
+    );
   }
-  return query<HistoryImportRow>("SELECT * FROM history_import_progress WHERE program_id = ? ORDER BY channel_id").all(programId);
+  return query<HistoryImportRow>("SELECT * FROM history_import_progress WHERE program_id = ? ORDER BY channel_id").all(
+    programId,
+  );
 }
 
 function upsertHistoryImportProgress(programId: string, channelId: string, patch: HistoryImportPatch = {}) {
@@ -1380,63 +1768,107 @@ function upsertHistoryImportProgress(programId: string, channelId: string, patch
        messages_scanned = excluded.messages_scanned, tickets_created = excluded.tickets_created, tickets_enriched = excluded.tickets_enriched,
        resolved = excluded.resolved, closed = excluded.closed, queued_for_judge = excluded.queued_for_judge, last_error = excluded.last_error,
        started_at = excluded.started_at, completed_at = excluded.completed_at, updated_at = excluded.updated_at, rules_version = excluded.rules_version`,
-  ).run(programId, channelId, values.cursor, values.newestTsDone, values.status, values.messagesScanned, values.ticketsCreated, values.ticketsEnriched, values.resolved, values.closed, values.queuedForJudge, values.lastError, values.startedAt, values.completedAt, t, values.rulesVersion);
+  ).run(
+    programId,
+    channelId,
+    values.cursor,
+    values.newestTsDone,
+    values.status,
+    values.messagesScanned,
+    values.ticketsCreated,
+    values.ticketsEnriched,
+    values.resolved,
+    values.closed,
+    values.queuedForJudge,
+    values.lastError,
+    values.startedAt,
+    values.completedAt,
+    t,
+    values.rulesVersion,
+  );
   return getHistoryImportProgress(programId, channelId);
 }
 
 function addTicketNote({ ticketId, programId, authorId, body }: Record<string, unknown>) {
   const clean = String(body || "").trim();
   if (!clean) return null;
-  const res = query("INSERT INTO ticket_notes (ticket_id, program_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)")
-    .run(ticketId, programId, authorId, clean, now());
+  const res = query(
+    "INSERT INTO ticket_notes (ticket_id, program_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)",
+  ).run(ticketId, programId, authorId, clean, now());
   return res.changes > 0 ? Number(res.lastInsertRowid) : null;
 }
 
 function listTicketNotes(ticketId: number, limit = 100) {
-  return query("SELECT id, ticket_id, program_id, author_id, body, created_at FROM ticket_notes WHERE ticket_id = ? ORDER BY created_at ASC LIMIT ?").all(ticketId, limit);
+  return query(
+    "SELECT id, ticket_id, program_id, author_id, body, created_at FROM ticket_notes WHERE ticket_id = ? ORDER BY created_at ASC LIMIT ?",
+  ).all(ticketId, limit);
 }
 
-function recordAuditEvent({ programId = null, actorId = null, action, entityType = null, entityId = null, metadata = null }: Record<string, unknown>) {
-  const res = query("INSERT INTO audit_events (program_id, actor_id, action, entity_type, entity_id, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
-    .run(programId, actorId, action, entityType, entityId, metadata, now());
+function recordAuditEvent({
+  programId = null,
+  actorId = null,
+  action,
+  entityType = null,
+  entityId = null,
+  metadata = null,
+}: Record<string, unknown>) {
+  const res = query(
+    "INSERT INTO audit_events (program_id, actor_id, action, entity_type, entity_id, metadata, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+  ).run(programId, actorId, action, entityType, entityId, metadata, now());
   return res.changes > 0 ? Number(res.lastInsertRowid) : null;
 }
 
 function listAuditEvents({ programId = null, limit = 100 }: Record<string, unknown> = {}): AuditEventRow[] {
   if (programId) {
-    return query<AuditEventRow>("SELECT * FROM audit_events WHERE program_id = ? ORDER BY created_at DESC LIMIT ?").all(programId, limit);
+    return query<AuditEventRow>("SELECT * FROM audit_events WHERE program_id = ? ORDER BY created_at DESC LIMIT ?").all(
+      programId,
+      limit,
+    );
   }
   return query<AuditEventRow>("SELECT * FROM audit_events ORDER BY created_at DESC LIMIT ?").all(limit);
 }
 
 function syncHelper({ programId, userId, source = "manual", role = "helper" }: Record<string, unknown>) {
   query(
-      `INSERT INTO program_helpers (program_id, user_id, helper_source, role, active, added_at, removed_at)
+    `INSERT INTO program_helpers (program_id, user_id, helper_source, role, active, added_at, removed_at)
        VALUES (?, ?, ?, ?, 1, ?, NULL)
        ON CONFLICT(program_id, user_id) DO UPDATE SET helper_source = excluded.helper_source, role = excluded.role, active = 1, removed_at = NULL`,
-    )
-    .run(programId, userId, source, role, now());
+  ).run(programId, userId, source, role, now());
 }
 
 function setHelperPingEligible({ programId, userId, eligible }: Record<string, unknown>) {
-  return query("UPDATE program_helpers SET ping_eligible = ? WHERE program_id = ? AND user_id = ?")
-    .run(eligible ? 1 : 0, programId, userId).changes > 0;
+  return (
+    query("UPDATE program_helpers SET ping_eligible = ? WHERE program_id = ? AND user_id = ?").run(
+      eligible ? 1 : 0,
+      programId,
+      userId,
+    ).changes > 0
+  );
 }
 
 function removeHelper({ programId, userId }: Record<string, unknown>) {
-  return query("UPDATE program_helpers SET active = 0, removed_at = ? WHERE program_id = ? AND user_id = ? AND active = 1").run(now(), programId, userId).changes > 0;
+  return (
+    query(
+      "UPDATE program_helpers SET active = 0, removed_at = ? WHERE program_id = ? AND user_id = ? AND active = 1",
+    ).run(now(), programId, userId).changes > 0
+  );
 }
 
 function listHelpers(programId: string, activeOnly = true) {
   if (activeOnly) {
-    return query("SELECT * FROM program_helpers WHERE program_id = ? AND active = 1 ORDER BY added_at ASC").all(programId);
+    return query("SELECT * FROM program_helpers WHERE program_id = ? AND active = 1 ORDER BY added_at ASC").all(
+      programId,
+    );
   }
   return query("SELECT * FROM program_helpers WHERE program_id = ? ORDER BY added_at ASC").all(programId);
 }
 
 function isHelper(programId: string, userId: string) {
   if (!programId || !userId) return false;
-  return !!query("SELECT 1 FROM program_helpers WHERE program_id = ? AND user_id = ? AND active = 1").get(programId, userId);
+  return !!query("SELECT 1 FROM program_helpers WHERE program_id = ? AND user_id = ? AND active = 1").get(
+    programId,
+    userId,
+  );
 }
 
 function recordAnsweredThread({ question, channel, threadTs }: Record<string, unknown>) {
@@ -1444,10 +1876,12 @@ function recordAnsweredThread({ question, channel, threadTs }: Record<string, un
   const cleanQ = String(question).trim();
   if (!cleanQ) return;
   try {
-    query(
-        "INSERT INTO answered_threads (question, channel, thread_ts, created_at) VALUES (?, ?, ?, ?)"
-      )
-      .run(cleanQ, channel, threadTs, now());
+    query("INSERT INTO answered_threads (question, channel, thread_ts, created_at) VALUES (?, ?, ?, ?)").run(
+      cleanQ,
+      channel,
+      threadTs,
+      now(),
+    );
   } catch (err: unknown) {
     log.debug("db", `recordAnsweredThread failed: ${errorMessage(err)}`);
   }
@@ -1456,9 +1890,8 @@ function recordAnsweredThread({ question, channel, threadTs }: Record<string, un
 function getRecentAnsweredThreads(limit = 100) {
   try {
     return query(
-        "SELECT id, question, channel, thread_ts, created_at FROM answered_threads ORDER BY created_at DESC LIMIT ?"
-      )
-      .all(limit);
+      "SELECT id, question, channel, thread_ts, created_at FROM answered_threads ORDER BY created_at DESC LIMIT ?",
+    ).all(limit);
   } catch (err: unknown) {
     log.debug("db", `getRecentAnsweredThreads failed: ${errorMessage(err)}`);
     return [];
@@ -1468,9 +1901,8 @@ function getRecentAnsweredThreads(limit = 100) {
 function getLearnedFactsWithThreads(limit = 100) {
   try {
     return query(
-        "SELECT id, question, channel, source_ts FROM learned_facts WHERE source_ts IS NOT NULL AND channel IS NOT NULL ORDER BY created_at DESC LIMIT ?"
-      )
-      .all(limit);
+      "SELECT id, question, channel, source_ts FROM learned_facts WHERE source_ts IS NOT NULL AND channel IS NOT NULL ORDER BY created_at DESC LIMIT ?",
+    ).all(limit);
   } catch (err: unknown) {
     log.debug("db", `getLearnedFactsWithThreads failed: ${errorMessage(err)}`);
     return [];

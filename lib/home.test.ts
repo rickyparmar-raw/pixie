@@ -37,7 +37,11 @@ test("reviewBlocks shows nothing to a non-admin", () => {
 });
 
 test("reviewBlocks attributes an author-less row to drafting, not a broken mention", () => {
-  db.addLearnedFact({ question: "how do i unlock the next region", answer: "ship your current region's project", status: learn.PENDING });
+  db.addLearnedFact({
+    question: "how do i unlock the next region",
+    answer: "ship your current region's project",
+    status: learn.PENDING,
+  });
 
   const blocks = reviewBlocks(ADMIN);
   const section = blocks.find((b: any) => b.text?.text?.includes("unlock the next region"));
@@ -58,7 +62,10 @@ test("approve action promotes the fact and republishes the view", async () => {
   };
 
   let acked = false;
-  await reviewAction(learn.approve, "approved")({
+  await reviewAction(
+    learn.approve,
+    "approved",
+  )({
     ack: async () => {
       acked = true;
     },
@@ -75,7 +82,10 @@ test("approve action promotes the fact and republishes the view", async () => {
 test("drop action deletes the candidate", async () => {
   const id = seedPending("does pixie read links", "yes, it fetches public URLs");
 
-  await reviewAction(learn.forget, "dropped")({
+  await reviewAction(
+    learn.forget,
+    "dropped",
+  )({
     ack: async () => {},
     body: { user: { id: ADMIN } },
     action: { value: String(id) },
@@ -91,7 +101,10 @@ test("drop action deletes the candidate", async () => {
 test("review action ignores a click from a non-admin", async () => {
   const id = seedPending("secret question", "this must not get approved");
 
-  await reviewAction(learn.approve, "approved")({
+  await reviewAction(
+    learn.approve,
+    "approved",
+  )({
     ack: async () => {},
     body: { user: { id: OUTSIDER } },
     action: { value: String(id) },
@@ -100,7 +113,6 @@ test("review action ignores a click from a non-admin", async () => {
 
   assert.doesNotMatch(learn.corpusSection(), /this must not get approved/);
 });
-
 
 function withCounts(counts: any, fn: any) {
   const original = db.metricCounts;
@@ -138,14 +150,13 @@ test("homeBlocks renders for a viewer with no history", () => {
   assert.match(JSON.stringify(blocks), /what i can walk you through/);
 });
 
-
-test("char: homeBlocks header names the bot and stays within the block budget", () => {
+test("homeBlocks header names the bot and stays within the block budget", () => {
   const blocks = homeBlocks(OUTSIDER);
   assert.equal(blocks[0].text.text, require("./brand").name());
   assert.ok(blocks.length < 100);
 });
 
-test("char: reviewBlocks empty-queue copy renders for admins, nothing for outsiders", () => {
+test("reviewBlocks empty-queue copy renders for admins, nothing for outsiders", () => {
   const db = require("./db");
   const learn = require("./learn");
   db.handle().query("DELETE FROM learned_facts").run();

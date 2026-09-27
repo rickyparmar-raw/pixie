@@ -13,16 +13,16 @@ interface CacheRow {
   written_at: number;
 }
 
-
 interface CacheResult {
   source?: string | null;
   answer: string;
 }
 
-interface CacheOptions { refreshed?: boolean }
+interface CacheOptions {
+  refreshed?: boolean;
+}
 
 const VOLATILE_SOURCE = "Program timeline";
-
 
 function isVolatile(source: string | null | undefined) {
   // Timeline answers contain a countdown, so an old hit is incorrect rather than merely stale.
@@ -30,13 +30,11 @@ function isVolatile(source: string | null | undefined) {
   return String(source).trim().toLowerCase() === VOLATILE_SOURCE.toLowerCase();
 }
 
-
 function normalize(question: string) {
   // Sorted meaningful terms make filler and word order irrelevant to the cache key.
   const terms = retrieve.tokenize((question || "").replace(/<@[^>]+>/g, " "));
   return [...new Set(terms)].sort().join(" ");
 }
-
 
 function keyFor(question: string, programId: string | null = null) {
   const normalized = normalize(question);
@@ -56,7 +54,12 @@ function get(question: string, programId: string | null = null) {
   return { source: hit.source, answer: hit.answer };
 }
 
-function put(question: string, result: CacheResult, options: CacheOptions | string = {}, programId: string | null = null) {
+function put(
+  question: string,
+  result: CacheResult,
+  options: CacheOptions | string = {},
+  programId: string | null = null,
+) {
   // The legacy string overload is retained for callers that passed programId as the third argument.
   if (typeof options === "string") {
     programId = options;
@@ -67,10 +70,12 @@ function put(question: string, result: CacheResult, options: CacheOptions | stri
   putCachedAnswer(key, question, result, options || {});
 }
 
-
 function cacheRow(hash: string) {
-  return db.handle()
-    .query("SELECT source, answer, ask_count, COALESCE(refreshed_at, created_at) AS written_at FROM answer_cache WHERE question_hash = ?")
+  return db
+    .handle()
+    .query(
+      "SELECT source, answer, ask_count, COALESCE(refreshed_at, created_at) AS written_at FROM answer_cache WHERE question_hash = ?",
+    )
     .get(hash) as CacheRow | null;
 }
 
@@ -91,7 +96,12 @@ function getCachedAnswer(hash: string) {
   return hit;
 }
 
-function putCachedAnswer(hash: string, question: string, result: CacheResult, { refreshed = false }: CacheOptions = {}) {
+function putCachedAnswer(
+  hash: string,
+  question: string,
+  result: CacheResult,
+  { refreshed = false }: CacheOptions = {},
+) {
   // Refreshes replace the answer without pretending that somebody asked again.
   const t = db.now();
   db.handle()
@@ -106,7 +116,8 @@ function putCachedAnswer(hash: string, question: string, result: CacheResult, { 
 
 function staleCacheEntries(staleAfterMs: number, limit: number) {
   // Warm popular stale rows first; idle cleanup is a separate retention decision.
-  return db.handle()
+  return db
+    .handle()
     .query(
       `SELECT question_hash, question, ask_count FROM answer_cache
        WHERE COALESCE(refreshed_at, created_at) < ?
@@ -122,8 +133,11 @@ function cachedCount() {
 }
 
 function topCached(limit = 5): CacheRow[] {
-  return db.handle()
-    .query("SELECT question_hash, question, ask_count, source, COALESCE(refreshed_at, created_at) AS written_at FROM answer_cache ORDER BY ask_count DESC, question LIMIT ?")
+  return db
+    .handle()
+    .query(
+      "SELECT question_hash, question, ask_count, source, COALESCE(refreshed_at, created_at) AS written_at FROM answer_cache ORDER BY ask_count DESC, question LIMIT ?",
+    )
     .all(limit) as CacheRow[];
 }
 

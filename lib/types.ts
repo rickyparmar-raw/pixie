@@ -73,7 +73,8 @@ export interface ProgramSource {
   [key: string]: unknown;
 }
 
-export type TicketStatus = "open" | "claimed" | "waiting_for_helper" | "waiting_for_user" | "resolved" | "closed" | (string & {});
+export type TicketStatus =
+  "open" | "claimed" | "waiting_for_helper" | "waiting_for_user" | "resolved" | "closed" | (string & {});
 
 // A row of the tickets table. Columns added by later migrations are optional
 // because old rows and test fixtures may not carry them.

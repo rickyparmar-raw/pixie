@@ -211,37 +211,37 @@ CREATE TABLE IF NOT EXISTS answered_threads (
 );
 `;
 
-
 const MIGRATIONS = [
   ["doc_gaps", "message_ts", "ALTER TABLE doc_gaps ADD COLUMN message_ts TEXT"],
-
 
   ["answer_cache", "ask_count", "ALTER TABLE answer_cache ADD COLUMN ask_count INTEGER NOT NULL DEFAULT 1"],
   ["answer_cache", "last_asked_at", "ALTER TABLE answer_cache ADD COLUMN last_asked_at INTEGER"],
   ["answer_cache", "refreshed_at", "ALTER TABLE answer_cache ADD COLUMN refreshed_at INTEGER"],
 
-
   ["doc_gaps", "kind", "ALTER TABLE doc_gaps ADD COLUMN kind TEXT"],
   ["metrics", "detail", "ALTER TABLE metrics ADD COLUMN detail TEXT"],
 
-
   ["active_guides", "message_ts", "ALTER TABLE active_guides ADD COLUMN message_ts TEXT"],
-
 
   ["programs", "scope", "ALTER TABLE programs ADD COLUMN scope TEXT DEFAULT 'any'"],
   ["learned_facts", "program_id", "ALTER TABLE learned_facts ADD COLUMN program_id TEXT"],
   ["doc_gaps", "program_id", "ALTER TABLE doc_gaps ADD COLUMN program_id TEXT"],
 
-
-  ["gap_rejections", "table", "CREATE TABLE IF NOT EXISTS gap_rejections (question TEXT NOT NULL PRIMARY KEY, created_at INTEGER NOT NULL)"],
-  ["answered_threads", "table", "CREATE TABLE IF NOT EXISTS answered_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT NOT NULL, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, created_at INTEGER NOT NULL)"],
-
+  [
+    "gap_rejections",
+    "table",
+    "CREATE TABLE IF NOT EXISTS gap_rejections (question TEXT NOT NULL PRIMARY KEY, created_at INTEGER NOT NULL)",
+  ],
+  [
+    "answered_threads",
+    "table",
+    "CREATE TABLE IF NOT EXISTS answered_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT NOT NULL, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, created_at INTEGER NOT NULL)",
+  ],
 
   ["programs", "workspace_id", "ALTER TABLE programs ADD COLUMN workspace_id TEXT"],
   ["programs", "deployment_mode", "ALTER TABLE programs ADD COLUMN deployment_mode TEXT DEFAULT 'dedicated_legacy'"],
   ["programs", "support_name", "ALTER TABLE programs ADD COLUMN support_name TEXT"],
   ["programs", "icon_url", "ALTER TABLE programs ADD COLUMN icon_url TEXT"],
-
 
   ["programs", "reply_signature", "ALTER TABLE programs ADD COLUMN reply_signature TEXT"],
   ["programs", "ai_answers", "ALTER TABLE programs ADD COLUMN ai_answers INTEGER NOT NULL DEFAULT 1"],
@@ -251,8 +251,11 @@ const MIGRATIONS = [
   ["programs", "support_active", "ALTER TABLE programs ADD COLUMN support_active INTEGER NOT NULL DEFAULT 1"],
   ["programs", "created_at", "ALTER TABLE programs ADD COLUMN created_at INTEGER"],
 
-
-  ["program_channels", "table", "CREATE TABLE IF NOT EXISTS program_channels (workspace_id TEXT NOT NULL, channel_id TEXT NOT NULL, program_id TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'help', claimed_by TEXT, created_at INTEGER NOT NULL, PRIMARY KEY (workspace_id, channel_id))"],
+  [
+    "program_channels",
+    "table",
+    "CREATE TABLE IF NOT EXISTS program_channels (workspace_id TEXT NOT NULL, channel_id TEXT NOT NULL, program_id TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'help', claimed_by TEXT, created_at INTEGER NOT NULL, PRIMARY KEY (workspace_id, channel_id))",
+  ],
   ["tickets", "workspace_id", "ALTER TABLE tickets ADD COLUMN workspace_id TEXT"],
   ["tickets", "category", "ALTER TABLE tickets ADD COLUMN category TEXT"],
   ["tickets", "category_source", "ALTER TABLE tickets ADD COLUMN category_source TEXT"],
@@ -272,15 +275,28 @@ const MIGRATIONS = [
   ["tickets", "snoozed_until", "ALTER TABLE tickets ADD COLUMN snoozed_until INTEGER"],
   ["tickets", "updated_at", "ALTER TABLE tickets ADD COLUMN updated_at INTEGER"],
 
+  [
+    "ticket_events",
+    "table",
+    "CREATE TABLE IF NOT EXISTS ticket_events (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL, program_id TEXT NOT NULL, actor_id TEXT, event_type TEXT NOT NULL, detail TEXT, created_at INTEGER NOT NULL)",
+  ],
+  [
+    "ticket_notes",
+    "table",
+    "CREATE TABLE IF NOT EXISTS ticket_notes (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL, program_id TEXT NOT NULL, author_id TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)",
+  ],
 
-  ["ticket_events", "table", "CREATE TABLE IF NOT EXISTS ticket_events (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL, program_id TEXT NOT NULL, actor_id TEXT, event_type TEXT NOT NULL, detail TEXT, created_at INTEGER NOT NULL)"],
-  ["ticket_notes", "table", "CREATE TABLE IF NOT EXISTS ticket_notes (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL, program_id TEXT NOT NULL, author_id TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)"],
+  [
+    "audit_events",
+    "table",
+    "CREATE TABLE IF NOT EXISTS audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT, actor_id TEXT, action TEXT NOT NULL, entity_type TEXT, entity_id TEXT, metadata TEXT, created_at INTEGER NOT NULL)",
+  ],
 
-
-  ["audit_events", "table", "CREATE TABLE IF NOT EXISTS audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT, actor_id TEXT, action TEXT NOT NULL, entity_type TEXT, entity_id TEXT, metadata TEXT, created_at INTEGER NOT NULL)"],
-
-  ["program_helpers", "table", "CREATE TABLE IF NOT EXISTS program_helpers (program_id TEXT NOT NULL, user_id TEXT NOT NULL, helper_source TEXT NOT NULL DEFAULT 'manual', role TEXT NOT NULL DEFAULT 'helper', active INTEGER NOT NULL DEFAULT 1, added_at INTEGER NOT NULL, removed_at INTEGER, PRIMARY KEY (program_id, user_id))"],
-
+  [
+    "program_helpers",
+    "table",
+    "CREATE TABLE IF NOT EXISTS program_helpers (program_id TEXT NOT NULL, user_id TEXT NOT NULL, helper_source TEXT NOT NULL DEFAULT 'manual', role TEXT NOT NULL DEFAULT 'helper', active INTEGER NOT NULL DEFAULT 1, added_at INTEGER NOT NULL, removed_at INTEGER, PRIMARY KEY (program_id, user_id))",
+  ],
 
   ["learned_facts", "category", "ALTER TABLE learned_facts ADD COLUMN category TEXT"],
   ["learned_facts", "ticket_id", "ALTER TABLE learned_facts ADD COLUMN ticket_id INTEGER"],
@@ -292,23 +308,36 @@ const MIGRATIONS = [
   ["learned_facts", "last_supported_at", "ALTER TABLE learned_facts ADD COLUMN last_supported_at INTEGER"],
   ["learned_facts", "auto_learned", "ALTER TABLE learned_facts ADD COLUMN auto_learned INTEGER NOT NULL DEFAULT 0"],
 
+  [
+    "program_macros",
+    "table",
+    "CREATE TABLE IF NOT EXISTS program_macros (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, trigger TEXT NOT NULL, name TEXT NOT NULL, description TEXT, content TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, allowed_roles TEXT, on_send_transition TEXT, created_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (program_id, trigger))",
+  ],
 
-  ["program_macros", "table", "CREATE TABLE IF NOT EXISTS program_macros (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, trigger TEXT NOT NULL, name TEXT NOT NULL, description TEXT, content TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, allowed_roles TEXT, on_send_transition TEXT, created_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (program_id, trigger))"],
-
-  ["helper_expertise", "table", "CREATE TABLE IF NOT EXISTS helper_expertise (program_id TEXT NOT NULL, user_id TEXT NOT NULL, tag TEXT NOT NULL, solved_count INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, PRIMARY KEY (program_id, user_id, tag))"],
+  [
+    "helper_expertise",
+    "table",
+    "CREATE TABLE IF NOT EXISTS helper_expertise (program_id TEXT NOT NULL, user_id TEXT NOT NULL, tag TEXT NOT NULL, solved_count INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, PRIMARY KEY (program_id, user_id, tag))",
+  ],
   ["programs", "auto_assign", "ALTER TABLE programs ADD COLUMN auto_assign INTEGER NOT NULL DEFAULT 0"],
   ["programs", "shadow_mode", "ALTER TABLE programs ADD COLUMN shadow_mode INTEGER NOT NULL DEFAULT 0"],
 
-  ["program_incidents", "table", "CREATE TABLE IF NOT EXISTS program_incidents (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'candidate', reason TEXT, confidence REAL, started_at INTEGER NOT NULL, created_at INTEGER NOT NULL, confirmed_at INTEGER, resolved_at INTEGER)"],
-  ["incident_tickets", "table", "CREATE TABLE IF NOT EXISTS incident_tickets (incident_id INTEGER NOT NULL, ticket_id INTEGER NOT NULL, program_id TEXT NOT NULL, linked_at INTEGER NOT NULL, PRIMARY KEY (incident_id, ticket_id))"],
-
+  [
+    "program_incidents",
+    "table",
+    "CREATE TABLE IF NOT EXISTS program_incidents (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'candidate', reason TEXT, confidence REAL, started_at INTEGER NOT NULL, created_at INTEGER NOT NULL, confirmed_at INTEGER, resolved_at INTEGER)",
+  ],
+  [
+    "incident_tickets",
+    "table",
+    "CREATE TABLE IF NOT EXISTS incident_tickets (incident_id INTEGER NOT NULL, ticket_id INTEGER NOT NULL, program_id TEXT NOT NULL, linked_at INTEGER NOT NULL, PRIMARY KEY (incident_id, ticket_id))",
+  ],
 
   ["programs", "sla_unassigned_ms", "ALTER TABLE programs ADD COLUMN sla_unassigned_ms INTEGER"],
   ["programs", "sla_assigned_ms", "ALTER TABLE programs ADD COLUMN sla_assigned_ms INTEGER"],
   ["programs", "sla_waiting_ms", "ALTER TABLE programs ADD COLUMN sla_waiting_ms INTEGER"],
   ["programs", "sla_target_ms", "ALTER TABLE programs ADD COLUMN sla_target_ms INTEGER"],
   ["programs", "sla_notify_channel", "ALTER TABLE programs ADD COLUMN sla_notify_channel TEXT"],
-
 
   ["programs", "retention_context_days", "ALTER TABLE programs ADD COLUMN retention_context_days INTEGER"],
   ["programs", "retention_tickets_days", "ALTER TABLE programs ADD COLUMN retention_tickets_days INTEGER"],
@@ -319,44 +348,70 @@ const MIGRATIONS = [
 
   ["metrics", "program_id", "ALTER TABLE metrics ADD COLUMN program_id TEXT"],
 
-  ["job_leases", "table", "CREATE TABLE IF NOT EXISTS job_leases (name TEXT PRIMARY KEY, owner TEXT NOT NULL, expires_at INTEGER NOT NULL)"],
-  ["history_import_progress", "table", "CREATE TABLE IF NOT EXISTS history_import_progress (program_id TEXT NOT NULL, channel_id TEXT NOT NULL, cursor TEXT, newest_ts_done TEXT, status TEXT NOT NULL DEFAULT 'pending', messages_scanned INTEGER NOT NULL DEFAULT 0, tickets_created INTEGER NOT NULL DEFAULT 0, tickets_enriched INTEGER NOT NULL DEFAULT 0, resolved INTEGER NOT NULL DEFAULT 0, closed INTEGER NOT NULL DEFAULT 0, queued_for_judge INTEGER NOT NULL DEFAULT 0, last_error TEXT, started_at INTEGER, completed_at INTEGER, updated_at INTEGER NOT NULL, PRIMARY KEY (program_id, channel_id))"],
-  ["history_import_progress", "rules_version", "ALTER TABLE history_import_progress ADD COLUMN rules_version INTEGER NOT NULL DEFAULT 1"],
+  [
+    "job_leases",
+    "table",
+    "CREATE TABLE IF NOT EXISTS job_leases (name TEXT PRIMARY KEY, owner TEXT NOT NULL, expires_at INTEGER NOT NULL)",
+  ],
+  [
+    "history_import_progress",
+    "table",
+    "CREATE TABLE IF NOT EXISTS history_import_progress (program_id TEXT NOT NULL, channel_id TEXT NOT NULL, cursor TEXT, newest_ts_done TEXT, status TEXT NOT NULL DEFAULT 'pending', messages_scanned INTEGER NOT NULL DEFAULT 0, tickets_created INTEGER NOT NULL DEFAULT 0, tickets_enriched INTEGER NOT NULL DEFAULT 0, resolved INTEGER NOT NULL DEFAULT 0, closed INTEGER NOT NULL DEFAULT 0, queued_for_judge INTEGER NOT NULL DEFAULT 0, last_error TEXT, started_at INTEGER, completed_at INTEGER, updated_at INTEGER NOT NULL, PRIMARY KEY (program_id, channel_id))",
+  ],
+  [
+    "history_import_progress",
+    "rules_version",
+    "ALTER TABLE history_import_progress ADD COLUMN rules_version INTEGER NOT NULL DEFAULT 1",
+  ],
 
+  [
+    "thread_takeover",
+    "table",
+    "CREATE TABLE IF NOT EXISTS thread_takeover (thread_ts TEXT PRIMARY KEY, channel TEXT, by_user TEXT, created_at INTEGER NOT NULL)",
+  ],
+  [
+    "sla_notifications",
+    "table",
+    "CREATE TABLE IF NOT EXISTS sla_notifications (program_id TEXT NOT NULL, ticket_id INTEGER NOT NULL, rule TEXT NOT NULL, sent_at INTEGER NOT NULL, PRIMARY KEY (program_id, ticket_id, rule))",
+  ],
 
-  ["thread_takeover", "table", "CREATE TABLE IF NOT EXISTS thread_takeover (thread_ts TEXT PRIMARY KEY, channel TEXT, by_user TEXT, created_at INTEGER NOT NULL)"],
-  ["sla_notifications", "table", "CREATE TABLE IF NOT EXISTS sla_notifications (program_id TEXT NOT NULL, ticket_id INTEGER NOT NULL, rule TEXT NOT NULL, sent_at INTEGER NOT NULL, PRIMARY KEY (program_id, ticket_id, rule))"],
-
-
-  ["radar_signals", "table", "CREATE TABLE IF NOT EXISTS radar_signals (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, type TEXT NOT NULL, severity TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', title TEXT NOT NULL, summary TEXT, evidence TEXT, fingerprint TEXT NOT NULL, first_detected_at INTEGER NOT NULL, last_detected_at INTEGER NOT NULL, acknowledged_at INTEGER, acknowledged_by TEXT, resolved_at INTEGER, suppressed_until INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"],
-
+  [
+    "radar_signals",
+    "table",
+    "CREATE TABLE IF NOT EXISTS radar_signals (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, type TEXT NOT NULL, severity TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', title TEXT NOT NULL, summary TEXT, evidence TEXT, fingerprint TEXT NOT NULL, first_detected_at INTEGER NOT NULL, last_detected_at INTEGER NOT NULL, acknowledged_at INTEGER, acknowledged_by TEXT, resolved_at INTEGER, suppressed_until INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)",
+  ],
 
   ["program_incidents", "description", "ALTER TABLE program_incidents ADD COLUMN description TEXT"],
   ["program_incidents", "declared_by", "ALTER TABLE program_incidents ADD COLUMN declared_by TEXT"],
   ["program_incidents", "public_message", "ALTER TABLE program_incidents ADD COLUMN public_message TEXT"],
 
+  [
+    "programs",
+    "incident_mode",
+    "ALTER TABLE programs ADD COLUMN incident_mode TEXT NOT NULL DEFAULT 'ANSWER_AND_TRACK'",
+  ],
 
-  ["programs", "incident_mode", "ALTER TABLE programs ADD COLUMN incident_mode TEXT NOT NULL DEFAULT 'ANSWER_AND_TRACK'"],
-
-
-  ["incident_reports", "table", "CREATE TABLE IF NOT EXISTS incident_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, incident_id INTEGER NOT NULL, program_id TEXT NOT NULL, ticket_id INTEGER, requester_id TEXT, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, created_at INTEGER NOT NULL, notified_at INTEGER)"],
-
+  [
+    "incident_reports",
+    "table",
+    "CREATE TABLE IF NOT EXISTS incident_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, incident_id INTEGER NOT NULL, program_id TEXT NOT NULL, ticket_id INTEGER, requester_id TEXT, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, created_at INTEGER NOT NULL, notified_at INTEGER)",
+  ],
 
   ["source_cache", "last_error", "ALTER TABLE source_cache ADD COLUMN last_error TEXT"],
   ["source_cache", "fail_count", "ALTER TABLE source_cache ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0"],
   ["source_cache", "last_success_at", "ALTER TABLE source_cache ADD COLUMN last_success_at INTEGER"],
 
-
-  ["programs", "public_tickets_enabled", "ALTER TABLE programs ADD COLUMN public_tickets_enabled INTEGER NOT NULL DEFAULT 1"],
-
+  [
+    "programs",
+    "public_tickets_enabled",
+    "ALTER TABLE programs ADD COLUMN public_tickets_enabled INTEGER NOT NULL DEFAULT 1",
+  ],
 
   ["tickets", "public_ack_ts", "ALTER TABLE tickets ADD COLUMN public_ack_ts TEXT"],
-
 
   ["tickets", "resolved_by", "ALTER TABLE tickets ADD COLUMN resolved_by TEXT"],
   ["tickets", "resolved_credit_id", "ALTER TABLE tickets ADD COLUMN resolved_credit_id TEXT"],
   ["tickets", "reopened_by", "ALTER TABLE tickets ADD COLUMN reopened_by TEXT"],
-
 
   ["programs", "helper_offer_timeout_ms", "ALTER TABLE programs ADD COLUMN helper_offer_timeout_ms INTEGER"],
   ["llm_usage", "provider", "ALTER TABLE llm_usage ADD COLUMN provider TEXT"],
@@ -376,16 +431,21 @@ const MIGRATIONS = [
 
   ["programs", "ticket_visibility", "ALTER TABLE programs ADD COLUMN ticket_visibility TEXT"],
 
-
   ["programs", "behavior", "ALTER TABLE programs ADD COLUMN behavior TEXT"],
   ["programs", "status", "ALTER TABLE programs ADD COLUMN status TEXT"],
   ["programs", "learning", "ALTER TABLE programs ADD COLUMN learning TEXT NOT NULL DEFAULT 'auto'"],
 
-
-  ["program_helpers", "ping_eligible", "ALTER TABLE program_helpers ADD COLUMN ping_eligible INTEGER NOT NULL DEFAULT 1"],
-  ["ticket_metrics_migrations", "table", "CREATE TABLE IF NOT EXISTS ticket_metrics_migrations (version TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)"],
+  [
+    "program_helpers",
+    "ping_eligible",
+    "ALTER TABLE program_helpers ADD COLUMN ping_eligible INTEGER NOT NULL DEFAULT 1",
+  ],
+  [
+    "ticket_metrics_migrations",
+    "table",
+    "CREATE TABLE IF NOT EXISTS ticket_metrics_migrations (version TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)",
+  ],
 ];
-
 
 const POST_MIGRATION_SCHEMA = `
 CREATE INDEX IF NOT EXISTS idx_doc_gaps_ts ON doc_gaps(message_ts);

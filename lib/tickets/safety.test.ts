@@ -21,7 +21,10 @@ function clientSpy() {
   return {
     posts,
     chat: {
-      postMessage: async (p) => { posts.push(p); return { ts: `ts-${posts.length}` }; },
+      postMessage: async (p) => {
+        posts.push(p);
+        return { ts: `ts-${posts.length}` };
+      },
       update: async () => ({ ok: true }),
       delete: async () => ({ ok: true }),
     },
@@ -58,15 +61,18 @@ async function escalate(program, threadTs, requesterId, client, question = "help
   });
 }
 
-
 test("safety: the requester is never selected as helper, even as the top expert", async () => {
   const program = prog("safe-req", ["U-REQ", "U-OTHER"]);
   helperRoute.recordResolution({ programId: "safe-req", userId: "U-REQ", category: "pcb" });
   helperRoute.recordResolution({ programId: "safe-req", userId: "U-REQ", category: "pcb" });
 
   const ticketId = db.createTicket({
-    programId: "safe-req", channel: "C-safe-req", threadTs: "t-safe-req",
-    requesterId: "U-REQ", question: "pcb help", category: "pcb",
+    programId: "safe-req",
+    channel: "C-safe-req",
+    threadTs: "t-safe-req",
+    requesterId: "U-REQ",
+    question: "pcb help",
+    category: "pcb",
   });
   const client = clientSpy();
   const who = await tickets.pingRecommendedHelper({ client, ticket: db.getTicket(ticketId), program });
@@ -75,14 +81,16 @@ test("safety: the requester is never selected as helper, even as the top expert"
 
   const solo = prog("safe-req-solo", ["U-SOLO"]);
   const soloId = db.createTicket({
-    programId: "safe-req-solo", channel: "C-safe-req-solo", threadTs: "t-safe-req-solo",
-    requesterId: "U-SOLO", question: "q",
+    programId: "safe-req-solo",
+    channel: "C-safe-req-solo",
+    threadTs: "t-safe-req-solo",
+    requesterId: "U-SOLO",
+    question: "q",
   });
   const c2 = clientSpy();
   assert.equal(await tickets.pingRecommendedHelper({ client: c2, ticket: db.getTicket(soloId), program: solo }), null);
   assert.equal(pings(c2.posts).length, 0);
 });
-
 
 test("safety: Pixie's own bot user is never selected, even on the roster", async () => {
   const saved = config.slack.botUserId;
@@ -92,12 +100,18 @@ test("safety: Pixie's own bot user is never selected, even on the roster", async
     helperRoute.recordResolution({ programId: "safe-bot", userId: "U-BOT", category: "general" });
     const ranked = helperRoute.recommend({ programId: "safe-bot", limit: 5 });
     assert.ok(ranked.length > 0);
-    assert.ok(ranked.every((r) => r.userId !== "U-BOT"), "the bot user never appears in recommendations");
+    assert.ok(
+      ranked.every((r) => r.userId !== "U-BOT"),
+      "the bot user never appears in recommendations",
+    );
     assert.equal(ranked[0].userId, "U-HUMAN");
 
     const ticketId = db.createTicket({
-      programId: "safe-bot", channel: "C-safe-bot", threadTs: "t-safe-bot",
-      requesterId: "U-REQ", question: "q",
+      programId: "safe-bot",
+      channel: "C-safe-bot",
+      threadTs: "t-safe-bot",
+      requesterId: "U-REQ",
+      question: "q",
     });
     const client = clientSpy();
     assert.equal(await tickets.pingRecommendedHelper({ client, ticket: db.getTicket(ticketId), program }), "U-HUMAN");
@@ -105,7 +119,6 @@ test("safety: Pixie's own bot user is never selected, even on the roster", async
     config.slack.botUserId = saved;
   }
 });
-
 
 test("safety: duplicate Slack event (same ts) creates one ticket and one ping", async () => {
   const program = prog("safe-dupe", ["U-HELPER"]);
@@ -119,7 +132,6 @@ test("safety: duplicate Slack event (same ts) creates one ticket and one ping", 
   assert.equal(pings(client.posts).length, 1);
 });
 
-
 test("safety: existing open assignment offer is not duplicated (one ping per epoch)", async () => {
   const program = prog("safe-epoch", ["U-HELPER"]);
   const client = clientSpy();
@@ -132,7 +144,6 @@ test("safety: existing open assignment offer is not duplicated (one ping per epo
   const ticket = db.getTicketByThreadTs("t-safe-epoch");
   assert.ok(lifecycle.openOfferFor("safe-epoch", ticket.id), "the epoch's offer stays open");
 });
-
 
 test("safety: resolved ticket reopens on requester write-back and reopen starts a new epoch", async () => {
   const program = prog("safe-reopen", ["U-HELPER"]);
@@ -157,7 +168,6 @@ test("safety: resolved ticket reopens on requester write-back and reopen starts 
   assert.equal(pings(client.posts).length, 2, "the new epoch dedupes too");
 });
 
-
 test("safety: helper reply in thread stops repeated offers", async () => {
   const program = prog("safe-replied", ["U-HELPER", "U-OTHER"]);
   const client = clientSpy();
@@ -168,13 +178,9 @@ test("safety: helper reply in thread stops repeated offers", async () => {
   assert.ok(db.listTicketEvents(ticket.id).some((e) => e.event_type === "helper_reply"));
 
   const c2 = clientSpy();
-  assert.equal(
-    await tickets.pingRecommendedHelper({ client: c2, ticket: db.getTicket(ticket.id), program }),
-    null,
-  );
+  assert.equal(await tickets.pingRecommendedHelper({ client: c2, ticket: db.getTicket(ticket.id), program }), null);
   assert.equal(pings(c2.posts).length, 0);
 });
-
 
 test("safety: ping fatigue lowers rank deterministically", () => {
   const program = prog("safe-fatigue", ["U-A", "U-B"]);
@@ -184,8 +190,11 @@ test("safety: ping fatigue lowers rank deterministically", () => {
   }
   for (let i = 0; i < 3; i += 1) {
     const id = db.createTicket({
-      programId: "safe-fatigue", channel: "C-safe-fatigue", threadTs: `t-safe-fatigue-${i}`,
-      requesterId: "U-req", question: "q",
+      programId: "safe-fatigue",
+      channel: "C-safe-fatigue",
+      threadTs: `t-safe-fatigue-${i}`,
+      requesterId: "U-req",
+      question: "q",
     });
     lifecycle.recordOffer({ ticket: db.getTicket(id), to: "U-B", source: "ping" });
   }
@@ -195,7 +204,6 @@ test("safety: ping fatigue lowers rank deterministically", () => {
   assert.equal(first[0].userId, "U-A", "the less-pinged helper wins the tie");
 });
 
-
 test("safety: a helper of another program is never selected", async () => {
   prog("safe-iso-a", ["U-FOREIGN"]);
   const programB = prog("safe-iso-b", []);
@@ -203,14 +211,19 @@ test("safety: a helper of another program is never selected", async () => {
   assert.deepEqual(ranked, [], "no roster means no candidates, never a foreign helper");
 
   const ticketId = db.createTicket({
-    programId: "safe-iso-b", channel: "C-safe-iso-b", threadTs: "t-safe-iso-b",
-    requesterId: "U-req", question: "q",
+    programId: "safe-iso-b",
+    channel: "C-safe-iso-b",
+    threadTs: "t-safe-iso-b",
+    requesterId: "U-req",
+    question: "q",
   });
   const client = clientSpy();
-  assert.equal(await tickets.pingRecommendedHelper({ client, ticket: db.getTicket(ticketId), program: programB }), null);
+  assert.equal(
+    await tickets.pingRecommendedHelper({ client, ticket: db.getTicket(ticketId), program: programB }),
+    null,
+  );
   assert.equal(pings(client.posts).length, 0);
 });
-
 
 test("safety: helper selection is deterministic for identical inputs", () => {
   prog("safe-determ", ["U-1", "U-2", "U-3"]);
@@ -221,7 +234,6 @@ test("safety: helper selection is deterministic for identical inputs", () => {
   assert.deepEqual(a, b);
   assert.equal(a[0].userId, "U-2");
 });
-
 
 test("lifecycle: create -> open -> waiting_for_helper -> engaged -> resolved -> reopened, with history and attribution", async () => {
   const program = prog("safe-life", ["U-HELPER"]);
@@ -237,11 +249,22 @@ test("lifecycle: create -> open -> waiting_for_helper -> engaged -> resolved -> 
   assert.equal(db.getTicket(ticket.id).assignee_id, "U-HELPER");
   assert.ok(db.getTicket(ticket.id).claimed_at, "claimed_at stamped on claim");
 
-  const reply = await tickets.replyToTicket({ ticketId: ticket.id, authorId: "U-HELPER", text: "try reseating the cable", client, programId: "safe-life" });
+  const reply = await tickets.replyToTicket({
+    ticketId: ticket.id,
+    authorId: "U-HELPER",
+    text: "try reseating the cable",
+    client,
+    programId: "safe-life",
+  });
   assert.equal(reply.ok, true);
   assert.ok(db.getTicket(ticket.id).first_human_response_at, "helper reply stamps first human response");
 
-  const note = tickets.addInternalNote({ ticketId: ticket.id, authorId: "U-HELPER", body: "suspect power supply", programId: "safe-life" });
+  const note = tickets.addInternalNote({
+    ticketId: ticket.id,
+    authorId: "U-HELPER",
+    body: "suspect power supply",
+    programId: "safe-life",
+  });
   assert.equal(note.ok, true);
   assert.equal(db.listTicketNotes(ticket.id).length, 1, "internal notes are kept");
 

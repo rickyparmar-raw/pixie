@@ -1,4 +1,3 @@
-
 import type { ChannelRole } from "../types";
 
 // Policy decides whether to proceed before any answer or ticket I/O.
@@ -27,7 +26,8 @@ interface PlanOptions {
   engagement?: EngagementResult | null;
 }
 type MessageKind = "program" | "general";
-type FinalAction = "reply" | "reply_chat" | "uncertain" | "escalate" | "escalate_and_uncertain" | "escalate_and_reply_chat" | "silence";
+type FinalAction =
+  "reply" | "reply_chat" | "uncertain" | "escalate" | "escalate_and_uncertain" | "escalate_and_reply_chat" | "silence";
 interface FinalActionOptions {
   role: ChannelRole;
   settings?: EngagementSettings | null;
@@ -67,7 +67,8 @@ function planEngagement({ role, settings, addressed = false, addressedHow = "men
     }
     if (settings.ambientProgramReplies === false) return { proceed: false, reason: "ambient_off" };
     if (e.error) return { proceed: false, reason: "classifier_error_silent" };
-    if (e.engage && PROGRAM_INTENTS.has(e.intent ?? "")) return { proceed: true, kind: "program", reason: "ambient_program_question" };
+    if (e.engage && PROGRAM_INTENTS.has(e.intent ?? ""))
+      return { proceed: true, kind: "program", reason: "ambient_program_question" };
     if (e.engage && !e.intent) return { proceed: true, kind: "program", noEscalate: true, reason: "ambient_engage" };
     return { proceed: false, reason: "ambient_chatter" };
   }
@@ -77,7 +78,8 @@ function planEngagement({ role, settings, addressed = false, addressedHow = "men
       return { proceed: false, reason: "thread_chatter" };
     }
     if (e.error) return { proceed: true, kind: "program", support: true, reason: "addressed_classifier_error" };
-    if (CHAT_INTENTS.has(e.intent ?? "")) return { proceed: true, kind: "general", support: false, reason: "addressed_general" };
+    if (CHAT_INTENTS.has(e.intent ?? ""))
+      return { proceed: true, kind: "general", support: false, reason: "addressed_general" };
     return { proceed: true, kind: "program", support: true, reason: "addressed_support" };
   }
   if (e.error) return { proceed: true, kind: "program", support: true, reason: "classifier_error_support" };
@@ -85,7 +87,17 @@ function planEngagement({ role, settings, addressed = false, addressedHow = "men
   return { proceed: false, reason: "help_chatter" };
 }
 
-function finalAction({ role, settings, addressed = false, kind = "program", grounded = false, hasAnswer = false, unclear = false, noEscalate = false, requireGrounded = false }: FinalActionOptions): FinalAction {
+function finalAction({
+  role,
+  settings,
+  addressed = false,
+  kind = "program",
+  grounded = false,
+  hasAnswer = false,
+  unclear = false,
+  noEscalate = false,
+  requireGrounded = false,
+}: FinalActionOptions): FinalAction {
   // Grounded answers take precedence over escalation because they already have publishable evidence.
   if (grounded) return "reply";
   if (noEscalate && !addressed && role !== "help") return "silence";

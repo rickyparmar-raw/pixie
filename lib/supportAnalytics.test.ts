@@ -41,9 +41,9 @@ test("overview counts every ticket surface and status within the analytics windo
     });
     const createdAt = now - ageMs;
     const resolvedAt = resolvedAgeMs === null ? null : now - resolvedAgeMs;
-    db.handle().query(
-      "UPDATE tickets SET status = ?, created_at = ?, updated_at = ?, resolved_at = ? WHERE id = ?",
-    ).run(status, createdAt, createdAt, resolvedAt, id);
+    db.handle()
+      .query("UPDATE tickets SET status = ?, created_at = ?, updated_at = ?, resolved_at = ? WHERE id = ?")
+      .run(status, createdAt, createdAt, resolvedAt, id);
     return { id, status, createdAt, resolvedAt };
   };
 
@@ -56,7 +56,8 @@ test("overview counts every ticket surface and status within the analytics windo
   });
   assert.ok(dashboardOnly, "dashboard-only tickets must still be persisted");
   const dashboardCreatedAt = now - 2 * HOUR;
-  db.handle().query("UPDATE tickets SET created_at = ?, updated_at = ? WHERE id = ?")
+  db.handle()
+    .query("UPDATE tickets SET created_at = ?, updated_at = ? WHERE id = ?")
     .run(dashboardCreatedAt, dashboardCreatedAt, dashboardOnly.id);
 
   const inWindow = [
@@ -67,7 +68,13 @@ test("overview counts every ticket surface and status within the analytics windo
     { status: "escalated", channel: "C-f5", threadTs: "f5-escalated", ageMs: 7 * DAY },
     { status: "reopened", channel: "C-f5", threadTs: "f5-reopened", ageMs: 8 * DAY },
     { status: "resolved", channel: "C-f5", threadTs: "f5-resolved-today", ageMs: DAY, resolvedAgeMs: 2 * HOUR },
-    { status: "resolved", channel: "C-f5", threadTs: "f5-resolved-yesterday", ageMs: 2 * DAY, resolvedAgeMs: 30 * HOUR },
+    {
+      status: "resolved",
+      channel: "C-f5",
+      threadTs: "f5-resolved-yesterday",
+      ageMs: 2 * DAY,
+      resolvedAgeMs: 30 * HOUR,
+    },
     { status: "closed", channel: "C-f5", threadTs: "f5-closed", ageMs: 9 * DAY, resolvedAgeMs: 3 * DAY },
     { status: "duplicate", channel: "C-f5", threadTs: "f5-duplicate", ageMs: 10 * DAY },
     { status: "snoozed", channel: "C-f5", threadTs: "f5-snoozed", ageMs: 11 * DAY },
@@ -75,7 +82,13 @@ test("overview counts every ticket surface and status within the analytics windo
   ].map(insert);
 
   insert({ status: "open", channel: "C-f5", threadTs: "f5-old-open", ageMs: WINDOW + DAY });
-  insert({ status: "resolved", channel: "D-f5", threadTs: "f5-old-resolved-today", ageMs: WINDOW + DAY, resolvedAgeMs: 3 * HOUR });
+  insert({
+    status: "resolved",
+    channel: "D-f5",
+    threadTs: "f5-old-resolved-today",
+    ageMs: WINDOW + DAY,
+    resolvedAgeMs: 3 * HOUR,
+  });
 
   const expectedByStatus = {
     open: 2,

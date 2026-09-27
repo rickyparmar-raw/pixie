@@ -13,7 +13,11 @@ interface DashboardApi {
   setSlackClient(client: unknown): void;
   internalUserInfoBatch(ids: Array<string | null>): Promise<{ users: Record<string, UserInfo | null> }>;
   internalUserInfo(id: string): Promise<UserInfo | null>;
-  internalTicketAction(id: number, action: string, options: { programId: string; actorId: string }): { ok?: boolean; error?: string };
+  internalTicketAction(
+    id: number,
+    action: string,
+    options: { programId: string; actorId: string },
+  ): { ok?: boolean; error?: string };
 }
 const api = require("./web/api") as unknown as DashboardApi;
 
@@ -30,18 +34,36 @@ function program(id: string, helpers: string[] = []): void {
   for (const h of helpers) db.syncHelper({ programId: id, userId: h, source: "manual" });
 }
 function ticket(programId: string, status = "waiting_for_helper"): number {
-  const id = db.createTicket({ programId, workspaceId: "WS" as unknown as null, channel: `C-${programId}`, threadTs: `t-${programId}-${Math.random()}`, requesterId: "U-req", question: "q" });
+  const id = db.createTicket({
+    programId,
+    workspaceId: "WS" as unknown as null,
+    channel: `C-${programId}`,
+    threadTs: `t-${programId}-${Math.random()}`,
+    requesterId: "U-req",
+    question: "q",
+  });
   db.handle().query("UPDATE tickets SET status = ? WHERE id = ?").run(status, id);
   return id;
 }
-
 
 test("internalUserInfoBatch dedupes, resolves the name variants, and never throws", async () => {
   api.setSlackClient({
     users: {
       info: async ({ user }: { user: string }) => {
-        if (user === "U-DELETED") { throw new Error("user_not_found"); }
-        return { user: { name: "handle", real_name: "Real Name", profile: { display_name: user === "U-NONICK" ? "" : "Nick", real_name: user === "U-NONICK" ? "" : "Real Name", image_192: "https://x/i.png" } } };
+        if (user === "U-DELETED") {
+          throw new Error("user_not_found");
+        }
+        return {
+          user: {
+            name: "handle",
+            real_name: "Real Name",
+            profile: {
+              display_name: user === "U-NONICK" ? "" : "Nick",
+              real_name: user === "U-NONICK" ? "" : "Real Name",
+              image_192: "https://x/i.png",
+            },
+          },
+        };
       },
     },
   });
@@ -64,12 +86,18 @@ test("internalUserInfoBatch degrades to all-null when Slack is not connected", a
 
 test("internalUserInfo caches a lookup so a page full of one user's rows costs one call", async () => {
   let calls = 0;
-  api.setSlackClient({ users: { info: async ({ user }: { user: string }) => { calls += 1; return { user: { name: "u", profile: { display_name: "D" } } }; } } });
+  api.setSlackClient({
+    users: {
+      info: async ({ user }: { user: string }) => {
+        calls += 1;
+        return { user: { name: "u", profile: { display_name: "D" } } };
+      },
+    },
+  });
   await api.internalUserInfoBatch(["U-CACHE", "U-CACHE"]);
   await api.internalUserInfo("U-CACHE");
   assert.equal(calls, 1);
 });
-
 
 test("an authorized program helper resolves a ticket from the dashboard, recorded with source", async () => {
   program("dr-ok", ["U-helper"]);

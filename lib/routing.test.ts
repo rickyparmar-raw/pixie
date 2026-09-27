@@ -27,10 +27,8 @@ test("channel claims are atomic: second program loses, double claim wins", () =>
   assert.equal(conflict.ok, false);
   assert.equal(conflict.ownerProgramId, "highway");
 
-
   const other = db.claimProgramChannel({ workspaceId: "T2", channelId: "C-help", programId: "pixl", kind: "help" });
   assert.equal(other.ok, true);
-
 
   const retry = db.claimProgramChannel({ workspaceId: "T1", channelId: "C-help", programId: "highway", kind: "help" });
   assert.equal(retry.ok, true);
@@ -41,7 +39,10 @@ test("claimChannelsForProgram rolls back partial claims on conflict", () => {
   const res = routing.claimChannelsForProgram({
     workspaceId: "T9",
     programId: "newprog",
-    channels: [{ id: "C-free", kind: "help" }, { id: "C-taken", kind: "discussion" }],
+    channels: [
+      { id: "C-free", kind: "help" },
+      { id: "C-taken", kind: "discussion" },
+    ],
   });
   assert.equal(res.ok, false);
   assert.equal(res.conflictChannel, "C-taken");
@@ -57,7 +58,6 @@ test("forChannel resolves explicit claims before config lists", () => {
   assert.equal(prog.id, "hwy");
   assert.equal(programs.isHelpChannel("C-hwy", "TW"), true);
 });
-
 
 const helperRoute = require("./helperRoute");
 
@@ -93,17 +93,19 @@ function charEvent({ programId, actorId, ageMs = 1000 }: Record<string, TestAny>
     question: "q",
   });
   db.handle()
-    .query("INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, detail, created_at) VALUES (?, ?, ?, 'note_added', NULL, ?)")
+    .query(
+      "INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, detail, created_at) VALUES (?, ?, ?, 'note_added', NULL, ?)",
+    )
     .run(tid, programId, actorId, Date.now() - ageMs);
   return tid;
 }
 
-test("char: empty roster recommends nobody", () => {
+test("empty roster recommends nobody", () => {
   charSetupProgram("hr-char-empty");
   assert.deepEqual(helperRoute.recommend({ programId: "hr-char-empty", category: "pcb" }), []);
 });
 
-test("char: fresh helper scores base 1 with member+load reasons", () => {
+test("fresh helper scores base 1 with member+load reasons", () => {
   charSetupProgram("hr-char-base");
   db.syncHelper({ programId: "hr-char-base", userId: "U-base" });
   const [rec] = helperRoute.recommend({ programId: "hr-char-base" });
@@ -114,7 +116,7 @@ test("char: fresh helper scores base 1 with member+load reasons", () => {
   assert.ok(rec.reasons.includes("no open assigned tickets"));
 });
 
-test("char: category match is 2+min(solved,10) plus min(total,5)*0.2", () => {
+test("category match is 2+min(solved,10) plus min(total,5)*0.2", () => {
   charSetupProgram("hr-char-weights");
   db.syncHelper({ programId: "hr-char-weights", userId: "U-w" });
   helperRoute.setExpertise({ programId: "hr-char-weights", userId: "U-w", tags: ["ordering"] });
@@ -126,17 +128,19 @@ test("char: category match is 2+min(solved,10) plus min(total,5)*0.2", () => {
   assert.ok(rec.reasons.some((r: TestAny) => r.includes("2 total verified resolutions")));
 });
 
-test("char: solved caps at 10 and total caps at 5", () => {
+test("solved caps at 10 and total caps at 5", () => {
   charSetupProgram("hr-char-caps");
   db.syncHelper({ programId: "hr-char-caps", userId: "U-cap" });
   helperRoute.setExpertise({ programId: "hr-char-caps", userId: "U-cap", tags: ["pcb", "other"] });
-  for (let i = 0; i < 15; i++) helperRoute.recordResolution({ programId: "hr-char-caps", userId: "U-cap", category: "pcb" });
-  for (let i = 0; i < 5; i++) helperRoute.recordResolution({ programId: "hr-char-caps", userId: "U-cap", category: "other" });
+  for (let i = 0; i < 15; i++)
+    helperRoute.recordResolution({ programId: "hr-char-caps", userId: "U-cap", category: "pcb" });
+  for (let i = 0; i < 5; i++)
+    helperRoute.recordResolution({ programId: "hr-char-caps", userId: "U-cap", category: "other" });
   const [rec] = helperRoute.recommend({ programId: "hr-char-caps", category: "pcb" });
   assert.equal(rec.score, 14);
 });
 
-test("char: load penalty is min(load,5)*0.5 and caps at 2.5", () => {
+test("load penalty is min(load,5)*0.5 and caps at 2.5", () => {
   charSetupProgram("hr-char-load");
   db.syncHelper({ programId: "hr-char-load", userId: "U-busy" });
   db.syncHelper({ programId: "hr-char-load", userId: "U-free" });
@@ -150,7 +154,7 @@ test("char: load penalty is min(load,5)*0.5 and caps at 2.5", () => {
   assert.equal(capped.find((r: TestAny) => r.userId === "U-busy").load, 8);
 });
 
-test("char: openLoad counts only claimed|assigned|waiting_for_helper|escalated|reopened", () => {
+test("openLoad counts only claimed|assigned|waiting_for_helper|escalated|reopened", () => {
   charSetupProgram("hr-char-statuses");
   db.syncHelper({ programId: "hr-char-statuses", userId: "U-s" });
   const counted = ["claimed", "assigned", "waiting_for_helper", "escalated", "reopened"];
@@ -161,7 +165,7 @@ test("char: openLoad counts only claimed|assigned|waiting_for_helper|escalated|r
   assert.equal(helperRoute.openLoad("hr-char-statuses", "U-s"), counted.length);
 });
 
-test("char: recent 7d activity adds 0.5, older does not", () => {
+test("recent 7d activity adds 0.5, older does not", () => {
   charSetupProgram("hr-char-recent");
   db.syncHelper({ programId: "hr-char-recent", userId: "U-fresh" });
   db.syncHelper({ programId: "hr-char-recent", userId: "U-stale" });
@@ -175,7 +179,7 @@ test("char: recent 7d activity adds 0.5, older does not", () => {
   assert.ok(recs.find((r: TestAny) => r.userId === "U-fresh").reasons.includes("active in the last 7 days"));
 });
 
-test("char: organizer/owner add 0.5, inactive members never route", () => {
+test("organizer/owner add 0.5, inactive members never route", () => {
   charSetupProgram("hr-char-roles");
   db.syncHelper({ programId: "hr-char-roles", userId: "U-org", role: "organizer" });
   db.syncHelper({ programId: "hr-char-roles", userId: "U-own", role: "owner" });
@@ -190,7 +194,7 @@ test("char: organizer/owner add 0.5, inactive members never route", () => {
   assert.ok(recs.find((r: TestAny) => r.userId === "U-org").reasons.includes("program organizer"));
 });
 
-test("char: unknown category gives no match points; matching is case-insensitive", () => {
+test("unknown category gives no match points; matching is case-insensitive", () => {
   charSetupProgram("hr-char-unknown");
   db.syncHelper({ programId: "hr-char-unknown", userId: "U-u" });
   helperRoute.setExpertise({ programId: "hr-char-unknown", userId: "U-u", tags: ["pcb"] });
@@ -202,18 +206,22 @@ test("char: unknown category gives no match points; matching is case-insensitive
   assert.equal(upper.score, 4.2);
 });
 
-test("char: ties break by roster order (earliest added first)", () => {
+test("ties break by roster order (earliest added first)", () => {
   charSetupProgram("hr-char-tie");
   db.syncHelper({ programId: "hr-char-tie", userId: "U-first" });
   db.syncHelper({ programId: "hr-char-tie", userId: "U-second" });
-  db.handle().query("UPDATE program_helpers SET added_at = ? WHERE program_id = ? AND user_id = ?").run(1000, "hr-char-tie", "U-first");
-  db.handle().query("UPDATE program_helpers SET added_at = ? WHERE program_id = ? AND user_id = ?").run(2000, "hr-char-tie", "U-second");
+  db.handle()
+    .query("UPDATE program_helpers SET added_at = ? WHERE program_id = ? AND user_id = ?")
+    .run(1000, "hr-char-tie", "U-first");
+  db.handle()
+    .query("UPDATE program_helpers SET added_at = ? WHERE program_id = ? AND user_id = ?")
+    .run(2000, "hr-char-tie", "U-second");
   const recs = helperRoute.recommend({ programId: "hr-char-tie" });
   assert.equal(recs[0].userId, "U-first");
   assert.equal(recs[1].userId, "U-second");
 });
 
-test("char: limit clamps to [1,10]", () => {
+test("limit clamps to [1,10]", () => {
   charSetupProgram("hr-char-limit");
   for (let i = 0; i < 4; i++) db.syncHelper({ programId: "hr-char-limit", userId: `U-lim-${i}` });
   assert.equal(helperRoute.recommend({ programId: "hr-char-limit", limit: 1 }).length, 1);
@@ -221,7 +229,7 @@ test("char: limit clamps to [1,10]", () => {
   assert.equal(helperRoute.recommend({ programId: "hr-char-limit", limit: 100 }).length, 4);
 });
 
-test("char: routing never leaks across programs", () => {
+test("routing never leaks across programs", () => {
   charSetupProgram("hr-char-xa");
   charSetupProgram("hr-char-xb");
   db.syncHelper({ programId: "hr-char-xa", userId: "U-shared" });
@@ -235,10 +243,14 @@ test("char: routing never leaks across programs", () => {
   assert.equal(rec.load, 0);
 });
 
-test("char: setExpertise normalizes tags and preserves solved_count", () => {
+test("setExpertise normalizes tags and preserves solved_count", () => {
   charSetupProgram("hr-char-exp");
   db.syncHelper({ programId: "hr-char-exp", userId: "U-e" });
-  const clean = helperRoute.setExpertise({ programId: "hr-char-exp", userId: "U-e", tags: [" PCB ", "pcb", "", "Firmware"] });
+  const clean = helperRoute.setExpertise({
+    programId: "hr-char-exp",
+    userId: "U-e",
+    tags: [" PCB ", "pcb", "", "Firmware"],
+  });
   assert.deepEqual(clean, ["pcb", "firmware"]);
   helperRoute.recordResolution({ programId: "hr-char-exp", userId: "U-e", category: "pcb" });
   helperRoute.setExpertise({ programId: "hr-char-exp", userId: "U-e", tags: ["pcb", "cad"] });
@@ -247,7 +259,7 @@ test("char: setExpertise normalizes tags and preserves solved_count", () => {
   assert.equal(rows.find((r: TestAny) => r.tag === "cad").solved_count, 0);
 });
 
-test("char: recordResolution defaults missing category to general", () => {
+test("recordResolution defaults missing category to general", () => {
   charSetupProgram("hr-char-gen");
   db.syncHelper({ programId: "hr-char-gen", userId: "U-g" });
   helperRoute.recordResolution({ programId: "hr-char-gen", userId: "U-g" });
@@ -255,7 +267,7 @@ test("char: recordResolution defaults missing category to general", () => {
   assert.equal(rows.find((r: TestAny) => r.tag === "general").solved_count, 1);
 });
 
-test("char: scoreHelper is pure — pins weights without DB", () => {
+test("scoreHelper is pure — pins weights without DB", () => {
   const now = 1_700_000_000_000;
   const base = helperRoute.scoreHelper({ user_id: "U-p", role: "helper" }, { now });
   assert.equal(base.score, 1);
@@ -273,41 +285,47 @@ test("char: scoreHelper is pure — pins weights without DB", () => {
   assert.deepEqual(helperRoute.scoreHelper({ user_id: "U-p", role: "helper" }, { now }), base);
 });
 
-test("char: scoreHelper recency boundary is strictly < 7 days", () => {
+test("scoreHelper recency boundary is strictly < 7 days", () => {
   const now = 1_700_000_000_000;
   const week = 7 * 24 * 60 * 60 * 1000;
-  const justInside = helperRoute.scoreHelper({ user_id: "U-p", role: "helper" }, { lastActiveAt: now - (week - 1), now });
+  const justInside = helperRoute.scoreHelper(
+    { user_id: "U-p", role: "helper" },
+    { lastActiveAt: now - (week - 1), now },
+  );
   const exactlyWeek = helperRoute.scoreHelper({ user_id: "U-p", role: "helper" }, { lastActiveAt: now - week, now });
   assert.equal(justInside.score, 1.5);
   assert.equal(exactlyWeek.score, 1);
 });
 
-test("char: replies add 0.2 each to the category match and cap at 15", () => {
+test("replies add 0.2 each to the category match and cap at 15", () => {
   charSetupProgram("hr-char-replies");
   db.syncHelper({ programId: "hr-char-replies", userId: "U-chatty" });
-  for (let i = 0; i < 5; i++) helperRoute.recordReply({ programId: "hr-char-replies", userId: "U-chatty", category: "reviews" });
+  for (let i = 0; i < 5; i++)
+    helperRoute.recordReply({ programId: "hr-char-replies", userId: "U-chatty", category: "reviews" });
   const [rec] = helperRoute.recommend({ programId: "hr-char-replies", category: "reviews" });
   assert.equal(rec.score, 4);
   assert.ok(rec.reasons.some((r: TestAny) => r.includes("5 reviews replies")));
 
   charSetupProgram("hr-char-replies-cap");
   db.syncHelper({ programId: "hr-char-replies-cap", userId: "U-flood" });
-  for (let i = 0; i < 40; i++) helperRoute.recordReply({ programId: "hr-char-replies-cap", userId: "U-flood", category: "reviews" });
+  for (let i = 0; i < 40; i++)
+    helperRoute.recordReply({ programId: "hr-char-replies-cap", userId: "U-flood", category: "reviews" });
   assert.equal(helperRoute.recommend({ programId: "hr-char-replies-cap", category: "reviews" })[0].score, 6);
 });
 
-test("char: one resolution outranks a pile of replies in the same category", () => {
+test("one resolution outranks a pile of replies in the same category", () => {
   charSetupProgram("hr-char-resolve-beats-reply");
   db.syncHelper({ programId: "hr-char-resolve-beats-reply", userId: "U-talker" });
   db.syncHelper({ programId: "hr-char-resolve-beats-reply", userId: "U-closer" });
-  for (let i = 0; i < 4; i++) helperRoute.recordReply({ programId: "hr-char-resolve-beats-reply", userId: "U-talker", category: "reviews" });
+  for (let i = 0; i < 4; i++)
+    helperRoute.recordReply({ programId: "hr-char-resolve-beats-reply", userId: "U-talker", category: "reviews" });
   helperRoute.recordResolution({ programId: "hr-char-resolve-beats-reply", userId: "U-closer", category: "reviews" });
 
   const [first] = helperRoute.recommend({ programId: "hr-char-resolve-beats-reply", category: "reviews" });
   assert.equal(first.userId, "U-closer");
 });
 
-test("char: setExpertise keeps reply counts, and keeps tags a helper has real history in", () => {
+test("setExpertise keeps reply counts, and keeps tags a helper has real history in", () => {
   charSetupProgram("hr-char-keep");
   db.syncHelper({ programId: "hr-char-keep", userId: "U-k" });
   helperRoute.setExpertise({ programId: "hr-char-keep", userId: "U-k", tags: ["pcb", "stale"] });

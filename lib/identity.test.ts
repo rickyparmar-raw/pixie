@@ -3,7 +3,6 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const identity = require("./identity");
 
-
 test("identity covers the questions that actually missed in production", () => {
   const section = identity.corpusSection();
   for (const probe of [/Who are you/i, /Who made you/i, /How are you/i, /What can you do/i]) {
@@ -23,7 +22,6 @@ test("identity credits Ricky and points at the help channel", () => {
   assert.match(section, /#pixl-help/);
 });
 
-
 test("identity distinguishes pixie from pixorpheus", () => {
   assert.match(identity.corpusSection(), /Pixorpheus/i);
 });
@@ -35,7 +33,8 @@ test("identity promises to admit an empty memory rather than invent one", () => 
 test("PIXIE_IDENTITY_OVERRIDE replaces the default, unset falls back to it", () => {
   const saved = process.env.PIXIE_IDENTITY_OVERRIDE;
   delete process.env.PIXIE_IDENTITY_OVERRIDE;
-  try {    assert.equal(identity.corpusSection(), identity.IDENTITY);
+  try {
+    assert.equal(identity.corpusSection(), identity.IDENTITY);
 
     process.env.PIXIE_IDENTITY_OVERRIDE = "Q: Who are you?\nA: I'm a trial bot.";
     assert.equal(identity.corpusSection(), "Q: Who are you?\nA: I'm a trial bot.");
@@ -45,7 +44,6 @@ test("PIXIE_IDENTITY_OVERRIDE replaces the default, unset falls back to it", () 
     else process.env.PIXIE_IDENTITY_OVERRIDE = saved;
   }
 });
-
 
 test("a program's identity names its channel and what questions belong there", () => {
   const text = identity.corpusSection({ id: "pixl", name: "Pixl", helpChannel: "C-help" });
@@ -60,19 +58,28 @@ test("an unscoped program's identity acknowledges the other programs as separate
   assert.match(text, /never answer one program's question with another program's numbers/);
 });
 
-
 test("a program-scoped identity names no other program and offers no redirect", () => {
-  const text = identity.corpusSection({ id: "back-to-basics", name: "Back to Basics", helpChannel: "C-b2b", scope: "program" });
+  const text = identity.corpusSection({
+    id: "back-to-basics",
+    name: "Back to Basics",
+    helpChannel: "C-b2b",
+    scope: "program",
+  });
   assert.match(text, /Here I only do Back to Basics/);
   assert.doesNotMatch(text, /Pixl/);
   assert.doesNotMatch(text, /point you at that program's channel/i);
 });
 
 test("a program-scoped identity introduces itself by its support name", () => {
-  const text = identity.corpusSection({ id: "back-to-basics", name: "Back to Basics", supportName: "B2B Support", helpChannel: "C-b2b", scope: "program" });
+  const text = identity.corpusSection({
+    id: "back-to-basics",
+    name: "Back to Basics",
+    supportName: "B2B Support",
+    helpChannel: "C-b2b",
+    scope: "program",
+  });
   assert.match(text, /I'm B2B Support,/);
 });
-
 
 test("PIXIE_IDENTITY_OVERRIDE still replaces the whole section", () => {
   const saved = process.env.PIXIE_IDENTITY_OVERRIDE;
@@ -90,7 +97,6 @@ test("the identity corpus contains no dashes for the model to copy", () => {
   const texts = [identity.IDENTITY, identity.corpusSection({ id: "pixl", name: "Pixl", helpChannel: "C1" })];
   for (const text of texts) assert.doesNotMatch(text, /[—–]|\s--\s/);
 });
-
 
 function withBrand(vars: Record<string, string | undefined>, fn: () => void) {
   const saved: Record<string, string | undefined> = {};
@@ -119,7 +125,6 @@ test("a rebranded bot introduces itself by its own name and commands", () => {
   });
 });
 
-
 test("a rebranded bot doesn't claim pixie's authorship as its own", () => {
   withBrand({ PIXIE_BOT_NAME: "Sol", PIXIE_BOT_SLUG: "sol" }, () => {
     const text = identity.corpusSection({ id: "solvable", name: "Solvable", helpChannel: "C-help" });
@@ -127,7 +132,6 @@ test("a rebranded bot doesn't claim pixie's authorship as its own", () => {
     assert.doesNotMatch(text, /Ricky built me/);
   });
 });
-
 
 test("a rebranded bot drops the Pixorpheus pair entirely", () => {
   withBrand({ PIXIE_BOT_NAME: "Sol", PIXIE_BOT_SLUG: "sol" }, () => {
@@ -141,7 +145,6 @@ test("a rebranded fallback identity doesn't send people to #pixl-help", () => {
     assert.doesNotMatch(identity.defaultIdentity(), /#pixl-help/);
   });
 });
-
 
 test("with no brand variables the identity is byte-identical to pixie's", () => {
   withBrand({ PIXIE_BOT_NAME: undefined, PIXIE_BOT_SLUG: undefined }, () => {
@@ -161,8 +164,7 @@ test("the rebranded corpus is still dash-free", () => {
   });
 });
 
-
-test("char: fallback identity with no program is pixie and dash-free", () => {
+test("fallback identity with no program is pixie and dash-free", () => {
   withBrand({ PIXIE_BOT_NAME: undefined, PIXIE_BOT_SLUG: undefined }, () => {
     const text = identity.corpusSection(null);
     assert.match(text, /I'm pixie,/);
@@ -170,7 +172,7 @@ test("char: fallback identity with no program is pixie and dash-free", () => {
   });
 });
 
-test("char: program identity degrades gracefully without a help channel", () => {
+test("program identity degrades gracefully without a help channel", () => {
   withBrand({ PIXIE_BOT_NAME: undefined, PIXIE_BOT_SLUG: undefined }, () => {
     const text = identity.corpusSection({ id: "x", name: "Xeno" });
     assert.match(text, /the help channel/);
@@ -178,7 +180,7 @@ test("char: program identity degrades gracefully without a help channel", () => 
   });
 });
 
-test("char: rebranded identity leaks neither pixie commands nor pixl channel", () => {
+test("rebranded identity leaks neither pixie commands nor pixl channel", () => {
   withBrand({ PIXIE_BOT_NAME: "Sol", PIXIE_BOT_SLUG: "sol" }, () => {
     const text = identity.corpusSection({ id: "solvable", name: "Solvable", helpChannel: "C1" });
     assert.doesNotMatch(text, /\/pixie/);
@@ -186,7 +188,6 @@ test("char: rebranded identity leaks neither pixie commands nor pixl channel", (
     assert.doesNotMatch(text, /Ricky built me/);
   });
 });
-
 
 test("regression: fallback identity interpolates the bot name, never ships ${botName}", () => {
   withBrand({ PIXIE_BOT_NAME: undefined, PIXIE_BOT_SLUG: undefined }, () => {

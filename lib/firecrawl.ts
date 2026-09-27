@@ -9,10 +9,25 @@ const DEFAULT_TIMEOUT_MS = 15000;
 const CREDITS_PAUSE_MS = 60 * 60 * 1000;
 const SEARCH_TIMEOUT_MS = 5000;
 
-interface ScrapeCacheEntry { markdown: string; fetchedAt: number }
-interface FirecrawlError { response?: { status?: number; data?: { error?: string } }; message?: string }
-interface FirecrawlSearchItem { url?: string; title?: string; markdown?: string; description?: string }
-interface FirecrawlSearchResult { url?: string; title?: string; markdown: string }
+interface ScrapeCacheEntry {
+  markdown: string;
+  fetchedAt: number;
+}
+interface FirecrawlError {
+  response?: { status?: number; data?: { error?: string } };
+  message?: string;
+}
+interface FirecrawlSearchItem {
+  url?: string;
+  title?: string;
+  markdown?: string;
+  description?: string;
+}
+interface FirecrawlSearchResult {
+  url?: string;
+  title?: string;
+  markdown: string;
+}
 
 function authHeaders(apiKey: string) {
   return { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" };
@@ -21,7 +36,10 @@ function authHeaders(apiKey: string) {
 function noteFailure({ exhaustedNote, failedNote, err }: { exhaustedNote: string; failedNote: string; err: unknown }) {
   const error = err as FirecrawlError;
   const errMsg = error.response?.data?.error || error.message || String(err);
-  if (error.response?.status === 402 || (typeof errMsg === "string" && errMsg.toLowerCase().includes("insufficient credits"))) {
+  if (
+    error.response?.status === 402 ||
+    (typeof errMsg === "string" && errMsg.toLowerCase().includes("insufficient credits"))
+  ) {
     markCreditsExhausted();
     log.warn("firecrawl", exhaustedNote);
   } else {
@@ -75,7 +93,11 @@ async function scrapeUrl(url: string, { skipCache = false }: { skipCache?: boole
       return markdown;
     }
   } catch (error: unknown) {
-    noteFailure({ exhaustedNote: "credits exhausted — pausing live web requests for 1 hour", failedNote: `scrape failed for ${url}`, err: error });
+    noteFailure({
+      exhaustedNote: "credits exhausted — pausing live web requests for 1 hour",
+      failedNote: `scrape failed for ${url}`,
+      err: error,
+    });
     if (cached) {
       log.debug("firecrawl", `serving stale cached copy for ${url} after a scrape failure`);
       return cached.markdown;
@@ -110,7 +132,11 @@ async function searchWeb(query: string, limit = 3): Promise<FirecrawlSearchResul
       }));
     }
   } catch (error: unknown) {
-    noteFailure({ exhaustedNote: "credits exhausted — pausing web search for 1 hour", failedNote: `search failed for "${query}"`, err: error });
+    noteFailure({
+      exhaustedNote: "credits exhausted — pausing web search for 1 hour",
+      failedNote: `search failed for "${query}"`,
+      err: error,
+    });
   }
   return null;
 }

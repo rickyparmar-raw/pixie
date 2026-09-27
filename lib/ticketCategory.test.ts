@@ -53,7 +53,6 @@ test("a question with a regex-special term does not throw or over-match", () => 
   assert.equal(classify({ question: "help with axb builds", rules }), null);
 });
 
-
 function pixlRules() {
   const programs = require("./programs");
   return programs.get("pixl").categories;
@@ -67,8 +66,15 @@ test("PIXL fallback is general_support, not the old Ricky-shaped 'support'", () 
 test("PIXL taxonomy covers at least the nine required concepts", () => {
   const cats = configuredCategories(pixlRules());
   for (const required of [
-    "review", "journals_hours", "project_requirements", "ai_policy",
-    "hardware", "shop_orders", "account_platform", "program_ops", "general_support",
+    "review",
+    "journals_hours",
+    "project_requirements",
+    "ai_policy",
+    "hardware",
+    "shop_orders",
+    "account_platform",
+    "program_ops",
+    "general_support",
   ]) {
     assert.ok(cats.includes(required), `missing category: ${required}`);
   }

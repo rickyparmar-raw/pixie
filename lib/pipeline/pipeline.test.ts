@@ -70,7 +70,10 @@ const JEV: Record<string, { action: string; intent: string }> = {
   "give me a chocolate chip cookie recipe": { action: "engage", intent: "addressed_general_request" },
   "my submission got rejected, how do i resubmit?": { action: "engage", intent: "support_question" },
   "how do i get my personal grant code?": { action: "engage", intent: "support_question" },
-  "@ricky if you had to save @pixie or @pixorpheus who would you save?": { action: "silence", intent: "human_conversation" },
+  "@ricky if you had to save @pixie or @pixorpheus who would you save?": {
+    action: "silence",
+    intent: "human_conversation",
+  },
 };
 
 function fakeAnswer(question: string, program: { id?: string } | null | undefined) {
@@ -78,8 +81,10 @@ function fakeAnswer(question: string, program: { id?: string } | null | undefine
   if (q.includes("restoration energy") && program?.id === "pixl") {
     return { answer: "Restoration Energy is what you earn by restoring pixels.", source: "Pixl Docs" };
   }
-  if (q === "what is pixl?" && program?.id === "pixl") return { answer: "Pixl is a YSWS for pixel art games.", source: "Pixl Docs" };
-  if (q.includes("resubmit") && program?.id === "pixl") return { answer: "Fix the notes and resubmit from your dashboard.", source: "Pixl Docs" };
+  if (q === "what is pixl?" && program?.id === "pixl")
+    return { answer: "Pixl is a YSWS for pixel art games.", source: "Pixl Docs" };
+  if (q.includes("resubmit") && program?.id === "pixl")
+    return { answer: "Fix the notes and resubmit from your dashboard.", source: "Pixl Docs" };
   if (q.includes("pixorpheus")) return { answer: "Me, obviously. Pixorpheus can swim.", source: "NONE" };
   if (q.includes("cookie")) return { answer: "Cream butter and sugar, add chips, bake at 180C.", source: "NONE" };
   return { answer: null, source: null, unclear: true };
@@ -107,7 +112,10 @@ function client() {
       postEphemeral: async () => ({ ok: true }),
     },
     reactions: { add: async () => ({ ok: true }) },
-    conversations: { replies: async (_args?: TestRecord) => ({ messages: [] as TestMessage[] }), history: async (_args?: TestRecord) => ({ messages: [] as TestMessage[] }) },
+    conversations: {
+      replies: async (_args?: TestRecord) => ({ messages: [] as TestMessage[] }),
+      history: async (_args?: TestRecord) => ({ messages: [] as TestMessage[] }),
+    },
   };
 }
 
@@ -146,10 +154,14 @@ beforeEach(() => {
     return hit ? { ...hit } : { action: "silence", intent: "unrelated_chatter" };
   });
   stub(lookup, "knownAnswer", () => null);
-  stub(lookup, "answerOrChat", async (question: string, _ctx: string, opts: { program?: { id?: string }; allowWebSearch?: boolean }) => {
-    answerCalls.push({ question, program: opts.program?.id, allowWebSearch: opts.allowWebSearch });
-    return fakeAnswer(question, opts.program);
-  });
+  stub(
+    lookup,
+    "answerOrChat",
+    async (question: string, _ctx: string, opts: { program?: { id?: string }; allowWebSearch?: boolean }) => {
+      answerCalls.push({ question, program: opts.program?.id, allowWebSearch: opts.allowWebSearch });
+      return fakeAnswer(question, opts.program);
+    },
+  );
   stub(tickets, "ensureSupportTicket", async (args: TestRecord) => {
     ticketCalls.push(args);
     return { id: ticketCalls.length, status: "open" };
@@ -165,7 +177,14 @@ beforeEach(() => {
 });
 
 let seq = 0;
-async function send({ channel, text, addressed = false, threadTs = null, messageTs = null, seedClient = null }: SendArgs) {
+async function send({
+  channel,
+  text,
+  addressed = false,
+  threadTs = null,
+  messageTs = null,
+  seedClient = null,
+}: SendArgs) {
   seq += 1;
   const ts = messageTs || `${1000 + seq}.000`;
   return respond.respond({
@@ -182,7 +201,6 @@ async function send({ channel, text, addressed = false, threadTs = null, message
 }
 
 const postedText = () => posts.map((p: TestMessage) => p.text || "").join("\n");
-
 
 test("main ambient: a Pixl program question is classified, retrieved and answered", async () => {
   const spoke = await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?" });
@@ -229,7 +247,9 @@ test("main ambient: exact payout is never fabricated — silence", async () => {
 });
 
 test("main ambient: exact AI-code percentage without evidence — silence, no number", async () => {
-  expect(await send({ channel: "C_PIXL_MAIN", text: "what is the exact maximum percentage of AI code allowed?" })).toBe(false);
+  expect(await send({ channel: "C_PIXL_MAIN", text: "what is the exact maximum percentage of AI code allowed?" })).toBe(
+    false,
+  );
   expect(postedText()).not.toMatch(/\d+\s*%/);
 });
 
@@ -247,10 +267,17 @@ test("main ambient: 'how do i do this' with a clear thread referent retrieves an
   });
   stub(lookup, "answerOrChat", async (question: string, ctx: string, opts: { program?: { id?: string } }) => {
     answerCalls.push({ question, program: opts.program?.id });
-    return /restoration energy/i.test(ctx) ? { answer: "Restore pixels in the editor to earn it.", source: "Pixl Docs" } : { unclear: true };
+    return /restoration energy/i.test(ctx)
+      ? { answer: "Restore pixels in the editor to earn it.", source: "Pixl Docs" }
+      : { unclear: true };
   });
   context.addToThread("9000.000", "user", "what is restoration energy?", "U1", "C_PIXL_MAIN");
-  const spoke = await send({ channel: "C_PIXL_MAIN", text: "how do i do this", threadTs: "9000.000", messageTs: "9000.100" });
+  const spoke = await send({
+    channel: "C_PIXL_MAIN",
+    text: "how do i do this",
+    threadTs: "9000.000",
+    messageTs: "9000.100",
+  });
   expect(jevCalls[0].conversationContext).toMatch(/restoration energy/i);
   expect(spoke).toBe(true);
   expect(postedText()).toContain("Restore pixels");
@@ -277,7 +304,9 @@ test("main ambient: a top-level fragment is classified with the channel's last m
   });
   const spoke = await send({ channel: "C_PIXL_MAIN", text: "it expires tomorrow", seedClient: slack });
   expect(historyCalls[0]).toMatchObject({ channel: "C_PIXL_MAIN", limit: 5, inclusive: false });
-  expect(jevCalls[0].conversationContext).toMatch(/other member: gm\nother member: mine's broken lol\nother member: yo is your hackatime streak/);
+  expect(jevCalls[0].conversationContext).toMatch(
+    /other member: gm\nother member: mine's broken lol\nother member: yo is your hackatime streak/,
+  );
   expect(spoke).toBe(false);
   expect(answerCalls).toHaveLength(0);
   expect(posts).toHaveLength(0);
@@ -291,7 +320,13 @@ test("a threaded reply uses its thread, not the channel history", async () => {
     return { messages: [] };
   };
   context.addToThread("9100.000", "user", "what is restoration energy?", "U1", "C_PIXL_MAIN");
-  await send({ channel: "C_PIXL_MAIN", text: "how do i do this", threadTs: "9100.000", messageTs: "9100.100", seedClient: slack });
+  await send({
+    channel: "C_PIXL_MAIN",
+    text: "how do i do this",
+    threadTs: "9100.000",
+    messageTs: "9100.100",
+    seedClient: slack,
+  });
   expect(historyCalled).toBe(false);
 });
 
@@ -308,14 +343,15 @@ test("the classifier never receives documentation", async () => {
   expect(keys).toEqual(["addressed", "channelPosture", "conversationContext", "message", "program"]);
 });
 
-
 test("addressed: program question gets the grounded answer", async () => {
   expect(await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?", addressed: true })).toBe(true);
   expect(postedText()).toContain("Restoration Energy");
 });
 
 test("addressed: a cookie recipe gets a general-purpose answer", async () => {
-  expect(await send({ channel: "C_PIXL_MAIN", text: "give me a chocolate chip cookie recipe", addressed: true })).toBe(true);
+  expect(await send({ channel: "C_PIXL_MAIN", text: "give me a chocolate chip cookie recipe", addressed: true })).toBe(
+    true,
+  );
   expect(postedText()).toContain("butter");
   expect(answerCalls[0].allowWebSearch).toBe(true);
 });
@@ -329,7 +365,9 @@ test("addressed: banter that @mentions Pixie gets a conversational reply, not 'c
 });
 
 test("addressed: exact payout gets transparent uncertainty, never an amount", async () => {
-  expect(await send({ channel: "C_PIXL_MAIN", text: "what is my exact payout amount right now?", addressed: true })).toBe(true);
+  expect(
+    await send({ channel: "C_PIXL_MAIN", text: "what is my exact payout amount right now?", addressed: true }),
+  ).toBe(true);
   expect(postedText()).toMatch(/couldn't verify/i);
   expect(postedText()).not.toMatch(/\$\s*\d|\d+\s*(?:usd|dollars)/i);
   expect(handOffs).toHaveLength(0);
@@ -345,7 +383,9 @@ test("addressed: classifier outage still answers, docs or not", async () => {
   expect(await send({ channel: "C_PIXL_MAIN", text: "what is restoration energy?", addressed: true })).toBe(true);
   expect(postedText()).toContain("Restoration Energy");
   posts = [];
-  expect(await send({ channel: "C_PIXL_MAIN", text: "give me a chocolate chip cookie recipe", addressed: true })).toBe(true);
+  expect(await send({ channel: "C_PIXL_MAIN", text: "give me a chocolate chip cookie recipe", addressed: true })).toBe(
+    true,
+  );
   expect(postedText()).toContain("bake at 180C");
   expect(postedText()).not.toMatch(/couldn't verify/i);
 });
@@ -355,7 +395,6 @@ test("addressed: 'who are you' needs no classifier call", async () => {
   expect(await send({ channel: "C_PIXL_MAIN", text: "who are you?", addressed: true })).toBe(true);
   expect(jevCalls).toHaveLength(0);
 });
-
 
 test("help: a known question opens a ticket and gets the grounded reply; ticket stays open", async () => {
   expect(await send({ channel: "C_PIXL_HELP", text: "my submission got rejected, how do i resubmit?" })).toBe(true);
@@ -397,22 +436,96 @@ test("help: 'how do i do this' with no referent never fabricates", async () => {
 });
 
 test("help: a thread reply does not open a second ticket", async () => {
-  await send({ channel: "C_PIXL_HELP", text: "how do i get my personal grant code?", threadTs: "7000.000", messageTs: "7000.500" });
+  await send({
+    channel: "C_PIXL_HELP",
+    text: "how do i get my personal grant code?",
+    threadTs: "7000.000",
+    messageTs: "7000.500",
+  });
   expect(ticketCalls).toHaveLength(0);
 });
 
-
 const MATRIX: Array<[string, TestRecord, string, string, boolean, MatrixWant]> = [
-  ["main disabled: silent even when addressed", { main: { enabled: false } }, "C_PIXL_MAIN", "what is restoration energy?", true, { spoke: false, answer: 0 }],
-  ["ambient off: ambient question silent, no classifier", { main: { ambientProgramReplies: false } }, "C_PIXL_MAIN", "what is restoration energy?", false, { spoke: false, answer: 0, jev: 0 }],
-  ["ambient off: addressed still answered", { main: { ambientProgramReplies: false } }, "C_PIXL_MAIN", "what is restoration energy?", true, { spoke: true }],
-  ["mention replies off: addressed silent", { main: { mentionReplies: false } }, "C_PIXL_MAIN", "what is restoration energy?", true, { spoke: false, answer: 0 }],
-  ["general chat off: addressed chatter is silent", { main: { generalMentionChat: false } }, "C_PIXL_MAIN", "give me a chocolate chip cookie recipe", true, { spoke: false, answer: 0 }],
-  ["main escalation on: ambient unknown hands to helper", { main: { helperEscalationEnabled: true } }, "C_PIXL_MAIN", "does the hardware grant cover shipping?", false, { spoke: true, handoff: 1 }],
-  ["help disabled: silent", { help: { enabled: false } }, "C_PIXL_HELP", "how do i get my personal grant code?", false, { spoke: false, ticket: 0, handoff: 0 }],
-  ["help AI off: no model call, ticket + helper", { help: { aiReplies: false } }, "C_PIXL_HELP", "my submission got rejected, how do i resubmit?", false, { answer: 0, ticket: 1, handoff: 1 }],
-  ["help escalate off: unknown stays silent, ticket still recorded", { help: { escalateUnknown: false } }, "C_PIXL_HELP", "how do i get my personal grant code?", false, { spoke: false, ticket: 1, handoff: 0 }],
-  ["help escalate on: unknown handed off", {}, "C_PIXL_HELP", "how do i get my personal grant code?", false, { ticket: 1, handoff: 1 }],
+  [
+    "main disabled: silent even when addressed",
+    { main: { enabled: false } },
+    "C_PIXL_MAIN",
+    "what is restoration energy?",
+    true,
+    { spoke: false, answer: 0 },
+  ],
+  [
+    "ambient off: ambient question silent, no classifier",
+    { main: { ambientProgramReplies: false } },
+    "C_PIXL_MAIN",
+    "what is restoration energy?",
+    false,
+    { spoke: false, answer: 0, jev: 0 },
+  ],
+  [
+    "ambient off: addressed still answered",
+    { main: { ambientProgramReplies: false } },
+    "C_PIXL_MAIN",
+    "what is restoration energy?",
+    true,
+    { spoke: true },
+  ],
+  [
+    "mention replies off: addressed silent",
+    { main: { mentionReplies: false } },
+    "C_PIXL_MAIN",
+    "what is restoration energy?",
+    true,
+    { spoke: false, answer: 0 },
+  ],
+  [
+    "general chat off: addressed chatter is silent",
+    { main: { generalMentionChat: false } },
+    "C_PIXL_MAIN",
+    "give me a chocolate chip cookie recipe",
+    true,
+    { spoke: false, answer: 0 },
+  ],
+  [
+    "main escalation on: ambient unknown hands to helper",
+    { main: { helperEscalationEnabled: true } },
+    "C_PIXL_MAIN",
+    "does the hardware grant cover shipping?",
+    false,
+    { spoke: true, handoff: 1 },
+  ],
+  [
+    "help disabled: silent",
+    { help: { enabled: false } },
+    "C_PIXL_HELP",
+    "how do i get my personal grant code?",
+    false,
+    { spoke: false, ticket: 0, handoff: 0 },
+  ],
+  [
+    "help AI off: no model call, ticket + helper",
+    { help: { aiReplies: false } },
+    "C_PIXL_HELP",
+    "my submission got rejected, how do i resubmit?",
+    false,
+    { answer: 0, ticket: 1, handoff: 1 },
+  ],
+  [
+    "help escalate off: unknown stays silent, ticket still recorded",
+    { help: { escalateUnknown: false } },
+    "C_PIXL_HELP",
+    "how do i get my personal grant code?",
+    false,
+    { spoke: false, ticket: 1, handoff: 0 },
+  ],
+  [
+    "help escalate on: unknown handed off",
+    {},
+    "C_PIXL_HELP",
+    "how do i get my personal grant code?",
+    false,
+    { ticket: 1, handoff: 1 },
+  ],
 ];
 
 for (const [name, behavior, channel, text, addressed, want] of MATRIX) {
@@ -449,7 +562,9 @@ test("organizer channel: never volunteers, answers when addressed, files no tick
   expect(await send({ channel: "C_PIXL_ORG", text: "what is restoration energy?", addressed: true })).toBe(true);
   expect(postedText()).toContain("Restoration Energy");
   posts = [];
-  expect(await send({ channel: "C_PIXL_ORG", text: "how do i get my personal grant code?", addressed: true })).toBe(true);
+  expect(await send({ channel: "C_PIXL_ORG", text: "how do i get my personal grant code?", addressed: true })).toBe(
+    true,
+  );
   expect(postedText()).toMatch(/couldn't verify/i);
   expect(ticketCalls).toHaveLength(0);
   expect(handOffs).toHaveLength(0);

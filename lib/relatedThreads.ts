@@ -1,6 +1,10 @@
 const db = require("./db");
 const log = require("./log");
-interface ThreadCandidate { question: string; channel: string; threadTs: string }
+interface ThreadCandidate {
+  question: string;
+  channel: string;
+  threadTs: string;
+}
 interface RelatedThread {
   threadTs: string;
   channel: string;
@@ -17,22 +21,193 @@ interface RelatedOptions {
 
 // Finds related Slack threads using lightweight token overlap and preserves stable permalinks.
 const STOP_WORDS = new Set([
-  "a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "aren't",
-  "as", "at", "be", "because", "been", "before", "being", "below", "between", "both", "but", "by",
-  "can", "can't", "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't", "doing",
-  "don't", "down", "during", "each", "few", "for", "from", "further", "had", "hadn't", "has", "hasn't",
-  "have", "haven't", "having", "he", "he'd", "he'll", "he's", "her", "here", "here's", "hers",
-  "herself", "him", "himself", "his", "how", "how's", "i", "i'd", "i'll", "i'm", "i've", "if", "in",
-  "into", "is", "isn't", "it", "it's", "its", "itself", "let's", "me", "more", "most", "mustn't",
-  "my", "myself", "no", "nor", "not", "of", "off", "on", "once", "only", "or", "other", "ought",
-  "our", "ours", "ourselves", "out", "over", "own", "same", "shan't", "she", "she'd", "she'll", "she's",
-  "should", "shouldn't", "so", "some", "such", "than", "that", "that's", "the", "their", "theirs",
-  "them", "themselves", "then", "there", "there's", "these", "they", "they'd", "they'll", "they're",
-  "they've", "this", "those", "through", "to", "too", "under", "until", "up", "very", "was", "wasn't",
-  "we", "we'd", "we'll", "we're", "we've", "were", "weren't", "what", "what's", "when", "when's",
-  "where", "where's", "which", "while", "who", "who's", "whom", "why", "why's", "with", "won't",
-  "would", "wouldn't", "you", "you'd", "you'll", "you're", "you've", "your", "yours", "yourself",
-  "yourselves", "pixie", "pixl", "please", "pls", "thx", "thanks", "thank", "bro", "gng", "yo", "hey", "hi"
+  "a",
+  "about",
+  "above",
+  "after",
+  "again",
+  "against",
+  "all",
+  "am",
+  "an",
+  "and",
+  "any",
+  "are",
+  "aren't",
+  "as",
+  "at",
+  "be",
+  "because",
+  "been",
+  "before",
+  "being",
+  "below",
+  "between",
+  "both",
+  "but",
+  "by",
+  "can",
+  "can't",
+  "cannot",
+  "could",
+  "couldn't",
+  "did",
+  "didn't",
+  "do",
+  "does",
+  "doesn't",
+  "doing",
+  "don't",
+  "down",
+  "during",
+  "each",
+  "few",
+  "for",
+  "from",
+  "further",
+  "had",
+  "hadn't",
+  "has",
+  "hasn't",
+  "have",
+  "haven't",
+  "having",
+  "he",
+  "he'd",
+  "he'll",
+  "he's",
+  "her",
+  "here",
+  "here's",
+  "hers",
+  "herself",
+  "him",
+  "himself",
+  "his",
+  "how",
+  "how's",
+  "i",
+  "i'd",
+  "i'll",
+  "i'm",
+  "i've",
+  "if",
+  "in",
+  "into",
+  "is",
+  "isn't",
+  "it",
+  "it's",
+  "its",
+  "itself",
+  "let's",
+  "me",
+  "more",
+  "most",
+  "mustn't",
+  "my",
+  "myself",
+  "no",
+  "nor",
+  "not",
+  "of",
+  "off",
+  "on",
+  "once",
+  "only",
+  "or",
+  "other",
+  "ought",
+  "our",
+  "ours",
+  "ourselves",
+  "out",
+  "over",
+  "own",
+  "same",
+  "shan't",
+  "she",
+  "she'd",
+  "she'll",
+  "she's",
+  "should",
+  "shouldn't",
+  "so",
+  "some",
+  "such",
+  "than",
+  "that",
+  "that's",
+  "the",
+  "their",
+  "theirs",
+  "them",
+  "themselves",
+  "then",
+  "there",
+  "there's",
+  "these",
+  "they",
+  "they'd",
+  "they'll",
+  "they're",
+  "they've",
+  "this",
+  "those",
+  "through",
+  "to",
+  "too",
+  "under",
+  "until",
+  "up",
+  "very",
+  "was",
+  "wasn't",
+  "we",
+  "we'd",
+  "we'll",
+  "we're",
+  "we've",
+  "were",
+  "weren't",
+  "what",
+  "what's",
+  "when",
+  "when's",
+  "where",
+  "where's",
+  "which",
+  "while",
+  "who",
+  "who's",
+  "whom",
+  "why",
+  "why's",
+  "with",
+  "won't",
+  "would",
+  "wouldn't",
+  "you",
+  "you'd",
+  "you'll",
+  "you're",
+  "you've",
+  "your",
+  "yours",
+  "yourself",
+  "yourselves",
+  "pixie",
+  "pixl",
+  "please",
+  "pls",
+  "thx",
+  "thanks",
+  "thank",
+  "bro",
+  "gng",
+  "yo",
+  "hey",
+  "hi",
 ]);
 
 const SIMPLE_LOOKUP_PATTERNS = [
@@ -98,7 +273,10 @@ function buildSlackPermalink(channel: string, threadTs: string) {
   return `https://hackclub.slack.com/archives/${channel}/p${cleanTs}`;
 }
 
-async function findRelatedThread(question: string, { currentThreadTs = null, channel = null, result = null, threshold = 0.35 }: RelatedOptions = {}): Promise<RelatedThread | null> {
+async function findRelatedThread(
+  question: string,
+  { currentThreadTs = null, channel = null, result = null, threshold = 0.35 }: RelatedOptions = {},
+): Promise<RelatedThread | null> {
   if (isSimpleLookupQuestion(question, result)) {
     return null;
   }
@@ -122,7 +300,10 @@ async function findRelatedThread(question: string, { currentThreadTs = null, cha
       }
     }
   } catch (error: unknown) {
-    log.debug("relatedThreads", `query answered_threads failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.debug(
+      "relatedThreads",
+      `query answered_threads failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   try {
@@ -137,7 +318,10 @@ async function findRelatedThread(question: string, { currentThreadTs = null, cha
       }
     }
   } catch (error: unknown) {
-    log.debug("relatedThreads", `query learned facts failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.debug(
+      "relatedThreads",
+      `query learned facts failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   if (!candidates.length) return null;
@@ -167,7 +351,10 @@ async function findRelatedThread(question: string, { currentThreadTs = null, cha
   }
 
   if (bestMatch && bestMatch.permalink) {
-    log.debug("relatedThreads", `found related thread: score=${bestMatch.score.toFixed(2)} matched="${bestMatch.matchedQuestion}" url=${bestMatch.permalink}`);
+    log.debug(
+      "relatedThreads",
+      `found related thread: score=${bestMatch.score.toFixed(2)} matched="${bestMatch.matchedQuestion}" url=${bestMatch.permalink}`,
+    );
     return bestMatch;
   }
 

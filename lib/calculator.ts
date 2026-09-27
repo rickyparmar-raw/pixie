@@ -11,8 +11,14 @@ interface ShopEconomy {
   tierRePerHour: number[];
 }
 
-interface ShopItem { name: string; price?: number }
-interface CalculatorData { economy?: ShopEconomy; items?: ShopItem[] }
+interface ShopItem {
+  name: string;
+  price?: number;
+}
+interface CalculatorData {
+  economy?: ShopEconomy;
+  items?: ShopItem[];
+}
 interface TargetArgs {
   question: string;
   targetItem: ShopItem | null;
@@ -29,10 +35,16 @@ interface AffordableArgs {
   tier: number;
   economy: ShopEconomy;
 }
-interface PayoutArgs { hours: number | null; currentRe: number; tier: number; economy: ShopEconomy }
+interface PayoutArgs {
+  hours: number | null;
+  currentRe: number;
+  tier: number;
+  economy: ShopEconomy;
+}
 const HOURS_REGEX = /\b(\d+(?:\.\d+)?)\s*(?:hrs?|hours?)\b/i;
 const RE_REGEX = /\b(\d+(?:\.\d+)?)\s*(?:re|restoration energy)\b/i;
-const CALCULATOR_INTENT_REGEX = /\b(?:calculate|how much (?:will|do) i (?:earn|make|get)|how many more hours|how much more hours|can i afford|what can i (?:get|buy|afford)|hours? (?:left|needed|remaining)|payout for)\b/i;
+const CALCULATOR_INTENT_REGEX =
+  /\b(?:calculate|how much (?:will|do) i (?:earn|make|get)|how many more hours|how much more hours|can i afford|what can i (?:get|buy|afford)|hours? (?:left|needed|remaining)|payout for)\b/i;
 
 function parseHours(text: string) {
   const m = String(text || "").match(HOURS_REGEX);
@@ -63,7 +75,6 @@ function directAnswer(question: string, data: CalculatorData | null = null) {
   const currentRe = parseRe(question) || 0;
   const tier = shop.parseTier(question) || 1;
 
-
   const matchedItems = items.length > 0 ? shop.findItems(question, items) : [];
   const targetItem = matchedItems.length === 1 ? matchedItems[0] : null;
 
@@ -74,36 +85,30 @@ function directAnswer(question: string, data: CalculatorData | null = null) {
   );
 }
 
-
 function answerForTargetItem({ question, targetItem, hours, currentRe, tier, economy }: TargetArgs) {
   if (!targetItem || shop.isTrophy(targetItem) || shop.isUnpriced(targetItem)) return null;
   const tierName = shop.TIER_NAMES[tier - 1] || "Spark";
   const rateRe = shop.rePerHour(tier, economy);
   const itemPx = shop.priceOf(targetItem);
-  const earnedRe = hours !== null ? currentRe + (hours * rateRe) : currentRe;
+  const earnedRe = hours !== null ? currentRe + hours * rateRe : currentRe;
   const totalHoursNeeded = shop.hoursForPixels(itemPx, { tier, startingRe: earnedRe, economy });
-  const hoursRemaining = hours !== null ? Math.max(0, Math.round((totalHoursNeeded) * 10) / 10) : totalHoursNeeded;
+  const hoursRemaining = hours !== null ? Math.max(0, Math.round(totalHoursNeeded * 10) / 10) : totalHoursNeeded;
 
-  const lines = [
-    `*${targetItem.name}* costs *${shop.priceOf(targetItem).toLocaleString()} px*.`,
-    "",
-  ];
+  const lines = [`*${targetItem.name}* costs *${shop.priceOf(targetItem).toLocaleString()} px*.`, ""];
 
   if (hours !== null) {
     const earnedPxAtFloor = Math.round(hours * shop.pxPerHour(0, economy));
     lines.push(
-      `With *${hours}h* at *T${tier} ${tierName}* (${rateRe} RE/h), you've banked ~*${Math.round(earnedRe)} RE* (worth ~*${earnedPxAtFloor} px* at base rate).`
+      `With *${hours}h* at *T${tier} ${tierName}* (${rateRe} RE/h), you've banked ~*${Math.round(earnedRe)} RE* (worth ~*${earnedPxAtFloor} px* at base rate).`,
     );
     if (hoursRemaining <= 0) {
       lines.push(`🎉 You already have enough hours to redeem this item!`);
     } else {
-      lines.push(
-        `You need about *${hoursRemaining} more hours* at T${tier} to reach it.`
-      );
+      lines.push(`You need about *${hoursRemaining} more hours* at T${tier} to reach it.`);
     }
   } else {
     lines.push(
-      `Starting from *${Math.round(currentRe)} RE* at *T${tier} ${tierName}* (${rateRe} RE/h), you need about *${Math.round(totalHoursNeeded * 10) / 10}h* of shipped work.`
+      `Starting from *${Math.round(currentRe)} RE* at *T${tier} ${tierName}* (${rateRe} RE/h), you need about *${Math.round(totalHoursNeeded * 10) / 10}h* of shipped work.`,
     );
   }
 
@@ -115,10 +120,11 @@ function answerForTargetItem({ question, targetItem, hours, currentRe, tier, eco
 }
 
 function answerForAffordable({ question, items, hours, currentRe, tier, economy }: AffordableArgs) {
-  if (!(/\b(?:what can i (?:get|buy|afford)|affordable)\b/i.test(question) && items.length > 0 && hours !== null)) return null;
+  if (!(/\b(?:what can i (?:get|buy|afford)|affordable)\b/i.test(question) && items.length > 0 && hours !== null))
+    return null;
   const tierName = shop.TIER_NAMES[tier - 1] || "Spark";
   const rateRe = shop.rePerHour(tier, economy);
-  const earnedRe = currentRe + (hours * rateRe);
+  const earnedRe = currentRe + hours * rateRe;
   const estimatedPx = Math.round(hours * shop.pxPerHour(0, economy));
   const affordable = items
     .filter((i) => !shop.isTrophy(i) && !shop.isUnpriced(i) && shop.priceOf(i) <= estimatedPx)
@@ -150,7 +156,7 @@ function answerForPayout({ hours, currentRe, tier, economy }: PayoutArgs) {
   if (hours === null) return null;
   const tierName = shop.TIER_NAMES[tier - 1] || "Spark";
   const rateRe = shop.rePerHour(tier, economy);
-  const bankedRe = Math.round(currentRe + (hours * rateRe));
+  const bankedRe = Math.round(currentRe + hours * rateRe);
   const startRateUsd = shop.payoutUsdPerHour(currentRe, economy);
   const finalRateUsd = shop.payoutUsdPerHour(bankedRe, economy);
   const floorPx = Math.round(hours * shop.pxPerHour(0, economy));

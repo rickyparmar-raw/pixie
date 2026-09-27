@@ -1,4 +1,3 @@
-
 interface KeywordRule {
   category?: unknown;
   match?: unknown[];
@@ -14,11 +13,26 @@ interface CategoryRules {
 const DEFAULT_TAXONOMY = {
   byChannel: {},
   byKeyword: [
-    { category: "review", match: ["review", "reviewer", "submission", "submit", "resubmit", "rejected", "approval", "rubric", "feedback"] },
-    { category: "fulfillment_shipping", match: ["shipping", "shipped", "tracking", "package", "delivery", "order", "fulfillment", "payout", "reward"] },
-    { category: "account_access", match: ["account", "login", "log in", "sign in", "password", "access", "permission", "email"] },
-    { category: "site_bug", match: ["bug", "broken", "error", "crash", "crashing", "not working", "doesn't work", "not loading", "down"] },
-    { category: "advice_how_to", match: ["how do", "how can", "how to", "help me", "advice", "guide", "configure", "install", "setup"] },
+    {
+      category: "review",
+      match: ["review", "reviewer", "submission", "submit", "resubmit", "rejected", "approval", "rubric", "feedback"],
+    },
+    {
+      category: "fulfillment_shipping",
+      match: ["shipping", "shipped", "tracking", "package", "delivery", "order", "fulfillment", "payout", "reward"],
+    },
+    {
+      category: "account_access",
+      match: ["account", "login", "log in", "sign in", "password", "access", "permission", "email"],
+    },
+    {
+      category: "site_bug",
+      match: ["bug", "broken", "error", "crash", "crashing", "not working", "doesn't work", "not loading", "down"],
+    },
+    {
+      category: "advice_how_to",
+      match: ["how do", "how can", "how to", "help me", "advice", "guide", "configure", "install", "setup"],
+    },
   ],
   fallback: "other",
 };
@@ -38,7 +52,9 @@ function normalize(value: unknown): string | null {
 }
 
 function mentions(haystack: string, term: unknown): boolean {
-  const clean = String(term || "").trim().toLowerCase();
+  const clean = String(term || "")
+    .trim()
+    .toLowerCase();
   if (!clean) return false;
   const escaped = clean.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, "i").test(haystack);
@@ -59,7 +75,11 @@ function byKeyword(rules: CategoryRules, question: unknown): string | null {
   return null;
 }
 
-function classify({ question = "", channel = null, rules = null }: { question?: unknown; channel?: string | null; rules?: CategoryRules | null } = {}): string | null {
+function classify({
+  question = "",
+  channel = null,
+  rules = null,
+}: { question?: unknown; channel?: string | null; rules?: CategoryRules | null } = {}): string | null {
   if (!rules || typeof rules !== "object") return null;
   return byChannel(rules, channel) || byKeyword(rules, question) || normalize(rules.fallback);
 }

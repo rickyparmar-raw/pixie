@@ -94,16 +94,23 @@ let startupTimer: ReturnType<typeof setTimeout> | null = null;
 let backoffUntil = 0;
 
 function openStatus(status: unknown): boolean {
-  return typeof status === "string" && ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened", "ai_answered"].includes(status);
+  return (
+    typeof status === "string" &&
+    ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened", "ai_answered"].includes(status)
+  );
 }
 
 function autoResolveEnabled(ticket: Row, program: Row | Program | null): boolean {
-  const behavior = program ? programModel.behaviorFor(program) as { help?: { autoResolve?: boolean } } : null;
+  const behavior = program ? (programModel.behaviorFor(program) as { help?: { autoResolve?: boolean } }) : null;
   return !!behavior && behavior.help?.autoResolve === true;
 }
 
 function parseDetail(event: Row): Detail {
-  try { return JSON.parse(String(event.detail || "{}")) as Detail; } catch (_) { return {}; }
+  try {
+    return JSON.parse(String(event.detail || "{}")) as Detail;
+  } catch (_) {
+    return {};
+  }
 }
 
 function eventRoleMap(ticket: Row): Map<string, Row> {
@@ -131,17 +138,41 @@ function normalizeSlackMessages(messages: Row[], ticket: Row): TranscriptRow[] {
   return (messages || [])
     .map((message: Row): TranscriptRow => {
       const who = slackRole(message, ticket, helperReplies);
-      return { ts: message.ts || null, role: who.role || "other", userId: who.userId, text: String(message.text || "").trim() };
+      return {
+        ts: message.ts || null,
+        role: who.role || "other",
+        userId: who.userId,
+        text: String(message.text || "").trim(),
+      };
     })
     .filter((message) => Boolean(message.text));
 }
 
 function fallbackTranscript(ticket: Row): TranscriptRow[] {
-  const rows: TranscriptRow[] = [{ ts: ticket.created_at || null, role: "requester", userId: ticket.requester_id || null, text: ticket.question || "" }];
+  const rows: TranscriptRow[] = [
+    {
+      ts: ticket.created_at || null,
+      role: "requester",
+      userId: ticket.requester_id || null,
+      text: ticket.question || "",
+    },
+  ];
   for (const row of db.listTicketEvents(ticket.id) as Row[]) {
     const detail = parseDetail(row);
-    if (row.event_type === "helper_reply") rows.push({ ts: row.created_at, role: "helper", userId: row.actor_id, text: detail.text || "A helper replied in the thread." });
-    if (row.event_type === "requester_followup") rows.push({ ts: row.created_at, role: "requester", userId: row.actor_id, text: detail.text || "The requester followed up." });
+    if (row.event_type === "helper_reply")
+      rows.push({
+        ts: row.created_at,
+        role: "helper",
+        userId: row.actor_id,
+        text: detail.text || "A helper replied in the thread.",
+      });
+    if (row.event_type === "requester_followup")
+      rows.push({
+        ts: row.created_at,
+        role: "requester",
+        userId: row.actor_id,
+        text: detail.text || "The requester followed up.",
+      });
   }
   try {
     const context = require("./context").getThreadMessages(ticket.thread_ts, 40);
@@ -165,11 +196,16 @@ async function fetchTranscript(ticket: Row, client: Client | null): Promise<Tran
 function lastMessageKey(transcript: TranscriptRow[]): string {
   const last = transcript.at(-1);
   if (!last) return "empty";
-  return crypto.createHash("sha256").update(JSON.stringify([last.ts || null, last.role, last.text])).digest("hex");
+  return crypto
+    .createHash("sha256")
+    .update(JSON.stringify([last.ts || null, last.role, last.text]))
+    .digest("hex");
 }
 
 function wasJudged(ticketId: number, messageKey: string): boolean {
-  return (db.listTicketEvents(ticketId) as Row[]).some((event: Row) => event.event_type === "resolution_judged" && parseDetail(event).messageKey === messageKey);
+  return (db.listTicketEvents(ticketId) as Row[]).some(
+    (event: Row) => event.event_type === "resolution_judged" && parseDetail(event).messageKey === messageKey,
+  );
 }
 
 function recordJudgement(ticket: Row, messageKey: string, decision: JudgeResult): void {
@@ -195,7 +231,9 @@ function hasAnswer(transcript: TranscriptRow[]): boolean {
 function recentClaimWithoutReply(ticket: Row, now: number): boolean {
   if (!ticket.claimed_at || now - ticket.claimed_at >= RECENT_CLAIM_MS) return false;
   const claimedAt = Number(ticket.claimed_at);
-  return !(db.listTicketEvents(ticket.id) as Row[]).some((event: Row) => event.event_type === "helper_reply" && Number(event.created_at) >= claimedAt);
+  return !(db.listTicketEvents(ticket.id) as Row[]).some(
+    (event: Row) => event.event_type === "helper_reply" && Number(event.created_at) >= claimedAt,
+  );
 }
 
 function lastMessageAt(transcript: TranscriptRow[]): number | null {
@@ -209,7 +247,16 @@ function lastMessageAt(transcript: TranscriptRow[]): number | null {
   return latest;
 }
 
-async function judgeTicketOnce(ticketId: number, { client = null, program = null, now = Date.now(), judge = resolutionJudge.judgeResolution, historical = false }: { client?: Client | null; program?: Row | Program | null; now?: number; judge?: Judge; historical?: boolean } = {}): Promise<Row> {
+async function judgeTicketOnce(
+  ticketId: number,
+  {
+    client = null,
+    program = null,
+    now = Date.now(),
+    judge = resolutionJudge.judgeResolution,
+    historical = false,
+  }: { client?: Client | null; program?: Row | Program | null; now?: number; judge?: Judge; historical?: boolean } = {},
+): Promise<Row> {
   let ticket = db.getTicket(ticketId);
   const prog = program || (ticket && programs.get(ticket.program_id));
   if (!ticket || !openStatus(ticket.status) || !autoResolveEnabled(ticket, prog)) return { skipped: true };
@@ -255,23 +302,39 @@ async function judgeTicketOnce(ticketId: number, { client = null, program = null
   } catch (_) {
     decision = { verdict: "unknown" };
   }
-  if (decision.verdict === "unknown" && typeof decision.errorKind === "string" && BACKOFF_ERRORS.has(decision.errorKind)) {
+  if (
+    decision.verdict === "unknown" &&
+    typeof decision.errorKind === "string" &&
+    BACKOFF_ERRORS.has(decision.errorKind)
+  ) {
     backoffUntil = Date.now() + JEV_BACKOFF_MS;
-    log.warn("resolution", `jev ${decision.errorKind}; pausing auto-resolve judgements for ${JEV_BACKOFF_MS / 60000} min`);
+    log.warn(
+      "resolution",
+      `jev ${decision.errorKind}; pausing auto-resolve judgements for ${JEV_BACKOFF_MS / 60000} min`,
+    );
     return { decision, skipped: true, reason: "backoff" };
   }
   recordJudgement(ticket, messageKey, decision);
   if (decision.verdict !== "resolved" || Number(decision.confidence) < RESOLUTION_CONFIDENCE) return { decision };
   ticket = db.getTicket(ticket.id);
-  if (!ticket || !openStatus(ticket.status) || recentClaimWithoutReply(ticket, now)) return { skipped: true, reason: "ticket_changed" };
+  if (!ticket || !openStatus(ticket.status) || recentClaimWithoutReply(ticket, now))
+    return { skipped: true, reason: "ticket_changed" };
   const tickets = require("./tickets");
-  const reason = String(decision.reason || "Jev found clear evidence that the issue was solved.").replace(/\s+/g, " ").trim().slice(0, 160);
+  const reason = String(decision.reason || "Jev found clear evidence that the issue was solved.")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 160);
   const result = tickets.resolveTicket({
     ticketId: ticket.id,
     actorId: null,
     resolution: `auto-resolved: ${reason}`,
     source: historical ? "backfill" : "auto",
-    resolutionMeta: { verdict: decision.verdict, confidence: decision.confidence, reason, ...(historical ? { lane: "backlog" } : {}) },
+    resolutionMeta: {
+      verdict: decision.verdict,
+      confidence: decision.confidence,
+      reason,
+      ...(historical ? { lane: "backlog" } : {}),
+    },
     resolvedAt: lastMessageAt(transcript),
     programId: ticket.program_id,
     workspaceId: ticket.workspace_id,
@@ -281,7 +344,16 @@ async function judgeTicketOnce(ticketId: number, { client = null, program = null
   return { decision, result };
 }
 
-function judgeTicket(ticketId: number, options: { client?: Client | null; program?: Row | Program | null; now?: number; judge?: Judge; historical?: boolean } = {}): Promise<Row> {
+function judgeTicket(
+  ticketId: number,
+  options: {
+    client?: Client | null;
+    program?: Row | Program | null;
+    now?: number;
+    judge?: Judge;
+    historical?: boolean;
+  } = {},
+): Promise<Row> {
   const key = String(ticketId);
   const existing = inFlight.get(key);
   if (existing) return existing;
@@ -292,20 +364,46 @@ function judgeTicket(ticketId: number, options: { client?: Client | null; progra
   return run;
 }
 
-function schedule({ ticketId, client = null, program = null, delayMs = DEBOUNCE_MS, judge = resolutionJudge.judgeResolution }: { ticketId?: number; client?: Client | null; program?: Row | Program | null; delayMs?: number; judge?: Judge } = {}): ReturnType<typeof setTimeout> | null {
+function schedule({
+  ticketId,
+  client = null,
+  program = null,
+  delayMs = DEBOUNCE_MS,
+  judge = resolutionJudge.judgeResolution,
+}: {
+  ticketId?: number;
+  client?: Client | null;
+  program?: Row | Program | null;
+  delayMs?: number;
+  judge?: Judge;
+} = {}): ReturnType<typeof setTimeout> | null {
   if (!ticketId) return null;
   const prior = timers.get(String(ticketId));
   if (prior) clearTimeout(prior);
   const timer = setTimeout(() => {
     timers.delete(String(ticketId));
-    void judgeTicket(ticketId, { client, program, judge }).catch((error: unknown) => log.warn("resolution", `judgement failed for #${ticketId}: ${errorMessage(error)}`));
+    void judgeTicket(ticketId, { client, program, judge }).catch((error: unknown) =>
+      log.warn("resolution", `judgement failed for #${ticketId}: ${errorMessage(error)}`),
+    );
   }, delayMs);
   if (timer.unref) timer.unref();
   timers.set(String(ticketId), timer);
   return timer;
 }
 
-function enqueueForJudge({ ticketId, client = null, program = null, judge = resolutionJudge.judgeResolution, autoStart = true }: { ticketId: number; client?: Client | null; program?: Row | Program | null; judge?: Judge; autoStart?: boolean }): boolean {
+function enqueueForJudge({
+  ticketId,
+  client = null,
+  program = null,
+  judge = resolutionJudge.judgeResolution,
+  autoStart = true,
+}: {
+  ticketId: number;
+  client?: Client | null;
+  program?: Row | Program | null;
+  judge?: Judge;
+  autoStart?: boolean;
+}): boolean {
   const key = String(ticketId || "");
   if (!key || backlogIds.has(key)) return false;
   backlogIds.add(key);
@@ -314,14 +412,22 @@ function enqueueForJudge({ ticketId, client = null, program = null, judge = reso
   return true;
 }
 
-async function drainBacklog({ now = Date.now(), spacingMs = SWEEP_SPACING_MS }: { now?: number; spacingMs?: number } = {}): Promise<Row> {
+async function drainBacklog({
+  now = Date.now(),
+  spacingMs = SWEEP_SPACING_MS,
+}: { now?: number; spacingMs?: number } = {}): Promise<Row> {
   if (backlogRunning || backlog.length === 0) return { judged: 0, queued: backlog.length };
   if (now < backoffUntil) {
     if (!backlogTimer) {
-      backlogTimer = setTimeout(() => {
-        backlogTimer = null;
-        void drainBacklog({ spacingMs }).catch((error: unknown) => log.warn("resolution", `backlog drain failed: ${errorMessage(error)}`));
-      }, Math.max(1, backoffUntil - now));
+      backlogTimer = setTimeout(
+        () => {
+          backlogTimer = null;
+          void drainBacklog({ spacingMs }).catch((error: unknown) =>
+            log.warn("resolution", `backlog drain failed: ${errorMessage(error)}`),
+          );
+        },
+        Math.max(1, backoffUntil - now),
+      );
       if (backlogTimer.unref) backlogTimer.unref();
     }
     return { judged: 0, queued: backlog.length, reason: "backoff" };
@@ -331,7 +437,9 @@ async function drainBacklog({ now = Date.now(), spacingMs = SWEEP_SPACING_MS }: 
     if (!backlogTimer) {
       backlogTimer = setTimeout(() => {
         backlogTimer = null;
-        void drainBacklog({ spacingMs }).catch((error: unknown) => log.warn("resolution", `backlog drain failed: ${errorMessage(error)}`));
+        void drainBacklog({ spacingMs }).catch((error: unknown) =>
+          log.warn("resolution", `backlog drain failed: ${errorMessage(error)}`),
+        );
       }, spacingMs - elapsed);
       if (backlogTimer.unref) backlogTimer.unref();
     }
@@ -343,14 +451,21 @@ async function drainBacklog({ now = Date.now(), spacingMs = SWEEP_SPACING_MS }: 
   backlogRunning = true;
   backlogLastCallAt = now;
   try {
-    const result = await judgeTicket(item.ticketId, { client: item.client, program: item.program, judge: item.judge, historical: true });
+    const result = await judgeTicket(item.ticketId, {
+      client: item.client,
+      program: item.program,
+      judge: item.judge,
+      historical: true,
+    });
     return { judged: result?.decision ? 1 : 0, queued: backlog.length, result };
   } finally {
     backlogRunning = false;
     if (backlog.length > 0 && !backlogTimer) {
       backlogTimer = setTimeout(() => {
         backlogTimer = null;
-      void drainBacklog({ spacingMs }).catch((error: unknown) => log.warn("resolution", `backlog drain failed: ${errorMessage(error)}`));
+        void drainBacklog({ spacingMs }).catch((error: unknown) =>
+          log.warn("resolution", `backlog drain failed: ${errorMessage(error)}`),
+        );
       }, spacingMs);
       if (backlogTimer.unref) backlogTimer.unref();
     }
@@ -372,7 +487,17 @@ async function sweepStale({
   spacingMs = SWEEP_SPACING_MS,
   maxExamined = SWEEP_MAX_EXAMINED,
   examineSpacingMs = SWEEP_EXAMINE_SPACING_MS,
-}: { client?: Client | null; now?: number; quietMs?: number; useLease?: boolean; judge?: Judge; maxJudgements?: number; spacingMs?: number; maxExamined?: number; examineSpacingMs?: number } = {}): Promise<Row> {
+}: {
+  client?: Client | null;
+  now?: number;
+  quietMs?: number;
+  useLease?: boolean;
+  judge?: Judge;
+  maxJudgements?: number;
+  spacingMs?: number;
+  maxExamined?: number;
+  examineSpacingMs?: number;
+} = {}): Promise<Row> {
   const run = async () => {
     const seen = new Set();
     let judged = 0;
@@ -399,14 +524,21 @@ async function sweepStale({
   return (await jobLease.runOnce("ticket-resolution-sweep", 25 * 60 * 1000, run)).result || { judged: 0 };
 }
 
-function start(client: Client, { intervalMs = SWEEP_INTERVAL_MS }: { intervalMs?: number } = {}): ReturnType<typeof setInterval> {
+function start(
+  client: Client,
+  { intervalMs = SWEEP_INTERVAL_MS }: { intervalMs?: number } = {},
+): ReturnType<typeof setInterval> {
   if (sweepTimer) return sweepTimer;
   startupTimer = setTimeout(() => {
-    void sweepStale({ client }).catch((error: unknown) => log.warn("resolution", `startup sweep failed: ${errorMessage(error)}`));
+    void sweepStale({ client }).catch((error: unknown) =>
+      log.warn("resolution", `startup sweep failed: ${errorMessage(error)}`),
+    );
   }, STARTUP_SWEEP_DELAY_MS);
   if (startupTimer.unref) startupTimer.unref();
   sweepTimer = setInterval(() => {
-    void sweepStale({ client }).catch((error: unknown) => log.warn("resolution", `stale sweep failed: ${errorMessage(error)}`));
+    void sweepStale({ client }).catch((error: unknown) =>
+      log.warn("resolution", `stale sweep failed: ${errorMessage(error)}`),
+    );
   }, intervalMs);
   if (sweepTimer.unref) sweepTimer.unref();
   return sweepTimer;
@@ -429,4 +561,18 @@ function stop() {
   backlogLastCallAt = 0;
 }
 
-export = { schedule, judgeTicket, sweepStale, start, stop, hasAnswer, enqueueForJudge, drainBacklog, RESOLUTION_CONFIDENCE, DEBOUNCE_MS, STALE_QUIET_MS, SWEEP_SPACING_MS, JEV_BACKOFF_MS };
+export = {
+  schedule,
+  judgeTicket,
+  sweepStale,
+  start,
+  stop,
+  hasAnswer,
+  enqueueForJudge,
+  drainBacklog,
+  RESOLUTION_CONFIDENCE,
+  DEBOUNCE_MS,
+  STALE_QUIET_MS,
+  SWEEP_SPACING_MS,
+  JEV_BACKOFF_MS,
+};

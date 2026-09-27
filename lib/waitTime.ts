@@ -1,7 +1,11 @@
 import db = require("./db");
 
-interface LagRow { lag: number | null; }
-interface CountRow { n: number; }
+interface LagRow {
+  lag: number | null;
+}
+interface CountRow {
+  n: number;
+}
 interface WaitEstimate {
   available?: boolean;
   medianWaitMs?: number | null;
@@ -34,10 +38,13 @@ function responseLags(programId: string, category: string | null = null, sinceMs
   const cutoff = Date.now() - sinceMs;
   const params = [programId, cutoff];
   if (category) params.push(category);
-  const rows = db.handle().query(
-    `SELECT (first_human_response_at - created_at) AS lag FROM tickets
+  const rows = db
+    .handle()
+    .query(
+      `SELECT (first_human_response_at - created_at) AS lag FROM tickets
      WHERE program_id = ? AND created_at > ? AND first_human_response_at IS NOT NULL ${category ? "AND category = ?" : ""}`,
-  ).all(...params);
+    )
+    .all(...params);
   return (rows as LagRow[]).map((r) => r.lag).filter(isUsableLag);
 }
 
@@ -48,10 +55,13 @@ function queuePosition(programId: string, ticketId: number, category: string | n
   const categoryClause = category ? " AND category = ?" : "";
   const params = [programId, ...QUEUE_STATUSES, ticket.created_at, ticket.created_at, ticketId];
   if (category) params.push(category);
-  const row = db.handle().query(
-    `SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND status IN (${placeholders})
+  const row = db
+    .handle()
+    .query(
+      `SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND status IN (${placeholders})
      AND (created_at < ? OR (created_at = ? AND id < ?))${categoryClause}`,
-  ).get(...params);
+    )
+    .get(...params);
   if (!row) return 0;
   return (row as CountRow).n;
 }
@@ -61,9 +71,10 @@ function queueDepth(programId: string, category: string | null = null): number {
   const categoryClause = category ? " AND category = ?" : "";
   const params = [programId, ...QUEUE_STATUSES];
   if (category) params.push(category);
-  const row = db.handle().query(
-    `SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND status IN (${placeholders})${categoryClause}`,
-  ).get(...params);
+  const row = db
+    .handle()
+    .query(`SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND status IN (${placeholders})${categoryClause}`)
+    .get(...params);
   return row ? (row as CountRow).n : 0;
 }
 
@@ -72,7 +83,15 @@ function lagsFor(programId: string, category: string | null): { lags: number[]; 
   return { lags: responseLags(programId, category), scope: "category" };
 }
 
-function estimate({ programId, category = null, ticketId = null }: { programId?: string; category?: string | null; ticketId?: number | null }): WaitEstimate {
+function estimate({
+  programId,
+  category = null,
+  ticketId = null,
+}: {
+  programId?: string;
+  category?: string | null;
+  ticketId?: number | null;
+}): WaitEstimate {
   if (!programId) return { error: "programId required" };
   let { lags, scope } = lagsFor(programId, category);
   if (lags.length < MIN_CATEGORY_SAMPLE) {

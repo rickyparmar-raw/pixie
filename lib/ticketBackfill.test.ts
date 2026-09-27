@@ -35,7 +35,10 @@ function setup() {
 
 function fakeClient(rawMessages, repliesByTs, posts = []) {
   const calls = { history: 0, replies: 0 };
-  const messages = rawMessages.map((m) => ({ ...m, reply_count: Math.max(0, (repliesByTs[m.ts] || []).length - 1) || ((repliesByTs[m.ts] || []).length ? 1 : 0) }));
+  const messages = rawMessages.map((m) => ({
+    ...m,
+    reply_count: Math.max(0, (repliesByTs[m.ts] || []).length - 1) || ((repliesByTs[m.ts] || []).length ? 1 : 0),
+  }));
   return {
     calls,
     conversations: {
@@ -51,10 +54,19 @@ function fakeClient(rawMessages, repliesByTs, posts = []) {
       },
     },
     chat: {
-      postMessage: async (payload) => { posts.push(payload); throw new Error("history import posted to Slack"); },
-      update: async () => { throw new Error("history import updated Slack"); },
+      postMessage: async (payload) => {
+        posts.push(payload);
+        throw new Error("history import posted to Slack");
+      },
+      update: async () => {
+        throw new Error("history import updated Slack");
+      },
     },
-    reactions: { add: async () => { throw new Error("history import reacted in Slack"); } },
+    reactions: {
+      add: async () => {
+        throw new Error("history import reacted in Slack");
+      },
+    },
   };
 }
 
@@ -62,23 +74,51 @@ test("history import creates, enriches, resolves, closes, queues, and stays sile
   const program = setup();
   const messages = [
     { ts: ts(NOW - 9 * DAY), user: "U-ONE", text: "helper answer" },
-    { ts: ts(NOW - 8 * DAY), user: "U-TWO", text: "checkmark answer", reactions: [{ name: "white_check_mark", users: ["U-TWO"] }] },
+    {
+      ts: ts(NOW - 8 * DAY),
+      user: "U-TWO",
+      text: "checkmark answer",
+      reactions: [{ name: "white_check_mark", users: ["U-TWO"] }],
+    },
     { ts: ts(NOW - 6 * DAY), user: "U-THREE", text: "Pixie answered" },
     { ts: ts(NOW - 10 * DAY), user: "U-FOUR", text: "no answer" },
     { ts: ts(NOW - 5 * DAY), user: "U-FIVE", text: "already tracked" },
   ];
-  const tracked = db.createTicket({ programId: program.id, channel: program.helpChannel, threadTs: messages[4].ts, requesterId: "U-FIVE", question: "already tracked", createdAt: NOW - 5 * DAY });
+  const tracked = db.createTicket({
+    programId: program.id,
+    channel: program.helpChannel,
+    threadTs: messages[4].ts,
+    requesterId: "U-FIVE",
+    question: "already tracked",
+    createdAt: NOW - 5 * DAY,
+  });
   const replies = {
-    [messages[0].ts]: [messages[0], { ts: ts(NOW - 8 * DAY), user: "U-HELPER", text: "Try this fix." }, { ts: ts(NOW - 7 * DAY), user: "U-ONE", text: "Thanks, that worked." }],
+    [messages[0].ts]: [
+      messages[0],
+      { ts: ts(NOW - 8 * DAY), user: "U-HELPER", text: "Try this fix." },
+      { ts: ts(NOW - 7 * DAY), user: "U-ONE", text: "Thanks, that worked." },
+    ],
     [messages[1].ts]: [messages[1], { ts: ts(NOW - 7 * DAY), user: "U-HELPER", text: "The fix is to restart it." }],
     [messages[2].ts]: [messages[2], { ts: ts(NOW - 5 * DAY), bot_id: "B-PIXIE", text: "Here is the answer." }],
     [messages[3].ts]: [messages[3]],
     [messages[4].ts]: [messages[4], { ts: ts(NOW - 4 * DAY), user: "U-HELPER", text: "The missing historical reply." }],
   };
-  db.addTicketEvent({ ticketId: tracked, programId: program.id, actorId: "U-HELPER", eventType: "helper_reply", detail: { ts: "old-reply", text: "already present" }, createdAt: NOW - 4 * DAY });
+  db.addTicketEvent({
+    ticketId: tracked,
+    programId: program.id,
+    actorId: "U-HELPER",
+    eventType: "helper_reply",
+    detail: { ts: "old-reply", text: "already present" },
+    createdAt: NOW - 4 * DAY,
+  });
   const posts = [];
   const client = fakeClient(messages, replies, posts);
-  await backfill.importProgram(program, client, { now: () => NOW, spacingMs: 0, sleepFn: async () => {}, autoStartJudge: false });
+  await backfill.importProgram(program, client, {
+    now: () => NOW,
+    spacingMs: 0,
+    sleepFn: async () => {},
+    autoStartJudge: false,
+  });
 
   const rows = db.getTicketsForProgram(program.id);
   assert.equal(rows.length, 5);
@@ -88,11 +128,24 @@ test("history import creates, enriches, resolves, closes, queues, and stays sile
   assert.equal(lastWord.resolved_at, NOW - 4 * DAY);
   assert.equal(rows.find((row) => row.requester_id === "U-FOUR").status, "closed");
   assert.equal(rows.find((row) => row.requester_id === "U-FOUR").resolution, "no answer (history import)");
-  assert.equal(rows.every((row) => row.visibility === "dashboard"), true);
+  assert.equal(
+    rows.every((row) => row.visibility === "dashboard"),
+    true,
+  );
   assert.equal(rows.find((row) => row.requester_id === "U-ONE").resolved_at, NOW - 7 * DAY);
   assert.equal(rows.find((row) => row.requester_id === "U-TWO").resolved_by, "U-HELPER");
-  assert.equal(db.listTicketEvents(rows.find((row) => row.requester_id === "U-ONE").id).find((event) => event.event_type === "helper_reply").created_at, NOW - 8 * DAY);
-  assert.equal(db.listTicketEvents(rows.find((row) => row.requester_id === "U-ONE").id).filter((event) => event.event_type === "requester_followup").length, 1);
+  assert.equal(
+    db
+      .listTicketEvents(rows.find((row) => row.requester_id === "U-ONE").id)
+      .find((event) => event.event_type === "helper_reply").created_at,
+    NOW - 8 * DAY,
+  );
+  assert.equal(
+    db
+      .listTicketEvents(rows.find((row) => row.requester_id === "U-ONE").id)
+      .filter((event) => event.event_type === "requester_followup").length,
+    1,
+  );
   assert.equal(backfill.getProgress(program.id).messagesScanned, 5);
   assert.equal(backfill.getProgress(program.id).queuedForJudge, 1);
   assert.deepEqual(posts, []);
@@ -112,22 +165,49 @@ test("history import reruns without duplicates and resumes a failed replies page
   };
   const client = {
     conversations: {
-      history: async ({ oldest }) => { historyOldest.push(oldest); return { messages }; },
+      history: async ({ oldest }) => {
+        historyOldest.push(oldest);
+        return { messages };
+      },
       replies: async ({ ts: threadTs }) => {
-        if (threadTs === messages[0].ts && fail) { fail = false; throw new Error("crash mid-page"); }
+        if (threadTs === messages[0].ts && fail) {
+          fail = false;
+          throw new Error("crash mid-page");
+        }
         return { messages: replies[threadTs] };
       },
     },
   };
-  await assert.rejects(backfill.importProgram(program, client, { now: () => NOW, spacingMs: 0, sleepFn: async () => {}, autoStartJudge: false }), /crash mid-page/);
+  await assert.rejects(
+    backfill.importProgram(program, client, {
+      now: () => NOW,
+      spacingMs: 0,
+      sleepFn: async () => {},
+      autoStartJudge: false,
+    }),
+    /crash mid-page/,
+  );
   assert.equal(db.getTicketsForProgram(program.id).length, 2);
-  await backfill.importProgram(program, client, { now: () => NOW, spacingMs: 0, sleepFn: async () => {}, autoStartJudge: false });
-  await backfill.importProgram(program, client, { now: () => NOW, spacingMs: 0, sleepFn: async () => {}, autoStartJudge: false });
+  await backfill.importProgram(program, client, {
+    now: () => NOW,
+    spacingMs: 0,
+    sleepFn: async () => {},
+    autoStartJudge: false,
+  });
+  await backfill.importProgram(program, client, {
+    now: () => NOW,
+    spacingMs: 0,
+    sleepFn: async () => {},
+    autoStartJudge: false,
+  });
   assert.equal(db.getTicketsForProgram(program.id).length, 2);
   for (const ticket of db.getTicketsForProgram(program.id)) {
     const events = db.listTicketEvents(ticket.id);
     assert.equal(events.filter((event) => event.event_type === "created").length, 1);
-    assert.equal(events.filter((event) => event.event_type === "helper_reply").length, ticket.requester_id === "U-ONE" ? 1 : 0);
+    assert.equal(
+      events.filter((event) => event.event_type === "helper_reply").length,
+      ticket.requester_id === "U-ONE" ? 1 : 0,
+    );
   }
   assert.equal(historyOldest.at(-1), messages[0].ts);
 });
@@ -135,13 +215,26 @@ test("history import reruns without duplicates and resumes a failed replies page
 test("backfill resolution skips the resolution pipeline", async () => {
   const program = setup();
   const thread = { ts: ts(NOW - DAY), user: "U-ONE", text: "fix" };
-  const client = fakeClient([thread], { [thread.ts]: [thread, { ts: ts(NOW - 12 * 60 * 60 * 1000), user: "U-HELPER", text: "done" }, { ts: ts(NOW - 6 * 60 * 60 * 1000), user: "U-ONE", text: "got it" }] });
+  const client = fakeClient([thread], {
+    [thread.ts]: [
+      thread,
+      { ts: ts(NOW - 12 * 60 * 60 * 1000), user: "U-HELPER", text: "done" },
+      { ts: ts(NOW - 6 * 60 * 60 * 1000), user: "U-ONE", text: "got it" },
+    ],
+  });
   const pipeline = require("./resolutionPipeline");
   const original = pipeline.schedule;
   let scheduled = 0;
-  pipeline.schedule = () => { scheduled += 1; };
+  pipeline.schedule = () => {
+    scheduled += 1;
+  };
   try {
-    await backfill.importProgram(program, client, { now: () => NOW, spacingMs: 0, sleepFn: async () => {}, autoStartJudge: false });
+    await backfill.importProgram(program, client, {
+      now: () => NOW,
+      spacingMs: 0,
+      sleepFn: async () => {},
+      autoStartJudge: false,
+    });
   } finally {
     pipeline.schedule = original;
   }
@@ -154,13 +247,23 @@ test("history import internal route starts work and rejects missing auth", async
   process.env.PIXIE_INTERNAL_TOKEN = "backfill-route-token";
   const api = require("./web/api");
   const serve = require("./web/serve");
-  api.setSlackClient({ conversations: { history: async () => ({ messages: [] }), replies: async () => ({ messages: [] }) } });
+  api.setSlackClient({
+    conversations: { history: async () => ({ messages: [] }), replies: async () => ({ messages: [] }) },
+  });
   try {
     const path = `/internal/programs/${program.id}/history-import`;
-    const progress = await serve.handleRequest(new Request(`http://localhost${path}`, { headers: { Authorization: "Bearer backfill-route-token" } }));
+    const progress = await serve.handleRequest(
+      new Request(`http://localhost${path}`, { headers: { Authorization: "Bearer backfill-route-token" } }),
+    );
     assert.equal(progress.status, 200);
     assert.equal((await progress.json()).status, "pending");
-    const started = await serve.handleRequest(new Request(`http://localhost${path}`, { method: "POST", headers: { Authorization: "Bearer backfill-route-token", "Content-Type": "application/json" }, body: "{}" }));
+    const started = await serve.handleRequest(
+      new Request(`http://localhost${path}`, {
+        method: "POST",
+        headers: { Authorization: "Bearer backfill-route-token", "Content-Type": "application/json" },
+        body: "{}",
+      }),
+    );
     assert.equal(started.status, 200);
     assert.equal((await started.json()).started, true);
     const denied = await serve.handleRequest(new Request(`http://localhost${path}`));
@@ -175,15 +278,39 @@ test("history import internal route starts work and rejects missing auth", async
 test("backfill judge lane spaces calls and honors Jev backoff", async () => {
   const program = setup();
   const makeTicket = (name) => {
-    const id = db.createTicket({ programId: program.id, channel: program.helpChannel, threadTs: name, requesterId: `U-${name}`, question: name });
-    db.addTicketEvent({ ticketId: id, programId: program.id, actorId: "U-HELPER", eventType: "helper_reply", detail: { ts: `${name}-reply` } });
+    const id = db.createTicket({
+      programId: program.id,
+      channel: program.helpChannel,
+      threadTs: name,
+      requesterId: `U-${name}`,
+      question: name,
+    });
+    db.addTicketEvent({
+      ticketId: id,
+      programId: program.id,
+      actorId: "U-HELPER",
+      eventType: "helper_reply",
+      detail: { ts: `${name}-reply` },
+    });
     return id;
   };
   const first = makeTicket("thread-one");
   const second = makeTicket("thread-two");
-  const client = { conversations: { replies: async ({ ts: threadTs }) => ({ messages: [{ ts: threadTs, user: "U-requester", text: "question" }, { ts: `${threadTs}-reply`, user: "U-HELPER", text: "answer" }] }) } };
+  const client = {
+    conversations: {
+      replies: async ({ ts: threadTs }) => ({
+        messages: [
+          { ts: threadTs, user: "U-requester", text: "question" },
+          { ts: `${threadTs}-reply`, user: "U-HELPER", text: "answer" },
+        ],
+      }),
+    },
+  };
   let calls = 0;
-  const judge = async () => { calls += 1; return { verdict: "unresolved", confidence: 1 }; };
+  const judge = async () => {
+    calls += 1;
+    return { verdict: "unresolved", confidence: 1 };
+  };
   watcher.enqueueForJudge({ ticketId: first, client, program, judge, autoStart: false });
   watcher.enqueueForJudge({ ticketId: second, client, program, judge, autoStart: false });
   await watcher.drainBacklog({ now: 1000, spacingMs: 20000 });
@@ -194,7 +321,10 @@ test("backfill judge lane spaces calls and honors Jev backoff", async () => {
 
   const limitedTicket = makeTicket("thread-limited");
   const queuedTicket = makeTicket("thread-queued");
-  const limited = async () => { calls += 1; return { verdict: "unknown", errorKind: "rate_limit" }; };
+  const limited = async () => {
+    calls += 1;
+    return { verdict: "unknown", errorKind: "rate_limit" };
+  };
   watcher.enqueueForJudge({ ticketId: limitedTicket, client, program, judge: limited, autoStart: false });
   await watcher.drainBacklog({ now: Date.now(), spacingMs: 0 });
   watcher.enqueueForJudge({ ticketId: queuedTicket, client, program, judge: limited, autoStart: false });
@@ -207,9 +337,21 @@ afterEach(() => watcher.stop());
 test("a rules-version bump re-walks the channel from the start with fresh counts", async () => {
   const program = setup();
   const thread = { ts: ts(NOW - 10 * DAY), user: "U-ONE", text: "q" };
-  const client = fakeClient([thread], { [thread.ts]: [thread, { ts: ts(NOW - 9 * DAY), user: "U-HELPER", text: "a" }] });
-  db.upsertHistoryImportProgress(program.id, program.helpChannel, { status: "done", newestTsDone: thread.ts, rulesVersion: 1, resolved: 7 });
-  await backfill.importProgram(program, client, { now: () => NOW, spacingMs: 0, sleepFn: async () => {}, autoStartJudge: false });
+  const client = fakeClient([thread], {
+    [thread.ts]: [thread, { ts: ts(NOW - 9 * DAY), user: "U-HELPER", text: "a" }],
+  });
+  db.upsertHistoryImportProgress(program.id, program.helpChannel, {
+    status: "done",
+    newestTsDone: thread.ts,
+    rulesVersion: 1,
+    resolved: 7,
+  });
+  await backfill.importProgram(program, client, {
+    now: () => NOW,
+    spacingMs: 0,
+    sleepFn: async () => {},
+    autoStartJudge: false,
+  });
   const progress = db.getHistoryImportProgress(program.id, program.helpChannel);
   assert.equal(progress.rules_version, 3);
   assert.equal(progress.status, "done");
@@ -222,15 +364,26 @@ test("a passive program with its ticket toggles off still gets every help thread
   db.open(":memory:");
   watcher.stop();
   const program = {
-    id: "backfill-passive", name: "Passive Pixl", helpChannel: "C-PASSIVE", channels: ["C-PASSIVE"], posture: "passive",
-    publicTicketsEnabled: true, ticketVisibility: "thread", behavior: { help: { ticketsEnabled: false, autoCreateTickets: false } },
+    id: "backfill-passive",
+    name: "Passive Pixl",
+    helpChannel: "C-PASSIVE",
+    channels: ["C-PASSIVE"],
+    posture: "passive",
+    publicTicketsEnabled: true,
+    ticketVisibility: "thread",
+    behavior: { help: { ticketsEnabled: false, autoCreateTickets: false } },
   };
   db.saveProgram(program);
   programs.invalidate();
   const thread = { ts: ts(NOW - 3 * DAY), user: "U-ONE", text: "how do tiers work" };
   const posts = [];
   const client = fakeClient([thread], { [thread.ts]: [thread] }, posts);
-  await backfill.importProgram(programs.get(program.id) || program, client, { now: () => NOW, spacingMs: 0, sleepFn: async () => {}, autoStartJudge: false });
+  await backfill.importProgram(programs.get(program.id) || program, client, {
+    now: () => NOW,
+    spacingMs: 0,
+    sleepFn: async () => {},
+    autoStartJudge: false,
+  });
   const rows = db.getTicketsForProgram(program.id);
   assert.equal(rows.length, 1);
   assert.equal(rows[0].visibility, "dashboard");

@@ -36,7 +36,6 @@ test("isRetryableError defers to the status when there is a response", () => {
   assert.equal(isRetryableError({ response: { status: 401 } }), false);
 });
 
-
 const sse = (c: string) => `data: ${JSON.stringify({ choices: [{ delta: { content: c } }] })}\n`;
 
 test("parseSseChunk pulls the content deltas out of complete lines", () => {
@@ -61,7 +60,6 @@ test("parseSseChunk ignores [DONE], keepalives and unparseable frames", () => {
   assert.deepEqual(deltas, []);
 });
 
-
 type MockFetchResponse = {
   ok: boolean;
   status: number;
@@ -72,7 +70,10 @@ type MockFetchResponse = {
 type FetchImpl = (...args: Parameters<typeof fetch>) => Promise<MockFetchResponse>;
 type StreamResult = { text: string; stopped?: boolean };
 
-function fakeFetch(chunks: string[], { status = 200, finishReason = "stop" }: { status?: number; finishReason?: string | null } = {}): FetchImpl {
+function fakeFetch(
+  chunks: string[],
+  { status = 200, finishReason = "stop" }: { status?: number; finishReason?: string | null } = {},
+): FetchImpl {
   const frames = finishReason
     ? [...chunks, `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: finishReason }] })}\n`]
     : chunks;
@@ -119,8 +120,9 @@ test("completeStream assembles the deltas and reports each one as it lands", asy
 
 test("completeStream retains a terminal SSE frame without its trailing newline", async () => {
   const terminal = 'data: {"choices":[{"delta":{"content":" complete."},"finish_reason":"stop"}]}';
-  const result = await withFetch<StreamResult>(fakeFetch([sse("A grounded answer"), terminal], { finishReason: null }), () =>
-    llm.completeStream(REQUEST, () => {}),
+  const result = await withFetch<StreamResult>(
+    fakeFetch([sse("A grounded answer"), terminal], { finishReason: null }),
+    () => llm.completeStream(REQUEST, () => {}),
   );
 
   assert.equal(result.text, "A grounded answer complete.");
@@ -208,7 +210,6 @@ test("completeStream throws a non-retryable status straight away", async () => {
   });
   assert.equal(attempts, 1);
 });
-
 
 const STANDBY = { baseUrl: "http://standby", apiKey: "k2", model: "m2" };
 
@@ -326,39 +327,44 @@ test("requestCompletion attaches the key it used to a thrown error", async () =>
       throw err429;
     },
     async () => {
-      await assert.rejects(() => llm.requestCompletion({ ...REQUEST, apiKey: apiKeyFn }), (thrown: { usedKey?: string }) => {
-        assert.equal(thrown, err429);
-        assert.equal(thrown.usedKey, "key-1");
-        return true;
-      });
+      await assert.rejects(
+        () => llm.requestCompletion({ ...REQUEST, apiKey: apiKeyFn }),
+        (thrown: { usedKey?: string }) => {
+          assert.equal(thrown, err429);
+          assert.equal(thrown.usedKey, "key-1");
+          return true;
+        },
+      );
     },
   );
 });
 
-
 test("complete falls through a two-hop fallback chain to reach a working tier", async () => {
   const seenUrls: string[] = [];
-  await withAxiosPost(async (url: string) => {
-    seenUrls.push(url);
-    if (url.startsWith("http://hop2")) {
-      return { data: { choices: [{ message: { content: "from hop2" }, finish_reason: "stop" }] } };
-    }
-    const err = Object.assign(new Error("bad request"), { response: { status: 400 } });
-    err.response = { status: 400 };
-    throw err;
-  }, async () => {
-    const result = await llm.complete({
-      ...REQUEST,
-      baseUrl: "http://primary",
-      fallback: {
-        baseUrl: "http://hop1",
-        apiKey: "k1",
-        model: "m1",
-        fallback: { baseUrl: "http://hop2", apiKey: "k2", model: "m2" },
-      },
-    });
-    assert.equal(result.text, "from hop2");
-  });
+  await withAxiosPost(
+    async (url: string) => {
+      seenUrls.push(url);
+      if (url.startsWith("http://hop2")) {
+        return { data: { choices: [{ message: { content: "from hop2" }, finish_reason: "stop" }] } };
+      }
+      const err = Object.assign(new Error("bad request"), { response: { status: 400 } });
+      err.response = { status: 400 };
+      throw err;
+    },
+    async () => {
+      const result = await llm.complete({
+        ...REQUEST,
+        baseUrl: "http://primary",
+        fallback: {
+          baseUrl: "http://hop1",
+          apiKey: "k1",
+          model: "m1",
+          fallback: { baseUrl: "http://hop2", apiKey: "k2", model: "m2" },
+        },
+      });
+      assert.equal(result.text, "from hop2");
+    },
+  );
 
   assert.ok(seenUrls.some((u: string) => u.startsWith("http://primary")));
   assert.ok(seenUrls.some((u: string) => u.startsWith("http://hop1")));
@@ -388,10 +394,7 @@ test("completeStream falls through a two-hop fallback chain to reach a working t
 
 test("completeStream rethrows when no standby is configured", async () => {
   await withFetch(byBaseUrl({}), async () => {
-    await assert.rejects(
-      () => llm.completeStream({ ...REQUEST, baseUrl: "http://dead" }, () => {}),
-      /ECONNREFUSED/,
-    );
+    await assert.rejects(() => llm.completeStream({ ...REQUEST, baseUrl: "http://dead" }, () => {}), /ECONNREFUSED/);
   });
 });
 
@@ -415,51 +418,65 @@ test("stripThinking removes unbracketed thinking process blocks", () => {
   );
 });
 
-
-test("CHAR: retryable 429 is retried up to 3 attempts with backoff, then succeeds", async () => {
+test("retryable 429 is retried up to 3 attempts with backoff, then succeeds", async () => {
   let calls = 0;
-  await withAxiosPost(async () => {
-    calls += 1;
-    if (calls < 3) {
-      const err = Object.assign(new Error("rate limited"), { response: { status: 429 } });
-      err.response = { status: 429 };
-      throw err;
-    }
-    return { data: { choices: [{ message: { content: "recovered" }, finish_reason: "stop" }] } };
-  }, async () => {
-    const result = await llm.complete({ baseUrl: "http://x", apiKey: "k", model: "m", messages: [] });
-    assert.equal(result.text, "recovered");
-  });
+  await withAxiosPost(
+    async () => {
+      calls += 1;
+      if (calls < 3) {
+        const err = Object.assign(new Error("rate limited"), { response: { status: 429 } });
+        err.response = { status: 429 };
+        throw err;
+      }
+      return { data: { choices: [{ message: { content: "recovered" }, finish_reason: "stop" }] } };
+    },
+    async () => {
+      const result = await llm.complete({ baseUrl: "http://x", apiKey: "k", model: "m", messages: [] });
+      assert.equal(result.text, "recovered");
+    },
+  );
   assert.equal(calls, 3, "3 attempts: 400/800/1600 backoff chain");
 });
 
-test("CHAR: non-retryable 401 throws immediately with no retry", async () => {
+test("non-retryable 401 throws immediately with no retry", async () => {
   let calls = 0;
-  await withAxiosPost(async () => {
-    calls += 1;
-    const err = Object.assign(new Error("bad key"), { response: { status: 401 } });
-    err.response = { status: 401 };
-    throw err;
-  }, async () => {
-    await assert.rejects(() => llm.complete({ baseUrl: "http://x", apiKey: "k", model: "m", messages: [] }), /bad key/);
-  });
+  await withAxiosPost(
+    async () => {
+      calls += 1;
+      const err = Object.assign(new Error("bad key"), { response: { status: 401 } });
+      err.response = { status: 401 };
+      throw err;
+    },
+    async () => {
+      await assert.rejects(
+        () => llm.complete({ baseUrl: "http://x", apiKey: "k", model: "m", messages: [] }),
+        /bad key/,
+      );
+    },
+  );
   assert.equal(calls, 1);
 });
 
-test("CHAR: thinking param only goes to bare deepseek models, never gateway names", () => {
+test("thinking param only goes to bare deepseek models, never gateway names", () => {
   assert.deepEqual(llm.thinkingFor("deepseek-chat", { type: "enabled" }), { type: "enabled" });
   assert.equal(llm.thinkingFor("deepseek/deepseek-v4-flash-latest", { type: "enabled" }), undefined);
   assert.equal(llm.thinkingFor("kr/claude-sonnet-4.5", { type: "enabled" }), undefined);
   assert.equal(llm.thinkingFor("gpt-4o", { type: "enabled" }), undefined);
 });
 
-test("CHAR: provider exhaustion with no fallback left rejects (defined degradation)", async () => {
-  await withAxiosPost(async () => {
-    const err = Object.assign(new Error("down"), { response: { status: 500 } });
-    err.response = { status: 500 };
-    throw err;
-  }, async () => {
-    await assert.rejects(() => llm.complete({ baseUrl: "http://dead", apiKey: "k", model: "m", messages: [] }), /down/);
-  });
+test("provider exhaustion with no fallback left rejects (defined degradation)", async () => {
+  await withAxiosPost(
+    async () => {
+      const err = Object.assign(new Error("down"), { response: { status: 500 } });
+      err.response = { status: 500 };
+      throw err;
+    },
+    async () => {
+      await assert.rejects(
+        () => llm.complete({ baseUrl: "http://dead", apiKey: "k", model: "m", messages: [] }),
+        /down/,
+      );
+    },
+  );
 });
 export {};

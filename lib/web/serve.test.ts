@@ -52,12 +52,11 @@ test("an actually unmatched route still falls through to the plain 404", async (
   assert.equal(text, "not found");
 });
 
-
 function withToken(tok: string) {
   return { Authorization: `Bearer ${tok}` };
 }
 
-test("char: absent PIXIE_INTERNAL_TOKEN → 404 (not 401/403); bad bearer → 401", async () => {
+test("absent PIXIE_INTERNAL_TOKEN → 404 (not 401/403); bad bearer → 401", async () => {
   const saved = process.env.PIXIE_INTERNAL_TOKEN;
   const serve = require("./serve");
   try {
@@ -87,7 +86,7 @@ test("char: absent PIXIE_INTERNAL_TOKEN → 404 (not 401/403); bad bearer → 40
   }
 });
 
-test("char: dashboard gates — pulse/stream/ask/health need session; writes need admin", async () => {
+test("dashboard gates — pulse/stream/ask/health need session; writes need admin", async () => {
   const serve = require("./serve");
   const auth = require("./auth");
   const anon = new Request("http://localhost/api/pulse");
@@ -100,16 +99,27 @@ test("char: dashboard gates — pulse/stream/ask/health need session; writes nee
   );
   const userTok = auth.signSession("U-serve-plain", "Plain", "user");
   const userHeaders = { Cookie: `${auth.COOKIE_NAME}=${userTok}` };
-  assert.equal((await serve.handleRequest(new Request("http://localhost/api/pulse", { headers: userHeaders }))).status, 200);
+  assert.equal(
+    (await serve.handleRequest(new Request("http://localhost/api/pulse", { headers: userHeaders }))).status,
+    200,
+  );
   const forbidden = await serve.handleRequest(new Request("http://localhost/api/queue", { headers: userHeaders }));
-  assert.ok([403, 200].includes(forbidden.status), "non-admin queue read is 403 unless the deployer allowlisted the user");
+  assert.ok(
+    [403, 200].includes(forbidden.status),
+    "non-admin queue read is 403 unless the deployer allowlisted the user",
+  );
   const adminTok = auth.signSession("admin", "Admin", "admin");
   const adminHeaders = { Cookie: `${auth.COOKIE_NAME}=${adminTok}` };
-  assert.equal((await serve.handleRequest(new Request("http://localhost/api/queue", { headers: adminHeaders }))).status, 200);
+  assert.equal(
+    (await serve.handleRequest(new Request("http://localhost/api/queue", { headers: adminHeaders }))).status,
+    200,
+  );
   const saved = process.env.PIXIE_INTERNAL_TOKEN;
   process.env.PIXIE_INTERNAL_TOKEN = "char-serve-token-2";
   try {
-    const sessOnly = await serve.handleRequest(new Request("http://localhost/internal/v1/health", { headers: adminHeaders }));
+    const sessOnly = await serve.handleRequest(
+      new Request("http://localhost/internal/v1/health", { headers: adminHeaders }),
+    );
     assert.equal(sessOnly.status, 401);
   } finally {
     if (saved === undefined) delete process.env.PIXIE_INTERNAL_TOKEN;
@@ -117,56 +127,81 @@ test("char: dashboard gates — pulse/stream/ask/health need session; writes nee
   }
 });
 
-test("char: internal error→status mapping per route family (pinned current values)", async () => {
+test("internal error→status mapping per route family (pinned current values)", async () => {
   const saved = process.env.PIXIE_INTERNAL_TOKEN;
   process.env.PIXIE_INTERNAL_TOKEN = "char-map-token";
   const serve = require("./serve");
   const api = require("./api");
   const H = withToken("char-map-token");
   try {
-    assert.equal((await serve.handleRequest(new Request("http://localhost/internal/v1/nope", { headers: H }))).status, 404);
-    assert.equal((await serve.handleRequest(new Request("http://localhost/internal/v1/tickets", { headers: H }))).status, 400);
-    api.internalProgramSync("char-map", { name: "Map", workspaceId: "TW-M", claimedBy: "U-map-org", programChannels: [] });
+    assert.equal(
+      (await serve.handleRequest(new Request("http://localhost/internal/v1/nope", { headers: H }))).status,
+      404,
+    );
+    assert.equal(
+      (await serve.handleRequest(new Request("http://localhost/internal/v1/tickets", { headers: H }))).status,
+      400,
+    );
+    api.internalProgramSync("char-map", {
+      name: "Map",
+      workspaceId: "TW-M",
+      claimedBy: "U-map-org",
+      programChannels: [],
+    });
     const miss = await serve.handleRequest(
       new Request("http://localhost/internal/v1/tickets/999999/claim", {
-        method: "PATCH", headers: { ...H, "Content-Type": "application/json" },
+        method: "PATCH",
+        headers: { ...H, "Content-Type": "application/json" },
         body: JSON.stringify({ programId: "char-map", actorId: "U-map-org" }),
       }),
     );
     assert.equal(miss.status, 400);
     assert.match((await miss.json()).error, /not found/);
-    const tid = require("../db").createTicket({ programId: "char-map", workspaceId: "TW-M", channel: "C1", threadTs: "char-map-1", requesterId: "U1", question: "q" });
+    const tid = require("../db").createTicket({
+      programId: "char-map",
+      workspaceId: "TW-M",
+      channel: "C1",
+      threadTs: "char-map-1",
+      requesterId: "U1",
+      question: "q",
+    });
     const mm = await serve.handleRequest(
       new Request(`http://localhost/internal/v1/tickets/${tid}/claim`, {
-        method: "PATCH", headers: { ...H, "Content-Type": "application/json" },
+        method: "PATCH",
+        headers: { ...H, "Content-Type": "application/json" },
         body: JSON.stringify({ programId: "wrong-prog", actorId: "U-map-org" }),
       }),
     );
     assert.equal(mm.status, 403);
     const denied = await serve.handleRequest(
       new Request(`http://localhost/internal/v1/tickets/${tid}/claim`, {
-        method: "PATCH", headers: { ...H, "Content-Type": "application/json" },
+        method: "PATCH",
+        headers: { ...H, "Content-Type": "application/json" },
         body: JSON.stringify({ programId: "char-map", actorId: "U-stranger-map" }),
       }),
     );
     assert.equal(denied.status, 403);
     const unk = await serve.handleRequest(
       new Request(`http://localhost/internal/v1/tickets/${tid}/frobnicate`, {
-        method: "PATCH", headers: { ...H, "Content-Type": "application/json" },
+        method: "PATCH",
+        headers: { ...H, "Content-Type": "application/json" },
         body: JSON.stringify({ programId: "char-map", actorId: "U-map-org" }),
       }),
     );
     assert.equal(unk.status, 400);
     const sweep = await serve.handleRequest(
       new Request("http://localhost/internal/v1/programs/char-map/retention", {
-        method: "POST", headers: { ...H, "Content-Type": "application/json" },
+        method: "POST",
+        headers: { ...H, "Content-Type": "application/json" },
         body: JSON.stringify({ actorId: "U-stranger-map", confirm: true }),
       }),
     );
     assert.equal(sweep.status, 403);
     const malformed = await serve.handleRequest(
       new Request("http://localhost/internal/v1/programs/Bad_Slug!/x", {
-        method: "PUT", headers: { ...H, "Content-Type": "application/json" }, body: "{not-json",
+        method: "PUT",
+        headers: { ...H, "Content-Type": "application/json" },
+        body: "{not-json",
       }),
     );
     assert.ok([400, 404].includes(malformed.status), "malformed bodies must not become 500s");
@@ -176,7 +211,7 @@ test("char: internal error→status mapping per route family (pinned current val
   }
 });
 
-test("char: internal responses never leak token/secret fields", async () => {
+test("internal responses never leak token/secret fields", async () => {
   const saved = process.env.PIXIE_INTERNAL_TOKEN;
   process.env.PIXIE_INTERNAL_TOKEN = "char-leak-token";
   const serve = require("./serve");
@@ -195,7 +230,6 @@ test("char: internal responses never leak token/secret fields", async () => {
   }
 });
 
-
 test("PUT /internal/v1/programs/:id maps a channel conflict to 409 naming the channel", async () => {
   const saved = process.env.PIXIE_INTERNAL_TOKEN;
   process.env.PIXIE_INTERNAL_TOKEN = "dash-serve-token";
@@ -204,16 +238,21 @@ test("PUT /internal/v1/programs/:id maps a channel conflict to 409 naming the ch
   const H = withToken("dash-serve-token");
   try {
     const first = api.internalProgramSync("dash-serve-owner", {
-      name: "Owner", workspaceId: "TW-DS", claimedBy: "U-ds-org",
+      name: "Owner",
+      workspaceId: "TW-DS",
+      claimedBy: "U-ds-org",
       helpChannel: "C-ds-help",
       programChannels: [{ id: "C-ds-help", kind: "help" }],
     });
     assert.equal(first.ok, true);
     const res = await serve.handleRequest(
       new Request("http://localhost/internal/v1/programs/dash-serve-intruder", {
-        method: "PUT", headers: { ...H, "Content-Type": "application/json" },
+        method: "PUT",
+        headers: { ...H, "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: "Intruder", workspaceId: "TW-DS", claimedBy: "U-ds-org",
+          name: "Intruder",
+          workspaceId: "TW-DS",
+          claimedBy: "U-ds-org",
           programChannels: [{ id: "C-ds-help", kind: "help" }],
         }),
       }),
@@ -234,7 +273,10 @@ test("POST /internal/v1/programs/:id/test-question proxies the probe; unknown pr
   const H = withToken("dash-serve-token-2");
   try {
     api.internalProgramSync("dash-serve-probe", {
-      name: "Probe", workspaceId: "TW-DS", claimedBy: "U-ds-org", programChannels: [],
+      name: "Probe",
+      workspaceId: "TW-DS",
+      claimedBy: "U-ds-org",
+      programChannels: [],
     });
     const knowledge = require("../knowledge");
     const lookup = require("../lookup");
@@ -245,7 +287,8 @@ test("POST /internal/v1/programs/:id/test-question proxies the probe; unknown pr
     try {
       const res = await serve.handleRequest(
         new Request("http://localhost/internal/v1/programs/dash-serve-probe/test-question", {
-          method: "POST", headers: { ...H, "Content-Type": "application/json" },
+          method: "POST",
+          headers: { ...H, "Content-Type": "application/json" },
           body: JSON.stringify({ question: "what is this?", role: "help" }),
         }),
       );
@@ -261,14 +304,16 @@ test("POST /internal/v1/programs/:id/test-question proxies the probe; unknown pr
     }
     const missing = await serve.handleRequest(
       new Request("http://localhost/internal/v1/programs/nope-missing-serve/test-question", {
-        method: "POST", headers: { ...H, "Content-Type": "application/json" },
+        method: "POST",
+        headers: { ...H, "Content-Type": "application/json" },
         body: JSON.stringify({ question: "hi" }),
       }),
     );
     assert.equal(missing.status, 404);
     const empty = await serve.handleRequest(
       new Request("http://localhost/internal/v1/programs/dash-serve-probe/test-question", {
-        method: "POST", headers: { ...H, "Content-Type": "application/json" },
+        method: "POST",
+        headers: { ...H, "Content-Type": "application/json" },
         body: JSON.stringify({ question: "  " }),
       }),
     );
@@ -286,20 +331,32 @@ test("regression: DELETE /internal/v1/macros/:id reads its JSON body (actorId su
   const api = require("./api");
   const H = withToken("char-del-token");
   try {
-    api.internalProgramSync("char-del", { name: "Del", workspaceId: "TW-D", claimedBy: "U-del-org", programChannels: [] });
-    const created = api.internalMacroCreate("char-del", { actorId: "U-del-org", trigger: "?delpin", name: "Del", content: "bye {helper}" });
+    api.internalProgramSync("char-del", {
+      name: "Del",
+      workspaceId: "TW-D",
+      claimedBy: "U-del-org",
+      programChannels: [],
+    });
+    const created = api.internalMacroCreate("char-del", {
+      actorId: "U-del-org",
+      trigger: "?delpin",
+      name: "Del",
+      content: "bye {helper}",
+    });
     assert.equal(created.ok, true);
     const mid = created.macro.id;
     const denied = await serve.handleRequest(
       new Request(`http://localhost/internal/v1/macros/${mid}`, {
-        method: "DELETE", headers: { ...H, "Content-Type": "application/json" },
+        method: "DELETE",
+        headers: { ...H, "Content-Type": "application/json" },
         body: JSON.stringify({ actorId: "U-del-stranger" }),
       }),
     );
     assert.equal(denied.status, 403);
     const ok = await serve.handleRequest(
       new Request(`http://localhost/internal/v1/macros/${mid}`, {
-        method: "DELETE", headers: { ...H, "Content-Type": "application/json" },
+        method: "DELETE",
+        headers: { ...H, "Content-Type": "application/json" },
         body: JSON.stringify({ actorId: "U-del-org" }),
       }),
     );
@@ -318,21 +375,40 @@ test("POST /internal/v1/programs/:id/incidents/manual creates only for a program
   const api = require("./api");
   const H = withToken("manual-incident-token");
   try {
-    api.internalProgramSync("manual-route-a", { name: "Manual Route A", workspaceId: "TW-MRA", claimedBy: "U-mra", programChannels: [] });
-    api.internalProgramSync("manual-route-b", { name: "Manual Route B", workspaceId: "TW-MRB", claimedBy: "U-mrb", programChannels: [] });
-    const created = await serve.handleRequest(new Request("http://localhost/internal/v1/programs/manual-route-a/incidents/manual", {
-      method: "POST",
-      headers: { ...H, "Content-Type": "application/json" },
-      body: JSON.stringify({ actorId: "U-mra", title: "Manual outage", description: "The site is unavailable", publicMessage: "We are investigating the outage." }),
-    }));
+    api.internalProgramSync("manual-route-a", {
+      name: "Manual Route A",
+      workspaceId: "TW-MRA",
+      claimedBy: "U-mra",
+      programChannels: [],
+    });
+    api.internalProgramSync("manual-route-b", {
+      name: "Manual Route B",
+      workspaceId: "TW-MRB",
+      claimedBy: "U-mrb",
+      programChannels: [],
+    });
+    const created = await serve.handleRequest(
+      new Request("http://localhost/internal/v1/programs/manual-route-a/incidents/manual", {
+        method: "POST",
+        headers: { ...H, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actorId: "U-mra",
+          title: "Manual outage",
+          description: "The site is unavailable",
+          publicMessage: "We are investigating the outage.",
+        }),
+      }),
+    );
     assert.equal(created.status, 200);
     assert.equal((await created.json()).incident.status, "confirmed");
 
-    const denied = await serve.handleRequest(new Request("http://localhost/internal/v1/programs/manual-route-a/incidents/manual", {
-      method: "POST",
-      headers: { ...H, "Content-Type": "application/json" },
-      body: JSON.stringify({ actorId: "U-mrb", title: "Cross-tenant", publicMessage: "nope" }),
-    }));
+    const denied = await serve.handleRequest(
+      new Request("http://localhost/internal/v1/programs/manual-route-a/incidents/manual", {
+        method: "POST",
+        headers: { ...H, "Content-Type": "application/json" },
+        body: JSON.stringify({ actorId: "U-mrb", title: "Cross-tenant", publicMessage: "nope" }),
+      }),
+    );
     assert.equal(denied.status, 403);
     assert.equal(api.internalIncidents("manual-route-b", {}).length, 0);
   } finally {

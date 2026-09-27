@@ -6,7 +6,6 @@ const programs = require("./programs");
 
 db.open(":memory:");
 
-
 const PROG = {
   id: "t-timeline",
   name: "Timeline Test",
@@ -36,14 +35,12 @@ test("dateFallback falls back to the shared timeline with no program", () => {
   assert.doesNotThrow(() => lookup.dateFallback("when does it drop", "", null));
 });
 
-
 test("idOf accepts a record, an id, or nothing", () => {
   assert.equal(lookup.idOf({ id: "pixl", name: "Pixl" }), "pixl");
   assert.equal(lookup.idOf("pixl"), "pixl");
   assert.equal(lookup.idOf(null), null);
   assert.equal(lookup.idOf({ name: "no id" }), null);
 });
-
 
 test("retrievalQuery augments follow-up questions with program name and thread context", () => {
   const context = "User: what is pixl and how does it work\nAssistant: pixl is a hack club ysws program!";
@@ -114,7 +111,9 @@ test("Live accepts a markdown section citation from its owned KB", () => {
         { source: "11. Software time tracking", answer: "Use Hackatime for software time." },
         {
           id: "live-ysws",
-          sources: [{ name: "Live YSWS Pixie Knowledge Base", type: "text", url: "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md" }],
+          sources: [
+            { name: "Live YSWS Pixie Knowledge Base", type: "text", url: "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md" },
+          ],
         },
       ),
       true,
@@ -129,14 +128,18 @@ test("Live static policy citations are not rejected without structured evidence"
   const original = knowledge.sourceEligibility;
   knowledge.sourceEligibility = () => ({ exactClaimsAllowed: true, authority: "static" });
   try {
-    assert.ok(lookup.applyGroundingBoundary(
-      { source: "5. Eligibility", answer: "Live YSWS is open to ages 13 through 18." },
-      {
-        id: "live-ysws",
-        sources: [{ name: "Live YSWS Pixie Knowledge Base", type: "text", url: "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md" }],
-      },
-      "Who is eligible to submit to Live YSWS?",
-    ));
+    assert.ok(
+      lookup.applyGroundingBoundary(
+        { source: "5. Eligibility", answer: "Live YSWS is open to ages 13 through 18." },
+        {
+          id: "live-ysws",
+          sources: [
+            { name: "Live YSWS Pixie Knowledge Base", type: "text", url: "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md" },
+          ],
+        },
+        "Who is eligible to submit to Live YSWS?",
+      ),
+    );
   } finally {
     knowledge.sourceEligibility = original;
   }
@@ -165,7 +168,6 @@ test("grounding rejects related policy evidence and malformed fenced verdicts", 
     false,
   );
 });
-
 
 test("isAuthoritativeOnlyTopic flags review, hours, AI, and money/fulfillment questions", () => {
   const yes = [
@@ -215,7 +217,8 @@ test("fixture E: a matched source authorizes only the exact number it contains, 
   const original = knowledge.sourceEligibility;
   knowledge.sourceEligibility = () => ({ exactClaimsAllowed: true, authority: "static" });
   const prog = { id: "pixl", sources: [{ name: "Pixl Docs", type: "text" }] };
-  const corpus = "Pixl Docs\nReview: no fixed SLA is published; review can take anywhere from a few days to about two weeks.";
+  const corpus =
+    "Pixl Docs\nReview: no fixed SLA is published; review can take anywhere from a few days to about two weeks.";
   try {
     assert.equal(
       lookup.exactClaimAllowed(
@@ -229,7 +232,10 @@ test("fixture E: a matched source authorizes only the exact number it contains, 
     );
     assert.equal(
       lookup.exactClaimAllowed(
-        { source: "Pixl Docs", answer: "there's no fixed SLA — it can take anywhere from a few days to about two weeks" },
+        {
+          source: "Pixl Docs",
+          answer: "there's no fixed SLA — it can take anywhere from a few days to about two weeks",
+        },
         prog,
         "how long will second review take?",
         corpus,
@@ -243,12 +249,21 @@ test("fixture E: a matched source authorizes only the exact number it contains, 
 });
 
 test("numericClaimsGrounded rejects invented digit-bearing claims and allows ones the corpus actually states", () => {
-  assert.equal(lookup.numericClaimsGrounded("your project has an 80% chance of passing", "nothing here about odds"), false);
-  assert.equal(lookup.numericClaimsGrounded("software is capped at 30% AI", "the AI policy caps software code at 30% AI usage"), true);
-  assert.equal(lookup.numericClaimsGrounded("that sounds right to me", "irrelevant corpus text"), true, "no numeric claim at all is always fine");
+  assert.equal(
+    lookup.numericClaimsGrounded("your project has an 80% chance of passing", "nothing here about odds"),
+    false,
+  );
+  assert.equal(
+    lookup.numericClaimsGrounded("software is capped at 30% AI", "the AI policy caps software code at 30% AI usage"),
+    true,
+  );
+  assert.equal(
+    lookup.numericClaimsGrounded("that sounds right to me", "irrelevant corpus text"),
+    true,
+    "no numeric claim at all is always fine",
+  );
   assert.equal(lookup.numericClaimsGrounded("80% chance", ""), true, "no corpus supplied is a no-op, not a reject");
 });
-
 
 function ownedFresh() {
   const knowledge = require("./knowledge");
@@ -306,8 +321,7 @@ test("an unknown payout amount is never fabricated, a documented one passes", ()
   }
 });
 
-
-test("CHAR: deterministic dispatch order is shop, liveShop, calculator, validator, retrieval, dateFallback", async () => {
+test("deterministic dispatch order is shop, liveShop, calculator, validator, retrieval, dateFallback", async () => {
   const order: string[] = [];
   const shop = require("./shop");
   const liveShop = require("./liveShop");
@@ -317,29 +331,57 @@ test("CHAR: deterministic dispatch order is shop, liveShop, calculator, validato
   const answer = require("./answer");
   const prog = { id: "char-shop", name: "CharShop", sources: [{ type: "pixl-shop" }, { type: "live-shop" }] };
   const orig = {
-    shop: shop.directAnswer, live: liveShop.directAnswer, calc: calculator.directAnswer,
-    shopCur: shop.current, liveCur: liveShop.current,
-    val: validator.validateRepository, ctx: knowledge.getContext, ans: answer.getAnswerOrChat,
+    shop: shop.directAnswer,
+    live: liveShop.directAnswer,
+    calc: calculator.directAnswer,
+    shopCur: shop.current,
+    liveCur: liveShop.current,
+    val: validator.validateRepository,
+    ctx: knowledge.getContext,
+    ans: answer.getAnswerOrChat,
   };
   shop.current = () => ({ items: [{ name: "Unrelated Widget", price: 100 }], economy: shop.DEFAULT_ECONOMY });
   liveShop.current = () => [{ name: "Unrelated Reward", hours: 99 }];
-  shop.directAnswer = (...a: unknown[]) => { order.push("shop"); return orig.shop(...a); };
-  liveShop.directAnswer = (...a: unknown[]) => { order.push("liveShop"); return orig.live(...a); };
-  calculator.directAnswer = (...a: unknown[]) => { order.push("calculator"); return orig.calc(...a); };
-  validator.validateRepository = async (..._a: unknown[]) => { order.push("validator"); return null; };
-  knowledge.getContext = () => { order.push("retrieval"); return ""; };
-  answer.getAnswerOrChat = async () => { order.push("answer"); return null; };
+  shop.directAnswer = (...a: unknown[]) => {
+    order.push("shop");
+    return orig.shop(...a);
+  };
+  liveShop.directAnswer = (...a: unknown[]) => {
+    order.push("liveShop");
+    return orig.live(...a);
+  };
+  calculator.directAnswer = (...a: unknown[]) => {
+    order.push("calculator");
+    return orig.calc(...a);
+  };
+  validator.validateRepository = async (..._a: unknown[]) => {
+    order.push("validator");
+    return null;
+  };
+  knowledge.getContext = () => {
+    order.push("retrieval");
+    return "";
+  };
+  answer.getAnswerOrChat = async () => {
+    order.push("answer");
+    return null;
+  };
   try {
     await lookup.answerOrChat("can you check https://github.com/u/r for submission readiness", "", { program: prog });
     assert.deepEqual(order, ["shop", "liveShop", "calculator", "validator", "retrieval", "answer"]);
   } finally {
-    shop.directAnswer = orig.shop; liveShop.directAnswer = orig.live; calculator.directAnswer = orig.calc;
-    shop.current = orig.shopCur; liveShop.current = orig.liveCur;
-    validator.validateRepository = orig.val; knowledge.getContext = orig.ctx; answer.getAnswerOrChat = orig.ans;
+    shop.directAnswer = orig.shop;
+    liveShop.directAnswer = orig.live;
+    calculator.directAnswer = orig.calc;
+    shop.current = orig.shopCur;
+    liveShop.current = orig.liveCur;
+    validator.validateRepository = orig.val;
+    knowledge.getContext = orig.ctx;
+    answer.getAnswerOrChat = orig.ans;
   }
 });
 
-test("CHAR: shop path is gated on a pixl-shop source; without one it never fires", () => {
+test("shop path is gated on a pixl-shop source; without one it never fires", () => {
   const shop = require("./shop");
   const data = { items: [{ name: "Test Widget", price: 100 }], economy: shop.DEFAULT_ECONOMY };
   const noShopProg = { id: "noshop", name: "NoShop", sources: [{ type: "docs", name: "Docs" }] };
@@ -360,7 +402,10 @@ test("walled programs do not inherit shared shop sources or milestones", () => {
   const originalCurrent = shop.current;
   const shared = programs.shared;
   shop.current = () => ({ items: [{ name: "Shared Widget", price: 10 }], economy: shop.DEFAULT_ECONOMY });
-  programs.shared = () => ({ sources: [{ name: "Shared shop", type: "pixl-shop" }], milestones: [{ name: "shared launch", date: "2020-01-01" }] });
+  programs.shared = () => ({
+    sources: [{ name: "Shared shop", type: "pixl-shop" }],
+    milestones: [{ name: "shared launch", date: "2020-01-01" }],
+  });
   try {
     const walled = { id: "walled", sharedSources: false, sources: [], milestones: [] };
     assert.equal(lookup.shopAnswer("how much is Shared Widget", walled), null);
@@ -371,7 +416,7 @@ test("walled programs do not inherit shared shop sources or milestones", () => {
   }
 });
 
-test("CHAR: Firecrawl web fires only inside answerOrChat with allowWebSearch", async () => {
+test("Firecrawl web fires only inside answerOrChat with allowWebSearch", async () => {
   const firecrawl = require("./firecrawl");
   const knowledge = require("./knowledge");
   const answer = require("./answer");
@@ -380,7 +425,10 @@ test("CHAR: Firecrawl web fires only inside answerOrChat with allowWebSearch", a
   const origCtx = knowledge.getContext;
   const origChat = answer.getAnswerOrChat;
   const origGrounded = answer.getGroundedAnswer;
-  firecrawl.searchWeb = async () => { webCalls += 1; return []; };
+  firecrawl.searchWeb = async () => {
+    webCalls += 1;
+    return [];
+  };
   knowledge.getContext = () => "";
   answer.getAnswerOrChat = async () => ({ source: null, answer: "" });
   answer.getGroundedAnswer = async () => null;
@@ -392,12 +440,14 @@ test("CHAR: Firecrawl web fires only inside answerOrChat with allowWebSearch", a
     await lookup.lookupAnswer("obscure question xyzzy", "");
     assert.equal(webCalls, 1, "lookupAnswer (docs-only path) never touches the web");
   } finally {
-    firecrawl.searchWeb = origSearch; knowledge.getContext = origCtx;
-    answer.getAnswerOrChat = origChat; answer.getGroundedAnswer = origGrounded;
+    firecrawl.searchWeb = origSearch;
+    knowledge.getContext = origCtx;
+    answer.getAnswerOrChat = origChat;
+    answer.getGroundedAnswer = origGrounded;
   }
 });
 
-test("CHAR: cache key includes the program (no cross-program leakage)", () => {
+test("cache key includes the program (no cross-program leakage)", () => {
   const cache = require("./cache");
   cache.put("same question everywhere", { source: "Docs", answer: "prog-a answer" }, "prog-a");
   try {
@@ -414,8 +464,14 @@ test("an end-date question reaches retrieval and the answer model, not a canned 
   const orig = { ctx: knowledge.getContext, ans: answer.getAnswerOrChat };
   const prog = { id: "enddate-prog", name: "EndDate", milestones: [], sharedSources: false };
   const seen: string[] = [];
-  knowledge.getContext = (_q: string) => { seen.push("retrieval"); return "Pixl's current stated final end date is January 1, 2027."; };
-  answer.getAnswerOrChat = async () => { seen.push("answer"); return { answer: "January 1, 2027.", source: "Pixl Pixie Knowledge Base" }; };
+  knowledge.getContext = (_q: string) => {
+    seen.push("retrieval");
+    return "Pixl's current stated final end date is January 1, 2027.";
+  };
+  answer.getAnswerOrChat = async () => {
+    seen.push("answer");
+    return { answer: "January 1, 2027.", source: "Pixl Pixie Knowledge Base" };
+  };
   try {
     const result = await lookup.answerOrChat("when does it end?", "", { program: prog, skipCache: true });
     assert.deepEqual(seen, ["retrieval", "answer"]);

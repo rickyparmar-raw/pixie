@@ -20,7 +20,9 @@ const KEEPALIVE_INTERVAL_MS = 60 * 1000;
 
 function startKeepAlive() {
   return setInterval(() => {
-    const key = config.zenApiKeys?.[0] || (typeof config.answer.apiKey === "function" ? config.answer.apiKey() : config.answer.apiKey);
+    const key =
+      config.zenApiKeys?.[0] ||
+      (typeof config.answer.apiKey === "function" ? config.answer.apiKey() : config.answer.apiKey);
     fetch(`${config.answer.baseUrl}/models`, {
       headers: { Authorization: `Bearer ${key}` },
     }).catch((e) => log.debug("keepalive", `ping failed: ${errorText(e)}`));
@@ -53,7 +55,11 @@ async function startBot() {
       const r = channelPolicy.resolve(channel);
       return r.role === "none" ? null : r.program?.id || null;
     });
-    if (facts.unowned) log.info("knowledge", `legacy learned facts: ${facts.assigned} assigned to their channel's program, ${facts.remaining} left unowned (served to no program)`);
+    if (facts.unowned)
+      log.info(
+        "knowledge",
+        `legacy learned facts: ${facts.assigned} assigned to their channel's program, ${facts.remaining} left unowned (served to no program)`,
+      );
   } catch (e) {
     log.warn("knowledge", `legacy learned-fact ownership pass failed: ${errorText(e)}`);
   }

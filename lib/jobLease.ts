@@ -4,7 +4,6 @@ import db = require("./db");
 import log = require("./log");
 import crypto = require("node:crypto");
 
-
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
 
 const INSERT_LEASE_SQL = "INSERT OR IGNORE INTO job_leases (name, owner, expires_at) VALUES (?, ?, ?)";
@@ -44,7 +43,11 @@ function release(name: string, owner: string) {
   } catch (_: unknown) {}
 }
 
-async function runOnce<T>(name: string, ttlMs: number, fn: () => T | Promise<T>): Promise<{ ran: boolean; result?: T }> {
+async function runOnce<T>(
+  name: string,
+  ttlMs: number,
+  fn: () => T | Promise<T>,
+): Promise<{ ran: boolean; result?: T }> {
   const lease = acquire(name, ttlMs);
   if (!lease.held) {
     log.debug("jobLease", `${name} already held — skipping`);

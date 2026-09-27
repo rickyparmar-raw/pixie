@@ -31,10 +31,10 @@ test("every definition carries the full contract shape with valid enums", () => 
 test("teach is split by surface because text and slash have different gates", () => {
   const teachDefs = COMMANDS.filter((c: any) => c.name === "teach");
   assert.equal(teachDefs.length, 2);
-  assert.deepEqual(
-    teachDefs.map((c: any) => [c.surface, c.permission]).sort(),
-    [["slash", "organizer"], ["text", "helper"]],
-  );
+  assert.deepEqual(teachDefs.map((c: any) => [c.surface, c.permission]).sort(), [
+    ["slash", "organizer"],
+    ["text", "helper"],
+  ]);
   assert.ok(teachDefs.every((c: any) => c.handlerKey === "teach"));
 });
 
@@ -45,7 +45,6 @@ test("organizer commands are never executable by normal users", () => {
     assert.equal(verdict.reason, "not_organizer");
   }
 });
-
 
 test("match: text-form teach parity with handlers.teachPattern(false)", () => {
   const handlers = require("./handlers");
@@ -108,7 +107,6 @@ test("match: teach args preserve the text after the trigger", () => {
   assert.equal(mentioned.args, "this thread");
 });
 
-
 test("match: text-form sum parity with handlers.sumPattern(false)", () => {
   const handlers = require("./handlers");
   const cases = [
@@ -155,7 +153,6 @@ test("match: mention-form sum parity with handlers.sumPattern(true)", () => {
   }
 });
 
-
 test("match: only the explicit !mute/!stfu command spellings route to mute", () => {
   assert.equal(match("!mute", { botUserId: BOT }).command.handlerKey, "mute");
   assert.equal(match("!stfu", { botUserId: BOT }).command.handlerKey, "mute");
@@ -166,7 +163,6 @@ test("match: only the explicit !mute/!stfu command spellings route to mute", () 
   assert.equal(match("mute", { botUserId: BOT }), null);
   assert.equal(match("please be quiet pixie", { botUserId: BOT }), null);
 });
-
 
 test("match: guide text triggers mirror respond.isGuideMenuRequest", () => {
   const respond = require("./respond");
@@ -186,18 +182,19 @@ test("match: guide text triggers mirror respond.isGuideMenuRequest", () => {
   assert.equal(match(`<@${BOT}> guide`, { botUserId: BOT }), null);
 });
 
-
 test("match: every own-slug command_bypass form reaches a registry command", () => {
   for (const text of ["!teach x :: y", "!sum", "!mute", "!stfu", "/pixie-teach x", "/pixie-sum"]) {
     assert.ok(match(text, { botUserId: BOT }), `bypass form with no registry match: ${text}`);
   }
 });
 
-
 test("authorize: helper text commands need helper or organizer", () => {
   const teachText = byName("teach", "text");
   const sum = byName("sum");
-  assert.deepEqual(authorize(teachText, { userId: HELPER, isHelper: true, role: "help" }), { ok: true, reason: "allowed" });
+  assert.deepEqual(authorize(teachText, { userId: HELPER, isHelper: true, role: "help" }), {
+    ok: true,
+    reason: "allowed",
+  });
   assert.deepEqual(authorize(sum, { userId: ADMIN, isOrganizer: true, role: "help" }), { ok: true, reason: "allowed" });
   assert.deepEqual(authorize(teachText, { userId: NORMAL, role: "help" }), { ok: false, reason: "not_helper" });
   assert.deepEqual(authorize(sum, { userId: NORMAL, role: "help" }), { ok: false, reason: "not_helper" });
@@ -267,7 +264,6 @@ test("byHandlerKey resolves the architect's dispatch map", () => {
   assert.equal(byHandlerKey("sum")[0].name, "sum");
   assert.equal(byHandlerKey("guide").length, 1);
 });
-
 
 test("list() renders a usage listing with the bot's own slash names", () => {
   const text = list();

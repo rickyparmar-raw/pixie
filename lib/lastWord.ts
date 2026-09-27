@@ -23,9 +23,20 @@ function toMs(ts: unknown): number | null {
   return raw < 1e11 ? Math.round(raw * 1000) : raw;
 }
 
-function helperLastWord({ programId, requesterId, threadTs = null, rows = [], now = Date.now() }: { programId?: string; requesterId?: string; threadTs?: string | null; rows?: ThreadRow[]; now?: number } = {}): { helperId: string; at: number } | null {
+function helperLastWord({
+  programId,
+  requesterId,
+  threadTs = null,
+  rows = [],
+  now = Date.now(),
+}: { programId?: string; requesterId?: string; threadTs?: string | null; rows?: ThreadRow[]; now?: number } = {}): {
+  helperId: string;
+  at: number;
+} | null {
   const humans = rows
-    .filter((row): row is ThreadRow & { userId: string } => Boolean(row && row.userId && !row.isBot && (threadTs === null || String(row.ts) !== String(threadTs))))
+    .filter((row): row is ThreadRow & { userId: string } =>
+      Boolean(row && row.userId && !row.isBot && (threadTs === null || String(row.ts) !== String(threadTs))),
+    )
     .map((row) => ({ ...row, at: toMs(row.ts) }))
     .filter((row): row is ThreadRow & { userId: string; at: number } => row.at !== null)
     .sort((a, b) => a.at - b.at);

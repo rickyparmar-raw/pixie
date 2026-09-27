@@ -1,7 +1,12 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-interface VerdictRow { sentence: string; verdict: string; }
-interface CandidateRow { ticketId: number; }
+interface VerdictRow {
+  sentence: string;
+  verdict: string;
+}
+interface CandidateRow {
+  ticketId: number;
+}
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -29,7 +34,13 @@ const BLOB = JSON.stringify([
     name: "Highway",
     helpChannel: "C-HWY",
     channels: ["C-HWY"],
-    sources: [{ name: "CP Highway Docs", type: "text", content: "Highway ships with tracking. PCBs from PCBWay are allowed for Highway builds." }],
+    sources: [
+      {
+        name: "CP Highway Docs",
+        type: "text",
+        content: "Highway ships with tracking. PCBs from PCBWay are allowed for Highway builds.",
+      },
+    ],
   },
 ]);
 
@@ -58,7 +69,10 @@ async function withCorpus(fn: () => unknown) {
 test("factCheck marks supported claims and flags the rest", async () => {
   await withCorpus(async () => {
     const prog = programs.get("cp-hwy");
-    const res = await copilot.factCheck({ program: prog, text: "PCBs from PCBWay are allowed for Highway builds. The moon is made of cheese." });
+    const res = await copilot.factCheck({
+      program: prog,
+      text: "PCBs from PCBWay are allowed for Highway builds. The moon is made of cheese.",
+    });
     const byVerdict = Object.fromEntries(res.verdicts.map((v: VerdictRow) => [v.sentence.slice(0, 20), v.verdict]));
     const supported = res.verdicts.find((v: VerdictRow) => v.verdict === "supported");
     const unsupported = res.verdicts.find((v: VerdictRow) => v.verdict === "unsupported");
@@ -71,12 +85,33 @@ test("factCheck marks supported claims and flags the rest", async () => {
 });
 
 test("findSimilar ranks resolved tickets in-program by wording overlap", () => {
-  const a = db.createTicket({ programId: "cp-hwy", workspaceId: "T1", channel: "C-HWY", threadTs: "cp-t1", requesterId: "U1", question: "pcbway pcb order allowed" });
+  const a = db.createTicket({
+    programId: "cp-hwy",
+    workspaceId: "T1",
+    channel: "C-HWY",
+    threadTs: "cp-t1",
+    requesterId: "U1",
+    question: "pcbway pcb order allowed",
+  });
   db.resolveTicket(a, "yes, allowed");
-  const b = db.createTicket({ programId: "cp-hwy", workspaceId: "T1", channel: "C-HWY", threadTs: "cp-t2", requesterId: "U2", question: "what color is the sky" });
+  const b = db.createTicket({
+    programId: "cp-hwy",
+    workspaceId: "T1",
+    channel: "C-HWY",
+    threadTs: "cp-t2",
+    requesterId: "U2",
+    question: "what color is the sky",
+  });
   db.resolveTicket(b, "blue");
   db.syncHelper({ programId: "cp-other", userId: "U9", source: "manual" });
-  const c = db.createTicket({ programId: "cp-other", workspaceId: "T1", channel: "CX", threadTs: "cp-t3", requesterId: "U3", question: "pcbway pcb order allowed" });
+  const c = db.createTicket({
+    programId: "cp-other",
+    workspaceId: "T1",
+    channel: "CX",
+    threadTs: "cp-t3",
+    requesterId: "U3",
+    question: "pcbway pcb order allowed",
+  });
   db.resolveTicket(c, "other program answer");
 
   const res = copilot.findSimilar({ programId: "cp-hwy", question: "can I order my pcb from pcbway" });
@@ -137,10 +172,22 @@ test("copilot API enforces program scope, actors, and budgets", async () => {
   db.saveProgram({ id: "cp-hwy", name: "Highway", helpChannel: "C-HWY", channels: ["C-HWY"] });
   programs.invalidate();
   db.syncHelper({ programId: "cp-hwy", userId: "U-helper", source: "manual" });
-  assert.match((await api.internalCopilot("draft", { programId: "nope", actorId: "U-helper", question: "q" })).error, /unknown program/);
-  assert.match((await api.internalCopilot("draft", { programId: "cp-hwy", actorId: "U-stranger", question: "q" })).error, /not a helper/);
-  assert.match((await api.internalCopilot("bogus", { programId: "cp-hwy", actorId: "U-helper" })).error, /unknown copilot action/);
-  assert.match((await api.internalCopilot("draft", { programId: "cp-hwy", actorId: "U-helper" })).error, /question required/);
+  assert.match(
+    (await api.internalCopilot("draft", { programId: "nope", actorId: "U-helper", question: "q" })).error,
+    /unknown program/,
+  );
+  assert.match(
+    (await api.internalCopilot("draft", { programId: "cp-hwy", actorId: "U-stranger", question: "q" })).error,
+    /not a helper/,
+  );
+  assert.match(
+    (await api.internalCopilot("bogus", { programId: "cp-hwy", actorId: "U-helper" })).error,
+    /unknown copilot action/,
+  );
+  assert.match(
+    (await api.internalCopilot("draft", { programId: "cp-hwy", actorId: "U-helper" })).error,
+    /question required/,
+  );
 
   for (let i = 0; i < 25; i++) {
     copilot.checkBudget("U-flood-test");
@@ -150,8 +197,7 @@ test("copilot API enforces program scope, actors, and budgets", async () => {
   assert.match(limited.error, /rate limited/);
 });
 
-
-test("char: copilot never sends — read-only helper surface", async () => {
+test("copilot never sends — read-only helper surface", async () => {
   const fs = require("fs");
   const path = require("path");
   const src = readSource("copilot.js");
@@ -183,10 +229,24 @@ test("char: copilot never sends — read-only helper surface", async () => {
   assert.equal(afterCount, before);
 });
 
-test("char: copilot scopes every helper to its program", async () => {
-  const a = db.createTicket({ programId: "cp-hwy", workspaceId: "T1", channel: "C-HWY", threadTs: "char-cp-t1", requesterId: "U1", question: "char pcbway order scope" });
+test("copilot scopes every helper to its program", async () => {
+  const a = db.createTicket({
+    programId: "cp-hwy",
+    workspaceId: "T1",
+    channel: "C-HWY",
+    threadTs: "char-cp-t1",
+    requesterId: "U1",
+    question: "char pcbway order scope",
+  });
   db.resolveTicket(a, "allowed");
-  const other = db.createTicket({ programId: "cp-scope-other", workspaceId: "T1", channel: "CX", threadTs: "char-cp-t2", requesterId: "U2", question: "char pcbway order scope" });
+  const other = db.createTicket({
+    programId: "cp-scope-other",
+    workspaceId: "T1",
+    channel: "CX",
+    threadTs: "char-cp-t2",
+    requesterId: "U2",
+    question: "char pcbway order scope",
+  });
   db.resolveTicket(other, "other answer");
   const res = copilot.findSimilar({ programId: "cp-hwy", question: "char pcbway order scope" });
   assert.ok(res.candidates.some((c: CandidateRow) => c.ticketId === a));
@@ -207,9 +267,16 @@ test("char: copilot scopes every helper to its program", async () => {
   }
   const llm = require("./llm");
   const realComplete = llm.complete;
-  llm.complete = async () => { throw new Error("down"); };
+  llm.complete = async () => {
+    throw new Error("down");
+  };
   try {
-    const s = await copilot.summarizeThread({ program: { id: "cp-hwy" }, ticket: null, threadTs: null, messages: [{ role: "user", user_id: "U1", content: "hello" }] });
+    const s = await copilot.summarizeThread({
+      program: { id: "cp-hwy" },
+      ticket: null,
+      threadTs: null,
+      messages: [{ role: "user", user_id: "U1", content: "hello" }],
+    });
     assert.equal(s.programId, "cp-hwy");
     assert.equal(s.aiPolished, false);
   } finally {
@@ -221,7 +288,7 @@ test("char: copilot scopes every helper to its program", async () => {
   assert.equal(copilot.checkBudget("char-cp-other-actor"), null);
 });
 
-test("char: copilot factualTokens + improveReply guard shape", async () => {
+test("copilot factualTokens + improveReply guard shape", async () => {
   const toks = copilot.factualTokens('due October 31 see https://example.com/x and "quoted"');
   assert.ok(toks.has("31"));
   assert.ok([...toks].some((t) => t.includes("https://example.com/x")));

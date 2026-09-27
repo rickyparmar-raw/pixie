@@ -16,7 +16,9 @@
     "test:file": "bun test",
     "test:wizard": "bun scripts/run-tests.mjs --wizard",
     "test:all": "bun scripts/run-tests.mjs --all",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "format": "prettier --write \"index.ts\" \"lib/**/*.ts\"",
+    "format:check": "prettier --check \"index.ts\" \"lib/**/*.ts\""
   },
   "keywords": [],
   "author": "",
@@ -33,6 +35,7 @@
   "devDependencies": {
     "@types/bun": "^1.4.2",
     "playwright": "^1.62.1",
+    "prettier": "3",
     "typescript": "5.9.3"
   }
 }

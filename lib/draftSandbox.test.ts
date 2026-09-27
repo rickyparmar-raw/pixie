@@ -1,7 +1,10 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 process.env.PIXIE_PROGRAMS_JSON = "[]";
 
-interface PostedMessage { channel?: string; [key: string]: unknown; }
+interface PostedMessage {
+  channel?: string;
+  [key: string]: unknown;
+}
 
 const { test, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -19,30 +22,70 @@ beforeEach(() => {
 });
 
 test("draft bindings are explicit and do not become production channel claims", () => {
-  sandbox.register({ id: "jame-gam", status: "suspended", privateSandboxOnly: true, sandboxBindings: [{ channelId: "C-JAME", role: "help" }], sourceTexts: { docs: "Jame Gam docs" } });
+  sandbox.register({
+    id: "jame-gam",
+    status: "suspended",
+    privateSandboxOnly: true,
+    sandboxBindings: [{ channelId: "C-JAME", role: "help" }],
+    sourceTexts: { docs: "Jame Gam docs" },
+  });
   assert.equal(sandbox.getForChannel("C-JAME")?.draftProgramId, "jame-gam");
   assert.equal(db.getChannelOwner("default", "C-JAME"), null);
   assert.equal(db.listProgramChannels("jame-gam").length, 0);
 });
 
 test("draft knowledge is isolated and uses draft-specific storage", () => {
-  sandbox.register({ id: "live-ysws", status: "suspended", privateSandboxOnly: true, sandboxBindings: [], sourceTexts: { docs: "Live has a 10 minute multiplier." }, faqContent: "Q: How does Live work?\nA: Live supports streaming." });
-  const result = knowledge.registerDraftKnowledge({ id: "live-ysws", status: "suspended", privateSandboxOnly: true, sandboxBindings: [], sourceTexts: { docs: "Live has a 10 minute multiplier." }, faqContent: "Q: How does Live work?\nA: Live supports streaming." }, { docs: "Live has a 10 minute multiplier." });
-  assert.equal(result.sources, 2, "Live drafts include their canonical Live-owned knowledge source alongside supplied sources");
+  sandbox.register({
+    id: "live-ysws",
+    status: "suspended",
+    privateSandboxOnly: true,
+    sandboxBindings: [],
+    sourceTexts: { docs: "Live has a 10 minute multiplier." },
+    faqContent: "Q: How does Live work?\nA: Live supports streaming.",
+  });
+  const result = knowledge.registerDraftKnowledge(
+    {
+      id: "live-ysws",
+      status: "suspended",
+      privateSandboxOnly: true,
+      sandboxBindings: [],
+      sourceTexts: { docs: "Live has a 10 minute multiplier." },
+      faqContent: "Q: How does Live work?\nA: Live supports streaming.",
+    },
+    { docs: "Live has a 10 minute multiplier." },
+  );
+  assert.equal(
+    result.sources,
+    2,
+    "Live drafts include their canonical Live-owned knowledge source alongside supplied sources",
+  );
   assert.match(knowledge.getDraftContext("live-ysws", "how much time does one hour add"), /10 minute/i);
-  assert.doesNotMatch(knowledge.getDraftContext("live-ysws", "Hardwire tiers"), /T1 Digital Logic|iCE40|T2 ASIC Tapeout|T3 Custom Carrier Board/);
+  assert.doesNotMatch(
+    knowledge.getDraftContext("live-ysws", "Hardwire tiers"),
+    /T1 Digital Logic|iCE40|T2 ASIC Tapeout|T3 Custom Carrier Board/,
+  );
 });
 
 test("canonical Jame Gam draft docs are persisted as owned source rows", () => {
   const draft = { id: "jame-gam", status: "suspended", privateSandboxOnly: true, sandboxBindings: [] };
   knowledge.registerDraftKnowledge(draft, {});
-  const row = db.handle().query("SELECT source_name, length(text) AS chars FROM draft_sandbox_sources WHERE program_id = ?").get("jame-gam");
+  const row = db
+    .handle()
+    .query("SELECT source_name, length(text) AS chars FROM draft_sandbox_sources WHERE program_id = ?")
+    .get("jame-gam");
   assert.equal(row?.source_name, "Jame Gam Complete Docs");
   assert.ok(row?.chars > 1000, "canonical Jame Gam docs must survive draft persistence");
 });
 
 test("draft binding resolves across workspaces (production PIXIE_WORKSPACE_ID unset)", () => {
-  sandbox.register({ id: "jame-gam", status: "suspended", privateSandboxOnly: true, workspaceId: "T0266FRGM", sandboxBindings: [{ channelId: "C0C14QK28LD", role: "help" }], sourceTexts: { docs: "Jame Gam docs" } });
+  sandbox.register({
+    id: "jame-gam",
+    status: "suspended",
+    privateSandboxOnly: true,
+    workspaceId: "T0266FRGM",
+    sandboxBindings: [{ channelId: "C0C14QK28LD", role: "help" }],
+    sourceTexts: { docs: "Jame Gam docs" },
+  });
   assert.equal(sandbox.getForChannel("C0C14QK28LD", null)?.draftProgramId, "jame-gam");
   assert.equal(sandbox.getForChannel("C0C14QK28LD", "T-OTHER")?.draftProgramId, "jame-gam");
 });
@@ -73,10 +116,18 @@ test("suspended draft sandbox answers without production claim; muted posture an
   const savedSend = slackMessages.sendProgramMessage;
   const posted: PostedMessage[] = [];
   answer.getGroundedAnswer = async () => ({ answer: "draft answer", source: "docs" });
-  slackMessages.sendProgramMessage = async (args: PostedMessage) => { posted.push(args); return { ts: "1" }; };
+  slackMessages.sendProgramMessage = async (args: PostedMessage) => {
+    posted.push(args);
+    return { ts: "1" };
+  };
   try {
     await handlers.onMessage({
-      event: { channel: "C-DRAFT-HELP", user: "U-TESTER", text: "where do i get the prize selection dm for jame gam?", ts: "1789202762.605789" },
+      event: {
+        channel: "C-DRAFT-HELP",
+        user: "U-TESTER",
+        text: "where do i get the prize selection dm for jame gam?",
+        ts: "1789202762.605789",
+      },
       client: {},
     });
   } finally {
@@ -114,8 +165,17 @@ test("draft help question creates one sandbox ticket in its bound sink without a
   const savedSend = slackMessages.sendProgramMessage;
   const posted: PostedMessage[] = [];
   answer.getGroundedAnswer = async () => ({ answer: "draft answer", source: "docs" });
-  slackMessages.sendProgramMessage = async (args: PostedMessage) => { posted.push(args); return { ts: `post-${posted.length}` }; };
-  const event = { channel: "C-DRAFT-HELP", user: "U-TESTER", text: "where do i get the prize selection dm?", ts: "draft-ticket-1", team: "T0266FRGM" };
+  slackMessages.sendProgramMessage = async (args: PostedMessage) => {
+    posted.push(args);
+    return { ts: `post-${posted.length}` };
+  };
+  const event = {
+    channel: "C-DRAFT-HELP",
+    user: "U-TESTER",
+    text: "where do i get the prize selection dm?",
+    ts: "draft-ticket-1",
+    team: "T0266FRGM",
+  };
   try {
     await handlers.onMessage({ event, client: {} });
     await handlers.onMessage({ event, client: {} });
@@ -126,9 +186,21 @@ test("draft help question creates one sandbox ticket in its bound sink without a
   const ticket = sandbox.getTicketForThread("jame-gam", "T0266FRGM", "draft-ticket-1");
   assert.ok(ticket, "a draft help question must create a sandbox ticket");
   assert.equal(ticket.sink_channel, "C-DRAFT-SINK");
-  assert.equal(db.getTicketByThreadTs("draft-ticket-1", "T0266FRGM", "jame-gam"), null, "draft tickets must not enter the production tickets table");
-  assert.equal(posted.filter((post: PostedMessage) => post.channel === "C-DRAFT-SINK").length, 1, "Slack retries must not duplicate the sink card");
-  assert.equal(posted.filter((post: PostedMessage) => post.channel === "C-DRAFT-HELP").length, 1, "Slack retries must not duplicate the same-thread answer");
+  assert.equal(
+    db.getTicketByThreadTs("draft-ticket-1", "T0266FRGM", "jame-gam"),
+    null,
+    "draft tickets must not enter the production tickets table",
+  );
+  assert.equal(
+    posted.filter((post: PostedMessage) => post.channel === "C-DRAFT-SINK").length,
+    1,
+    "Slack retries must not duplicate the sink card",
+  );
+  assert.equal(
+    posted.filter((post: PostedMessage) => post.channel === "C-DRAFT-HELP").length,
+    1,
+    "Slack retries must not duplicate the same-thread answer",
+  );
 });
 
 test("unanswerable draft question posts scoped fallback instead of silence", async () => {
@@ -153,10 +225,18 @@ test("unanswerable draft question posts scoped fallback instead of silence", asy
   const savedSend = slackMessages.sendProgramMessage;
   const posted: PostedMessage[] = [];
   answer.getGroundedAnswer = async () => null;
-  slackMessages.sendProgramMessage = async (args: PostedMessage) => { posted.push(args); return { ts: "1" }; };
+  slackMessages.sendProgramMessage = async (args: PostedMessage) => {
+    posted.push(args);
+    return { ts: "1" };
+  };
   try {
     await handlers.onMessage({
-      event: { channel: "C-DRAFT-HELP", user: "U-TESTER", text: "something not in draft docs?", ts: "1789203999.000001" },
+      event: {
+        channel: "C-DRAFT-HELP",
+        user: "U-TESTER",
+        text: "something not in draft docs?",
+        ts: "1789203999.000001",
+      },
       client: {},
     });
   } finally {
@@ -168,12 +248,21 @@ test("unanswerable draft question posts scoped fallback instead of silence", asy
 });
 
 test("public non-bound channel gets no draft response and foreign query stays draft-scoped", () => {
-  sandbox.register({ id: "jame-gam", status: "suspended", privateSandboxOnly: true, sandboxBindings: [{ channelId: "C-DRAFT-HELP", role: "help" }], sourceTexts: { docs: "Jame Gam docs" } });
+  sandbox.register({
+    id: "jame-gam",
+    status: "suspended",
+    privateSandboxOnly: true,
+    sandboxBindings: [{ channelId: "C-DRAFT-HELP", role: "help" }],
+    sourceTexts: { docs: "Jame Gam docs" },
+  });
   assert.equal(sandbox.getForChannel("C-PUBLIC", null), null);
   knowledge.registerDraftKnowledge(
     { id: "jame-gam", status: "suspended", privateSandboxOnly: true, sandboxBindings: [] },
     { docs: "Jame Gam docs" },
   );
-  assert.doesNotMatch(knowledge.getDraftContext("jame-gam", "what are Hardwire tiers"), /T1 Digital Logic|iCE40|T2 ASIC Tapeout|T3 Custom Carrier Board/i);
+  assert.doesNotMatch(
+    knowledge.getDraftContext("jame-gam", "what are Hardwire tiers"),
+    /T1 Digital Logic|iCE40|T2 ASIC Tapeout|T3 Custom Carrier Board/i,
+  );
 });
 export {};

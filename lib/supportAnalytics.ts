@@ -53,16 +53,16 @@ interface SupportOverview {
   activityKinds: Record<string, number>;
 }
 
-// WHY: 30d is a full operating cycle — long enough to smooth weekly rhythm,
+// 30d is a full operating cycle — long enough to smooth weekly rhythm,
 // short enough that old regimes don't mask this week's reality.
 const DEFAULT_SINCE_MS = 30 * 24 * 60 * 60 * 1000;
-// WHY: 48h without movement means the requester waited two full workdays;
+// 48h without movement means the requester waited two full workdays;
 // assigned/claimed tickets have an owner on point, so only ownerless states
 // count here (narrower than the SLA/radar open set by design).
 const STALE48H_MS = 48 * 60 * 60 * 1000;
 const STALE48H_STATUSES = ["open", "waiting_for_helper", "escalated", "reopened"];
 const OPEN_STATUSES = Object.freeze(["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"]);
-// WHY: gap trends only matter while fresh — a week of misses is a backlog,
+// Gap trends only matter while fresh — a week of misses is a backlog,
 // a month of misses is history already covered by the radar's FAQ detector.
 const GAP_COUNTS_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -76,7 +76,7 @@ function lags(rows: AnalyticsRow[], from: string, to: string): number[] {
   return rows.map((r) => Number(r[to]) - Number(r[from])).filter((n) => Number.isFinite(n) && n >= 0);
 }
 
-// WHY: rates round to 3 decimals — precise enough to graph, too coarse to
+// Rates round to 3 decimals — precise enough to graph, too coarse to
 // invite fake-precision arguments about a 0.0004 wobble.
 function rate(n: number, d: number): number {
   return d > 0 ? Number((n / d).toFixed(3)) : 0;
@@ -106,9 +106,10 @@ function overview(programId: string, sinceMs = DEFAULT_SINCE_MS): SupportOvervie
   const now = Date.now();
   const cutoff = now - sinceMs;
   const totals = ticketMetrics.programTotals(programId, { since: cutoff });
-  const byStatus = db.handle().query(
-    "SELECT status, COUNT(*) AS n FROM tickets WHERE program_id = ? AND created_at > ? GROUP BY status",
-  ).all(programId, cutoff) as AnalyticsRow[];
+  const byStatus = db
+    .handle()
+    .query("SELECT status, COUNT(*) AS n FROM tickets WHERE program_id = ? AND created_at > ? GROUP BY status")
+    .all(programId, cutoff) as AnalyticsRow[];
   const counts: Record<string, number> = Object.fromEntries(byStatus.map((r) => [r.status || "", Number(r.n || 0)]));
   counts.resolved = totals.resolvedInWindow;
   const created = byStatus.reduce((n, r) => n + Number(r.n || 0), 0);
@@ -119,47 +120,71 @@ function overview(programId: string, sinceMs = DEFAULT_SINCE_MS): SupportOvervie
     since: Date.parse(`${utcDay(now)}T00:00:00Z`),
   }).resolvedInWindow;
 
-  const times = db.handle().query(
-    "SELECT created_at, first_response_at, first_human_response_at, resolved_at, reopen_count, status FROM tickets WHERE program_id = ? AND created_at > ?",
-  ).all(programId, cutoff) as AnalyticsRow[];
+  const times = db
+    .handle()
+    .query(
+      "SELECT created_at, first_response_at, first_human_response_at, resolved_at, reopen_count, status FROM tickets WHERE program_id = ? AND created_at > ?",
+    )
+    .all(programId, cutoff) as AnalyticsRow[];
 
-  const resolved = db.handle().query(
-    "SELECT first_human_response_at FROM tickets WHERE program_id = ? AND status = 'resolved' AND resolved_at IS NOT NULL AND resolved_at >= ?",
-  ).all(programId, cutoff) as AnalyticsRow[];
+  const resolved = db
+    .handle()
+    .query(
+      "SELECT first_human_response_at FROM tickets WHERE program_id = ? AND status = 'resolved' AND resolved_at IS NOT NULL AND resolved_at >= ?",
+    )
+    .all(programId, cutoff) as AnalyticsRow[];
   const reopened = times.filter((t) => (t.reopen_count || 0) > 0).length;
   const aiAnswered = times.filter((t) => t.first_response_at).length;
   const humanHandled = times.filter((t) => t.first_human_response_at).length;
   const deflected = resolved.filter((t) => !t.first_human_response_at).length;
 
-  const byCategory = db.handle().query(
-    "SELECT COALESCE(category, 'uncategorized') AS category, COUNT(*) AS n FROM tickets WHERE program_id = ? AND created_at > ? GROUP BY category ORDER BY n DESC",
-  ).all(programId, cutoff) as AnalyticsRow[];
+  const byCategory = db
+    .handle()
+    .query(
+      "SELECT COALESCE(category, 'uncategorized') AS category, COUNT(*) AS n FROM tickets WHERE program_id = ? AND created_at > ? GROUP BY category ORDER BY n DESC",
+    )
+    .all(programId, cutoff) as AnalyticsRow[];
 
-  const helperLoad = db.handle().query(
-    `SELECT assignee_id AS userId, COUNT(*) AS openAssigned FROM tickets
+  const helperLoad = db
+    .handle()
+    .query(
+      `SELECT assignee_id AS userId, COUNT(*) AS openAssigned FROM tickets
      WHERE program_id = ? AND assignee_id IS NOT NULL AND created_at > ? AND status IN ('claimed','assigned','waiting_for_helper','escalated','reopened')
      GROUP BY assignee_id`,
-  ).all(programId, cutoff) as AnalyticsRow[];
+    )
+    .all(programId, cutoff) as AnalyticsRow[];
 
-  const helperResolved = ticketMetrics.leaderboard(programId, { since: cutoff })
+  const helperResolved = ticketMetrics
+    .leaderboard(programId, { since: cutoff })
     .filter((helper) => helper.resolved > 0)
     .map((helper) => ({ userId: helper.userId, resolved: helper.resolved }));
 
-  const stale = db.handle().query(
-    `SELECT COUNT(*) AS n FROM tickets WHERE program_id = ?
+  const stale = db
+    .handle()
+    .query(
+      `SELECT COUNT(*) AS n FROM tickets WHERE program_id = ?
      AND status IN (${STALE48H_STATUSES.map(() => "?").join(",")})
      AND created_at > ? AND created_at < ?`,
-  ).get(programId, ...STALE48H_STATUSES, cutoff, now - STALE48H_MS) as AnalyticsRow;
+    )
+    .get(programId, ...STALE48H_STATUSES, cutoff, now - STALE48H_MS) as AnalyticsRow;
 
   const duplicates = counts.duplicate || 0;
-  const gapCounts = (db.gapCountsByKind as (windowMs: number, kind: null, programId: string) => unknown)(GAP_COUNTS_WINDOW_MS, null, programId);
-  const incidents = db.handle().query(
-    "SELECT status, COUNT(*) AS n FROM program_incidents WHERE program_id = ? GROUP BY status",
-  ).all(programId) as AnalyticsRow[];
+  const gapCounts = (db.gapCountsByKind as (windowMs: number, kind: null, programId: string) => unknown)(
+    GAP_COUNTS_WINDOW_MS,
+    null,
+    programId,
+  );
+  const incidents = db
+    .handle()
+    .query("SELECT status, COUNT(*) AS n FROM program_incidents WHERE program_id = ? GROUP BY status")
+    .all(programId) as AnalyticsRow[];
 
-  const kinds = db.handle().query(
-    "SELECT kind, COUNT(*) AS n FROM metrics WHERE (program_id = ? OR program_id IS NULL) AND created_at > ? GROUP BY kind",
-  ).all(programId, cutoff) as AnalyticsRow[];
+  const kinds = db
+    .handle()
+    .query(
+      "SELECT kind, COUNT(*) AS n FROM metrics WHERE (program_id = ? OR program_id IS NULL) AND created_at > ? GROUP BY kind",
+    )
+    .all(programId, cutoff) as AnalyticsRow[];
 
   return {
     programId,

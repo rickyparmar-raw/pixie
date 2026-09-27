@@ -29,12 +29,14 @@ function newTicket(programId: string, overrides: { category?: string | null } = 
   return id;
 }
 function events(programId: string, ticketId: number): string[] {
-  return db.listTicketEvents(ticketId).filter((e: { program_id: string }) => e.program_id === programId).map((e: { event_type: string }) => e.event_type);
+  return db
+    .listTicketEvents(ticketId)
+    .filter((e: { program_id: string }) => e.program_id === programId)
+    .map((e: { event_type: string }) => e.event_type);
 }
 function metricCount(kind: string): number {
   return (db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = ?").get(kind) as { c: number }).c;
 }
-
 
 test("a program helper claims an offered ticket and it counts as accepted", () => {
   prog("al-claim", ["U-h1"]);
@@ -91,7 +93,6 @@ test("a duplicate claim (Slack retry) does not append a second claimed event", (
   assert.equal(events("al-dup", id).filter((t) => t === "helper_assignment_claimed").length, 1);
 });
 
-
 test("decline records an event without touching ticket status or resolution", () => {
   prog("al-decline", ["U-d"]);
   const id = newTicket("al-decline");
@@ -109,7 +110,6 @@ test("decline records an event without touching ticket status or resolution", ()
   assert.equal(stats.declinedAssignments, 1);
   assert.equal(stats.acceptedAssignments, 0);
 });
-
 
 test("release after claim records a distinct released event and re-offers the ticket", () => {
   prog("al-release", ["U-h"]);
@@ -138,7 +138,6 @@ test("release without a prior claim is rejected", () => {
   assert.equal(events("al-norelease", id).includes("helper_assignment_released"), false);
 });
 
-
 test("the timeout sweep is a no-op until the program sets helper_offer_timeout_ms", () => {
   prog("al-noto", ["U-h"]);
   const id = newTicket("al-noto");
@@ -150,10 +149,15 @@ test("the timeout sweep is a no-op until the program sets helper_offer_timeout_m
 
 test("a stale offer times out once and only once when a timeout is configured", () => {
   prog("al-to", ["U-h"]);
-  db.handle().query("UPDATE programs SET helper_offer_timeout_ms = ? WHERE id = ?").run(30 * 60 * 1000, "al-to");
+  db.handle()
+    .query("UPDATE programs SET helper_offer_timeout_ms = ? WHERE id = ?")
+    .run(30 * 60 * 1000, "al-to");
   const id = newTicket("al-to");
   const offeredAt = Date.now() - 60 * 60 * 1000;
-  db.handle().query("INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, detail, created_at) VALUES (?, 'al-to', NULL, 'helper_assignment_offered', ?, ?)")
+  db.handle()
+    .query(
+      "INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, detail, created_at) VALUES (?, 'al-to', NULL, 'helper_assignment_offered', ?, ?)",
+    )
     .run(id, JSON.stringify({ to: null, source: "queue" }), offeredAt);
   const first = lifecycle.sweepProgramTimeouts({ programId: "al-to" });
   const second = lifecycle.sweepProgramTimeouts({ programId: "al-to" });
@@ -161,7 +165,6 @@ test("a stale offer times out once and only once when a timeout is configured", 
   assert.equal(second.swept, 0);
   assert.equal(events("al-to", id).filter((t) => t === "helper_assignment_timed_out").length, 1);
 });
-
 
 test("accept rate is claimed / (claimed + declined + timed-out), sample size exposed", () => {
   prog("al-rate", ["U-x"]);
@@ -198,8 +201,18 @@ test("pending offers are excluded from the accept-rate denominator", () => {
 test("pre-lifecycle tickets never fabricate an accept rate", () => {
   prog("al-legacy", ["U-old"]);
   const id = newTicket("al-legacy");
-  db.addTicketEvent({ ticketId: id, programId: "al-legacy", actorId: "U-old", eventType: "claimed" } as unknown as null);
-  db.addTicketEvent({ ticketId: id, programId: "al-legacy", actorId: "U-old", eventType: "resolved" } as unknown as null);
+  db.addTicketEvent({
+    ticketId: id,
+    programId: "al-legacy",
+    actorId: "U-old",
+    eventType: "claimed",
+  } as unknown as null);
+  db.addTicketEvent({
+    ticketId: id,
+    programId: "al-legacy",
+    actorId: "U-old",
+    eventType: "resolved",
+  } as unknown as null);
   const stats = lifecycle.helperAcceptStats("al-legacy", "U-old");
   assert.equal(stats.acceptRate, null);
   assert.equal(stats.completedOffers, 0);
@@ -228,7 +241,6 @@ test("helper accept stats are program-scoped", () => {
   assert.equal(lifecycle.helperAcceptStats("al-scopeB", "U-s").assignmentLifecycle, "unsupported");
 });
 
-
 test("nextEligibleHelper skips a helper who declined", () => {
   prog("al-retry", ["U-1", "U-2", "U-3"]);
   const id = newTicket("al-retry");
@@ -244,7 +256,6 @@ test("nextEligibleHelper is wired into tickets.js's decline path", () => {
   assert.ok(src.includes("nextEligibleHelper"));
 });
 
-
 test("shadow routing and the lifecycle offer coexist on the same escalation", () => {
   prog("pixl", ["U-sh1", "U-sh2"]);
   helperRoute.setExpertise({ programId: "pixl", userId: "U-sh1", tags: ["support"] });
@@ -253,7 +264,9 @@ test("shadow routing and the lifecycle offer coexist on the same escalation", ()
   const trail = events("pixl", id);
   assert.ok(trail.includes("helper_routing_recommended"), "shadow routing still snapshots");
   assert.ok(trail.includes("helper_assignment_offered"), "a pool offer is recorded");
-  const snap = db.listTicketEvents(id).find((e: { event_type: string }) => e.event_type === "helper_routing_recommended");
+  const snap = db
+    .listTicketEvents(id)
+    .find((e: { event_type: string }) => e.event_type === "helper_routing_recommended");
   const detail = JSON.parse(snap.detail);
   assert.equal(detail.mode, "shadow");
   assert.ok(Array.isArray(detail.candidates));
@@ -261,7 +274,11 @@ test("shadow routing and the lifecycle offer coexist on the same escalation", ()
 
 test("autoAssign stays off by default — no ticket is auto-assigned by the offer path", () => {
   prog("al-noauto", ["U-h"]);
-  assert.equal((db.handle().query("SELECT auto_assign FROM programs WHERE id = ?").get("al-noauto") as { auto_assign: number }).auto_assign, 0);
+  assert.equal(
+    (db.handle().query("SELECT auto_assign FROM programs WHERE id = ?").get("al-noauto") as { auto_assign: number })
+      .auto_assign,
+    0,
+  );
   const id = newTicket("al-noauto");
   tickets.markWaitingForHelper({ ticketId: id });
   assert.equal(db.getTicket(id).assignee_id, null, "offer to the pool does not assign anyone");

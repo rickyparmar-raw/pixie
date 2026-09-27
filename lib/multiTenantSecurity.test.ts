@@ -23,11 +23,9 @@ beforeEach(() => {
   programs.invalidate();
 });
 
-
 test("multi-tenant ticket separation: Program A tickets never leak to Program B", () => {
   const wsA = "WORKSPACE_A";
   const wsB = "WORKSPACE_B";
-
 
   db.syncHelper({ programId: "prog-alpha", userId: "U_HELPER_ALPHA", source: "manual" });
   db.syncHelper({ programId: "prog-beta", userId: "U_HELPER_BETA", source: "manual" });
@@ -53,7 +51,6 @@ test("multi-tenant ticket separation: Program A tickets never leak to Program B"
   assert.ok(ticketA);
   assert.ok(ticketB);
 
-
   const searchA = api.internalTicketSearch({ programId: "prog-alpha" });
   assert.equal(searchA.total, 1);
   assert.equal(searchA.rows[0].id, ticketA);
@@ -64,10 +61,8 @@ test("multi-tenant ticket separation: Program A tickets never leak to Program B"
   assert.equal(searchB.rows[0].id, ticketB);
   assert.equal(searchB.rows[0].program_id, "prog-beta");
 
-
   const detailA = api.ticketDetail(ticketA);
   assert.equal(detailA.ticket.program_id, "prog-alpha");
-
 
   const claimAttempt = api.internalTicketAction(ticketA, "claim", {
     programId: "prog-alpha",
@@ -76,14 +71,12 @@ test("multi-tenant ticket separation: Program A tickets never leak to Program B"
   assert.match(claimAttempt.error, /not a helper of this program/i);
   assert.equal(db.getTicket(ticketA).status, "open");
 
-
   const mismatchAttempt = api.internalTicketAction(ticketA, "claim", {
     programId: "prog-beta",
     actorId: "U_HELPER_BETA",
   });
   assert.match(mismatchAttempt.error, /program mismatch/i);
   assert.equal(db.getTicket(ticketA).status, "open");
-
 
   const noteAttempt = api.internalTicketNote(ticketA, {
     programId: "prog-alpha",
@@ -93,7 +86,6 @@ test("multi-tenant ticket separation: Program A tickets never leak to Program B"
   assert.match(noteAttempt.error, /not a helper of this program/i);
   assert.equal(db.listTicketNotes(ticketA).length, 0);
 
-
   const dupAttempt = api.internalTicketAction(ticketB, "duplicate", {
     programId: "prog-beta",
     actorId: "U_HELPER_BETA",
@@ -102,7 +94,6 @@ test("multi-tenant ticket separation: Program A tickets never leak to Program B"
   assert.match(dupAttempt.error, /same program/i);
   assert.equal(db.getTicket(ticketB).status, "open");
 
-
   const foundInA = db.getTicketByThreadTs("t-alpha-001", wsA);
   assert.ok(foundInA);
   assert.equal(foundInA.id, ticketA);
@@ -110,7 +101,6 @@ test("multi-tenant ticket separation: Program A tickets never leak to Program B"
   const foundInB = db.getTicketByThreadTs("t-alpha-001", wsB);
   assert.equal(foundInB, null, "Ticket from Workspace A must not be found by threadTs in Workspace B");
 });
-
 
 test("ticket cards NEVER go to public help channels — only organizer channels", async () => {
   const postedMessages: Array<Record<string, TestAny>> = [];
@@ -141,11 +131,7 @@ test("ticket cards NEVER go to public help channels — only organizer channels"
     "C_PRIVATE_ORGANIZERS",
     "Ticket card destination MUST be the organizer channel",
   );
-  assert.equal(
-    tickets.getOrganizerChannel(progWithOrg),
-    "C_PRIVATE_ORGANIZERS",
-    "Organizer channel must be returned",
-  );
+  assert.equal(tickets.getOrganizerChannel(progWithOrg), "C_PRIVATE_ORGANIZERS", "Organizer channel must be returned");
 
   const ticket = await tickets.escalateTicket({
     program: progWithOrg,
@@ -168,7 +154,11 @@ test("ticket cards NEVER go to public help channels — only organizer channels"
   const ackActionIds = (ackMsg.blocks || [])
     .filter((b: TestAny) => b.type === "actions")
     .flatMap((b: TestAny) => b.elements.map((e: TestAny) => e.action_id));
-  assert.deepEqual(ackActionIds, ["st_resolve"], "Ack message must carry only the public resolve button, no organizer triage actions");
+  assert.deepEqual(
+    ackActionIds,
+    ["st_resolve"],
+    "Ack message must carry only the public resolve button, no organizer triage actions",
+  );
 
   const cardMsg = postedMessages.find((m: TestAny) => m.channel === "C_PRIVATE_ORGANIZERS");
   assert.ok(cardMsg, "Ticket card MUST be sent to organizer channel");
@@ -233,7 +223,6 @@ test("internal helper notes NEVER leak to requester threads or public channels",
   });
   assert.equal(db.listTicketNotes(otherTicketId).length, 0);
 });
-
 
 test("idempotent message claiming: redelivered Slack messages are rejected", () => {
   const ts = "1725700000.000100";
@@ -306,7 +295,6 @@ test("escalateTicket is idempotent on threadTs duplicate calls", async () => {
   assert.equal(posted.length, 2, "Only initial escalation should post to Slack");
 });
 
-
 test("grounded answer and escalation are mutually exclusive (grounded -> no escalation)", async () => {
   const client = {
     calls: { posts: [] as string[], updates: [] as string[] },
@@ -335,17 +323,21 @@ test("grounded answer and escalation are mutually exclusive (grounded -> no esca
     answer: "You can resubmit returned projects once fixes are made.",
     groundingVerdict: {
       verdict: "supported",
-      claims: [{
-        claim: "You can resubmit returned projects once fixes are made.",
-        supported: true,
-        evidenceIds: ["guidelines"],
-      }],
+      claims: [
+        {
+          claim: "You can resubmit returned projects once fixes are made.",
+          supported: true,
+          evidenceIds: ["guidelines"],
+        },
+      ],
     },
-    evidence: [{
-      id: "guidelines",
-      programId: "prog-grounded",
-      supportsClaims: ["You can resubmit returned projects once fixes are made."],
-    }],
+    evidence: [
+      {
+        id: "guidelines",
+        programId: "prog-grounded",
+        supportsClaims: ["You can resubmit returned projects once fixes are made."],
+      },
+    ],
   });
 
   const prog = {
@@ -355,7 +347,9 @@ test("grounded answer and escalation are mutually exclusive (grounded -> no esca
     helpChannel: "C_GROUNDED_HELP",
     organizerChannel: "C_GROUNDED_ORG",
     channels: ["C_GROUNDED_HELP"],
-    sources: [{ name: "Official Guidelines", type: "text", content: "You can resubmit returned projects once fixes are made." }],
+    sources: [
+      { name: "Official Guidelines", type: "text", content: "You can resubmit returned projects once fixes are made." },
+    ],
   };
   db.saveProgram(prog);
   db.claimProgramChannel({ programId: prog.id, channelId: prog.helpChannel, kind: "help" });
@@ -448,14 +442,24 @@ test("grounded answer and escalation are mutually exclusive (unanswerable -> esc
 
     assert.equal(handled, true, "Authoritative terminal action: ESCALATE handles the request");
     const helpChannelMsgs = posted.filter((p: TestAny) => p.channel === "C_GAP_HELP");
-    assert.ok(helpChannelMsgs.filter((message: TestAny) => message.text?.includes("Someone will be here to help you soon")).length >= 1, "Requester ticket UI is posted");
-    const ackMsg = helpChannelMsgs.find((message: TestAny) => message.text?.includes("Someone will be here to help you soon"));
+    assert.ok(
+      helpChannelMsgs.filter((message: TestAny) => message.text?.includes("Someone will be here to help you soon"))
+        .length >= 1,
+      "Requester ticket UI is posted",
+    );
+    const ackMsg = helpChannelMsgs.find((message: TestAny) =>
+      message.text?.includes("Someone will be here to help you soon"),
+    );
     assert.ok(ackMsg, "Help channel message is the open ticket UI");
     if (!ackMsg) throw new Error("missing help acknowledgement");
     const ackActionIds = (ackMsg.blocks || [])
       .filter((b: TestAny) => b.type === "actions")
       .flatMap((b: TestAny) => b.elements.map((e: TestAny) => e.action_id));
-    assert.deepEqual(ackActionIds, ["st_resolve"], "The thread UI carries only the Mark as resolved button — no organizer triage");
+    assert.deepEqual(
+      ackActionIds,
+      ["st_resolve"],
+      "The thread UI carries only the Mark as resolved button — no organizer triage",
+    );
 
     const ticket = db.getTicketByThreadTs("t-gap-200");
     assert.ok(ticket, "Ticket MUST be created for unanswered help request");
@@ -463,12 +467,28 @@ test("grounded answer and escalation are mutually exclusive (unanswerable -> esc
 
     const cardMsg = posted.find((p: TestAny) => p.channel === "C_GAP_ORG");
     assert.ok(cardMsg, "Ticket card must be sent to organizer channel");
-    const organizerOnlyActionIds = ["claim_ticket", "resolve_ticket", "unclaim_ticket", "close_ticket", "reopen_ticket", "reassign_select", "reply_ticket_button"];
+    const organizerOnlyActionIds = [
+      "claim_ticket",
+      "resolve_ticket",
+      "unclaim_ticket",
+      "close_ticket",
+      "reopen_ticket",
+      "reassign_select",
+      "reply_ticket_button",
+    ];
     const helpChannelOrganizerActions = posted
       .filter((p: TestAny) => p.channel === "C_GAP_HELP")
-      .flatMap((p: TestAny) => (p.blocks || []).filter((b: TestAny) => b.type === "actions").flatMap((b: TestAny) => b.elements.map((e: TestAny) => e.action_id)))
+      .flatMap((p: TestAny) =>
+        (p.blocks || [])
+          .filter((b: TestAny) => b.type === "actions")
+          .flatMap((b: TestAny) => b.elements.map((e: TestAny) => e.action_id)),
+      )
       .filter((id: TestAny) => organizerOnlyActionIds.includes(id));
-    assert.equal(helpChannelOrganizerActions.length, 0, "Organizer-only ticket triage actions must never appear in the help channel");
+    assert.equal(
+      helpChannelOrganizerActions.length,
+      0,
+      "Organizer-only ticket triage actions must never appear in the help channel",
+    );
   } finally {
     answer.getAnswerOrChatStream = origGetAnswer;
     answer.getAnswerOrChat = origGetAnswerPlain;
@@ -477,7 +497,6 @@ test("grounded answer and escalation are mutually exclusive (unanswerable -> esc
     programs.invalidate();
   }
 });
-
 
 test("cache tenancy isolation: Program A and Program B cache keys never collide", () => {
   const question = "what is the stipend amount?";
@@ -517,10 +536,21 @@ test("cache key hashing incorporates programId prefix into SHA1", () => {
   assert.notEqual(keyBeta, keyUnscoped, "Tenant key must not match unscoped key");
 });
 
-
 test("!teach stores a fact scoped to exactly one program", () => {
-  const idA = learn.teach({ question: "what is the stipend", answer: "$100 for program A", authorId: "U1", channel: "C-A", programId: "teach-prog-a" });
-  const idB = learn.teach({ question: "what is the stipend", answer: "$500 for program B", authorId: "U2", channel: "C-B", programId: "teach-prog-b" });
+  const idA = learn.teach({
+    question: "what is the stipend",
+    answer: "$100 for program A",
+    authorId: "U1",
+    channel: "C-A",
+    programId: "teach-prog-a",
+  });
+  const idB = learn.teach({
+    question: "what is the stipend",
+    answer: "$500 for program B",
+    authorId: "U2",
+    channel: "C-B",
+    programId: "teach-prog-b",
+  });
   assert.ok(idA);
   assert.ok(idB);
   assert.notEqual(idA, idB);
@@ -528,31 +558,67 @@ test("!teach stores a fact scoped to exactly one program", () => {
   const factsForA = db.approvedFacts(50, "teach-prog-a");
   const factsForB = db.approvedFacts(50, "teach-prog-b");
 
-  assert.ok(factsForA.some((f: TestAny) => f.answer === "$100 for program A"), "program A sees its own taught fact");
-  assert.ok(!factsForA.some((f: TestAny) => f.answer === "$500 for program B"), "program A must not see program B's fact");
+  assert.ok(
+    factsForA.some((f: TestAny) => f.answer === "$100 for program A"),
+    "program A sees its own taught fact",
+  );
+  assert.ok(
+    !factsForA.some((f: TestAny) => f.answer === "$500 for program B"),
+    "program A must not see program B's fact",
+  );
 
-  assert.ok(factsForB.some((f: TestAny) => f.answer === "$500 for program B"), "program B sees its own taught fact");
-  assert.ok(!factsForB.some((f: TestAny) => f.answer === "$100 for program A"), "program B must not see program A's fact");
+  assert.ok(
+    factsForB.some((f: TestAny) => f.answer === "$500 for program B"),
+    "program B sees its own taught fact",
+  );
+  assert.ok(
+    !factsForB.some((f: TestAny) => f.answer === "$100 for program A"),
+    "program B must not see program A's fact",
+  );
 });
 
 test("!teach fact scoped to a program is excluded from an unrelated program's corpus section", () => {
-  learn.teach({ question: "unique-only-a question", answer: "answer only for A", authorId: "U1", channel: "C-A2", programId: "teach-corpus-a" });
+  learn.teach({
+    question: "unique-only-a question",
+    answer: "answer only for A",
+    authorId: "U1",
+    channel: "C-A2",
+    programId: "teach-corpus-a",
+  });
 
   const corpusForA = learn.corpusSection("teach-corpus-a");
   const corpusForOther = learn.corpusSection("teach-corpus-unrelated");
 
   assert.ok(corpusForA.includes("answer only for A"), "the teaching program's corpus includes the fact");
-  assert.ok(!corpusForOther.includes("answer only for A"), "an unrelated program's corpus must not include another program's taught fact");
+  assert.ok(
+    !corpusForOther.includes("answer only for A"),
+    "an unrelated program's corpus must not include another program's taught fact",
+  );
 });
-
 
 test("radar signals list only ever returns the requested program's own rows", () => {
   db.saveProgram({ id: "radar-sec-a", name: "RadarSecA" });
   db.saveProgram({ id: "radar-sec-b", name: "RadarSecB" });
   programs.invalidate();
   const radar = require("./radar");
-  radar.upsertSignal({ programId: "radar-sec-a", type: "STALE_TICKETS", severity: "HIGH", title: "A's backlog", summary: "s", evidence: {}, fingerprint: "backlog" });
-  radar.upsertSignal({ programId: "radar-sec-b", type: "STALE_TICKETS", severity: "HIGH", title: "B's backlog", summary: "s", evidence: {}, fingerprint: "backlog" });
+  radar.upsertSignal({
+    programId: "radar-sec-a",
+    type: "STALE_TICKETS",
+    severity: "HIGH",
+    title: "A's backlog",
+    summary: "s",
+    evidence: {},
+    fingerprint: "backlog",
+  });
+  radar.upsertSignal({
+    programId: "radar-sec-b",
+    type: "STALE_TICKETS",
+    severity: "HIGH",
+    title: "B's backlog",
+    summary: "s",
+    evidence: {},
+    fingerprint: "backlog",
+  });
 
   const forA = api.internalRadarList("radar-sec-a").signals;
   assert.equal(forA.length, 1);
@@ -566,13 +632,25 @@ test("a helper of Program A cannot acknowledge, resolve, or suppress a Program B
   programs.invalidate();
   db.syncHelper({ programId: "radar-sec-c", userId: "U-helper-c", source: "manual" });
   const radar = require("./radar");
-  const signalD = radar.upsertSignal({ programId: "radar-sec-d", type: "REOPEN_SPIKE", severity: "MEDIUM", title: "D's spike", summary: "s", evidence: {}, fingerprint: "reopen" });
+  const signalD = radar.upsertSignal({
+    programId: "radar-sec-d",
+    type: "REOPEN_SPIKE",
+    severity: "MEDIUM",
+    title: "D's spike",
+    summary: "s",
+    evidence: {},
+    fingerprint: "reopen",
+  });
 
   for (const action of ["acknowledge", "resolve"]) {
     const res = api.internalRadarAction(signalD.id, { actorId: "U-helper-c", action });
     assert.ok(res.error, `${action} should be rejected across programs`);
   }
-  const suppressRes = api.internalRadarAction(signalD.id, { actorId: "U-helper-c", action: "suppress", duration: "1h" });
+  const suppressRes = api.internalRadarAction(signalD.id, {
+    actorId: "U-helper-c",
+    action: "suppress",
+    duration: "1h",
+  });
   assert.ok(suppressRes.error);
   assert.equal(radar.getSignal(signalD.id).status, "active");
 });
@@ -593,7 +671,11 @@ test("a Program A helper cannot declare, dismiss, resolve, or notify affected us
   programs.invalidate();
   db.syncHelper({ programId: "inc-sec-a", userId: "U-helper-a", source: "manual" });
   const incB = Number(
-    db.handle().query("INSERT INTO program_incidents (program_id, title, status, started_at, created_at) VALUES (?, ?, 'candidate', ?, ?)")
+    db
+      .handle()
+      .query(
+        "INSERT INTO program_incidents (program_id, title, status, started_at, created_at) VALUES (?, ?, 'candidate', ?, ?)",
+      )
       .run("inc-sec-b", "B's outage", Date.now(), Date.now()).lastInsertRowid,
   );
 

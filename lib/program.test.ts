@@ -12,7 +12,6 @@ test("describeWhen counts whole days in both directions", () => {
   assert.equal(program.describeWhen(new Date("2026-07-20T00:00:00Z"), NOW), "8 days ago");
 });
 
-
 test("describeWhen ignores time of day", () => {
   assert.equal(program.describeWhen(new Date("2026-07-28T01:00:00Z"), NOW), "today");
 });
@@ -31,7 +30,6 @@ test("describeEntry includes an optional note and rejects a bad date", () => {
   assert.match(program.describeEntry({ name: "X", date: "2026-08-01", note: "extra detail" }, NOW), /extra detail/);
   assert.equal(program.describeEntry({ name: "X", date: "not a date" }, NOW), null);
 });
-
 
 test("corpusSection is empty without usable data", () => {
   assert.equal(program.corpusSection(NOW, null), "");
@@ -61,7 +59,6 @@ test("corpusSection includes the timezone when configured", () => {
   assert.match(section, /America\/New_York/);
 });
 
-
 test("dates render the same regardless of the process timezone", () => {
   const savedTz = process.env.TZ;
   process.env.TZ = "America/New_York";
@@ -88,7 +85,6 @@ test("the shipped program.json parses and carries the real release date", () => 
   assert.match(section, /in 21 days/);
 });
 
-
 test("the release date is reachable by the phrasings people actually used", () => {
   const section = program.corpusSection(NOW, program.load());
   for (const probe of [/When is Pixl launching\?/i, /Is Pixl released yet\?/i, /What is the release date\?/i]) {
@@ -105,13 +101,11 @@ test("questionPairs answers 'has it happened yet' from both sides of the date", 
 });
 
 test("questionPairs folds in the extra phrasings from the milestone", () => {
-  const pairs = program.questionPairs(
-    { name: "Launch", date: "2026-08-18", questions: ["When does it drop?"] },
-    NOW,
-  ).join("\n");
+  const pairs = program
+    .questionPairs({ name: "Launch", date: "2026-08-18", questions: ["When does it drop?"] }, NOW)
+    .join("\n");
   assert.match(pairs, /When does it drop\?/);
 });
-
 
 const RELEASE = { milestones: [{ name: "Pixl official release", date: "2026-08-18" }] };
 
@@ -142,12 +136,21 @@ test("metadata-driven timeline helpers safely decline missing or malformed miles
 
   assert.equal(program.corpusSection(NOW, null, metadata), "");
   assert.equal(program.directAnswer("has ship+wrecked launched", NOW, null, metadata), null);
-  assert.equal(program.directAnswer("has ship+wrecked launched", NOW, [{ name: "Launch", date: "nope" }], metadata), null);
+  assert.equal(
+    program.directAnswer("has ship+wrecked launched", NOW, [{ name: "Launch", date: "nope" }], metadata),
+    null,
+  );
   assert.equal(program.isTimingQuestion("has ship+wrecked launched", { name: null, aliases: [null, {}] }), false);
 });
 
 test("isTimingQuestion catches the phrasings the model kept declining", () => {
-  for (const q of ["has pixl launched", "is pixl out yet", "is pixl live", "when does pixl drop", "whats the deadline"]) {
+  for (const q of [
+    "has pixl launched",
+    "is pixl out yet",
+    "is pixl live",
+    "when does pixl drop",
+    "whats the deadline",
+  ]) {
     assert.equal(program.isTimingQuestion(q), true, q);
   }
 });
@@ -177,7 +180,6 @@ test("directAnswer declines non-timing questions and empty data", () => {
   assert.equal(program.directAnswer("has pixl launched", NOW, null), null);
 });
 
-
 test("directAnswer needs the question to name a milestone when there are several", () => {
   const many = {
     milestones: [
@@ -189,14 +191,12 @@ test("directAnswer needs the question to name a milestone when there are several
   assert.match(program.directAnswer("when does chapter two start", NOW, many).answer, /September 30/);
 });
 
-
 test("isTimingQuestion does not treat every use of 'live' as a timing question", () => {
   assert.equal(program.isTimingQuestion("where do you live"), false);
   assert.equal(program.isTimingQuestion("i live in canada"), false);
   assert.equal(program.isTimingQuestion("is pixl live"), true);
   assert.equal(program.isTimingQuestion("has the game gone live"), true);
 });
-
 
 test("isTimingQuestion does not treat 'start'/'end'/'close' as timing words on their own", () => {
   assert.equal(program.isTimingQuestion("how do i start pcb, what is pcb and schematics"), false);
@@ -215,7 +215,6 @@ test("directAnswer declines the exact live-bug question instead of answering wit
   assert.equal(program.directAnswer("how do i start pcb, what is pcb and schematics", NOW, RELEASE), null);
 });
 
-
 test("directAnswer's single-milestone fallback needs program-referring context for 'start', not a bare mention", () => {
   assert.equal(program.directAnswer("how do i start my own project", NOW, RELEASE), null);
   assert.match(program.directAnswer("has it started yet", NOW, RELEASE).answer, /August 18, 2026/);
@@ -227,8 +226,7 @@ test("directAnswer does not intercept hackatime hours discrepancy queries", () =
   assert.equal(program.isTimingQuestion("my hackatime is not syncing"), false);
 });
 
-
-test("char: corpusSection with unsorted input still renders chronological", () => {
+test("corpusSection with unsorted input still renders chronological", () => {
   const section = program.corpusSection(NOW, {
     milestones: [
       { name: "B close", date: "2026-09-01" },
@@ -238,12 +236,17 @@ test("char: corpusSection with unsorted input still renders chronological", () =
   assert.ok(section.indexOf("A open") < section.indexOf("B close"));
 });
 
-test("char: directAnswer fail-closed on ambiguous multi-milestone asks", () => {
-  const many = { milestones: [{ name: "Alpha", date: "2026-08-01" }, { name: "Beta", date: "2026-09-01" }] };
+test("directAnswer fail-closed on ambiguous multi-milestone asks", () => {
+  const many = {
+    milestones: [
+      { name: "Alpha", date: "2026-08-01" },
+      { name: "Beta", date: "2026-09-01" },
+    ],
+  };
   assert.equal(program.directAnswer("when is it", NOW, many), null);
 });
 
-test("char: describeWhen boundary pins today/tomorrow/yesterday", () => {
+test("describeWhen boundary pins today/tomorrow/yesterday", () => {
   assert.equal(program.describeWhen(new Date("2026-07-28T00:00:00Z"), NOW), "today");
   assert.equal(program.describeWhen(new Date("2026-07-29T00:00:00Z"), NOW), "tomorrow");
   assert.equal(program.describeWhen(new Date("2026-07-27T00:00:00Z"), NOW), "yesterday");

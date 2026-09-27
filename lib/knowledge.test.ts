@@ -87,7 +87,7 @@ test("stripHtml surfaces link targets in the final corpus text", () => {
 });
 
 test("stripHtml removes script contents before link rewriting", () => {
-  const html = '<script>var a = \'<a href="https://evil.example">x</a>\';</script><p>hi</p>';
+  const html = "<script>var a = '<a href=\"https://evil.example\">x</a>';</script><p>hi</p>";
   assert.equal(stripHtml(html), "hi");
 });
 
@@ -111,7 +111,8 @@ test("annotateHeadingAnchors leaves a section untouched if it has no heading", (
 });
 
 test("annotateHeadingAnchors handles a div wrapper with a nested eyebrow label without picking the label as the heading", () => {
-  const html = '<div class="hero doc-page" id="welcome"><div class="eyebrow">Start here</div><h1>Welcome to Pixl</h1><p class="lead">So here\'s the deal.</p></div>';
+  const html =
+    '<div class="hero doc-page" id="welcome"><div class="eyebrow">Start here</div><h1>Welcome to Pixl</h1><p class="lead">So here\'s the deal.</p></div>';
   const links = new Map();
   const annotated = annotateHeadingAnchors(html, "https://example.com/docs", links);
 
@@ -122,7 +123,8 @@ test("annotateHeadingAnchors handles a div wrapper with a nested eyebrow label w
 });
 
 test("annotateHeadingAnchors extracts article content and direct heading tags with id", () => {
-  const html = '<nav>Sidebar</nav><article class="doc"><h2 id="h-age">Age</h2><p>You must be 18 or under.</p></article>';
+  const html =
+    '<nav>Sidebar</nav><article class="doc"><h2 id="h-age">Age</h2><p>You must be 18 or under.</p></article>';
   const links = new Map();
   const annotated = annotateHeadingAnchors(html, "https://pixl.hackclub.com/docs/eligibility", links);
 
@@ -154,7 +156,10 @@ test("markdownFilesFromListing keeps only markdown files, in filename order", ()
   const files = markdownFilesFromListing(listing);
 
   assert.equal(files.length, 2);
-  assert.deepEqual(files.map((f: { name: string }) => f.name), ["010-welcome.md", "040-rules.md"]);
+  assert.deepEqual(
+    files.map((f: { name: string }) => f.name),
+    ["010-welcome.md", "040-rules.md"],
+  );
   assert.equal(files[0].title, "Welcome");
   assert.equal(files[0].pageUrl, "https://gh/10");
 });
@@ -183,7 +188,9 @@ test("markdownFilesFromListing falls back to the GitHub URL with no siteUrl", ()
 });
 
 test("markdownFilesFromListing reads bodies from the site when siteUrl is set", () => {
-  const listing = [{ type: "file", name: "150-energy.md", download_url: "https://raw/150", html_url: "https://gh/150" }];
+  const listing = [
+    { type: "file", name: "150-energy.md", download_url: "https://raw/150", html_url: "https://gh/150" },
+  ];
 
   const [file] = markdownFilesFromListing(listing, "https://pixl.hackclub.com/docs");
 
@@ -192,7 +199,9 @@ test("markdownFilesFromListing reads bodies from the site when siteUrl is set", 
 });
 
 test("markdownFilesFromListing reads raw markdown when no siteUrl is set", () => {
-  const listing = [{ type: "file", name: "150-energy.md", download_url: "https://raw/150", html_url: "https://gh/150" }];
+  const listing = [
+    { type: "file", name: "150-energy.md", download_url: "https://raw/150", html_url: "https://gh/150" },
+  ];
 
   const [file] = markdownFilesFromListing(listing);
 
@@ -235,7 +244,11 @@ test("a source that fails to fetch falls back to the copy on disk", async () => 
 
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([
-    { id: "flaky-prog", name: "Flaky", sources: [{ name: "Flaky Source", type: "url", url: "https://example.com/docs" }] },
+    {
+      id: "flaky-prog",
+      name: "Flaky",
+      sources: [{ name: "Flaky Source", type: "url", url: "https://example.com/docs" }],
+    },
   ]);
   programs.invalidate();
   knowledge.invalidate();
@@ -251,7 +264,11 @@ test("a source that fails to fetch falls back to the copy on disk", async () => 
     assert.match(knowledge.getCorpus("flaky-prog"), /the deadline is august 18/);
   } finally {
     guard.fetchSourceUrl = realGuard;
-    try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("Flaky Source", "Flaky Source::https://example.com/docs"); } catch (_: unknown) {}
+    try {
+      db.handle()
+        .query("DELETE FROM source_cache WHERE name IN (?, ?)")
+        .run("Flaky Source", "Flaky Source::https://example.com/docs");
+    } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     programs.invalidate();
@@ -304,12 +321,15 @@ test("the shop catalogue only enters the context when the question is about the 
   shop.refreshText = async () => "Catalogue:\n- Test Widget: 700 px";
 
   try {
-    await knowledge.refreshSource({
-      name: "Pixl Shop",
-      type: "pixl-shop",
-      url: "https://server.pixl.hackclub.com/api/shop/items",
-      siteUrl: "https://pixl.hackclub.com/shop",
-    }, true);
+    await knowledge.refreshSource(
+      {
+        name: "Pixl Shop",
+        type: "pixl-shop",
+        url: "https://server.pixl.hackclub.com/api/shop/items",
+        siteUrl: "https://pixl.hackclub.com/shop",
+      },
+      true,
+    );
     knowledge.invalidate();
 
     const asked = knowledge.getContext("how much is a test widget", "pixl");
@@ -321,7 +341,6 @@ test("the shop catalogue only enters the context when the question is about the 
     shop.refreshText = original;
   }
 });
-
 
 test("fetchSourceText renders an inline json-faq from a bare items array", async () => {
   const knowledge = require("./knowledge");
@@ -408,18 +427,22 @@ test("loadSources keeps inline sources and tells same-named ones apart", () => {
   }
 });
 
-
 test("sourceCacheKey namespaces by location, including inline content", () => {
   const knowledge = require("./knowledge");
   assert.equal(knowledge.sourceCacheKey({ name: "Docs", url: "https://example.com/a" }), "Docs::https://example.com/a");
   const faqKey = knowledge.sourceCacheKey({ name: "FAQ", type: "json-faq", content: [{ question: "q", answer: "a" }] });
   assert.match(faqKey, /^FAQ::inline::[a-f0-9]{64}$/);
-  assert.notEqual(faqKey, knowledge.sourceCacheKey({ name: "FAQ", type: "json-faq", content: [{ question: "q", answer: "different" }] }));
-  assert.match(knowledge.sourceCacheKey({ name: "NoUrl", url: undefined, content: "hi" }), /^NoUrl::inline::[a-f0-9]{64}$/);
+  assert.notEqual(
+    faqKey,
+    knowledge.sourceCacheKey({ name: "FAQ", type: "json-faq", content: [{ question: "q", answer: "different" }] }),
+  );
+  assert.match(
+    knowledge.sourceCacheKey({ name: "NoUrl", url: undefined, content: "hi" }),
+    /^NoUrl::inline::[a-f0-9]{64}$/,
+  );
   assert.equal(knowledge.sourceCacheKey({ url: "https://example.com" }), null);
   assert.equal(knowledge.sourceCacheKey(null), null);
 });
-
 
 test("a successfully refreshed source is fresh and exact-claim eligible", () => {
   const knowledge = require("./knowledge");
@@ -454,12 +477,12 @@ test("a failed refresh keeps last-good content and marks the source stale", asyn
   const original = guard.fetchSourceUrl;
   db.saveSourceText(key, "last good contract copy");
   const saved = process.env.PIXIE_PROGRAMS_JSON;
-  process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([
-    { id: "stale-prog", name: "Stale", sources: [source] },
-  ]);
+  process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([{ id: "stale-prog", name: "Stale", sources: [source] }]);
   programs.invalidate();
   knowledge.invalidate();
-  guard.fetchSourceUrl = async () => { throw new Error("refresh offline"); };
+  guard.fetchSourceUrl = async () => {
+    throw new Error("refresh offline");
+  };
   try {
     await knowledge.refreshSource(source, true);
     const eligibility = knowledge.sourceEligibility(source);
@@ -469,7 +492,9 @@ test("a failed refresh keeps last-good content and marks the source stale", asyn
     assert.match(knowledge.getCorpus("stale-prog"), /last good contract copy/);
   } finally {
     guard.fetchSourceUrl = original;
-    try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("Stale Contract Source", key); } catch (_: unknown) {}
+    try {
+      db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("Stale Contract Source", key);
+    } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     programs.invalidate();
@@ -522,7 +547,9 @@ test("automatic refresh fallback records failure and stale dynamic metrics", asy
   const originalMetric = db.recordMetric;
   const metrics: unknown[][] = [];
   db.saveSourceText(key, "last good dynamic metric copy");
-  guard.fetchSourceUrl = async () => { throw new Error("metric refresh offline"); };
+  guard.fetchSourceUrl = async () => {
+    throw new Error("metric refresh offline");
+  };
   db.recordMetric = (...args: unknown[]) => metrics.push(args);
   try {
     await knowledge.refreshSource(source, false);
@@ -543,11 +570,15 @@ test("loadSources dedupes by name::url but keeps same-name different-URL", () =>
   const programs = require("./programs");
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([
-    { id: "dedupe-test", name: "Dedupe", sources: [
-      { name: "Same", type: "json-faq", url: "file://./quick-links.json" },
-      { name: "Same", type: "json-faq", url: "file://./quick-links.json" },
-      { name: "Same", type: "json-faq", url: "file://./data/ysws-submission-guidelines.md" },
-    ] },
+    {
+      id: "dedupe-test",
+      name: "Dedupe",
+      sources: [
+        { name: "Same", type: "json-faq", url: "file://./quick-links.json" },
+        { name: "Same", type: "json-faq", url: "file://./quick-links.json" },
+        { name: "Same", type: "json-faq", url: "file://./data/ysws-submission-guidelines.md" },
+      ],
+    },
   ]);
   programs.invalidate();
   knowledge.invalidate();
@@ -566,15 +597,28 @@ test("loadSources dedupes by name::url but keeps same-name different-URL", () =>
 
 test("fetchSourceText dispatches file:// json-faq and text", async () => {
   const knowledge = require("./knowledge");
-  const faqText = await knowledge.fetchSourceText({ name: "Quick", type: "json-faq", url: "file://./quick-links.json" });
+  const faqText = await knowledge.fetchSourceText({
+    name: "Quick",
+    type: "json-faq",
+    url: "file://./quick-links.json",
+  });
   assert.match(faqText, /Q: Where can I play Pixl\?/);
-  const mdText = await knowledge.fetchSourceText({ name: "Guide", type: "text", url: "file://./data/ysws-submission-guidelines.md" });
+  const mdText = await knowledge.fetchSourceText({
+    name: "Guide",
+    type: "text",
+    url: "file://./data/ysws-submission-guidelines.md",
+  });
   assert.ok(mdText.length > 50);
 });
 
 test("fetchSourceText inline gdoc records siteUrl for citations", async () => {
   const knowledge = require("./knowledge");
-  const text = await knowledge.fetchSourceText({ name: "CharInlineGdoc", type: "gdoc", content: "hello inline doc", siteUrl: "https://example.com/inline-doc" });
+  const text = await knowledge.fetchSourceText({
+    name: "CharInlineGdoc",
+    type: "gdoc",
+    content: "hello inline doc",
+    siteUrl: "https://example.com/inline-doc",
+  });
   assert.equal(text, "hello inline doc");
   assert.equal(knowledge.getSourceUrl("CharInlineGdoc"), "https://example.com/inline-doc");
 });
@@ -599,7 +643,12 @@ test("github-dir fetch skips unrendered {{placeholder}} pages and drops shared c
     throw new Error(`unexpected url ${url}`);
   };
   try {
-    const text = await knowledge.fetchSourceText({ name: "CharDir", type: "github-dir", url: "https://api.example.com/dir", siteUrl: "https://site.example.com/docs" });
+    const text = await knowledge.fetchSourceText({
+      name: "CharDir",
+      type: "github-dir",
+      url: "https://api.example.com/dir",
+      siteUrl: "https://site.example.com/docs",
+    });
     assert.match(text, /alpha unique body/);
     assert.match(text, /beta unique body/);
     assert.match(text, /gamma unique body/);
@@ -618,9 +667,7 @@ test("a source that succeeds then fails keeps serving the in-memory last good co
   const real = guard.fetchSourceUrl;
   const src = { name: "CharMemFallback", type: "json-faq", url: "https://example.com/char-faq" };
   const saved = process.env.PIXIE_PROGRAMS_JSON;
-  process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([
-    { id: "charmem-prog", name: "CharMem", sources: [src] },
-  ]);
+  process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([{ id: "charmem-prog", name: "CharMem", sources: [src] }]);
   programs.invalidate();
   knowledge.invalidate();
   guard.fetchSourceUrl = async () => ({ data: { faq: { items: [{ question: "mem q", answer: "mem good copy" }] } } });
@@ -629,14 +676,24 @@ test("a source that succeeds then fails keeps serving the in-memory last good co
   } finally {
     guard.fetchSourceUrl = real;
   }
-  try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("CharMemFallback", "CharMemFallback::https://example.com/char-faq"); } catch (_: unknown) {}
-  guard.fetchSourceUrl = async () => { throw new Error("boom"); };
+  try {
+    db.handle()
+      .query("DELETE FROM source_cache WHERE name IN (?, ?)")
+      .run("CharMemFallback", "CharMemFallback::https://example.com/char-faq");
+  } catch (_: unknown) {}
+  guard.fetchSourceUrl = async () => {
+    throw new Error("boom");
+  };
   try {
     await knowledge.refreshSource(src, true);
     assert.match(knowledge.getCorpus("charmem-prog"), /mem good copy/);
   } finally {
     guard.fetchSourceUrl = real;
-    try { db.handle().query("DELETE FROM source_cache WHERE name IN (?, ?)").run("CharMemFallback", "CharMemFallback::https://example.com/char-faq"); } catch (_: unknown) {}
+    try {
+      db.handle()
+        .query("DELETE FROM source_cache WHERE name IN (?, ?)")
+        .run("CharMemFallback", "CharMemFallback::https://example.com/char-faq");
+    } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     programs.invalidate();
@@ -661,7 +718,6 @@ test("corpus puts generated sections first and memoizes per program until invali
   assert.equal(typeof after, "string");
 });
 
-
 test("same-name different-URL sources stay isolated across programs", async () => {
   const knowledge = require("./knowledge");
   const programs = require("./programs");
@@ -669,15 +725,25 @@ test("same-name different-URL sources stay isolated across programs", async () =
   const db = require("./db");
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   process.env.PIXIE_PROGRAMS_JSON = JSON.stringify([
-    { id: "char-a", name: "A", sources: [{ name: "Collision Docs", type: "json-faq", url: "https://example.com/a-faq" }] },
-    { id: "char-b", name: "B", sources: [{ name: "Collision Docs", type: "json-faq", url: "https://example.com/b-faq" }] },
+    {
+      id: "char-a",
+      name: "A",
+      sources: [{ name: "Collision Docs", type: "json-faq", url: "https://example.com/a-faq" }],
+    },
+    {
+      id: "char-b",
+      name: "B",
+      sources: [{ name: "Collision Docs", type: "json-faq", url: "https://example.com/b-faq" }],
+    },
   ]);
   programs.invalidate();
   knowledge.invalidate();
   const real = guard.fetchSourceUrl;
   guard.fetchSourceUrl = async (url: string) => {
-    if (url === "https://example.com/a-faq") return { data: { faq: { items: [{ question: "qa", answer: "alpha unique text" }] } } };
-    if (url === "https://example.com/b-faq") return { data: { faq: { items: [{ question: "qb", answer: "beta unique text" }] } } };
+    if (url === "https://example.com/a-faq")
+      return { data: { faq: { items: [{ question: "qa", answer: "alpha unique text" }] } } };
+    if (url === "https://example.com/b-faq")
+      return { data: { faq: { items: [{ question: "qb", answer: "beta unique text" }] } } };
     throw new Error(`unexpected ${url}`);
   };
   try {
@@ -692,7 +758,9 @@ test("same-name different-URL sources stay isolated across programs", async () =
     assert.doesNotMatch(bSecs, /alpha unique text/);
   } finally {
     guard.fetchSourceUrl = real;
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Collision Docs%'").run(); } catch (_: unknown) {}
+    try {
+      db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Collision Docs%'").run();
+    } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     programs.invalidate();
@@ -746,14 +814,20 @@ test("url subpages are fetched through the SSRF guard, not raw axios", async () 
   const realKey = firecrawl.getApiKey;
   const realAxios = axios.get;
   firecrawl.getApiKey = () => null;
-  axios.get = async () => { throw new Error("raw axios must not be called for subpages"); };
+  axios.get = async () => {
+    throw new Error("raw axios must not be called for subpages");
+  };
   guard.fetchSourceUrl = async (url: string) => {
     if (url === "https://example.com/docs-root") return { data: '<a href="/docs/sub">sub</a><p>root marker</p>' };
     if (url === "https://example.com/docs/sub") return { data: "<p>subpage unique marker xyz</p>" };
     throw new Error(`unexpected ${url}`);
   };
   try {
-    const text = await knowledge.fetchSourceText({ name: "CharGuarded", type: "url", url: "https://example.com/docs-root" });
+    const text = await knowledge.fetchSourceText({
+      name: "CharGuarded",
+      type: "url",
+      url: "https://example.com/docs-root",
+    });
     assert.match(text, /subpage unique marker xyz/);
   } finally {
     guard.fetchSourceUrl = realGuard;
@@ -768,7 +842,6 @@ test("file:// sources outside the app root are refused", () => {
   assert.throws(() => knowledge.resolveLocalPath("file:///etc/passwd"), /outside app root/);
   assert.throws(() => knowledge.resolveLocalPath("file://./../../etc/passwd"), /outside app root/);
 });
-
 
 async function withFleet(fleet: unknown[], fn: () => Promise<void>) {
   const knowledge = require("./knowledge");
@@ -794,7 +867,6 @@ async function withFleet(fleet: unknown[], fn: () => Promise<void>) {
   }
 }
 
-
 test("getContext fits the total budget with a 14k-char learned section", async () => {
   const knowledge = require("./knowledge");
   const learn = require("./learn");
@@ -804,11 +876,14 @@ test("getContext fits the total budget with a 14k-char learned section", async (
       id: "budget-prog",
       name: "Budget",
       sharedSources: false,
-      sources: [{
-        name: "Budget Docs",
-        type: "text",
-        content: "To reset your widget, press the recalibration button for three seconds until the status lamp glows amber. Widgets ship with a spare fuse in the accessory tray.",
-      }],
+      sources: [
+        {
+          name: "Budget Docs",
+          type: "text",
+          content:
+            "To reset your widget, press the recalibration button for three seconds until the status lamp glows amber. Widgets ship with a spare fuse in the accessory tray.",
+        },
+      ],
     },
   ];
   await withFleet(fleet, async () => {
@@ -822,12 +897,14 @@ test("getContext fits the total budget with a 14k-char learned section", async (
     ];
     const kilnBody = "Slow cooling prevents crazing in cone-six glazes. ";
     for (let i = 0; i < 11; i++) {
-      ids.push(learn.teach({
-        question: `kiln-marker-${i} firing schedules for pottery studios`,
-        answer: `kiln-marker-${i} ${kilnBody.repeat(25)}`,
-        authorId: "U1",
-        programId: "budget-prog",
-      }));
+      ids.push(
+        learn.teach({
+          question: `kiln-marker-${i} firing schedules for pottery studios`,
+          answer: `kiln-marker-${i} ${kilnBody.repeat(25)}`,
+          authorId: "U1",
+          programId: "budget-prog",
+        }),
+      );
     }
     try {
       const full = learn.corpusSection("budget-prog");
@@ -849,7 +926,6 @@ test("getContext fits the total budget with a 14k-char learned section", async (
   });
 });
 
-
 test("taught facts never cross programs: same question, each program answers from its own", async () => {
   const knowledge = require("./knowledge");
   const learn = require("./learn");
@@ -864,13 +940,25 @@ test("taught facts never cross programs: same question, each program answers fro
       id: "bud-b2b",
       name: "B2B",
       sharedSources: false,
-      sources: [{ name: "B2B Docs", type: "text", content: "B2B coins accrue from tracked hours and journal quality." }],
+      sources: [
+        { name: "B2B Docs", type: "text", content: "B2B coins accrue from tracked hours and journal quality." },
+      ],
     },
   ];
   await withFleet(fleet, async () => {
     const ids = [
-      learn.teach({ question: "bud-tenancy what is the payout", answer: "bud-pixl-marker: pixl payouts land as shop credit", authorId: "U1", programId: "bud-pixl" }),
-      learn.teach({ question: "bud-tenancy what is the payout", answer: "bud-b2b-marker: b2b payouts accrue as weekly coins", authorId: "U2", programId: "bud-b2b" }),
+      learn.teach({
+        question: "bud-tenancy what is the payout",
+        answer: "bud-pixl-marker: pixl payouts land as shop credit",
+        authorId: "U1",
+        programId: "bud-pixl",
+      }),
+      learn.teach({
+        question: "bud-tenancy what is the payout",
+        answer: "bud-b2b-marker: b2b payouts accrue as weekly coins",
+        authorId: "U2",
+        programId: "bud-b2b",
+      }),
     ];
     try {
       const pixlCtx = knowledge.getContext("bud-tenancy what is the payout", "bud-pixl");
@@ -887,7 +975,6 @@ test("taught facts never cross programs: same question, each program answers fro
     }
   });
 });
-
 
 test("untrusted sources never enter the corpus: SSRF targets, oversized bodies, script HTML", async () => {
   const knowledge = require("./knowledge");
@@ -919,7 +1006,9 @@ test("untrusted sources never enter the corpus: SSRF targets, oversized bodies, 
       return { data: `BIG-HEAD-MARKER ${"padded body text ".repeat(20000)} BIG-TAIL-MARKER` };
     }
     if (url === "https://example.com/scripted") {
-      return { data: "<html><head><script>EVIL-SCRIPT-MARKER()</script></head><body><p>SCRIPTED-LEGIT-MARKER benign docs text</p></body></html>" };
+      return {
+        data: "<html><head><script>EVIL-SCRIPT-MARKER()</script></head><body><p>SCRIPTED-LEGIT-MARKER benign docs text</p></body></html>",
+      };
     }
     return realGuard(url, opts);
   };
@@ -935,14 +1024,17 @@ test("untrusted sources never enter the corpus: SSRF targets, oversized bodies, 
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;
     const db = require("./db");
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Evil%' OR name LIKE 'Big Docs%' OR name LIKE 'Script Docs%'").run(); } catch (_: unknown) {}
+    try {
+      db.handle()
+        .query("DELETE FROM source_cache WHERE name LIKE 'Evil%' OR name LIKE 'Big Docs%' OR name LIKE 'Script Docs%'")
+        .run();
+    } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     programs.invalidate();
     knowledge.invalidate();
   }
 });
-
 
 test("sourceStatus reports ready/stale/error/pending with no secrets", async () => {
   const knowledge = require("./knowledge");
@@ -986,7 +1078,9 @@ test("sourceStatus reports ready/stale/error/pending with no secrets", async () 
   };
   try {
     await knowledge.refreshCorpus();
-    const byName = new Map<string, SourceStatus>(knowledge.sourceStatus("stat-prog").map((s: SourceStatus): [string, SourceStatus] => [s.name, s]));
+    const byName = new Map<string, SourceStatus>(
+      knowledge.sourceStatus("stat-prog").map((s: SourceStatus): [string, SourceStatus] => [s.name, s]),
+    );
 
     const faq = byName.get("Stat FAQ");
     if (!faq) throw new Error("Stat FAQ status missing");
@@ -1020,7 +1114,9 @@ test("sourceStatus reports ready/stale/error/pending with no secrets", async () 
   } finally {
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Stat%'").run(); } catch (_: unknown) {}
+    try {
+      db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Stat%'").run();
+    } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     require("./programs").invalidate();
@@ -1079,7 +1175,9 @@ test("refreshProgramSources starts without blocking and refreshes only its progr
   } finally {
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Rps%'").run(); } catch (_: unknown) {}
+    try {
+      db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Rps%'").run();
+    } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     require("./programs").invalidate();
@@ -1108,7 +1206,9 @@ test("refreshProgramSources dedupes in-flight sources and reports fetching", asy
   const realKey = firecrawl.getApiKey;
   firecrawl.getApiKey = () => null;
   let release: () => void = () => {};
-  const gate = new Promise<void>((resolve) => { release = resolve; });
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
   let calls = 0;
   guard.fetchSourceUrl = async () => {
     calls += 1;
@@ -1120,14 +1220,21 @@ test("refreshProgramSources dedupes in-flight sources and reports fetching", asy
     assert.deepEqual(knowledge.refreshProgramSources("dedup-prog"), { started: true, sources: 0 });
     assert.equal(knowledge.sourceStatus("dedup-prog")[0].status, "fetching");
     release();
-    assert.ok(await drainUntil(() => knowledge.sourceStatus("dedup-prog")[0].status === "ready"), "refresh did not finish");
+    assert.ok(
+      await drainUntil(() => knowledge.sourceStatus("dedup-prog")[0].status === "ready"),
+      "refresh did not finish",
+    );
     assert.equal(calls, 1);
     assert.match(knowledge.getCorpus("dedup-prog"), /DEDUP-MARKER/);
   } finally {
-    try { release(); } catch (_: unknown) {}
+    try {
+      release();
+    } catch (_: unknown) {}
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Dedup%'").run(); } catch (_: unknown) {}
+    try {
+      db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Dedup%'").run();
+    } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     require("./programs").invalidate();
@@ -1156,15 +1263,22 @@ test("a failed program refresh never erases the last-known-good text", async () 
   const realGuard = guard.fetchSourceUrl;
   const realKey = firecrawl.getApiKey;
   firecrawl.getApiKey = () => null;
-  guard.fetchSourceUrl = async () => { throw new Error("good offline"); };
+  guard.fetchSourceUrl = async () => {
+    throw new Error("good offline");
+  };
   try {
     assert.deepEqual(knowledge.refreshProgramSources("good-prog"), { started: true, sources: 1 });
-    assert.ok(await drainUntil(() => knowledge.sourceStatus("good-prog")[0]?.status === "stale"), "status did not settle");
+    assert.ok(
+      await drainUntil(() => knowledge.sourceStatus("good-prog")[0]?.status === "stale"),
+      "status did not settle",
+    );
     assert.match(knowledge.getCorpus("good-prog"), /good last-known copy/);
   } finally {
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;
-    try { db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Good Docs%'").run(); } catch (_: unknown) {}
+    try {
+      db.handle().query("DELETE FROM source_cache WHERE name LIKE 'Good Docs%'").run();
+    } catch (_: unknown) {}
     if (saved === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
     else process.env.PIXIE_PROGRAMS_JSON = saved;
     require("./programs").invalidate();

@@ -44,17 +44,22 @@ test("summary success uses the full Slack thread and persists the result", async
   };
   const client = {
     conversations: {
-      replies: async () => ({ messages: [
-        { user: "U-requester", text: "I cannot find the form." },
-        { user: "U-helper", text: "Use the submission form and click Submit." },
-      ] }),
+      replies: async () => ({
+        messages: [
+          { user: "U-requester", text: "I cannot find the form." },
+          { user: "U-helper", text: "Use the submission form and click Submit." },
+        ],
+      }),
     },
   };
 
   await pipeline.onResolved({ ticket, client, actorId: "U-helper" });
 
   const stored = db.getTicket(ticket.id);
-  assert.equal(stored.resolution_summary, "The requester needed submission help; the helper directed them to the form.");
+  assert.equal(
+    stored.resolution_summary,
+    "The requester needed submission help; the helper directed them to the form.",
+  );
   assert.ok(stored.resolution_summary_at > 0);
   assert.match(request.messages[1].content, /I cannot find the form/);
   assert.match(request.messages[1].content, /Use the submission form/);
@@ -63,8 +68,16 @@ test("summary success uses the full Slack thread and persists the result", async
 
 test("LLM failure stores the deterministic question-resolution-timeline fallback", async () => {
   const ticket = createResolvedTicket("fallback");
-  db.addTicketEvent({ ticketId: ticket.id, programId: ticket.program_id, actorId: "U-helper", eventType: "helper_reply", detail: "gave submission guidance" });
-  llm.complete = async () => { throw new Error("provider unavailable"); };
+  db.addTicketEvent({
+    ticketId: ticket.id,
+    programId: ticket.program_id,
+    actorId: "U-helper",
+    eventType: "helper_reply",
+    detail: "gave submission guidance",
+  });
+  llm.complete = async () => {
+    throw new Error("provider unavailable");
+  };
 
   await pipeline.onResolved({ ticket, actorId: "U-helper" });
 
@@ -97,7 +110,12 @@ test("resolution succeeds when the pipeline throws", async () => {
     requesterId: "U-requester",
     question: "Why does this fail?",
   });
-  const savedSteps = pipeline.steps.splice(0, pipeline.steps.length, { name: "boom", run: async () => { throw new Error("pipeline failed"); } });
+  const savedSteps = pipeline.steps.splice(0, pipeline.steps.length, {
+    name: "boom",
+    run: async () => {
+      throw new Error("pipeline failed");
+    },
+  });
   process.env.PIXIE_RESOLUTION_PIPELINE = "true";
   try {
     const result = tickets.resolveTicket({ ticketId, actorId: "U-helper", resolution: "Restart the process." });

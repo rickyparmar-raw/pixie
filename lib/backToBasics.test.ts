@@ -1,4 +1,3 @@
-
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before, after, beforeEach, afterEach } = require("node:test");
@@ -103,7 +102,8 @@ const FLEET = JSON.stringify([
       {
         name: "YSWS Submission Guidelines",
         type: "text",
-        content: "## AI policy\nAcross YSWS, AI-written code is capped at a hard ceiling of 30% of the total. Your README must be written by you, not AI.",
+        content:
+          "## AI policy\nAcross YSWS, AI-written code is capped at a hard ceiling of 30% of the total. Your README must be written by you, not AI.",
       },
     ],
   },
@@ -146,7 +146,6 @@ afterEach(() => {
   llm.complete = realComplete;
 });
 
-
 test("the B2B help channel routes to B2B; a channel Pixie isn't in does not", () => {
   assert.equal(programs.forChannel(B2B_HELP).id, "back-to-basics");
   assert.equal(programs.forChannel(PIXL_HELP).id, "pixl");
@@ -169,7 +168,6 @@ test("Pixl stays passive with no organizer channel — it does not open tickets"
   assert.equal(tickets.getOrganizerChannel(programs.get("pixl")), null);
 });
 
-
 test("B2B identity uses its own support name and never says Pixl or offers a redirect", () => {
   const text = identity.corpusSection(programs.get("back-to-basics"));
   assert.match(text, /I'm B2B Support,/);
@@ -179,7 +177,6 @@ test("B2B identity uses its own support name and never says Pixl or offers a red
   assert.doesNotMatch(text, /point you at that program's channel/i);
   assert.match(text, /Here I only do Back to Basics/);
 });
-
 
 test("B2B prompt names B2B, uses the B2B help channel, and carries none of Pixl's pinned policy", () => {
   const b2b = programs.get("back-to-basics");
@@ -202,7 +199,6 @@ test("in a B2B channel the prompt forbids naming or redirecting to another progr
   assert.match(prompt, /This is a Back to Basics channel only/);
   assert.match(prompt, /sounds like another program's name is still a Back to Basics question/);
 });
-
 
 test("the B2B retrieval namespace contains B2B docs and none of Pixl's", () => {
   const ctx = knowledge.getContext("how does back to basics work", "back-to-basics");
@@ -228,7 +224,6 @@ test("B2B does not inherit the shared YSWS submission guidelines", () => {
   assert.doesNotMatch(pixlAi, /hard ceiling of 30% of the total/i);
 });
 
-
 const SHARED_VOCAB_CASES = [
   ["can i use ai on my project", /no percentage cap|agent hook|deflation/i, /30 percent|<=30%/i],
   ["how do coins work", /0\.3 coins per hour|graded journal quality/i, /priced in px|700 px/i],
@@ -244,7 +239,6 @@ for (const [q, wantB2B, mustNotLeak] of SHARED_VOCAB_CASES) {
     assert.doesNotMatch(ctx, mustNotLeak, `Pixl leak for "${q}"`);
   });
 }
-
 
 test("the B2B corpus retrieved for a real question carries B2B facts into the prompt and nothing of Pixl's", () => {
   for (const q of [
@@ -276,13 +270,18 @@ test("a grounded B2B reply is parsed and its help-channel reference points at B2
 });
 
 test("when B2B docs do not cover a question the model is told to decline, not invent or redirect", async () => {
-  const prompt = answer.answerOrChatPrompt("### Back to Basics Docs\n(nothing about prize money)", "", true, programs.get("back-to-basics"), B2B_HELP);
+  const prompt = answer.answerOrChatPrompt(
+    "### Back to Basics Docs\n(nothing about prize money)",
+    "",
+    true,
+    programs.get("back-to-basics"),
+    B2B_HELP,
+  );
   assert.match(prompt, new RegExp(answer.NONE_MARKER));
   assert.match(prompt, /Never invent a Back to Basics fact/i);
   assert.match(prompt, /a helper in this channel will pick it up/i);
   assert.doesNotMatch(prompt, /#pixl/i);
 });
-
 
 test("a url source crawls recursively within its path scope and canonicalises urls", async () => {
   const guard = require("./sourceGuard");
@@ -292,7 +291,8 @@ test("a url source crawls recursively within its path scope and canonicalises ur
   firecrawl.getApiKey = () => null;
   const fetched: string[] = [];
   const pages: Record<string, string> = {
-    "https://ex.test/docs": '<a href="/docs/a">a</a><a href="/docs/b/">b</a><a href="/other">out of scope</a><p>root</p>',
+    "https://ex.test/docs":
+      '<a href="/docs/a">a</a><a href="/docs/b/">b</a><a href="/other">out of scope</a><p>root</p>',
     "https://ex.test/docs/a": '<a href="/docs/c#frag">c</a><a href="/docs/a?x=1">self</a><p>page a xyz</p>',
     "https://ex.test/docs/b": "<p>page b qrs</p>",
     "https://ex.test/docs/c": "<p>page c tuv</p>",
@@ -310,7 +310,11 @@ test("a url source crawls recursively within its path scope and canonicalises ur
     assert.match(text, /page c tuv/);
     assert.doesNotMatch(text, /OUT_OF_SCOPE_MARKER/);
     assert.ok(!fetched.includes("https://ex.test/other"), "/other was never fetched");
-    assert.equal(fetched.filter((u: string) => u === "https://ex.test/docs/a").length, 1, "/docs/a fetched once (query-string dupe collapsed)");
+    assert.equal(
+      fetched.filter((u: string) => u === "https://ex.test/docs/a").length,
+      1,
+      "/docs/a fetched once (query-string dupe collapsed)",
+    );
   } finally {
     guard.fetchSourceUrl = realGuard;
     firecrawl.getApiKey = realKey;

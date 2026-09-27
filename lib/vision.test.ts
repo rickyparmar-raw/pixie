@@ -15,7 +15,7 @@ after(() => {
   axios.get = realGet;
 });
 
-test("char: system prompt embeds context and states the ground rules", () => {
+test("system prompt embeds context and states the ground rules", () => {
   const withCtx = vision.visionSystemPrompt("order #12 stuck");
   assert.match(withCtx, /order #12 stuck/);
   assert.match(withCtx, /Only describe what you can actually see/i);
@@ -23,9 +23,13 @@ test("char: system prompt embeds context and states the ground rules", () => {
   assert.doesNotMatch(bare, /Context:/);
 });
 
-test("char: Slack fetch failure surfaces a friendly error, never the raw axios error", async () => {
-  axios.get = async () => { throw new Error("403 forbidden"); };
-  axios.post = async () => { throw new Error("must not reach the model"); };
+test("Slack fetch failure surfaces a friendly error, never the raw axios error", async () => {
+  axios.get = async () => {
+    throw new Error("403 forbidden");
+  };
+  axios.post = async () => {
+    throw new Error("must not reach the model");
+  };
   try {
     await assert.rejects(
       () => vision.analyzeImage("https://files.slack.com/files-pri/T1-F1/blob.png", "what is this?", "", "xoxb-test"),
@@ -37,9 +41,12 @@ test("char: Slack fetch failure surfaces a friendly error, never the raw axios e
   }
 });
 
-test("char: public URLs skip the Slack fetch entirely", async () => {
+test("public URLs skip the Slack fetch entirely", async () => {
   let fetched = false;
-  axios.get = async () => { fetched = true; throw new Error("must not fetch"); };
+  axios.get = async () => {
+    fetched = true;
+    throw new Error("must not fetch");
+  };
   axios.post = async () => ({ data: { choices: [{ message: { content: "a cat diagram  " } }] } });
   try {
     const reply = await vision.analyzeImage("https://example.com/cat.png", "what is this?");
@@ -51,7 +58,7 @@ test("char: public URLs skip the Slack fetch entirely", async () => {
   }
 });
 
-test("char: empty model replies resolve to null, not empty strings", async () => {
+test("empty model replies resolve to null, not empty strings", async () => {
   axios.post = async () => ({ data: { choices: [{ message: { content: "   " } }] } });
   try {
     assert.equal(await vision.analyzeImage("https://example.com/x.png", "q?"), null);
@@ -60,7 +67,7 @@ test("char: empty model replies resolve to null, not empty strings", async () =>
   }
 });
 
-test("char: Slack files inline as data URIs with the bot token", async () => {
+test("Slack files inline as data URIs with the bot token", async () => {
   let sawAuth: string | undefined;
   let sawBody: AxiosResponseBody | null = null;
   axios.get = async (_url: string, opts: { headers?: { Authorization?: string } }) => {

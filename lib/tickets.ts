@@ -194,7 +194,7 @@ const STATUS_EMOJI: Record<string, string> = {
   closed: ":x:",
 };
 
-// WHY: Slack stays usable before any helper syncs, while the dashboard must
+// Slack stays usable before any helper syncs, while the dashboard must
 // deny strangers even then — one check, explicit empty-table policy.
 function isActorAllowed(programId: string, actorId: string | null, allowEmpty = true): boolean {
   if (!actorId) return false;
@@ -213,7 +213,14 @@ function isActorAllowed(programId: string, actorId: string | null, allowEmpty = 
   return false;
 }
 
-function authorize(ticket: Ticket | null, { programId, workspaceId, actorId }: { programId?: string | null; workspaceId?: string | null; actorId?: string | null }): string | null {
+function authorize(
+  ticket: Ticket | null,
+  {
+    programId,
+    workspaceId,
+    actorId,
+  }: { programId?: string | null; workspaceId?: string | null; actorId?: string | null },
+): string | null {
   if (!ticket) return "ticket not found";
   if (programId && ticket.program_id !== programId) return "program mismatch";
   if (workspaceId && ticket.workspace_id && ticket.workspace_id !== workspaceId) return "workspace mismatch";
@@ -223,7 +230,11 @@ function authorize(ticket: Ticket | null, { programId, workspaceId, actorId }: {
 
 function getOrganizerChannel(program: Program | null, workspaceId: string | null = null): string | null {
   if (!program) return null;
-  const legacyProgram = program as Program & { organizer_channel?: string; organizer_channel_id?: string; workspace_id?: string | null };
+  const legacyProgram = program as Program & {
+    organizer_channel?: string;
+    organizer_channel_id?: string;
+    workspace_id?: string | null;
+  };
   const direct = program.organizerChannel || legacyProgram.organizer_channel || legacyProgram.organizer_channel_id;
   if (direct) return direct;
   if (program.id) {
@@ -245,7 +256,13 @@ function getTicketCardDestination(program: Program | null, workspaceId: string |
   return getOrganizerChannel(program, workspaceId);
 }
 
-function recordTransition(ticket: Ticket, actorId: string | null, eventType: string, detail: unknown = null, createdAt: number | null = null): void {
+function recordTransition(
+  ticket: Ticket,
+  actorId: string | null,
+  eventType: string,
+  detail: unknown = null,
+  createdAt: number | null = null,
+): void {
   try {
     db.addTicketEvent({ ticketId: ticket.id, programId: ticket.program_id, actorId, eventType, detail, createdAt });
   } catch (e: unknown) {
@@ -275,7 +292,11 @@ function startNewEpoch(ticket: Ticket | null): void {
   }
 }
 
-function buildTicketCardBlocks(ticket: Ticket, program: Program | null, candidates: TicketCandidate[] | null = null): SlackBlock[] {
+function buildTicketCardBlocks(
+  ticket: Ticket,
+  program: Program | null,
+  candidates: TicketCandidate[] | null = null,
+): SlackBlock[] {
   const statusEmoji = STATUS_EMOJI[ticket.status] || ":sos:";
   const progName = program ? program.name : ticket.program_id || "YSWS";
   const assigneeStr = ticket.assignee_id ? ` • Claimed by <@${ticket.assignee_id}>` : "";
@@ -329,7 +350,7 @@ function buildTicketCardBlocks(ticket: Ticket, program: Program | null, candidat
       ],
     });
   } else if (WORKABLE.includes(ticket.status)) {
-    // WHY: auto-assign lands here without a Claim click — same actions as
+    // Auto-assign lands here without a Claim click — same actions as
     // claimed, since the assignee still needs to work, hand off, or close.
     blocks.push({
       type: "actions",
@@ -374,16 +395,28 @@ function buildTicketCardBlocks(ticket: Ticket, program: Program | null, candidat
       ],
     });
   }
-  // WHY: a static select right on the card, not a modal — recommend() is a
+  // A static select right on the card, not a modal — recommend() is a
   // pure DB read, so options can be built synchronously at render time.
   if (ticket.status === CLAIMABLE[0] || WORKABLE.includes(ticket.status)) {
     let list = candidates;
     if (!list) {
       try {
-        list = helperRoute.recommend({ programId: ticket.program_id, category: ticket.category, limit: 5, ...routingOptions(program, ticket) });
+        list = helperRoute.recommend({
+          programId: ticket.program_id,
+          category: ticket.category,
+          limit: 5,
+          ...routingOptions(program, ticket),
+        });
         if (!list || list.length === 0) {
-          const bot = (() => { try { return require("./config").config?.slack?.botUserId || null; } catch (_) { return null; } })();
-          list = db.listHelpers(ticket.program_id, true)
+          const bot = (() => {
+            try {
+              return require("./config").config?.slack?.botUserId || null;
+            } catch (_) {
+              return null;
+            }
+          })();
+          list = db
+            .listHelpers(ticket.program_id, true)
             .filter((helper) => helper.user_id !== ticket.requester_id && helper.user_id !== bot)
             .map((helper) => ({
               userId: helper.user_id,
@@ -401,8 +434,20 @@ function buildTicketCardBlocks(ticket: Ticket, program: Program | null, candidat
     } catch (e) {
       log.debug("tickets", `helpersWhoPassed lookup failed for #${ticket.id}: ${errorMessage(e)}`);
     }
-    const botId = (() => { try { return require("./config").config?.slack?.botUserId || null; } catch (_) { return null; } })();
-    const filtered = (list || []).filter((r) => r.userId !== ticket.assignee_id && !passed.has(r.userId) && r.userId !== ticket.requester_id && r.userId !== botId);
+    const botId = (() => {
+      try {
+        return require("./config").config?.slack?.botUserId || null;
+      } catch (_) {
+        return null;
+      }
+    })();
+    const filtered = (list || []).filter(
+      (r) =>
+        r.userId !== ticket.assignee_id &&
+        !passed.has(r.userId) &&
+        r.userId !== ticket.requester_id &&
+        r.userId !== botId,
+    );
     if (filtered.length > 0) {
       blocks.push({
         type: "actions",
@@ -450,7 +495,6 @@ function ticketRef(ticket: Ticket | null): string {
   return Number.isInteger(n) && n > 0 ? `#${n}` : "";
 }
 
-
 function docsLink(prog: Program | null): string | null {
   const links = (prog && prog.links) || {};
   return links.docs || links.site || null;
@@ -460,19 +504,46 @@ function supportTicketBlocks(ticket: Ticket, prog: Program | null): SlackBlock[]
   if (CLOSED.includes(ticket.status)) {
     const by = ticket.resolved_by ? ` by <@${ticket.resolved_by}>` : "";
     return [
-      { type: "section", text: { type: "mrkdwn", text: `Resolved${by}! If you have more questions, feel free to open a new thread.` } },
-      { type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Reopen" }, value: String(ticket.id), action_id: SUPPORT_REOPEN_ACTION }] },
+      {
+        type: "section",
+        text: { type: "mrkdwn", text: `Resolved${by}! If you have more questions, feel free to open a new thread.` },
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: { type: "plain_text", text: "Reopen" },
+            value: String(ticket.id),
+            action_id: SUPPORT_REOPEN_ACTION,
+          },
+        ],
+      },
     ];
   }
   const link = docsLink(prog);
   const tail = link ? ` In the meantime, take a look at the docs: ${link}` : "";
   return [
     { type: "section", text: { type: "mrkdwn", text: `Someone will be here to help you soon!${tail}` } },
-    { type: "actions", elements: [{ type: "button", text: { type: "plain_text", text: "Mark as resolved" }, value: String(ticket.id), action_id: SUPPORT_RESOLVE_ACTION }] },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Mark as resolved" },
+          value: String(ticket.id),
+          action_id: SUPPORT_RESOLVE_ACTION,
+        },
+      ],
+    },
   ];
 }
 
-function ticketUIProjection(ticket: Ticket, prog: Program | null, candidates: TicketCandidate[] | null = null): TicketUIProjection {
+function ticketUIProjection(
+  ticket: Ticket,
+  prog: Program | null,
+  candidates: TicketCandidate[] | null = null,
+): TicketUIProjection {
   return {
     card: {
       text: `[Ticket #${ticket.id}] ${friendlyStatusLabel(ticket.status)}`,
@@ -499,7 +570,17 @@ function projectionKey(ticket: Ticket, projection: TicketUIProjection): string {
   });
 }
 
-async function reconcileTicketUI({ client, ticket, program = null, cardText = null }: { client: SlackClient | null; ticket: Ticket; program?: Program | null; cardText?: string | null }): Promise<boolean | undefined> {
+async function reconcileTicketUI({
+  client,
+  ticket,
+  program = null,
+  cardText = null,
+}: {
+  client: SlackClient | null;
+  ticket: Ticket;
+  program?: Program | null;
+  cardText?: string | null;
+}): Promise<boolean | undefined> {
   if (!client || !ticket) return;
   let queues = reconcilingTicketUI.get(client as object);
   if (!queues) {
@@ -511,19 +592,37 @@ async function reconcileTicketUI({ client, ticket, program = null, cardText = nu
   const current = previous
     ? previous.catch(() => {}).then(() => reconcileTicketUIOnce({ client, ticket, program, cardText }))
     : reconcileTicketUIOnce({ client, ticket, program, cardText });
-  queues.set(ticketKey, current.finally(() => {
-    if (queues.get(ticketKey) === current) queues.delete(ticketKey);
-  }));
+  queues.set(
+    ticketKey,
+    current.finally(() => {
+      if (queues.get(ticketKey) === current) queues.delete(ticketKey);
+    }),
+  );
   return current;
 }
 
-async function reconcileTicketUIOnce({ client, ticket, program = null, cardText = null }: { client: SlackClient | null; ticket: Ticket; program?: Program | null; cardText?: string | null }): Promise<boolean> {
+async function reconcileTicketUIOnce({
+  client,
+  ticket,
+  program = null,
+  cardText = null,
+}: {
+  client: SlackClient | null;
+  ticket: Ticket;
+  program?: Program | null;
+  cardText?: string | null;
+}): Promise<boolean> {
   if (!client) return false;
   ticket = db.getTicket(ticket.id) || ticket;
   const prog = program || (ticket.program_id ? programs.get(ticket.program_id) : null);
   let candidates: TicketCandidate[] = [];
   try {
-    candidates = helperRoute.recommend({ programId: ticket.program_id, category: ticket.category, limit: 5, ...routingOptions(prog, ticket) });
+    candidates = helperRoute.recommend({
+      programId: ticket.program_id,
+      category: ticket.category,
+      limit: 5,
+      ...routingOptions(prog, ticket),
+    });
   } catch (e) {
     log.debug("tickets", `helper recommendation failed: ${errorMessage(e)}`);
   }
@@ -539,13 +638,16 @@ async function reconcileTicketUIOnce({ client, ticket, program = null, cardText 
   if (previous === key) return true;
 
   const destinationProgram = prog || ({ id: ticket.program_id } as Program);
-  const cardSynced = await syncSlack({
-    client,
-    channel: getOrganizerChannel(destinationProgram, ticket.workspace_id),
-    ts: ticket.card_ts,
-    text: projection.card.text,
-    blocks: projection.card.blocks,
-  }, ticket);
+  const cardSynced = await syncSlack(
+    {
+      client,
+      channel: getOrganizerChannel(destinationProgram, ticket.workspace_id),
+      ts: ticket.card_ts,
+      text: projection.card.text,
+      blocks: projection.card.blocks,
+    },
+    ticket,
+  );
   const latest = db.getTicket(ticket.id) || ticket;
   if (latest.status !== ticket.status || latest.assignee_id !== ticket.assignee_id) {
     return reconcileTicketUIOnce({ client, ticket: latest, program, cardText });
@@ -555,7 +657,12 @@ async function reconcileTicketUIOnce({ client, ticket, program = null, cardText 
   return cardSynced && supportSynced;
 }
 
-async function syncSupportTicketUI(client: SlackClient, ticket: Ticket, prog: Program | null, projection: TicketUIProjection | null = null): Promise<boolean> {
+async function syncSupportTicketUI(
+  client: SlackClient,
+  ticket: Ticket,
+  prog: Program | null,
+  projection: TicketUIProjection | null = null,
+): Promise<boolean> {
   const view = projection || ticketUIProjection(ticket, prog);
   let synced = true;
   if (client?.chat?.update && ticket.public_ack_ts) {
@@ -571,10 +678,14 @@ async function syncSupportTicketUI(client: SlackClient, ticket: Ticket, prog: Pr
       synced = false;
     }
   }
-  return synced && await syncTicketReactions(client, ticket, prog);
+  return synced && (await syncTicketReactions(client, ticket, prog));
 }
 
-async function syncTicketReactions(client: SlackClient, ticket: Ticket, program: Program | null = null): Promise<boolean> {
+async function syncTicketReactions(
+  client: SlackClient,
+  ticket: Ticket,
+  program: Program | null = null,
+): Promise<boolean> {
   const open = config.ticketOpenReaction;
   const done = config.ticketResolvedReaction;
   if (!client?.reactions?.add || !ticket?.thread_ts || !ticket?.channel || (!open && !done)) return true;
@@ -584,8 +695,16 @@ async function syncTicketReactions(client: SlackClient, ticket: Ticket, program:
   const want = closed ? done : open;
   const drop = closed ? open : done;
   const at = { channel: ticket.channel, timestamp: ticket.thread_ts };
-  if (want) await client.reactions.add({ ...at, name: want }).catch((e) => { synced = false; recordSlackSyncFailure("reaction", ticket, e); });
-  if (drop && client.reactions.remove) await client.reactions.remove({ ...at, name: drop }).catch((e) => { synced = false; recordSlackSyncFailure("reaction", ticket, e); });
+  if (want)
+    await client.reactions.add({ ...at, name: want }).catch((e) => {
+      synced = false;
+      recordSlackSyncFailure("reaction", ticket, e);
+    });
+  if (drop && client.reactions.remove)
+    await client.reactions.remove({ ...at, name: drop }).catch((e) => {
+      synced = false;
+      recordSlackSyncFailure("reaction", ticket, e);
+    });
   return synced;
 }
 
@@ -595,9 +714,19 @@ function isHelpChannelFor(prog: Program | null, channel: string | null, workspac
   return programs.isHelpChannel(channel, workspaceId);
 }
 
-function policyFor(prog: Program | null, { channel = null, workspaceId = null, role = null }: { channel?: string | null; workspaceId?: string | null; role?: string | null } = {}): TicketPolicy | null {
+function policyFor(
+  prog: Program | null,
+  {
+    channel = null,
+    workspaceId = null,
+    role = null,
+  }: { channel?: string | null; workspaceId?: string | null; role?: string | null } = {},
+): TicketPolicy | null {
   if (!prog) return null;
-  return ticketPolicy({ program: prog, role: resolveTicketRole({ program: prog, channel, workspaceId, role: role as ChannelRole | null }) }) as TicketPolicy & Record<string, boolean>;
+  return ticketPolicy({
+    program: prog,
+    role: resolveTicketRole({ program: prog, channel, workspaceId, role: role as ChannelRole | null }),
+  }) as TicketPolicy & Record<string, boolean>;
 }
 
 interface RoutingTicket {
@@ -614,7 +743,21 @@ function routingOptions(prog: Program | null, ticket: RoutingTicket | null): Tic
   };
 }
 
-function ticketCreationAllowed({ prog, channel, workspaceId = null, paging = false, role = null, backfill = false }: { prog: Program | null; channel: string | null; workspaceId?: string | null; paging?: boolean; role?: string | null; backfill?: boolean }): boolean {
+function ticketCreationAllowed({
+  prog,
+  channel,
+  workspaceId = null,
+  paging = false,
+  role = null,
+  backfill = false,
+}: {
+  prog: Program | null;
+  channel: string | null;
+  workspaceId?: string | null;
+  paging?: boolean;
+  role?: string | null;
+  backfill?: boolean;
+}): boolean {
   if (!prog) return false;
   if (backfill) return channel ? isHelpChannelFor(prog, channel, workspaceId) : false;
   const pol = policyFor(prog, { channel, workspaceId, role });
@@ -644,7 +787,10 @@ function categoryRules(prog: Program | null): Record<string, unknown> | null {
   return ticketCategory.defaultTaxonomy();
 }
 
-function applyCategory(ticketId: number, { prog, channel, question }: { prog: Program | null; channel: string | null; question: string }): string | null {
+function applyCategory(
+  ticketId: number,
+  { prog, channel, question }: { prog: Program | null; channel: string | null; question: string },
+): string | null {
   const rules = categoryRules(prog);
   if (!ticketId || !prog || !rules) return null;
   try {
@@ -657,7 +803,10 @@ function applyCategory(ticketId: number, { prog, channel, question }: { prog: Pr
   }
 }
 
-function reclassifyOnFollowUp(ticket: Ticket, { prog, question, requesterId }: { prog: Program | null; question: string | null; requesterId: string }): Ticket {
+function reclassifyOnFollowUp(
+  ticket: Ticket,
+  { prog, question, requesterId }: { prog: Program | null; question: string | null; requesterId: string },
+): Ticket {
   if (!ticket || !prog || ticket.status === "resolved" || ticket.status === "closed") return ticket;
   if (!question || requesterId !== ticket.requester_id || question === ticket.question) return ticket;
   const followUps: string[] = [];
@@ -676,12 +825,27 @@ function reclassifyOnFollowUp(ticket: Ticket, { prog, question, requesterId }: {
   if (!rules) return ticket;
   if (ticket.category_source === "human") return db.getTicket(ticket.id) || ticket;
   const category = ticketCategory.classify({ question, channel: null, rules: { ...rules, fallback: null } });
-  if (category && category !== ticket.category) db.setTicketTriage(ticket.id, { category, categorySource: "classifier" });
+  if (category && category !== ticket.category)
+    db.setTicketTriage(ticket.id, { category, categorySource: "classifier" });
   return db.getTicket(ticket.id) || ticket;
 }
 
 async function ensureSupportTicket(options: EnsureSupportTicketOptions): Promise<Ticket | null> {
-  const { program, channel, threadTs, requesterId, question, client, workspaceId = null, paging = false, role = null, silent = false, backfill = false, createdAt = null, source = null } = options;
+  const {
+    program,
+    channel,
+    threadTs,
+    requesterId,
+    question,
+    client,
+    workspaceId = null,
+    paging = false,
+    role = null,
+    silent = false,
+    backfill = false,
+    createdAt = null,
+    source = null,
+  } = options;
   if (!threadTs) return null;
   const prog = program || (channel ? programs.forChannel(channel, workspaceId) : null);
   if (!prog) return null;
@@ -694,12 +858,28 @@ async function ensureSupportTicket(options: EnsureSupportTicketOptions): Promise
     const surfaces = ticketSurfaces(prog);
     if (!backfill && prog.posture === "passive" && (surfaces.thread || surfaces.organizer)) return null;
     if (!ticketCreationAllowed({ prog, channel, workspaceId: wsId, paging, role, backfill })) return null;
-    const visibility = backfill || prog.publicTicketsEnabled === false ? "dashboard" : (prog.ticketVisibility || "thread");
-    const id = db.createTicket({ programId: prog.id, workspaceId: wsId, channel, threadTs, requesterId, question, createdAt, visibility });
+    const visibility =
+      backfill || prog.publicTicketsEnabled === false ? "dashboard" : prog.ticketVisibility || "thread";
+    const id = db.createTicket({
+      programId: prog.id,
+      workspaceId: wsId,
+      channel,
+      threadTs,
+      requesterId,
+      question,
+      createdAt,
+      visibility,
+    });
     if (id) applyCategory(id, { prog, channel, question });
     ticket = id ? db.getTicket(id) : db.getTicketByThreadTs(threadTs, wsId, prog.id);
     if (ticket && !db.listTicketEvents(ticket.id).some((e) => e.event_type === "created")) {
-      recordTransition(ticket, requesterId, "created", { channel, workspaceId: wsId, source: source || "support_question" }, createdAt);
+      recordTransition(
+        ticket,
+        requesterId,
+        "created",
+        { channel, workspaceId: wsId, source: source || "support_question" },
+        createdAt,
+      );
     }
   }
   if (!ticket) return null;
@@ -731,7 +911,15 @@ async function ensureSupportTicket(options: EnsureSupportTicketOptions): Promise
   const fresh = db.getTicket(ticket.id);
   if (client) void syncTicketReactions(client, fresh, prog);
   if (client && !fresh.card_ts && ticketSurfaces(prog).organizer && getOrganizerChannel(prog, wsId)) {
-    await postCard({ prog, programId: prog.id, resolvedWorkspaceId: wsId, ticket: fresh, client, requesterId, question });
+    await postCard({
+      prog,
+      programId: prog.id,
+      resolvedWorkspaceId: wsId,
+      ticket: fresh,
+      client,
+      requesterId,
+      question,
+    });
   }
   return db.getTicket(ticket.id);
 }
@@ -754,7 +942,21 @@ function helperMentionedIn(programId: string, text: string | null): boolean {
   });
 }
 
-function markWaitingForHelper({ ticketId, client = null, program = null, question = null, role = null, explicit = false }: { ticketId: number; client?: SlackClient | null; program?: Program | null; question?: string | null; role?: string | null; explicit?: boolean }): Ticket | null {
+function markWaitingForHelper({
+  ticketId,
+  client = null,
+  program = null,
+  question = null,
+  role = null,
+  explicit = false,
+}: {
+  ticketId: number;
+  client?: SlackClient | null;
+  program?: Program | null;
+  question?: string | null;
+  role?: string | null;
+  explicit?: boolean;
+}): Ticket | null {
   const ticket = db.getTicket(ticketId);
   if (!ticket || CLOSED.includes(ticket.status) || ticket.status === "snoozed") return ticket || null;
   if (db.isThreadMuted(ticket.thread_ts) || db.isTakeover(ticket.thread_ts)) return ticket;
@@ -782,7 +984,12 @@ function markWaitingForHelper({ ticketId, client = null, program = null, questio
   }
   if (!autoBlocked && prog && prog.autoAssign === true && !updated.assignee_id && !alreadyOffered) {
     try {
-      const [top] = helperRoute.recommend({ programId: ticket.program_id, category: updated.category, limit: 1, ...routingOptions(prog, updated) });
+      const [top] = helperRoute.recommend({
+        programId: ticket.program_id,
+        category: updated.category,
+        limit: 1,
+        ...routingOptions(prog, updated),
+      });
       if (top && db.assignTicket(ticketId, top.userId)) {
         updated = db.getTicket(ticketId);
         recordTransition(updated, null, "assigned", { to: top.userId, automatic: true });
@@ -796,17 +1003,38 @@ function markWaitingForHelper({ ticketId, client = null, program = null, questio
       log.warn("tickets", `auto-assign failed for #${ticketId}: ${errorMessage(e)}`);
     }
   }
-  const mayPing = !autoBlocked && (pol ? pol.pingHelpers : (prog && prog.helperPing === true));
+  const mayPing = !autoBlocked && (pol ? pol.pingHelpers : prog && prog.helperPing === true);
   if (mayPing) {
     void pingRecommendedHelper({ client, ticket: updated, program: prog, question, role }).catch((e) => {
       log.warn("tickets", `helper ping failed for #${ticketId}: ${errorMessage(e)}`);
     });
   }
-  if (!autoBlocked && client && updated.card_ts) void syncCard(client, updated, `[Ticket #${updated.id}] Waiting for a helper`).catch(() => {});
+  if (!autoBlocked && client && updated.card_ts)
+    void syncCard(client, updated, `[Ticket #${updated.id}] Waiting for a helper`).catch(() => {});
   return updated;
 }
 
-async function handOffToHelper({ client, program, channel, threadTs, question, ticket = null, requesterId = null, workspaceId = null, role = null }: { client: SlackClient; program: Program | null; channel: string; threadTs: string; question: string; ticket?: Ticket | null; requesterId?: string | null; workspaceId?: string | null; role?: string | null }): Promise<Ticket | string | null> {
+async function handOffToHelper({
+  client,
+  program,
+  channel,
+  threadTs,
+  question,
+  ticket = null,
+  requesterId = null,
+  workspaceId = null,
+  role = null,
+}: {
+  client: SlackClient;
+  program: Program | null;
+  channel: string;
+  threadTs: string;
+  question: string;
+  ticket?: Ticket | null;
+  requesterId?: string | null;
+  workspaceId?: string | null;
+  role?: string | null;
+}): Promise<Ticket | string | null> {
   if (ticket) return markWaitingForHelper({ ticketId: ticket.id, client, program, question, role, explicit: true });
   if (!program) return null;
   const pol = policyFor(program, { channel, workspaceId, role });
@@ -814,7 +1042,25 @@ async function handOffToHelper({ client, program, channel, threadTs, question, t
   return pingThreadHelper({ client, program, channel, threadTs, question, requesterId, workspaceId, role });
 }
 
-async function pingThreadHelper({ client, program, channel, threadTs, question, requesterId = null, workspaceId = null, role = null }: { client: SlackClient; program: Program | null; channel: string; threadTs: string; question: string; requesterId?: string | null; workspaceId?: string | null; role?: string | null }): Promise<string | null> {
+async function pingThreadHelper({
+  client,
+  program,
+  channel,
+  threadTs,
+  question,
+  requesterId = null,
+  workspaceId = null,
+  role = null,
+}: {
+  client: SlackClient;
+  program: Program | null;
+  channel: string;
+  threadTs: string;
+  question: string;
+  requesterId?: string | null;
+  workspaceId?: string | null;
+  role?: string | null;
+}): Promise<string | null> {
   if (!client || !program || !threadTs || !channel) return null;
   const pol = policyFor(program, { channel, workspaceId, role });
   if (pol ? !pol.pingHelpers : program.helperPing !== true) return null;
@@ -828,8 +1074,16 @@ async function pingThreadHelper({ client, program, channel, threadTs, question, 
   const candidates = helperRoute.recommend({ programId: program.id, category, limit: 5, ...opts });
   const [top] = candidates;
   const logDecision = (skipReason: string | null, posted = false, selected: string | null = null) =>
-    logRoutingDecision({ ticket: { channel, thread_ts: threadTs, program_id: program.id }, program, category, candidates, selected, posted, skipReason });
-  if (!top) return logDecision("no_eligible_helper"), null;
+    logRoutingDecision({
+      ticket: { channel, thread_ts: threadTs, program_id: program.id },
+      program,
+      category,
+      candidates,
+      selected,
+      posted,
+      skipReason,
+    });
+  if (!top) return (logDecision("no_eligible_helper"), null);
 
   db.touchThread(threadTs, channel, { helperPinged: true });
 
@@ -845,8 +1099,27 @@ async function pingThreadHelper({ client, program, channel, threadTs, question, 
   return top.userId;
 }
 
-function logRoutingDecision({ ticket, program, category, candidates = [], selected = null, posted = false, skipReason = null }: { ticket: (Pick<Ticket, "channel" | "thread_ts" | "program_id"> & { id?: number }) | null; program: Program | null; category?: string | null; candidates?: TicketCandidate[]; selected?: string | null; posted?: boolean; skipReason?: string | null }): void {
-  const ranked = candidates.slice(0, 5).map((c) => `${c.userId}:${c.score}`).join(",");
+function logRoutingDecision({
+  ticket,
+  program,
+  category,
+  candidates = [],
+  selected = null,
+  posted = false,
+  skipReason = null,
+}: {
+  ticket: (Pick<Ticket, "channel" | "thread_ts" | "program_id"> & { id?: number }) | null;
+  program: Program | null;
+  category?: string | null;
+  candidates?: TicketCandidate[];
+  selected?: string | null;
+  posted?: boolean;
+  skipReason?: string | null;
+}): void {
+  const ranked = candidates
+    .slice(0, 5)
+    .map((c) => `${c.userId}:${c.score}`)
+    .join(",");
   log.info(
     "routing",
     `program=${(program && program.id) || (ticket && ticket.program_id) || "?"} ` +
@@ -856,30 +1129,56 @@ function logRoutingDecision({ ticket, program, category, candidates = [], select
   );
 }
 
-async function pingSpecificHelper({ client, ticket, program, userId, question = null, source = "ping", candidates = [], role = null }: { client: SlackClient; ticket: Ticket | null; program: Program | null; userId: string; question?: string | null; source?: string; candidates?: TicketCandidate[]; role?: string | null }): Promise<string | null> {
+async function pingSpecificHelper({
+  client,
+  ticket,
+  program,
+  userId,
+  question = null,
+  source = "ping",
+  candidates = [],
+  role = null,
+}: {
+  client: SlackClient;
+  ticket: Ticket | null;
+  program: Program | null;
+  userId: string;
+  question?: string | null;
+  source?: string;
+  candidates?: TicketCandidate[];
+  role?: string | null;
+}): Promise<string | null> {
   const logDecision = (skipReason: string | null, posted = false) =>
-    logRoutingDecision({ ticket, program, category: ticket?.category, candidates, selected: userId, posted, skipReason });
+    logRoutingDecision({
+      ticket,
+      program,
+      category: ticket?.category,
+      candidates,
+      selected: userId,
+      posted,
+      skipReason,
+    });
 
-  if (!client || !ticket || !program || !userId) return logDecision("missing_args"), null;
+  if (!client || !ticket || !program || !userId) return (logDecision("missing_args"), null);
   const pol = policyFor(program, { channel: ticket.channel, workspaceId: ticket.workspace_id, role });
-  if (pol ? !pol.pingHelpers : program.helperPing !== true) return logDecision("helper_ping_disabled"), null;
-  if (CLOSED.includes(ticket.status)) return logDecision("ticket_closed"), null;
-  if (programs.isShadow(program)) return logDecision("shadow_mode"), null;
+  if (pol ? !pol.pingHelpers : program.helperPing !== true) return (logDecision("helper_ping_disabled"), null);
+  if (CLOSED.includes(ticket.status)) return (logDecision("ticket_closed"), null);
+  if (programs.isShadow(program)) return (logDecision("shadow_mode"), null);
   try {
     const bot = require("./config").config?.slack?.botUserId;
-    if (bot && userId === bot) return logDecision("bot_user"), null;
-  } catch (_) {
-  }
-  if (db.isThreadMuted(ticket.thread_ts)) return logDecision("thread_muted"), null;
-  if (userId && ticket.requester_id && userId === ticket.requester_id) return logDecision("requester_is_candidate"), null;
-  if (db.isTakeover(ticket.thread_ts)) return logDecision("human_engaged"), null;
-  if (hasHelperReplied(ticket.id)) return logDecision("helper_already_replied"), null;
+    if (bot && userId === bot) return (logDecision("bot_user"), null);
+  } catch (_) {}
+  if (db.isThreadMuted(ticket.thread_ts)) return (logDecision("thread_muted"), null);
+  if (userId && ticket.requester_id && userId === ticket.requester_id)
+    return (logDecision("requester_is_candidate"), null);
+  if (db.isTakeover(ticket.thread_ts)) return (logDecision("human_engaged"), null);
+  if (hasHelperReplied(ticket.id)) return (logDecision("helper_already_replied"), null);
   if (helperMentionedIn(ticket.program_id, question) || helperMentionedIn(ticket.program_id, ticket.question)) {
-    return logDecision("requester_already_mentioned_helper"), null;
+    return (logDecision("requester_already_mentioned_helper"), null);
   }
 
   const offer = assignmentLifecycle.recordOffer({ ticket, to: userId, source });
-  if (!offer.recorded) return logDecision("dedupe_open_offer_exists"), null;
+  if (!offer.recorded) return (logDecision("dedupe_open_offer_exists"), null);
 
   const ask = `<@${userId}> — could you take a look at this one?`;
   await slackMessages.sendProgramMessage({
@@ -893,16 +1192,41 @@ async function pingSpecificHelper({ client, ticket, program, userId, question = 
   return userId;
 }
 
-async function pingRecommendedHelper({ client, ticket, program, question = null, role = null }: { client: SlackClient | null; ticket: Ticket | null; program: Program | null; question?: string | null; role?: string | null }): Promise<string | null> {
+async function pingRecommendedHelper({
+  client,
+  ticket,
+  program,
+  question = null,
+  role = null,
+}: {
+  client: SlackClient | null;
+  ticket: Ticket | null;
+  program: Program | null;
+  question?: string | null;
+  role?: string | null;
+}): Promise<string | null> {
   if (!client || !ticket || !program) return null;
   let userId = ticket.assignee_id || null;
   if (userId && ticket.requester_id && userId === ticket.requester_id) {
-    logRoutingDecision({ ticket, program, category: ticket.category, candidates: [], selected: userId, posted: false, skipReason: "assignee_is_requester" });
+    logRoutingDecision({
+      ticket,
+      program,
+      category: ticket.category,
+      candidates: [],
+      selected: userId,
+      posted: false,
+      skipReason: "assignee_is_requester",
+    });
     return null;
   }
   let candidates: TicketCandidate[] = [];
   if (!userId) {
-    candidates = helperRoute.recommend({ programId: ticket.program_id, category: ticket.category, limit: 5, ...routingOptions(program, ticket) });
+    candidates = helperRoute.recommend({
+      programId: ticket.program_id,
+      category: ticket.category,
+      limit: 5,
+      ...routingOptions(program, ticket),
+    });
     const [top] = candidates;
     if (!top) {
       logRoutingDecision({ ticket, program, category: ticket.category, candidates, skipReason: "no_eligible_helper" });
@@ -917,13 +1241,27 @@ function recordSlackSyncFailure(surface: string, ticket: Ticket | null, err: Sla
   const code = (err && (err.code || (err.data && err.data.error))) || "unknown";
   log.warn("tickets", `slack ${surface} sync failed for #${ticket?.id ?? "?"}: ${code}`);
   try {
-    db.recordMetric("ticket_slack_sync_failure", null, `${surface}:${String(code).slice(0, 40)}`, ticket?.program_id || null);
+    db.recordMetric(
+      "ticket_slack_sync_failure",
+      null,
+      `${surface}:${String(code).slice(0, 40)}`,
+      ticket?.program_id || null,
+    );
   } catch (e) {
     log.debug("tickets", `sync failure metric failed: ${errorMessage(e)}`);
   }
 }
 
-async function syncSlack({ client, channel, ts, text, blocks }: { client: SlackClient; channel: string | null; ts: string | null; text: string; blocks: SlackBlock[] }, ticket: Ticket | null = null): Promise<boolean> {
+async function syncSlack(
+  {
+    client,
+    channel,
+    ts,
+    text,
+    blocks,
+  }: { client: SlackClient; channel: string | null; ts: string | null; text: string; blocks: SlackBlock[] },
+  ticket: Ticket | null = null,
+): Promise<boolean> {
   if (!client?.chat?.update || !channel || !ts) return true;
   try {
     await client.chat.update({
@@ -943,7 +1281,15 @@ async function syncCard(client: SlackClient, ticket: Ticket, text: string): Prom
   await reconcileTicketUI({ client, ticket, cardText: text });
 }
 
-function resolveProg({ program, channel, workspaceId }: { program: Program | null; channel: string; workspaceId: string | null }): { prog: Program | null; programId: string; resolvedWorkspaceId: string | null } {
+function resolveProg({
+  program,
+  channel,
+  workspaceId,
+}: {
+  program: Program | null;
+  channel: string;
+  workspaceId: string | null;
+}): { prog: Program | null; programId: string; resolvedWorkspaceId: string | null } {
   const prog = program || (channel ? programs.forChannel(channel, workspaceId) : null);
   const programId = prog ? prog.id : "pixl";
   const resolvedWorkspaceId = workspaceId || (prog ? prog.workspaceId || prog.workspace_id || null : null);
@@ -951,7 +1297,19 @@ function resolveProg({ program, channel, workspaceId }: { program: Program | nul
 }
 
 async function checkIncident(options: IncidentCheckOptions): Promise<TicketActionResult> {
-  const { prog, programId, question, ticket, client, channel, threadTs, requesterId, resolvedWorkspaceId, placeholder, bypassIncidentMatch } = options;
+  const {
+    prog,
+    programId,
+    question,
+    ticket,
+    client,
+    channel,
+    threadTs,
+    requesterId,
+    resolvedWorkspaceId,
+    placeholder,
+    bypassIncidentMatch,
+  } = options;
   if (bypassIncidentMatch) return { done: false };
   const incidentMode = prog?.incidentMode || "ANSWER_AND_TRACK";
   if (incidentMode === "NORMAL_TICKET" || !client) return { done: false };
@@ -962,7 +1320,10 @@ async function checkIncident(options: IncidentCheckOptions): Promise<TicketActio
     log.debug("tickets", `incident match failed: ${errorMessage(e)}`);
   }
   if (!matched) return { done: false };
-  const text = reply.plainDashes(matched.public_message || `We're currently aware of an issue with "${matched.title}". The team is investigating — I'll update this thread when there's a confirmed resolution.`);
+  const text = reply.plainDashes(
+    matched.public_message ||
+      `We're currently aware of an issue with "${matched.title}". The team is investigating — I'll update this thread when there's a confirmed resolution.`,
+  );
   try {
     if (placeholder) {
       await reply.finalize(client, channel, threadTs, placeholder, text, { program: prog });
@@ -980,19 +1341,43 @@ async function checkIncident(options: IncidentCheckOptions): Promise<TicketActio
   }
 }
 
-async function postCard({ prog, programId, resolvedWorkspaceId, ticket, client, requesterId, question }: { prog: Program | null; programId: string; resolvedWorkspaceId: string | null; ticket: Ticket; client: SlackClient; requesterId: string; question: string }): Promise<Ticket> {
-  // WHY: cards route strictly to the organizer channel — never the public
+async function postCard({
+  prog,
+  programId,
+  resolvedWorkspaceId,
+  ticket,
+  client,
+  requesterId,
+  question,
+}: {
+  prog: Program | null;
+  programId: string;
+  resolvedWorkspaceId: string | null;
+  ticket: Ticket;
+  client: SlackClient;
+  requesterId: string;
+  question: string;
+}): Promise<Ticket> {
+  // Cards route strictly to the organizer channel — never the public
   // help channel, and no fallback on error.
   const organizerChannel = getOrganizerChannel(prog, resolvedWorkspaceId);
   if (!organizerChannel) {
-    log.error("tickets", `no organizer channel configured for program ${programId} — ticket #${ticket.id} card not posted`);
+    log.error(
+      "tickets",
+      `no organizer channel configured for program ${programId} — ticket #${ticket.id} card not posted`,
+    );
     return ticket;
   }
   if (client && client.chat && (client.chat as { postMessage?: unknown }).postMessage) {
     try {
       let candidates: TicketCandidate[] = [];
       try {
-        candidates = helperRoute.recommend({ programId, category: ticket.category, limit: 5, ...routingOptions(prog, ticket) });
+        candidates = helperRoute.recommend({
+          programId,
+          category: ticket.category,
+          limit: 5,
+          ...routingOptions(prog, ticket),
+        });
       } catch (e) {
         log.debug("tickets", `helper recommendation failed: ${errorMessage(e)}`);
       }
@@ -1001,29 +1386,70 @@ async function postCard({ prog, programId, resolvedWorkspaceId, ticket, client, 
         client,
         program: prog,
         channel: organizerChannel,
-        text: reply.plainDashes(`[Ticket #${ticket.id}] <@${requesterId}> asked: "${reply.escapeSlack(question).slice(0, 100)}"`),
+        text: reply.plainDashes(
+          `[Ticket #${ticket.id}] <@${requesterId}> asked: "${reply.escapeSlack(question).slice(0, 100)}"`,
+        ),
         blocks: cardBlocks,
       });
       if (res?.ts) {
         if (db.updateTicketCardTs(ticket.id, res.ts)) {
           ticket.card_ts = res.ts;
         } else if (client.chat.delete) {
-          await client.chat.delete({ channel: organizerChannel, ts: res.ts }).catch((e) => recordSlackSyncFailure("card_duplicate_delete", ticket, e as SlackError));
+          await client.chat
+            .delete({ channel: organizerChannel, ts: res.ts })
+            .catch((e) => recordSlackSyncFailure("card_duplicate_delete", ticket, e as SlackError));
         }
       }
     } catch (e) {
       recordSlackSyncFailure("card_post", ticket, e as SlackError);
-      log.error("tickets", `failed to post ticket card to organizer channel ${organizerChannel} for program ${programId}: ${errorMessage(e)}`);
+      log.error(
+        "tickets",
+        `failed to post ticket card to organizer channel ${organizerChannel} for program ${programId}: ${errorMessage(e)}`,
+      );
     }
   }
   return ticket;
 }
 
-async function escalateTicket({ program, channel, threadTs, requesterId, question, client, workspaceId = null, placeholder = null, bypassIncidentMatch = false, role = null }: { program: Program | null; channel: string; threadTs: string; requesterId: string; question: string; client: SlackClient; workspaceId?: string | null; placeholder?: string | null; bypassIncidentMatch?: boolean; role?: string | null }): Promise<Ticket | null> {
+async function escalateTicket({
+  program,
+  channel,
+  threadTs,
+  requesterId,
+  question,
+  client,
+  workspaceId = null,
+  placeholder = null,
+  bypassIncidentMatch = false,
+  role = null,
+}: {
+  program: Program | null;
+  channel: string;
+  threadTs: string;
+  requesterId: string;
+  question: string;
+  client: SlackClient;
+  workspaceId?: string | null;
+  placeholder?: string | null;
+  bypassIncidentMatch?: boolean;
+  role?: string | null;
+}): Promise<Ticket | null> {
   const { prog, programId, resolvedWorkspaceId } = resolveProg({ program, channel, workspaceId });
   const existing = db.getTicketByThreadTs(threadTs, resolvedWorkspaceId, prog?.id || null);
 
-  const inc = await checkIncident({ prog, programId, question, ticket: existing, client, channel, threadTs, requesterId, resolvedWorkspaceId, placeholder, bypassIncidentMatch });
+  const inc = await checkIncident({
+    prog,
+    programId,
+    question,
+    ticket: existing,
+    client,
+    channel,
+    threadTs,
+    requesterId,
+    resolvedWorkspaceId,
+    placeholder,
+    bypassIncidentMatch,
+  });
   if (inc.done) return inc.ticket || existing || null;
 
   const ticket = await ensureSupportTicket({
@@ -1042,13 +1468,31 @@ async function escalateTicket({ program, channel, threadTs, requesterId, questio
     return null;
   }
 
-  const promoted = CLOSED.includes(ticket.status) ? ticket : markWaitingForHelper({ ticketId: ticket.id, client, program: prog, question, role, explicit: true });
+  const promoted = CLOSED.includes(ticket.status)
+    ? ticket
+    : markWaitingForHelper({ ticketId: ticket.id, client, program: prog, question, role, explicit: true });
   if (placeholder) await reply.discardPlaceholder(client, channel, placeholder);
   log.info("tickets", `escalated ticket #${ticket.id} for ${programId} in ${channel}`);
   return promoted || ticket;
 }
 
-function getOrCreateOpenTicket({ program, channel, threadTs, requesterId, question, workspaceId = null, role = null }: { program: Program | null; channel: string; threadTs: string; requesterId: string; question: string; workspaceId?: string | null; role?: string | null }): Ticket | null {
+function getOrCreateOpenTicket({
+  program,
+  channel,
+  threadTs,
+  requesterId,
+  question,
+  workspaceId = null,
+  role = null,
+}: {
+  program: Program | null;
+  channel: string;
+  threadTs: string;
+  requesterId: string;
+  question: string;
+  workspaceId?: string | null;
+  role?: string | null;
+}): Ticket | null {
   if (!threadTs) return null;
   const prog = program || (channel ? programs.forChannel(channel, workspaceId) : null);
   const resolvedWorkspaceId = workspaceId || (prog ? prog.workspaceId || prog.workspace_id || null : null);
@@ -1056,17 +1500,29 @@ function getOrCreateOpenTicket({ program, channel, threadTs, requesterId, questi
   if (existing) return existing;
   if (!ticketCreationAllowed({ prog, channel, workspaceId: resolvedWorkspaceId, role })) return null;
   if (!prog) return null;
-  const id = db.createTicket({ programId: prog.id, workspaceId: resolvedWorkspaceId, channel, threadTs, requesterId, question, visibility: prog.publicTicketsEnabled === false ? "dashboard" : (prog.ticketVisibility || "thread") });
+  const id = db.createTicket({
+    programId: prog.id,
+    workspaceId: resolvedWorkspaceId,
+    channel,
+    threadTs,
+    requesterId,
+    question,
+    visibility: prog.publicTicketsEnabled === false ? "dashboard" : prog.ticketVisibility || "thread",
+  });
   if (!id) return db.getTicketByThreadTs(threadTs, resolvedWorkspaceId, prog.id);
   applyCategory(id, { prog, channel, question });
   const ticket = db.getTicket(id);
   if (!db.listTicketEvents(id).some((e) => e.event_type === "created")) {
-    recordTransition(ticket, requesterId, "created", { channel, workspaceId: resolvedWorkspaceId, source: "eligible_question" });
+    recordTransition(ticket, requesterId, "created", {
+      channel,
+      workspaceId: resolvedWorkspaceId,
+      source: "eligible_question",
+    });
   }
   return db.getTicket(id) || ticket;
 }
 
-// WHY: "still broken" from the requester is a reopen, never a new ticket —
+// "still broken" from the requester is a reopen, never a new ticket —
 // helper chatter must not reopen. Same lifecycle as the Reopen button: the
 // thread UI flips back to "someone will be here soon", the organizer card
 // updates, and the reopen is announced in the thread.
@@ -1085,7 +1541,19 @@ function creditThreadReply(ticket: Ticket, userId: string): void {
   }
 }
 
-function noteHelperEngaged({ channel, threadTs, userId, parentUserId, workspaceId }: { channel: string; threadTs: string; userId: string; parentUserId?: string | null; workspaceId?: string | null }): void {
+function noteHelperEngaged({
+  channel,
+  threadTs,
+  userId,
+  parentUserId,
+  workspaceId,
+}: {
+  channel: string;
+  threadTs: string;
+  userId: string;
+  parentUserId?: string | null;
+  workspaceId?: string | null;
+}): void {
   if (!parentUserId || parentUserId === userId) return;
   try {
     const prog = programs.forChannel(channel, workspaceId);
@@ -1096,7 +1564,23 @@ function noteHelperEngaged({ channel, threadTs, userId, parentUserId, workspaceI
   }
 }
 
-function noteThreadActivity({ channel, threadTs, userId, text = null, workspaceId = null, client = null, parentUserId = null }: { channel: string; threadTs: string; userId: string; text?: string | null; workspaceId?: string | null; client?: SlackClient | null; parentUserId?: string | null }): Ticket | null {
+function noteThreadActivity({
+  channel,
+  threadTs,
+  userId,
+  text = null,
+  workspaceId = null,
+  client = null,
+  parentUserId = null,
+}: {
+  channel: string;
+  threadTs: string;
+  userId: string;
+  text?: string | null;
+  workspaceId?: string | null;
+  client?: SlackClient | null;
+  parentUserId?: string | null;
+}): Ticket | null {
   if (!threadTs || !userId) return null;
   noteHelperEngaged({ channel, threadTs, userId, parentUserId, workspaceId });
   let ticket = db.getTicketByThreadTs(threadTs, workspaceId);
@@ -1136,7 +1620,21 @@ function noteThreadActivity({ channel, threadTs, userId, text = null, workspaceI
   return updated;
 }
 
-function claimTicket({ ticketId, actorId, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId: string; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
+function claimTicket({
+  ticketId,
+  actorId,
+  programId = null,
+  workspaceId = null,
+  client = null,
+  program = null,
+}: {
+  ticketId: number;
+  actorId: string;
+  programId?: string | null;
+  workspaceId?: string | null;
+  client?: SlackClient | null;
+  program?: Program | null;
+}): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1150,11 +1648,26 @@ function claimTicket({ ticketId, actorId, programId = null, workspaceId = null, 
     log.debug("tickets", `claim lifecycle record failed for #${ticketId}: ${errorMessage(e)}`);
   }
   const prog = program || programs.get(ticket.program_id);
-  if (client && updated.card_ts) void syncCard(client, updated, `[Ticket #${updated.id}] Claimed by <@${actorId}>`).catch(() => {});
+  if (client && updated.card_ts)
+    void syncCard(client, updated, `[Ticket #${updated.id}] Claimed by <@${actorId}>`).catch(() => {});
   return { ok: true, ticket: updated };
 }
 
-function unclaimTicket({ ticketId, actorId = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
+function unclaimTicket({
+  ticketId,
+  actorId = null,
+  programId = null,
+  workspaceId = null,
+  client = null,
+  program = null,
+}: {
+  ticketId: number;
+  actorId?: string | null;
+  programId?: string | null;
+  workspaceId?: string | null;
+  client?: SlackClient | null;
+  program?: Program | null;
+}): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1173,11 +1686,30 @@ function unclaimTicket({ ticketId, actorId = null, programId = null, workspaceId
     log.debug("tickets", `release lifecycle record failed for #${ticketId}: ${errorMessage(e)}`);
   }
   const prog = program || programs.get(ticket.program_id);
-  if (client && updated.card_ts) void syncCard(client, updated, `[Ticket #${updated.id}] Released to the queue`).catch(() => {});
+  if (client && updated.card_ts)
+    void syncCard(client, updated, `[Ticket #${updated.id}] Released to the queue`).catch(() => {});
   return { ok: true, ticket: updated };
 }
 
-function declineAssignment({ ticketId, actorId = null, reason = null, programId = null, workspaceId = null, client = null, program = null, role = null }: { ticketId: number; actorId?: string | null; reason?: unknown; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null; role?: string | null }): TicketActionResult {
+function declineAssignment({
+  ticketId,
+  actorId = null,
+  reason = null,
+  programId = null,
+  workspaceId = null,
+  client = null,
+  program = null,
+  role = null,
+}: {
+  ticketId: number;
+  actorId?: string | null;
+  reason?: unknown;
+  programId?: string | null;
+  workspaceId?: string | null;
+  client?: SlackClient | null;
+  program?: Program | null;
+  role?: string | null;
+}): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1190,12 +1722,13 @@ function declineAssignment({ ticketId, actorId = null, reason = null, programId 
   const res = assignmentLifecycle.recordDecline({ ticket, userId: actorId, reason });
   if (!res.recorded) return { ok: true, ticket, deduped: true };
   recordTransition(ticket, actorId, "assignment_declined", reason ? { reason: String(reason).slice(0, 40) } : null);
-  if (client && ticket.card_ts) void syncCard(client, db.getTicket(ticketId), `[Ticket #${ticket.id}] <@${actorId}> passed`).catch(() => {});
+  if (client && ticket.card_ts)
+    void syncCard(client, db.getTicket(ticketId), `[Ticket #${ticket.id}] <@${actorId}> passed`).catch(() => {});
 
   if (wasTargetedAtDecliner && client) {
     const prog = program || programs.get(ticket.program_id);
     const pol = policyFor(prog, { channel: ticket.channel, workspaceId: ticket.workspace_id, role });
-    if (pol ? pol.pingHelpers : (prog && prog.helperPing === true)) {
+    if (pol ? pol.pingHelpers : prog && prog.helperPing === true) {
       const next = assignmentLifecycle.nextEligibleHelper({
         programId: ticket.program_id,
         ticketId,
@@ -1204,7 +1737,14 @@ function declineAssignment({ ticketId, actorId = null, reason = null, programId 
         expertiseRouting: pol ? pol.expertiseRouting : true,
       });
       if (next) {
-        void pingSpecificHelper({ client, ticket: db.getTicket(ticketId), program: prog, userId: next.userId, source: "reassign_ping", role }).catch((e) => {
+        void pingSpecificHelper({
+          client,
+          ticket: db.getTicket(ticketId),
+          program: prog,
+          userId: next.userId,
+          source: "reassign_ping",
+          role,
+        }).catch((e) => {
           log.warn("tickets", `reassign ping failed for #${ticketId}: ${errorMessage(e)}`);
         });
       }
@@ -1217,23 +1757,35 @@ function resolveTicketWorker(ticket: Ticket | null, resolvingActorId: string | n
   if (!ticket || !ticket.program_id || !ticket.id) return null;
   const helpers = new Set(db.listHelpers(ticket.program_id, false).map((helper) => helper.user_id));
   const activeHelpers = new Set(db.listHelpers(ticket.program_id, true).map((helper) => helper.user_id));
-  const replies = db.handle().query(
-    `SELECT actor_id FROM ticket_events
+  const replies = db
+    .handle()
+    .query(
+      `SELECT actor_id FROM ticket_events
      WHERE ticket_id = ? AND event_type = 'helper_reply' AND actor_id IS NOT NULL
      ORDER BY created_at DESC, id DESC`,
-  ).all(ticket.id);
+    )
+    .all(ticket.id);
   const latestHelperReply = replies.find((event) => !!event.actor_id && helpers.has(event.actor_id));
   if (latestHelperReply?.actor_id) return latestHelperReply.actor_id;
   if (ticket.assignee_id) return ticket.assignee_id;
   return resolvingActorId && activeHelpers.has(resolvingActorId) ? resolvingActorId : null;
 }
 
-// WHY: the decision is pure data so Slack and dashboard share one outcome —
+// The decision is pure data so Slack and dashboard share one outcome —
 // the caller owns all I/O. `source` is the only thing that distinguishes a
 // dashboard resolve from a Slack one; it lands in the audit metadata and
 // nowhere in the ticket's domain state.
 function finishResolve(options: FinishResolveOptions): FinishResult {
-  const { ticket, actorId, resolution, source = null, resolutionMeta = null, client = null, resolvedAt = null, creditId = null } = options;
+  const {
+    ticket,
+    actorId,
+    resolution,
+    source = null,
+    resolutionMeta = null,
+    client = null,
+    resolvedAt = null,
+    creditId = null,
+  } = options;
   const resText = resolution || (actorId ? `resolved by <@${actorId}>` : "resolved");
   const ok = db.resolveTicket(ticket.id, resText, actorId || null, resolvedAt);
   if (!ok) return { error: "ticket could not be resolved" };
@@ -1243,17 +1795,36 @@ function finishResolve(options: FinishResolveOptions): FinishResult {
   let workerId = null;
   try {
     workerId = creditId || resolveTicketWorker(ticket, actorId);
-    db.handle().query("UPDATE tickets SET resolved_credit_id = ?, resolved_by = COALESCE(resolved_by, ?) WHERE id = ?").run(workerId, actorId ? null : workerId, ticket.id);
-    if (workerId) helperRoute.recordResolution({ programId: ticket.program_id, userId: workerId, category: ticket.category });
+    db.handle()
+      .query("UPDATE tickets SET resolved_credit_id = ?, resolved_by = COALESCE(resolved_by, ?) WHERE id = ?")
+      .run(workerId, actorId ? null : workerId, ticket.id);
+    if (workerId)
+      helperRoute.recordResolution({ programId: ticket.program_id, userId: workerId, category: ticket.category });
   } catch (e) {
     log.warn("tickets", `recordResolution failed: ${errorMessage(e)}`);
   }
   if (source !== "backfill") resolutionPipeline.schedule({ ticket: updated, client, actorId, workerId });
-  return { updated, cardText: `[Ticket #${updated.id}] Resolved`, ackText: `✅ Resolved${actorId ? ` by <@${actorId}>` : ""}.` };
+  return {
+    updated,
+    cardText: `[Ticket #${updated.id}] Resolved`,
+    ackText: `✅ Resolved${actorId ? ` by <@${actorId}>` : ""}.`,
+  };
 }
 
 function resolveTicket(options: ResolveTicketOptions): TicketActionResult {
-  const { ticketId, actorId = null, resolution = null, source = null, resolutionMeta = null, programId = null, workspaceId = null, client = null, program = null, resolvedAt = null, creditId = null } = options;
+  const {
+    ticketId,
+    actorId = null,
+    resolution = null,
+    source = null,
+    resolutionMeta = null,
+    programId = null,
+    workspaceId = null,
+    client = null,
+    program = null,
+    resolvedAt = null,
+    creditId = null,
+  } = options;
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1264,7 +1835,19 @@ function resolveTicket(options: ResolveTicketOptions): TicketActionResult {
   return { ok: true, ticket: d.updated };
 }
 
-function publicResolveTicket({ ticketId, actorId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
+function publicResolveTicket({
+  ticketId,
+  actorId = null,
+  workspaceId = null,
+  client = null,
+  program = null,
+}: {
+  ticketId: number;
+  actorId?: string | null;
+  workspaceId?: string | null;
+  client?: SlackClient | null;
+  program?: Program | null;
+}): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   if (!ticket) return { error: "ticket not found" };
   if (workspaceId && ticket.workspace_id && ticket.workspace_id !== workspaceId) return { error: "workspace mismatch" };
@@ -1279,7 +1862,19 @@ function publicResolveTicket({ ticketId, actorId = null, workspaceId = null, cli
   return { ok: true, ticket: d.updated };
 }
 
-async function publicReopenTicket({ ticketId, actorId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): Promise<TicketActionResult> {
+async function publicReopenTicket({
+  ticketId,
+  actorId = null,
+  workspaceId = null,
+  client = null,
+  program = null,
+}: {
+  ticketId: number;
+  actorId?: string | null;
+  workspaceId?: string | null;
+  client?: SlackClient | null;
+  program?: Program | null;
+}): Promise<TicketActionResult> {
   const ticket = db.getTicket(ticketId);
   if (!ticket) return { error: "ticket not found" };
   if (workspaceId && ticket.workspace_id && ticket.workspace_id !== workspaceId) return { error: "workspace mismatch" };
@@ -1310,12 +1905,28 @@ async function publicReopenTicket({ ticketId, actorId = null, workspaceId = null
   return { ok: true, ticket: updated };
 }
 
-function assignTicket({ ticketId, actorId = null, assigneeId, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; assigneeId: string; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
+function assignTicket({
+  ticketId,
+  actorId = null,
+  assigneeId,
+  programId = null,
+  workspaceId = null,
+  client = null,
+  program = null,
+}: {
+  ticketId: number;
+  actorId?: string | null;
+  assigneeId: string;
+  programId?: string | null;
+  workspaceId?: string | null;
+  client?: SlackClient | null;
+  program?: Program | null;
+}): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
   if (!assigneeId) return { error: "assigneeId required" };
-  // WHY: single membership fetch — actor and assignee checks share one read.
+  // Single membership fetch — actor and assignee checks share one read.
   let helpers: HelperRecord[] = [];
   try {
     helpers = db.listHelpers(ticket.program_id);
@@ -1342,16 +1953,34 @@ function assignTicket({ ticketId, actorId = null, assigneeId, programId = null, 
   const updated = db.getTicket(ticketId);
   recordTransition(updated, actorId, "assigned", { to: assigneeId });
   try {
-    assignmentLifecycle.recordOffer({ ticket: updated, to: assigneeId, source: actorId ? "reassign" : "auto", actorId });
+    assignmentLifecycle.recordOffer({
+      ticket: updated,
+      to: assigneeId,
+      source: actorId ? "reassign" : "auto",
+      actorId,
+    });
   } catch (e) {
     log.debug("tickets", `assign offer record failed for #${ticketId}: ${errorMessage(e)}`);
   }
   const prog = program || programs.get(ticket.program_id);
-  if (client && updated.card_ts) void syncCard(client, updated, `[Ticket #${updated.id}] Assigned to <@${assigneeId}>`).catch(() => {});
+  if (client && updated.card_ts)
+    void syncCard(client, updated, `[Ticket #${updated.id}] Assigned to <@${assigneeId}>`).catch(() => {});
   return { ok: true, ticket: updated };
 }
 
-function snoozeTicket({ ticketId, actorId = null, until, programId = null, workspaceId = null }: { ticketId: number; actorId?: string | null; until: number; programId?: string | null; workspaceId?: string | null }): TicketActionResult {
+function snoozeTicket({
+  ticketId,
+  actorId = null,
+  until,
+  programId = null,
+  workspaceId = null,
+}: {
+  ticketId: number;
+  actorId?: string | null;
+  until: number;
+  programId?: string | null;
+  workspaceId?: string | null;
+}): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1366,24 +1995,57 @@ function snoozeTicket({ ticketId, actorId = null, until, programId = null, works
   return { ok: true, ticket: updated };
 }
 
-function duplicateTicket({ ticketId, actorId = null, canonicalId, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; canonicalId: number; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
+function duplicateTicket({
+  ticketId,
+  actorId = null,
+  canonicalId,
+  programId = null,
+  workspaceId = null,
+  client = null,
+  program = null,
+}: {
+  ticketId: number;
+  actorId?: string | null;
+  canonicalId: number;
+  programId?: string | null;
+  workspaceId?: string | null;
+  client?: SlackClient | null;
+  program?: Program | null;
+}): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
   const canon = Number(canonicalId);
-  if (!canonicalId || !Number.isInteger(canon) || canon === ticketId) return { error: "valid canonicalId required (must differ from the ticket)" };
+  if (!canonicalId || !Number.isInteger(canon) || canon === ticketId)
+    return { error: "valid canonicalId required (must differ from the ticket)" };
   const target = db.getTicket(canon);
-  if (!target || target.program_id !== ticket.program_id) return { error: "canonical ticket must exist in the same program" };
+  if (!target || target.program_id !== ticket.program_id)
+    return { error: "canonical ticket must exist in the same program" };
   const ok = db.markDuplicateTicket(ticketId, canon);
   if (!ok) return { error: "ticket could not be marked duplicate" };
   const updated = db.getTicket(ticketId);
   recordTransition(updated, actorId, "duplicate", { of: canon });
   const prog = program || programs.get(ticket.program_id);
-  if (client && updated.card_ts) void syncCard(client, updated, `[Ticket #${updated.id}] Duplicate of #${canon}`).catch(() => {});
+  if (client && updated.card_ts)
+    void syncCard(client, updated, `[Ticket #${updated.id}] Duplicate of #${canon}`).catch(() => {});
   return { ok: true, ticket: updated };
 }
 
-function escalateStatusTicket({ ticketId, actorId = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
+function escalateStatusTicket({
+  ticketId,
+  actorId = null,
+  programId = null,
+  workspaceId = null,
+  client = null,
+  program = null,
+}: {
+  ticketId: number;
+  actorId?: string | null;
+  programId?: string | null;
+  workspaceId?: string | null;
+  client?: SlackClient | null;
+  program?: Program | null;
+}): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1396,7 +2058,23 @@ function escalateStatusTicket({ ticketId, actorId = null, programId = null, work
   return { ok: true, ticket: updated };
 }
 
-function reopenTicket({ ticketId, actorId = null, source = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; source?: string | null; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
+function reopenTicket({
+  ticketId,
+  actorId = null,
+  source = null,
+  programId = null,
+  workspaceId = null,
+  client = null,
+  program = null,
+}: {
+  ticketId: number;
+  actorId?: string | null;
+  source?: string | null;
+  programId?: string | null;
+  workspaceId?: string | null;
+  client?: SlackClient | null;
+  program?: Program | null;
+}): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1410,7 +2088,21 @@ function reopenTicket({ ticketId, actorId = null, source = null, programId = nul
   return { ok: true, ticket: updated };
 }
 
-function closeTicket({ ticketId, actorId = null, programId = null, workspaceId = null, client = null, program = null }: { ticketId: number; actorId?: string | null; programId?: string | null; workspaceId?: string | null; client?: SlackClient | null; program?: Program | null }): TicketActionResult {
+function closeTicket({
+  ticketId,
+  actorId = null,
+  programId = null,
+  workspaceId = null,
+  client = null,
+  program = null,
+}: {
+  ticketId: number;
+  actorId?: string | null;
+  programId?: string | null;
+  workspaceId?: string | null;
+  client?: SlackClient | null;
+  program?: Program | null;
+}): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId });
   if (err) return { error: err };
@@ -1423,17 +2115,38 @@ function closeTicket({ ticketId, actorId = null, programId = null, workspaceId =
   return { ok: true, ticket: updated };
 }
 
-// WHY: dashboard replies post as the program identity, never as the human —
+// Dashboard replies post as the program identity, never as the human —
 // internal notes must never leak into this path. `source: "dashboard"` adds a
 // visible "sent by @helper" line so a requester (and other helpers reading the
 // thread) can tell who's actually behind the branded identity; replies coming
 // from Slack itself (the reply modal, macros) skip it since the human is
 // already the one typing in the thread.
-async function replyToTicket({ ticketId, authorId, text, client, programId = null, workspaceId = null, program = null, source = null, requireOpen = false }: { ticketId: number; authorId: string; text: string; client: SlackClient; programId?: string | null; workspaceId?: string | null; program?: Program | null; source?: string | null; requireOpen?: boolean }): Promise<TicketActionResult> {
+async function replyToTicket({
+  ticketId,
+  authorId,
+  text,
+  client,
+  programId = null,
+  workspaceId = null,
+  program = null,
+  source = null,
+  requireOpen = false,
+}: {
+  ticketId: number;
+  authorId: string;
+  text: string;
+  client: SlackClient;
+  programId?: string | null;
+  workspaceId?: string | null;
+  program?: Program | null;
+  source?: string | null;
+  requireOpen?: boolean;
+}): Promise<TicketActionResult> {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId: authorId });
   if (err) return { error: err };
-  if (requireOpen && ![...CLAIMABLE, ...WORKABLE, "escalated"].includes(ticket.status)) return { error: "ticket is not open" };
+  if (requireOpen && ![...CLAIMABLE, ...WORKABLE, "escalated"].includes(ticket.status))
+    return { error: "ticket is not open" };
   const clean = String(text || "").trim();
   if (!clean) return { error: "reply text required" };
   const prog = program || programs.get(ticket.program_id);
@@ -1474,13 +2187,25 @@ async function replyToTicket({ ticketId, authorId, text, client, programId = nul
   return { ok: true, ts, ticket: refreshed };
 }
 
-function addInternalNote({ ticketId, authorId, body, programId = null, workspaceId = null }: { ticketId: number; authorId: string; body: string; programId?: string | null; workspaceId?: string | null }): TicketActionResult {
+function addInternalNote({
+  ticketId,
+  authorId,
+  body,
+  programId = null,
+  workspaceId = null,
+}: {
+  ticketId: number;
+  authorId: string;
+  body: string;
+  programId?: string | null;
+  workspaceId?: string | null;
+}): TicketActionResult {
   const ticket = db.getTicket(ticketId);
   const err = authorize(ticket, { programId, workspaceId, actorId: authorId });
   if (err) return { error: err };
   const clean = String(body || "").trim();
   if (!clean) return { error: "note body required" };
-  // WHY: notes stay helper-side — never posted, never fed to answers.
+  // Notes stay helper-side — never posted, never fed to answers.
   const id = db.addTicketNote({ ticketId, programId: ticket.program_id, authorId, body: clean });
   if (!id) return { error: "could not save note" };
   recordTransition(ticket, authorId, "note_added", { noteId: id });

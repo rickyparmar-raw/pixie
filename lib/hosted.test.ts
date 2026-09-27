@@ -54,15 +54,36 @@ test("program sync claims channels atomically and bootstraps the creator", () =>
 });
 
 test("ticket search is tenant-scoped and paginated", () => {
-  db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "t-h1", requesterId: "U1", question: "deadline?" });
-  db.createTicket({ programId: "pixl", workspaceId: "TW", channel: "C2", threadTs: "t-p1", requesterId: "U2", question: "deadline?" });
+  db.createTicket({
+    programId: "hwy",
+    workspaceId: "TW",
+    channel: "C1",
+    threadTs: "t-h1",
+    requesterId: "U1",
+    question: "deadline?",
+  });
+  db.createTicket({
+    programId: "pixl",
+    workspaceId: "TW",
+    channel: "C2",
+    threadTs: "t-p1",
+    requesterId: "U2",
+    question: "deadline?",
+  });
   const res = api.internalTicketSearch({ programId: "hwy" });
   assert.equal(res.total, 1);
   assert.equal(res.rows[0].program_id, "hwy");
 });
 
 test("ticket actions enforce actor membership and tenant match", () => {
-  const id = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "t-h2", requesterId: "U1", question: "help" });
+  const id = db.createTicket({
+    programId: "hwy",
+    workspaceId: "TW",
+    channel: "C1",
+    threadTs: "t-h2",
+    requesterId: "U1",
+    question: "help",
+  });
   const outsider = api.internalTicketAction(id, "claim", { programId: "hwy", actorId: "U-stranger" });
   assert.match(outsider.error, /not a helper/);
   const crossTenant = api.internalTicketAction(id, "claim", { programId: "pixl", actorId: "U-org" });
@@ -78,8 +99,22 @@ test("ticket actions enforce actor membership and tenant match", () => {
 
 test("dashboard reply posts as program identity and lands in the timeline", async () => {
   const posted: Array<Record<string, TestAny>> = [];
-  const client = { chat: { postMessage: async (p: TestAny) => { posted.push(p); return { ts: "2.0" }; } } };
-  const id = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "t-h3", requesterId: "U1", question: "help" });
+  const client = {
+    chat: {
+      postMessage: async (p: TestAny) => {
+        posted.push(p);
+        return { ts: "2.0" };
+      },
+    },
+  };
+  const id = db.createTicket({
+    programId: "hwy",
+    workspaceId: "TW",
+    channel: "C1",
+    threadTs: "t-h3",
+    requesterId: "U1",
+    question: "help",
+  });
   const res = await tickets.replyToTicket({ ticketId: id, authorId: "U-org", text: "try rebooting", client });
   assert.equal(res.ok, true);
   assert.equal(posted.length, 1);
@@ -89,7 +124,14 @@ test("dashboard reply posts as program identity and lands in the timeline", asyn
 });
 
 test("internal notes never touch Slack and require membership", () => {
-  const id = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "t-h4", requesterId: "U1", question: "help" });
+  const id = db.createTicket({
+    programId: "hwy",
+    workspaceId: "TW",
+    channel: "C1",
+    threadTs: "t-h4",
+    requesterId: "U1",
+    question: "help",
+  });
   const denied = api.internalTicketNote(id, { programId: "hwy", actorId: "U-stranger", body: "secret" });
   assert.match(denied.error, /not a helper/);
   const note = api.internalTicketNote(id, { programId: "hwy", actorId: "U-org", body: "customer is on v2" });
@@ -101,7 +143,12 @@ test("internal notes never touch Slack and require membership", () => {
 
 test("helper reconciliation removes stale membership instead of going stale", () => {
   db.syncHelper({ programId: "hwy", userId: "U-gone", source: "organizer_channel" });
-  const res = api.internalHelpersSync("hwy", { actorId: "U-org", source: "organizer_channel", members: ["U-org"], reconcile: true });
+  const res = api.internalHelpersSync("hwy", {
+    actorId: "U-org",
+    source: "organizer_channel",
+    members: ["U-org"],
+    reconcile: true,
+  });
   assert.equal(res.ok, true);
   assert.equal(db.isHelper("hwy", "U-gone"), false);
   assert.equal(db.isHelper("hwy", "U-org"), true);
@@ -117,15 +164,36 @@ test("program sync validates slug, name, and channel kinds", () => {
 });
 
 test("snooze and duplicate actions validate their targets", () => {
-  const id = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "t-sec-1", requesterId: "U1", question: "q" });
+  const id = db.createTicket({
+    programId: "hwy",
+    workspaceId: "TW",
+    channel: "C1",
+    threadTs: "t-sec-1",
+    requesterId: "U1",
+    question: "q",
+  });
   const me = { programId: "hwy", actorId: "U-org" };
   assert.match(api.internalTicketAction(id, "snooze", { ...me }).error, /until required/);
   assert.match(api.internalTicketAction(id, "snooze", { ...me, until: "yesterday" }).error, /valid future until/);
   assert.match(api.internalTicketAction(id, "duplicate", { ...me, canonicalId: id }).error, /must differ/);
-  const other = db.createTicket({ programId: "pixl", workspaceId: "TW", channel: "C2", threadTs: "t-sec-2", requesterId: "U2", question: "q" });
+  const other = db.createTicket({
+    programId: "pixl",
+    workspaceId: "TW",
+    channel: "C2",
+    threadTs: "t-sec-2",
+    requesterId: "U2",
+    question: "q",
+  });
   db.syncHelper({ programId: "pixl", userId: "U-org", source: "manual" });
   assert.match(api.internalTicketAction(id, "duplicate", { ...me, canonicalId: other }).error, /same program/);
-  const canon = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "t-sec-3", requesterId: "U1", question: "q" });
+  const canon = db.createTicket({
+    programId: "hwy",
+    workspaceId: "TW",
+    channel: "C1",
+    threadTs: "t-sec-3",
+    requesterId: "U1",
+    question: "q",
+  });
   assert.equal(api.internalTicketAction(id, "duplicate", { ...me, canonicalId: canon }).ok, true);
 });
 
@@ -135,20 +203,36 @@ test("ticket search bounds pagination and requires a tenant", () => {
   assert.ok(res.rows.length <= 200);
 });
 
-
-test("char: workspace mismatch denied on reply/note even with right program", async () => {
-  const id = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "char-ws-1", requesterId: "U1", question: "q" });
+test("workspace mismatch denied on reply/note even with right program", async () => {
+  const id = db.createTicket({
+    programId: "hwy",
+    workspaceId: "TW",
+    channel: "C1",
+    threadTs: "char-ws-1",
+    requesterId: "U1",
+    question: "q",
+  });
   const me = { programId: "hwy", workspaceId: "WRONG", actorId: "U-org", text: "hi", body: "hi" };
   assert.match((await api.internalTicketReply(id, me)).error, /mismatch/);
   assert.match(api.internalTicketNote(id, me).error, /mismatch/);
 });
 
-test("char: knowledge propose + candidate action resolve tenant from stored rows", async () => {
-  const a = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "char-k1", requesterId: "U1", question: "how do rebates work" });
+test("knowledge propose + candidate action resolve tenant from stored rows", async () => {
+  const a = db.createTicket({
+    programId: "hwy",
+    workspaceId: "TW",
+    channel: "C1",
+    threadTs: "char-k1",
+    requesterId: "U1",
+    question: "how do rebates work",
+  });
   const cross = await api.internalKnowledgePropose("pixl", { actorId: "U-org", ticketId: a });
   assert.match(cross.error, /not found in this program|not a helper/);
 
-  assert.match(api.internalKnowledgeCandidateAction(999999999, { actorId: "U-org", action: "approve" }).error, /not found/);
+  assert.match(
+    api.internalKnowledgeCandidateAction(999999999, { actorId: "U-org", action: "approve" }).error,
+    /not found/,
+  );
 
   db.syncHelper({ programId: "hwy", userId: "U-org", source: "manual" });
   const fakeRow = db.handle().query("SELECT id, program_id FROM learned_facts LIMIT 1").get();
@@ -158,8 +242,13 @@ test("char: knowledge propose + candidate action resolve tenant from stored rows
   }
 });
 
-test("char: macro update/delete/send scope to the macro's own program", async () => {
-  const created = api.internalMacroCreate("hwy", { actorId: "U-org", trigger: "?charpin", name: "Pin", content: "hello {helper}" });
+test("macro update/delete/send scope to the macro's own program", async () => {
+  const created = api.internalMacroCreate("hwy", {
+    actorId: "U-org",
+    trigger: "?charpin",
+    name: "Pin",
+    content: "hello {helper}",
+  });
   assert.equal(created.ok, true);
   const mid = created.macro.id;
 
@@ -169,10 +258,25 @@ test("char: macro update/delete/send scope to the macro's own program", async ()
   assert.match((await api.internalMacroSend(mid, { actorId: "U-org" })).error, /ticketId required/);
 });
 
-test("char: incident link/unlink/notify re-check the incident's program membership", async () => {
-  const t1 = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "char-i1", requesterId: "U1", question: "outage login failing badly" });
-  const t2 = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "char-i2", requesterId: "U2", question: "outage login failing badly again" });
-  void t1; void t2;
+test("incident link/unlink/notify re-check the incident's program membership", async () => {
+  const t1 = db.createTicket({
+    programId: "hwy",
+    workspaceId: "TW",
+    channel: "C1",
+    threadTs: "char-i1",
+    requesterId: "U1",
+    question: "outage login failing badly",
+  });
+  const t2 = db.createTicket({
+    programId: "hwy",
+    workspaceId: "TW",
+    channel: "C1",
+    threadTs: "char-i2",
+    requesterId: "U2",
+    question: "outage login failing badly again",
+  });
+  void t1;
+  void t2;
   const found = api.internalIncidentDetect("hwy", { actorId: "U-org" });
   assert.ok(found && !found.error);
   const listed = api.internalIncidents("hwy", {});
@@ -191,13 +295,13 @@ test("char: incident link/unlink/notify re-check the incident's program membersh
   }
 });
 
-test("char: radar/health/wait/analytics/sla/retention-preview reject unknown programs", () => {
+test("radar/health/wait/analytics/sla/retention-preview reject unknown programs", () => {
   for (const fn of [
     () => api.internalRadarList("nope-char", {}),
     () => api.internalHealthScore("nope-char"),
     () => api.internalWaitEstimate("nope-char", {}),
-     () => api.internalAnalytics("nope-char", {}),
-     () => api.internalHelperStats("nope-char", {}),
+    () => api.internalAnalytics("nope-char", {}),
+    () => api.internalHelperStats("nope-char", {}),
     () => api.internalSlaCheck("nope-char"),
     () => api.internalRetentionPreview("nope-char"),
     () => api.internalRetentionSweep("nope-char", { actorId: "U-org", confirm: true }),

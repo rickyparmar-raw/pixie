@@ -3,7 +3,9 @@ const assert = require("node:assert/strict");
 const shop = require("./liveShop");
 
 test("parses Live reward names and approved-hour thresholds", () => {
-  const items = shop.parseCatalogue('\\"name\\":\\"Four Key Macropad\\",\\"price\\":3,\\"name\\":\\"GoPro HERO12 Black\\",\\"price\\":65');
+  const items = shop.parseCatalogue(
+    '\\"name\\":\\"Four Key Macropad\\",\\"price\\":3,\\"name\\":\\"GoPro HERO12 Black\\",\\"price\\":65',
+  );
   assert.deepEqual(items, [
     { name: "Four Key Macropad", hours: 3 },
     { name: "GoPro HERO12 Black", hours: 65 },
@@ -11,7 +13,11 @@ test("parses Live reward names and approved-hour thresholds", () => {
 });
 
 test("answers the stream time added by approved build hours", () => {
-  const result = shop.directAnswer("how much stream time does 3 approved hours add", [{ name: "Keyboard", hours: 15 }], 20);
+  const result = shop.directAnswer(
+    "how much stream time does 3 approved hours add",
+    [{ name: "Keyboard", hours: 15 }],
+    20,
+  );
   assert.equal(result.answer, "*3 approved build hours* add *1 hour* to the stream.");
 });
 
@@ -35,8 +41,7 @@ test("lists rewards unlocked by approved build hours", () => {
   assert.doesNotMatch(result.answer, /Monitor/);
 });
 
-
-test("CHAR: liveShop returns null when nothing matches (hands back to docs path)", () => {
+test("liveShop returns null when nothing matches (hands back to docs path)", () => {
   assert.equal(shop.directAnswer("what is the deadline", [{ name: "Keyboard", hours: 15 }], 20), null);
   assert.equal(shop.directAnswer("hello there", [], 20), null);
 });

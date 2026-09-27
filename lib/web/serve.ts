@@ -52,12 +52,11 @@ function htmlResponse(html: string, extraHeaders: Record<string, string> = {}): 
   });
 }
 
-
 async function readJsonBody(req: Request, method: string): Promise<JsonObject> {
   // Malformed bodies become validation errors; they must never crash the request handler.
   if (!["POST", "PUT", "PATCH", "DELETE"].includes(method)) return {};
   try {
-    return await req.json() as JsonObject;
+    return (await req.json()) as JsonObject;
   } catch (_) {
     return {};
   }
@@ -93,7 +92,6 @@ function radarWriteStatus(err: string | null | undefined): number {
   return 400;
 }
 
-
 const sseClients = new Set<SseClient>();
 
 function broadcastSSE(event: string, data: unknown): void {
@@ -124,7 +122,11 @@ function sseStream(req: Request): Response {
       req.signal.addEventListener("abort", () => {
         closed = true;
         sseClients.delete(client);
-        try { controller.close(); } catch (e) { log.debug("web/serve", `SSE close failed: ${e instanceof Error ? e.message : String(e)}`); }
+        try {
+          controller.close();
+        } catch (e) {
+          log.debug("web/serve", `SSE close failed: ${e instanceof Error ? e.message : String(e)}`);
+        }
       });
     },
     cancel() {
@@ -172,7 +174,6 @@ function startMetricTicks() {
   if (metricTimer.unref) metricTimer.unref();
 }
 
-
 async function handleStatic(req: Request): Promise<Response | null> {
   // Static traversal is rejected before path resolution; the root document still requires a session.
   const url = new URL(req.url);
@@ -206,7 +207,7 @@ async function handleScreenshots(req: Request): Promise<Response | null | undefi
 
     if (fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
       return serveFile(fullPath);
-  }
+    }
   }
 
   return null;
@@ -349,13 +350,17 @@ function renderLoginPage({ error, slackUrl }: { error?: string; slackUrl?: strin
       <button type="submit" class="btn-login">Enter Control Room →</button>
     </form>
 
-    ${slackUrl ? `
+    ${
+      slackUrl
+        ? `
       <div class="login-divider"><span>OR</span></div>
       <a href="${slackUrl}" class="btn-slack">
         <svg width="16" height="16" viewBox="0 0 122.8 122.8"><path d="M25.8 77.6c0 7.1-5.8 12.9-12.9 12.9S0 84.7 0 77.6s5.8-12.9 12.9-12.9h12.9v12.9zm6.5 0c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9v32.3c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V77.6z" fill="#e01e5a"/><path d="M45.2 25.8c-7.1 0-12.9-5.8-12.9-12.9S38.1 0 45.2 0s12.9 5.8 12.9 12.9v12.9H45.2zm0 6.5c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H12.9C5.8 58.1 0 52.3 0 45.2s5.8-12.9 12.9-12.9h32.3z" fill="#36c5f0"/><path d="M97 45.2c0-7.1 5.8-12.9 12.9-12.9s12.9 5.8 12.9 12.9-5.8 12.9-12.9 12.9H97V45.2zm-6.5 0c0 7.1-5.8 12.9-12.9 12.9s-12.9-5.8-12.9-12.9V12.9C64.7 5.8 70.5 0 77.6 0s12.9 5.8 12.9 12.9v32.3z" fill="#2eb67d"/><path d="M77.6 97c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9-12.9-5.8-12.9-12.9V97h12.9zm0-6.5c-7.1 0-12.9-5.8-12.9-12.9s5.8-12.9 12.9-12.9h32.3c7.1 0 12.9 5.8 12.9 12.9s-5.8 12.9-12.9 12.9H77.6z" fill="#ecb22e"/></svg>
         Sign in with Slack
       </a>
-    ` : ""}
+    `
+        : ""
+    }
   </div>
 </body>
 </html>`;
@@ -429,7 +434,7 @@ async function handleApi(req: Request): Promise<Response | null> {
 
   if (url.pathname === "/api/ask" && method === "POST") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
-      const body = await req.json().catch(() => ({})) as JsonObject;
+    const body = (await req.json().catch(() => ({}))) as JsonObject;
     const result = await api.handleAsk(body.question || "");
     return json(result);
   }
@@ -452,7 +457,7 @@ async function handleApi(req: Request): Promise<Response | null> {
   if (url.pathname.startsWith("/api/queue/") && method === "PATCH") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const id = Number(url.pathname.split("/")[3]);
-    const body = await req.json().catch(() => ({})) as JsonObject;
+    const body = (await req.json().catch(() => ({}))) as JsonObject;
     api.queueEdit(id, body.question, body.answer);
     return json({ ok: true });
   }
@@ -466,7 +471,7 @@ async function handleApi(req: Request): Promise<Response | null> {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const parts = url.pathname.split("/");
     const id = Number(parts[3]);
-    const body = await req.json().catch(() => ({})) as JsonObject;
+    const body = (await req.json().catch(() => ({}))) as JsonObject;
     api.gapsMove(id, body.kind);
     return json({ ok: true });
   }
@@ -513,7 +518,7 @@ async function handleApi(req: Request): Promise<Response | null> {
 
   if (url.pathname === "/api/teach" && method === "POST") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
-    const body = await req.json().catch(() => ({})) as JsonObject;
+    const body = (await req.json().catch(() => ({}))) as JsonObject;
     const taught = api.handleTeach(body.question, body.answer, adminResult.session.userId, body.programId);
     if (taught && taught.error) return json(taught, 400);
     return json({ ok: true });
@@ -543,7 +548,7 @@ async function handleApi(req: Request): Promise<Response | null> {
 
   if (url.pathname === "/api/programs" && method === "POST") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
-    const body = await req.json().catch(() => ({})) as JsonObject;
+    const body = (await req.json().catch(() => ({}))) as JsonObject;
     return json(api.programSave(body));
   }
 
@@ -556,7 +561,7 @@ async function handleApi(req: Request): Promise<Response | null> {
   if (url.pathname.startsWith("/api/programs/") && url.pathname.endsWith("/posture") && method === "PATCH") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const id = url.pathname.split("/")[3];
-    const body = await req.json().catch(() => ({})) as JsonObject;
+    const body = (await req.json().catch(() => ({}))) as JsonObject;
     return json(api.programSetPosture(id, body.posture));
   }
 
@@ -570,7 +575,7 @@ async function handleApi(req: Request): Promise<Response | null> {
   if (/^\/api\/tickets\/\d+$/.test(url.pathname) && method === "PATCH") {
     if (adminResult.status) return json(adminResult.body, adminResult.status);
     const id = Number(url.pathname.split("/")[3]);
-    const body = await req.json().catch(() => ({})) as JsonObject;
+    const body = (await req.json().catch(() => ({}))) as JsonObject;
     if (!body.status) return json({ error: "status required" }, 400);
     return json(api.ticketUpdate(id, body.status, body.assigneeId, adminResult.session?.userId || null));
   }
@@ -610,10 +615,16 @@ async function handleApi(req: Request): Promise<Response | null> {
     const gate = api.internalAuth(req);
     if (!gate.ok) return json(gate.body, gate.status);
     const programId = decodeURIComponent(historyImportRoute[1]);
-    const result = method === "GET"
-      ? api.internalHistoryImportProgress(programId)
-      : api.internalHistoryImportStart(programId);
-    const status = result.error === "unknown program" ? 404 : result.error === "Slack client unavailable" ? 503 : result.error ? 400 : 200;
+    const result =
+      method === "GET" ? api.internalHistoryImportProgress(programId) : api.internalHistoryImportStart(programId);
+    const status =
+      result.error === "unknown program"
+        ? 404
+        : result.error === "Slack client unavailable"
+          ? 503
+          : result.error
+            ? 400
+            : 200;
     return json(result, status);
   }
 
@@ -638,7 +649,7 @@ async function handleApi(req: Request): Promise<Response | null> {
         limit: url.searchParams.get("limit"),
         offset: url.searchParams.get("offset"),
       });
-      return json(res, res.error === "unknown program" ? 404 : (res.error ? 400 : 200));
+      return json(res, res.error === "unknown program" ? 404 : res.error ? 400 : 200);
     }
     if (url.pathname === "/internal/v1/programs" && method === "GET") {
       return json(api.programsList());
@@ -646,13 +657,13 @@ async function handleApi(req: Request): Promise<Response | null> {
     const progSync = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)$/);
     if (progSync && method === "PUT") {
       const res = api.internalProgramSync(progSync[1], body);
-      return json(res, res.error ? (res.status || 400) : 200);
+      return json(res, res.error ? res.status || 400 : 200);
     }
     const testQuestion = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/test-question$/);
     if (testQuestion && method === "POST") {
       const res = await api.internalTestQuestion(decodeURIComponent(testQuestion[1]), body);
       if (!res.error) return json(res);
-      return json(res, res.error === "unknown program" ? 404 : (res.status || 400));
+      return json(res, res.error === "unknown program" ? 404 : res.status || 400);
     }
     const helpersSync = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/helpers$/);
     if (helpersSync && method === "GET") {
@@ -750,7 +761,12 @@ async function handleApi(req: Request): Promise<Response | null> {
     }
     const macroSuggestRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/macros\/suggest$/);
     if (macroSuggestRoute && method === "GET") {
-      return json(api.internalMacroSuggest(macroSuggestRoute[1], { q: url.searchParams.get("q"), limit: url.searchParams.get("limit") }));
+      return json(
+        api.internalMacroSuggest(macroSuggestRoute[1], {
+          q: url.searchParams.get("q"),
+          limit: url.searchParams.get("limit"),
+        }),
+      );
     }
     const macroTemplatesRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/macros\/templates$/);
     if (macroTemplatesRoute && method === "GET") {
@@ -759,16 +775,27 @@ async function handleApi(req: Request): Promise<Response | null> {
     }
     const macroWaitingRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/macros\/waiting$/);
     if (macroWaitingRoute && method === "GET") {
-      const res = api.internalMacroWaiting(macroWaitingRoute[1], { actorId: url.searchParams.get("actorId"), category: url.searchParams.get("category") });
+      const res = api.internalMacroWaiting(macroWaitingRoute[1], {
+        actorId: url.searchParams.get("actorId"),
+        category: url.searchParams.get("category"),
+      });
       return json(res, res.error ? (res.error.includes("not a helper") ? 403 : 400) : 200);
     }
     const routingRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/routing\/recommend$/);
     if (routingRoute && method === "GET") {
-      return json(api.internalRoutingRecommend(routingRoute[1], { category: url.searchParams.get("category"), limit: url.searchParams.get("limit") }));
+      return json(
+        api.internalRoutingRecommend(routingRoute[1], {
+          category: url.searchParams.get("category"),
+          limit: url.searchParams.get("limit"),
+        }),
+      );
     }
     const helperStatsRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/helpers\/stats$/);
     if (helperStatsRoute && method === "GET") {
-      const res = api.internalHelperStats(helperStatsRoute[1], { recentLimit: url.searchParams.get("recentLimit"), since: url.searchParams.get("since") });
+      const res = api.internalHelperStats(helperStatsRoute[1], {
+        recentLimit: url.searchParams.get("recentLimit"),
+        since: url.searchParams.get("since"),
+      });
       return json(res, res.error ? 400 : 200);
     }
     const leaderboardRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/leaderboard$/);
@@ -793,7 +820,13 @@ async function handleApi(req: Request): Promise<Response | null> {
     }
     const dupRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/duplicates$/);
     if (dupRoute && method === "GET") {
-      return json(api.internalDuplicates(dupRoute[1], { ticketId: url.searchParams.get("ticketId"), q: url.searchParams.get("q"), limit: url.searchParams.get("limit") }));
+      return json(
+        api.internalDuplicates(dupRoute[1], {
+          ticketId: url.searchParams.get("ticketId"),
+          q: url.searchParams.get("q"),
+          limit: url.searchParams.get("limit"),
+        }),
+      );
     }
     const incidentManualRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/incidents\/manual$/);
     if (incidentManualRoute && method === "POST") {
@@ -802,12 +835,18 @@ async function handleApi(req: Request): Promise<Response | null> {
     }
     const incidentList = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/incidents$/);
     if (incidentList && method === "GET") {
-      return json(api.internalIncidents(incidentList[1], { status: url.searchParams.get("status"), limit: url.searchParams.get("limit") }));
+      return json(
+        api.internalIncidents(incidentList[1], {
+          status: url.searchParams.get("status"),
+          limit: url.searchParams.get("limit"),
+        }),
+      );
     }
     if (incidentList && method === "POST") {
-      const res = body.action === "create"
-        ? api.internalIncidentCreate(incidentList[1], body)
-        : api.internalIncidentDetect(incidentList[1], body);
+      const res =
+        body.action === "create"
+          ? api.internalIncidentCreate(incidentList[1], body)
+          : api.internalIncidentDetect(incidentList[1], body);
       return json(res, res.error ? helperWriteStatus(res.error) : 200);
     }
     const incidentRoute = url.pathname.match(/^\/internal\/v1\/incidents\/(\d+)$/);
@@ -826,12 +865,18 @@ async function handleApi(req: Request): Promise<Response | null> {
     }
     const incidentAffectedRoute = url.pathname.match(/^\/internal\/v1\/incidents\/(\d+)\/affected$/);
     if (incidentAffectedRoute && method === "GET") {
-      const res = api.internalIncidentAffected(Number(incidentAffectedRoute[1]), { onlyUnnotified: url.searchParams.get("onlyUnnotified") });
+      const res = api.internalIncidentAffected(Number(incidentAffectedRoute[1]), {
+        onlyUnnotified: url.searchParams.get("onlyUnnotified"),
+      });
       return json(res, res.error ? 404 : 200);
     }
     const radarRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/radar$/);
     if (radarRoute && method === "GET") {
-      const res = api.internalRadarList(radarRoute[1], { status: url.searchParams.get("status"), severity: url.searchParams.get("severity"), limit: url.searchParams.get("limit") });
+      const res = api.internalRadarList(radarRoute[1], {
+        status: url.searchParams.get("status"),
+        severity: url.searchParams.get("severity"),
+        limit: url.searchParams.get("limit"),
+      });
       return json(res, res.error ? 400 : 200);
     }
     if (radarRoute && method === "POST") {
@@ -850,7 +895,12 @@ async function handleApi(req: Request): Promise<Response | null> {
     }
     const waitRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/wait$/);
     if (waitRoute && method === "GET") {
-      return json(api.internalWaitEstimate(waitRoute[1], { category: url.searchParams.get("category"), ticketId: url.searchParams.get("ticketId") }));
+      return json(
+        api.internalWaitEstimate(waitRoute[1], {
+          category: url.searchParams.get("category"),
+          ticketId: url.searchParams.get("ticketId"),
+        }),
+      );
     }
     const analyticsRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/analytics$/);
     if (analyticsRoute && method === "GET") {
@@ -874,7 +924,10 @@ async function handleApi(req: Request): Promise<Response | null> {
     }
     const macrosRoute = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/macros$/);
     if (macrosRoute && method === "GET") {
-      const res = api.internalMacrosList(macrosRoute[1], { enabledOnly: url.searchParams.get("enabledOnly"), q: url.searchParams.get("q") });
+      const res = api.internalMacrosList(macrosRoute[1], {
+        enabledOnly: url.searchParams.get("enabledOnly"),
+        q: url.searchParams.get("q"),
+      });
       return json(res, res.error ? 400 : 200);
     }
     if (macrosRoute && method === "POST") {
@@ -901,10 +954,14 @@ async function handleApi(req: Request): Promise<Response | null> {
     }
     {
       const dashboardApi = require("./dashboardApi");
-      const dashNotFound = (res: JsonObject) => res && res.error === "unknown program" ? 404
-        : res && res.error === "ticket not found" ? 404
-        : res && res.error === "helper not found" ? 404
-        : null;
+      const dashNotFound = (res: JsonObject) =>
+        res && res.error === "unknown program"
+          ? 404
+          : res && res.error === "ticket not found"
+            ? 404
+            : res && res.error === "helper not found"
+              ? 404
+              : null;
       const dashTicketSearch = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/tickets\/search$/);
       if (dashTicketSearch && method === "GET") {
         const res = dashboardApi.ticketSearchScoped(decodeURIComponent(dashTicketSearch[1]), {
@@ -927,13 +984,18 @@ async function handleApi(req: Request): Promise<Response | null> {
       }
       const dashTicketDetail = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/tickets\/(\d+)$/);
       if (dashTicketDetail && method === "GET") {
-        const res = dashboardApi.ticketDetailScoped(decodeURIComponent(dashTicketDetail[1]), Number(dashTicketDetail[2]));
+        const res = dashboardApi.ticketDetailScoped(
+          decodeURIComponent(dashTicketDetail[1]),
+          Number(dashTicketDetail[2]),
+        );
         const notFound = dashNotFound(res);
         return json(res, notFound || (res.error ? 400 : 200));
       }
       const dashMetrics = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/dashboard\/metrics$/);
       if (dashMetrics && method === "GET") {
-        const res = dashboardApi.metricsOverview(decodeURIComponent(dashMetrics[1]), { days: url.searchParams.get("days") });
+        const res = dashboardApi.metricsOverview(decodeURIComponent(dashMetrics[1]), {
+          days: url.searchParams.get("days"),
+        });
         const notFound = dashNotFound(res);
         return json(res, notFound || (res.error ? 400 : 200));
       }
@@ -943,7 +1005,9 @@ async function handleApi(req: Request): Promise<Response | null> {
         const notFound = dashNotFound(res);
         return json(res, notFound || (res.error ? 400 : 200));
       }
-      const dashKnowledgeRefresh = url.pathname.match(/^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/knowledge\/refresh$/);
+      const dashKnowledgeRefresh = url.pathname.match(
+        /^\/internal\/v1\/programs\/([A-Za-z0-9-]+)\/knowledge\/refresh$/,
+      );
       if (dashKnowledgeRefresh && method === "POST") {
         const res = dashboardApi.knowledgeRefresh(decodeURIComponent(dashKnowledgeRefresh[1]));
         const notFound = dashNotFound(res);
@@ -981,7 +1045,11 @@ async function handleRequest(req: Request): Promise<Response> {
     }
 
     // Internal and browser APIs share this dispatcher but retain separate authentication.
-    if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/internal/v1/") || url.pathname.startsWith("/internal/programs/")) {
+    if (
+      url.pathname.startsWith("/api/") ||
+      url.pathname.startsWith("/internal/v1/") ||
+      url.pathname.startsWith("/internal/programs/")
+    ) {
       const res = await handleApi(req);
       if (res) return res;
     }
@@ -992,7 +1060,7 @@ async function handleRequest(req: Request): Promise<Response> {
     }
 
     const res = await handleStatic(req);
-     if (res) return res;
+    if (res) return res;
 
     return new Response("not found", { status: 404 });
   } catch (e) {

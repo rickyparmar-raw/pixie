@@ -168,7 +168,13 @@ test("stored behavior overrides legacy flags", () => {
 });
 
 test("unknown program and non-support roles fail closed", () => {
-  const deny = { createOnSupport: false, recordTicket: false, escalate: false, pingHelpers: false, expertiseRouting: false };
+  const deny = {
+    createOnSupport: false,
+    recordTicket: false,
+    escalate: false,
+    pingHelpers: false,
+    expertiseRouting: false,
+  };
   assert.deepEqual(ticketPolicy({ program: null, role: "help" }), deny);
   assert.deepEqual(ticketPolicy({ role: "help" }), deny);
   assert.deepEqual(ticketPolicy({ program: helpProg(), role: "dm" }), deny);

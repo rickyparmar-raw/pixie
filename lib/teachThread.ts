@@ -52,7 +52,10 @@ function isDeclineLine(line: string): boolean {
 function parseModelReply(text: string): TeachResult | null {
   const reply = llm.stripThinking((text || "").trim());
   if (!reply || reply.toUpperCase() === DECLINE_MARKER) return null;
-  const lines = reply.split("\n").map((l: string) => l.trim()).filter(Boolean);
+  const lines = reply
+    .split("\n")
+    .map((l: string) => l.trim())
+    .filter(Boolean);
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
     if (isDeclineLine(line)) return null;
@@ -64,7 +67,15 @@ function parseModelReply(text: string): TeachResult | null {
   return null;
 }
 
-async function summarizeThread({ client, channel, threadTs }: { client: ThreadClient; channel: string; threadTs: string }): Promise<TeachResult | null> {
+async function summarizeThread({
+  client,
+  channel,
+  threadTs,
+}: {
+  client: ThreadClient;
+  channel: string;
+  threadTs: string;
+}): Promise<TeachResult | null> {
   const { messages } = await client.conversations.replies({ channel, ts: threadTs, limit: THREAD_FETCH_LIMIT });
   const transcript = buildTranscript(messages || []);
   if (!transcript) return null;

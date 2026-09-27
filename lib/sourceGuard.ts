@@ -6,9 +6,7 @@ import axios = require("axios");
 
 const dns = dnsModule.promises;
 
-
 const MAX_REDIRECTS = 5;
-
 
 const DEFAULT_FETCH_TIMEOUT_MS = 10000;
 
@@ -39,7 +37,9 @@ function isPublicV6(ip: string) {
 }
 
 function hostnameLooksPrivate(host: string) {
-  const h = String(host || "").toLowerCase().replace(/\.$/, "");
+  const h = String(host || "")
+    .toLowerCase()
+    .replace(/\.$/, "");
   if (h === "localhost") return true;
   if (net.isIPv4(h)) return !isPublicV4(h);
   if (net.isIP(h)) return !isPublicV6(h);
@@ -81,7 +81,11 @@ async function fetchSourceUrl(rawUrl: string, { timeout = DEFAULT_FETCH_TIMEOUT_
   // Redirects are manual so each destination is subject to the same SSRF checks.
   let current = await validateUrl(rawUrl);
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    const res = await axios.get(current, { timeout, maxRedirects: 0, validateStatus: (s: number) => s >= 200 && s < 400 });
+    const res = await axios.get(current, {
+      timeout,
+      maxRedirects: 0,
+      validateStatus: (s: number) => s >= 200 && s < 400,
+    });
     const location = res.headers && res.headers.location;
     if (res.status < 300 || res.status >= 400 || !location) return res;
     if (hop === MAX_REDIRECTS) throw new Error(`too many redirects fetching ${current.slice(0, 80)}`);

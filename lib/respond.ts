@@ -18,9 +18,22 @@ const pipelineEvents = require("./pipeline/events");
 import type { ChannelRole, Program, SlackClient } from "./types";
 
 type ProgramLike = Partial<Program> & { id?: string };
-interface AnswerResult { source: string | null; answer: string; direct?: boolean; unclear?: boolean }
-interface UserContext { recentTopics?: string[]; helpfulAnswers?: string[] }
-interface GuideResult { message: string; checkNext?: string; completed?: boolean; cancelled?: boolean }
+interface AnswerResult {
+  source: string | null;
+  answer: string;
+  direct?: boolean;
+  unclear?: boolean;
+}
+interface UserContext {
+  recentTopics?: string[];
+  helpfulAnswers?: string[];
+}
+interface GuideResult {
+  message: string;
+  checkNext?: string;
+  completed?: boolean;
+  cancelled?: boolean;
+}
 interface CacheReplyArgs {
   client: SlackClient;
   channel: string;
@@ -94,7 +107,9 @@ interface RespondOptions {
   rateLimitReserved?: boolean;
 }
 
-function errorMessage(error: unknown) { return error instanceof Error ? error.message : String(error); }
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
 
 const MENTION_FALLBACK = "hmm not totally sure about that one — ask a helper if it's something specific :hii:";
 const ERROR_FALLBACK = "having trouble thinking rn, try again in a sec :sob-pray:";
@@ -204,7 +219,16 @@ function buildChatContext(threadContext: string | null, userContext: UserContext
   return parts.join("");
 }
 
-async function replyFromCache({ client, channel, threadTs, userId, question, result, startedAt, program = null }: CacheReplyArgs) {
+async function replyFromCache({
+  client,
+  channel,
+  threadTs,
+  userId,
+  question,
+  result,
+  startedAt,
+  program = null,
+}: CacheReplyArgs) {
   // Cache replies are safe only when there is no thread-specific context.
   const requireGrounded = process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || program?.requireGroundedAnswer;
   if (requireGrounded) {
@@ -245,7 +269,15 @@ function formatGuideText(result: GuideResult) {
   return `${result.message}\n\n${question}`;
 }
 
-async function postGuideStep({ client, channel, threadTs, result, isFirstStep = false, program = null, workspaceId = null }: TextPostArgs & { result: GuideResult; isFirstStep?: boolean }) {
+async function postGuideStep({
+  client,
+  channel,
+  threadTs,
+  result,
+  isFirstStep = false,
+  program = null,
+  workspaceId = null,
+}: TextPostArgs & { result: GuideResult; isFirstStep?: boolean }) {
   // Guide message_ts links the rendered step to later reaction advancement.
   const text = formatGuideText(result);
   const blocks = guides.buildGuideBlocks(result, config.web.baseUrl, { showReactionHint: isFirstStep });
@@ -278,7 +310,10 @@ async function handleActiveGuide({ client, channel, threadTs, question, userId, 
 }
 
 function isGuideMenuRequest(text: string) {
-  const clean = (text || "").trim().toLowerCase().replace(/^<@[^>]+>\s*/, "");
+  const clean = (text || "")
+    .trim()
+    .toLowerCase()
+    .replace(/^<@[^>]+>\s*/, "");
   const slug = brand.slug();
   const names = new Set([slug, brand.name().toLowerCase(), brand.DEFAULT_SLUG]);
 
@@ -308,13 +343,23 @@ function isMuteRequest(text: string) {
   return (
     new RegExp(`^(?:${shush})\\b.*?\\b(?:${names})\\b`, "i").test(clean) ||
     new RegExp(`\\b(?:${names})\\b.*?\\b(?:${shush}|leave)\\b`, "i").test(clean) ||
-    new RegExp(`^(?:stfu|shut\\s*up|shutup|leave\\s*thread|!mute|!stfu|(?:stfu|shutup|stop)\\s*(?:${names})|(?:${names})\\s*stfu)$`, "i").test(clean) ||
+    new RegExp(
+      `^(?:stfu|shut\\s*up|shutup|leave\\s*thread|!mute|!stfu|(?:stfu|shutup|stop)\\s*(?:${names})|(?:${names})\\s*stfu)$`,
+      "i",
+    ).test(clean) ||
     new RegExp(`^(?:${names})stop$|^stop(?:${names})$`, "i").test(clean) ||
     /\bstop\s+ping(?:ing)?\b/i.test(clean)
   );
 }
 
-async function handleMute({ client, channel, threadTs, question, program = null, workspaceId = null }: TextPostArgs & { question: string }) {
+async function handleMute({
+  client,
+  channel,
+  threadTs,
+  question,
+  program = null,
+  workspaceId = null,
+}: TextPostArgs & { question: string }) {
   if (!isMuteRequest(question)) return false;
   if (threadTs) {
     db.muteThread(threadTs, channel);
@@ -363,11 +408,16 @@ async function handleNewGuide({ client, channel, threadTs, userId, question, wor
   const names = [...new Set([brand.slug(), brand.name().toLowerCase(), brand.DEFAULT_SLUG])]
     .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|");
-  const prefixMatch = q.match(new RegExp(`^(?:(?:${names})[-_\\s]?guides?|!guides?|/(?:${names})[-_\\s]?guides?|/guides?)\\s+(.+)$`, "i"));
+  const prefixMatch = q.match(
+    new RegExp(`^(?:(?:${names})[-_\\s]?guides?|!guides?|/(?:${names})[-_\\s]?guides?|/guides?)\\s+(.+)$`, "i"),
+  );
   if (!prefixMatch) return false;
 
   const target = prefixMatch[1].trim();
-  const guideId = (guides.GUIDES[target] ? target : null) || guides.detectGuideByKeyword(target) || (await guides.detectGuideIntent(target));
+  const guideId =
+    (guides.GUIDES[target] ? target : null) ||
+    guides.detectGuideByKeyword(target) ||
+    (await guides.detectGuideIntent(target));
   if (!guideId || !guides.isAvailable(programs.forChannel(channel, workspaceId), guideId)) return false;
 
   const result = guides.startGuide(guideId, threadTs, userId);
@@ -379,8 +429,17 @@ async function handleNewGuide({ client, channel, threadTs, userId, question, wor
 
 const link = require("./link");
 
-
-async function handleSensitiveMatch({ trimmed, prog, programId, channel, threadTs, userId, client, workspaceId, startedAt }: SensitiveArgs) {
+async function handleSensitiveMatch({
+  trimmed,
+  prog,
+  programId,
+  channel,
+  threadTs,
+  userId,
+  client,
+  workspaceId,
+  startedAt,
+}: SensitiveArgs) {
   // Run sensitive-category checks before model calls so these questions always reach human review.
   if (!require("./eligibility").sensitiveHit(trimmed, prog)) return false;
   log.debug("respond", `sensitive-category match, escalating without answering`);
@@ -400,21 +459,89 @@ async function handleSensitiveMatch({ trimmed, prog, programId, channel, threadT
   return true;
 }
 
-
-async function publishReply({ client, channel, threadTs, placeholder, text, blocks, program, seededTs, seed = true, silencedBefore = null }: { client: SlackClient; channel: string; threadTs: string; placeholder: Promise<string | null>; text: string; blocks?: unknown[] | null; program: ProgramLike | null; seededTs?: string | null; seed?: boolean; silencedBefore?: { muted: boolean; takeover: boolean } | null }) {
+async function publishReply({
+  client,
+  channel,
+  threadTs,
+  placeholder,
+  text,
+  blocks,
+  program,
+  seededTs,
+  seed = true,
+  silencedBefore = null,
+}: {
+  client: SlackClient;
+  channel: string;
+  threadTs: string;
+  placeholder: Promise<string | null>;
+  text: string;
+  blocks?: unknown[] | null;
+  program: ProgramLike | null;
+  seededTs?: string | null;
+  seed?: boolean;
+  silencedBefore?: { muted: boolean; takeover: boolean } | null;
+}) {
   // Finalize and seed feedback only after the reply lifecycle confirms it was posted.
-  const postedTs = await reply.finalize(client, channel, threadTs, placeholder, text, { program, blocks, silencedBefore });
+  const postedTs = await reply.finalize(client, channel, threadTs, placeholder, text, {
+    program,
+    blocks,
+    silencedBefore,
+  });
   if (seed && postedTs !== seededTs) await reply.seedFeedbackReactions(client, channel, postedTs);
   return postedTs;
 }
 
-function recordSpokenReply({ threadTs, channel, userId, question, text, grounded, startedAt, programId, linkContext, metric }: { threadTs: string; channel: string; userId: string; question: string; text: string; grounded: boolean; startedAt: number; programId: string | null; linkContext?: boolean; metric?: string }) {
+function recordSpokenReply({
+  threadTs,
+  channel,
+  userId,
+  question,
+  text,
+  grounded,
+  startedAt,
+  programId,
+  linkContext,
+  metric,
+}: {
+  threadTs: string;
+  channel: string;
+  userId: string;
+  question: string;
+  text: string;
+  grounded: boolean;
+  startedAt: number;
+  programId: string | null;
+  linkContext?: boolean;
+  metric?: string;
+}) {
   context.addToThread(threadTs, "assistant", text, null, channel);
   context.updateUserHistory(userId, question, grounded);
-  db.recordMetric(metric || (linkContext ? "answer_link" : grounded ? "answer_docs" : "answer_chat"), Date.now() - startedAt, null, programId);
+  db.recordMetric(
+    metric || (linkContext ? "answer_link" : grounded ? "answer_docs" : "answer_chat"),
+    Date.now() - startedAt,
+    null,
+    programId,
+  );
 }
 
-async function handleLookupFailure({ client, channel, threadTs, userId, question, prog, programId, inHelpChannel, mayChat, seedClient, workspaceId, placeholder, streamer, startedAt, silencedBefore = null }: LookupFailureArgs) {
+async function handleLookupFailure({
+  client,
+  channel,
+  threadTs,
+  userId,
+  question,
+  prog,
+  programId,
+  inHelpChannel,
+  mayChat,
+  seedClient,
+  workspaceId,
+  placeholder,
+  streamer,
+  startedAt,
+  silencedBefore = null,
+}: LookupFailureArgs) {
   if (inHelpChannel) {
     db.recordGap(question, userId, channel, threadTs, programId);
     try {
@@ -428,7 +555,15 @@ async function handleLookupFailure({ client, channel, threadTs, userId, question
         client: seedClient || client,
         workspaceId,
       });
-      await tickets.handOffToHelper({ ticket, client: seedClient || client, program: prog, channel, threadTs, question, requesterId: userId });
+      await tickets.handOffToHelper({
+        ticket,
+        client: seedClient || client,
+        program: prog,
+        channel,
+        threadTs,
+        question,
+        requesterId: userId,
+      });
       await reply.discardPlaceholder(client, channel, placeholder());
     } catch (error: unknown) {
       log.warn("respond", `support ticket during outage failed: ${errorMessage(error)}`);
@@ -450,7 +585,6 @@ async function handleLookupFailure({ client, channel, threadTs, userId, question
   return false;
 }
 
-
 function uncertaintyText(prog: ProgramLike | null, { escalated = false }: { escalated?: boolean } = {}) {
   const name = prog?.name && prog.id !== "ysws-global" ? `the ${prog.name} docs` : "the program docs";
   return escalated
@@ -464,21 +598,53 @@ function isDeterministicAnswer(result: AnswerResult | null) {
 
 const RECENT_CHANNEL_CONTEXT = 5;
 
-async function recentChannelContext({ seedClient, channel, messageTs, threadTs }: { seedClient: SlackClient | null; channel: string; messageTs: string | null; threadTs: string }) {
+async function recentChannelContext({
+  seedClient,
+  channel,
+  messageTs,
+  threadTs,
+}: {
+  seedClient: SlackClient | null;
+  channel: string;
+  messageTs: string | null;
+  threadTs: string;
+}) {
   // Recent channel context is bounded so ambient classification cannot grow with channel traffic.
   if (!seedClient || messageTs !== threadTs) return [];
   try {
-    return await context.recentChannelMessages(seedClient, channel, messageTs || threadTs, config.slack.botUserId, RECENT_CHANNEL_CONTEXT);
+    return await context.recentChannelMessages(
+      seedClient,
+      channel,
+      messageTs || threadTs,
+      config.slack.botUserId,
+      RECENT_CHANNEL_CONTEXT,
+    );
   } catch (_error: unknown) {
     return [];
   }
 }
 
-async function handleActiveIncident({ client, channel, threadTs, userId, question, program, programId }: { client: SlackClient; channel: string; threadTs: string; userId: string; question: string; program: ProgramLike | null; programId: string | null }) {
+async function handleActiveIncident({
+  client,
+  channel,
+  threadTs,
+  userId,
+  question,
+  program,
+  programId,
+}: {
+  client: SlackClient;
+  channel: string;
+  threadTs: string;
+  userId: string;
+  question: string;
+  program: ProgramLike | null;
+  programId: string | null;
+}) {
   const incidentMode = program?.incidentMode || "ANSWER_AND_TRACK";
   if (incidentMode === "NORMAL_TICKET" || !programId) return null;
 
-  let matched: { id: string; title: string; public_message?: string; } | null = null;
+  let matched: { id: string; title: string; public_message?: string } | null = null;
   try {
     matched = require("./incidents").matchActiveIncident({ programId, question });
   } catch (error: unknown) {
@@ -487,13 +653,22 @@ async function handleActiveIncident({ client, channel, threadTs, userId, questio
   }
   if (!matched) return null;
 
-  const text = reply.plainDashes(matched.public_message || `We're currently aware of an issue with "${matched.title}". The team is investigating — I'll update this thread when there's a confirmed resolution.`);
+  const text = reply.plainDashes(
+    matched.public_message ||
+      `We're currently aware of an issue with "${matched.title}". The team is investigating — I'll update this thread when there's a confirmed resolution.`,
+  );
   try {
     const slackMessages = require("./slackMessages");
     const sent = await slackMessages.sendProgramMessage({ client, program, channel, threadTs, text });
     if (!sent?.shadowed) {
       if (incidentMode === "ANSWER_AND_TRACK") {
-        require("./incidents").recordAffectedReport({ incidentId: matched.id, programId, requesterId: userId, channel, threadTs });
+        require("./incidents").recordAffectedReport({
+          incidentId: matched.id,
+          programId,
+          requesterId: userId,
+          channel,
+          threadTs,
+        });
       }
       context.addToThread(threadTs, "assistant", text, null, channel);
     }
@@ -534,14 +709,28 @@ async function respond({
   const startedAt = Date.now();
   const trace = pipelineEvents.start({ programId, role, addressed: isAddressed });
 
-  const activeIncident = await handleActiveIncident({ client, channel, threadTs, userId, question: trimmed, program: prog, programId });
+  const activeIncident = await handleActiveIncident({
+    client,
+    channel,
+    threadTs,
+    userId,
+    question: trimmed,
+    program: prog,
+    programId,
+  });
   if (activeIncident) {
     db.recordMetric("answer_docs", Date.now() - startedAt, "active_incident", programId);
     trace.finish({ finalAction: "reply", reason: "active_incident", incidentId: activeIncident.incidentId });
     return activeIncident.handled;
   }
 
-  const early = messagePolicy.planEngagement({ role, settings, addressed: isAddressed, addressedHow, engagement: { engage: true, intent: null } });
+  const early = messagePolicy.planEngagement({
+    role,
+    settings,
+    addressed: isAddressed,
+    addressedHow,
+    engagement: { engage: true, intent: null },
+  });
   if (!early.proceed && early.reason !== "ambient_chatter" && early.reason !== "help_chatter") {
     trace.finish({ finalAction: "silence", reason: early.reason });
     db.recordMetric("silent", 0, early.reason, programId);
@@ -557,7 +746,13 @@ async function respond({
     log.debug("respond", `rate limited ${userId}`);
     if (isAddressed && !programs.isShadow(prog)) {
       const slackMessages = require("./slackMessages");
-      await slackMessages.sendProgramMessage({ client, program: prog, channel, threadTs, text: reply.plainDashes(RATE_LIMITED) });
+      await slackMessages.sendProgramMessage({
+        client,
+        program: prog,
+        channel,
+        threadTs,
+        text: reply.plainDashes(RATE_LIMITED),
+      });
     }
     trace.finish({ finalAction: "silence", reason: "rate_limited" });
     return false;
@@ -591,7 +786,9 @@ async function respond({
     }
   }
 
-  if (await handleSensitiveMatch({ trimmed, prog, programId, channel, threadTs, userId, client, workspaceId, startedAt })) {
+  if (
+    await handleSensitiveMatch({ trimmed, prog, programId, channel, threadTs, userId, client, workspaceId, startedAt })
+  ) {
     trace.finish({ finalAction: "escalate", reason: "sensitive" });
     return true;
   }
@@ -607,9 +804,20 @@ async function respond({
     threadMessages: context.getThreadMessages(threadTs),
     recentMessages: await recentChannelContext({ seedClient, channel, messageTs, threadTs }),
   });
-  trace.set({ classifier: engaged.source, intent: engaged.intent, shouldEngage: engaged.engage, providerErrorKind: engaged.error });
+  trace.set({
+    classifier: engaged.source,
+    intent: engaged.intent,
+    shouldEngage: engaged.engage,
+    providerErrorKind: engaged.error,
+  });
 
-  const plan = messagePolicy.planEngagement({ role, settings, addressed: isAddressed, addressedHow, engagement: engaged });
+  const plan = messagePolicy.planEngagement({
+    role,
+    settings,
+    addressed: isAddressed,
+    addressedHow,
+    engagement: engaged,
+  });
   if (!plan.proceed) {
     db.recordMetric("silent", Date.now() - startedAt, plan.reason, programId);
     trace.finish({ finalAction: "silence", reason: plan.reason });
@@ -620,14 +828,24 @@ async function respond({
   const tickets = require("./tickets");
   const requireGrounded = process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || prog?.requireGroundedAnswer;
   const isRootMessage = !messageTs || messageTs === threadTs;
-  const supportTicketReady = plan.support && isRootMessage && !programs.isShadow(prog)
-    ? tickets
-        .ensureSupportTicket({ program: prog, channel, threadTs, requesterId: userId, question: trimmed, client, workspaceId, role })
-        .catch((error: unknown) => {
-          log.warn("respond", `support ticket ensure failed: ${errorMessage(error)}`);
-          return null;
-        })
-    : Promise.resolve(null);
+  const supportTicketReady =
+    plan.support && isRootMessage && !programs.isShadow(prog)
+      ? tickets
+          .ensureSupportTicket({
+            program: prog,
+            channel,
+            threadTs,
+            requesterId: userId,
+            question: trimmed,
+            client,
+            workspaceId,
+            role,
+          })
+          .catch((error: unknown) => {
+            log.warn("respond", `support ticket ensure failed: ${errorMessage(error)}`);
+            return null;
+          })
+      : Promise.resolve(null);
   trace.set({ ticketRequested: Boolean(plan.support && isRootMessage) });
 
   const currentTicket = async () => {
@@ -636,7 +854,16 @@ async function respond({
   };
   const handOff = async () => {
     const ticket = await currentTicket();
-    await tickets.handOffToHelper({ ticket, client, program: prog, channel, threadTs, question: trimmed, requesterId: userId, role });
+    await tickets.handOffToHelper({
+      ticket,
+      client,
+      program: prog,
+      channel,
+      threadTs,
+      question: trimmed,
+      requesterId: userId,
+      role,
+    });
     trace.set({ helperEscalated: true });
   };
 
@@ -644,7 +871,16 @@ async function respond({
   if (aiOff && kind === "program") {
     if (role === "help" && settings?.escalateUnknown !== false) await handOff();
     if (isAddressed) {
-      await publishReply({ silencedBefore, client, channel, threadTs, placeholder: Promise.resolve(null), text: MENTION_FALLBACK, program: prog, seed: false });
+      await publishReply({
+        silencedBefore,
+        client,
+        channel,
+        threadTs,
+        placeholder: Promise.resolve(null),
+        text: MENTION_FALLBACK,
+        program: prog,
+        seed: false,
+      });
       context.addToThread(threadTs, "assistant", MENTION_FALLBACK, null, channel);
     }
     db.recordMetric(isAddressed ? "fallback" : "silent", Date.now() - startedAt, "ai_answers_disabled", programId);
@@ -657,11 +893,31 @@ async function respond({
       ? buildChatContext(threadContext, context.getUserContext(userId), effectiveQuestion)
       : buildContextPrompt(threadContext);
 
-  const known = lookup.knownAnswer({ question: effectiveQuestion, contextPrompt, mode: isAddressed ? ALWAYS : HELP_ONLY, program: prog, skipCache: requireGrounded });
+  const known = lookup.knownAnswer({
+    question: effectiveQuestion,
+    contextPrompt,
+    mode: isAddressed ? ALWAYS : HELP_ONLY,
+    program: prog,
+    skipCache: requireGrounded,
+  });
   if (known && (kind === "general" || isDeterministicAnswer(known) || isGroundedAnswer(known))) {
-    const spoke = await replyFromCache({ client, channel, threadTs, userId, question: effectiveQuestion, result: known, startedAt, program: prog });
+    const spoke = await replyFromCache({
+      client,
+      channel,
+      threadTs,
+      userId,
+      question: effectiveQuestion,
+      result: known,
+      startedAt,
+      program: prog,
+    });
     if (spoke !== null) {
-      trace.finish({ finalAction: spoke ? "reply" : "silence", reason: "cache", retrievalHit: true, groundingPass: true });
+      trace.finish({
+        finalAction: spoke ? "reply" : "silence",
+        reason: "cache",
+        retrievalHit: true,
+        groundingPass: true,
+      });
       return spoke;
     }
   }
@@ -706,7 +962,8 @@ async function respond({
       if (linkResult.blocked) {
         if (placeholderTimer) clearTimeout(placeholderTimer);
         db.recordMetric("blocked_link", Date.now() - startedAt);
-        const blockedMsg = "sorry, i can only open public URLs — localhost on your machine isn't reachable from the bot";
+        const blockedMsg =
+          "sorry, i can only open public URLs — localhost on your machine isn't reachable from the bot";
         await reply.finalize(client, channel, threadTs, placeholder(), blockedMsg, { program: prog, silencedBefore });
         context.addToThread(threadTs, "assistant", blockedMsg, null, channel);
         trace.finish({ finalAction: "reply", reason: "blocked_link" });
@@ -720,9 +977,10 @@ async function respond({
     }
   }
 
-  const streamer = isAddressed && kind === "general" && !requireGrounded
-    ? reply.makeStreamWriter({ client, channel, ensurePlaceholder, threadTs, silencedBefore })
-    : null;
+  const streamer =
+    isAddressed && kind === "general" && !requireGrounded
+      ? reply.makeStreamWriter({ client, channel, ensurePlaceholder, threadTs, silencedBefore })
+      : null;
 
   let firstTextMs: number | null = null;
   const onText = streamer
@@ -762,8 +1020,28 @@ async function respond({
       log.debug("respond", `stream settlement failed after lookup error: ${errorMessage(settleError)}`);
     }
     await supportTicketReady;
-    trace.finish({ finalAction: inHelpChannel ? "escalate" : isAddressed ? "error_reply" : "silence", reason: "lookup_error" });
-    return handleLookupFailure({ client, channel, threadTs, userId, question: trimmed, prog, programId, inHelpChannel, mayChat: isAddressed, seedClient, workspaceId, placeholder, streamer, startedAt, role, silencedBefore });
+    trace.finish({
+      finalAction: inHelpChannel ? "escalate" : isAddressed ? "error_reply" : "silence",
+      reason: "lookup_error",
+    });
+    return handleLookupFailure({
+      client,
+      channel,
+      threadTs,
+      userId,
+      question: trimmed,
+      prog,
+      programId,
+      inHelpChannel,
+      mayChat: isAddressed,
+      seedClient,
+      workspaceId,
+      placeholder,
+      streamer,
+      startedAt,
+      role,
+      silencedBefore,
+    });
   } finally {
     if (placeholderTimer) {
       clearTimeout(placeholderTimer);
@@ -782,7 +1060,10 @@ async function respond({
   const cannotTell = result?.unclear === true || result?.answer?.trim()?.toUpperCase() === UNCLEAR_MARKER;
   const grounded = !cannotTell && (isDeterministicAnswer(result) || isGroundedAnswer(result));
   if (grounded && requireGrounded) result.answer = stripChannelMentions(result.answer);
-  trace.set({ retrievalHit: Boolean(result?.source && result.source.trim().toUpperCase() !== "NONE"), groundingPass: grounded });
+  trace.set({
+    retrievalHit: Boolean(result?.source && result.source.trim().toUpperCase() !== "NONE"),
+    groundingPass: grounded,
+  });
 
   const action = messagePolicy.finalAction({
     role,
@@ -802,7 +1083,8 @@ async function respond({
 
   if (prog?.shadowMode) {
     await reply.discardPlaceholder(client, channel, placeholder());
-    if (action.startsWith("escalate")) await reply.flagForHumans(client, channel, threadTs, trimmed, userId, workspaceId);
+    if (action.startsWith("escalate"))
+      await reply.flagForHumans(client, channel, threadTs, trimmed, userId, workspaceId);
     db.recordMetric("silent", Date.now() - startedAt, "shadow_mode", programId);
     trace.finish({ finalAction: "silence", reason: "shadow_mode" });
     return true;
@@ -813,8 +1095,28 @@ async function respond({
   if (action === "reply") {
     const text = reply.withReplySignature(`${result.answer}${reply.sourceLineFor(result.source, prog)}`, prog);
     await waitForSeed();
-    await publishReply({ silencedBefore, client, channel, threadTs, placeholder: placeholder(), text, blocks: reply.blocksFor(text), program: prog, seededTs });
-    recordSpokenReply({ threadTs, channel, userId, question: trimmed, text: result.answer, grounded: true, startedAt, programId, linkContext: hasLinkContext });
+    await publishReply({
+      silencedBefore,
+      client,
+      channel,
+      threadTs,
+      placeholder: placeholder(),
+      text,
+      blocks: reply.blocksFor(text),
+      program: prog,
+      seededTs,
+    });
+    recordSpokenReply({
+      threadTs,
+      channel,
+      userId,
+      question: trimmed,
+      text: result.answer,
+      grounded: true,
+      startedAt,
+      programId,
+      linkContext: hasLinkContext,
+    });
     trace.finish({ finalAction: "reply", reason: plan.reason });
     return true;
   }
@@ -823,8 +1125,27 @@ async function respond({
     if (action === "escalate_and_reply_chat") await handOff();
     if (threadTs) db.recordAnsweredThread({ question: trimmed, channel, threadTs });
     await waitForSeed();
-    await publishReply({ silencedBefore, client, channel, threadTs, placeholder: placeholder(), text: reply.withReplySignature(result.answer, prog), program: prog, seededTs });
-    recordSpokenReply({ threadTs, channel, userId, question: trimmed, text: result.answer, grounded: false, startedAt, programId, linkContext: hasLinkContext });
+    await publishReply({
+      silencedBefore,
+      client,
+      channel,
+      threadTs,
+      placeholder: placeholder(),
+      text: reply.withReplySignature(result.answer, prog),
+      program: prog,
+      seededTs,
+    });
+    recordSpokenReply({
+      threadTs,
+      channel,
+      userId,
+      question: trimmed,
+      text: result.answer,
+      grounded: false,
+      startedAt,
+      programId,
+      linkContext: hasLinkContext,
+    });
     trace.finish({ finalAction: action, reason: plan.reason });
     return true;
   }
@@ -834,14 +1155,30 @@ async function respond({
     if (action === "escalate_and_uncertain") {
       const text = uncertaintyText(prog, { escalated: true });
       await waitForSeed();
-      await publishReply({ silencedBefore, client, channel, threadTs, placeholder: placeholder(), text, program: prog, seededTs, seed: false });
+      await publishReply({
+        silencedBefore,
+        client,
+        channel,
+        threadTs,
+        placeholder: placeholder(),
+        text,
+        program: prog,
+        seededTs,
+        seed: false,
+      });
       context.addToThread(threadTs, "assistant", text, null, channel);
       context.updateUserHistory(userId, trimmed, false);
     } else {
       await reply.discardPlaceholder(client, channel, placeholder());
     }
-    db.recordMetric(isAddressed ? "fallback" : "silent", Date.now() - startedAt, cannotTell ? "unclear_escalated" : "gap_escalated", programId);
-    if (engaged.source === "jev" && engaged.engage) db.recordMetric("jev_downstream_block", Date.now() - startedAt, "ungrounded", programId);
+    db.recordMetric(
+      isAddressed ? "fallback" : "silent",
+      Date.now() - startedAt,
+      cannotTell ? "unclear_escalated" : "gap_escalated",
+      programId,
+    );
+    if (engaged.source === "jev" && engaged.engage)
+      db.recordMetric("jev_downstream_block", Date.now() - startedAt, "ungrounded", programId);
     trace.finish({ finalAction: action, reason: plan.reason });
     return true;
   }
@@ -849,7 +1186,17 @@ async function respond({
   if (action === "uncertain") {
     const text = uncertaintyText(prog);
     await waitForSeed();
-    await publishReply({ silencedBefore, client, channel, threadTs, placeholder: placeholder(), text, program: prog, seededTs, seed: false });
+    await publishReply({
+      silencedBefore,
+      client,
+      channel,
+      threadTs,
+      placeholder: placeholder(),
+      text,
+      program: prog,
+      seededTs,
+      seed: false,
+    });
     context.addToThread(threadTs, "assistant", text, null, channel);
     context.updateUserHistory(userId, trimmed, false);
     db.recordMetric("fallback", Date.now() - startedAt, "unverified", programId);
@@ -859,7 +1206,8 @@ async function respond({
 
   await reply.discardPlaceholder(client, channel, placeholder());
   db.recordMetric("silent", Date.now() - startedAt, grounded ? "unaddressed" : "ungrounded", programId);
-  if (engaged.source === "jev" && engaged.engage && !grounded) db.recordMetric("jev_downstream_block", Date.now() - startedAt, "ungrounded", programId);
+  if (engaged.source === "jev" && engaged.engage && !grounded)
+    db.recordMetric("jev_downstream_block", Date.now() - startedAt, "ungrounded", programId);
   trace.finish({ finalAction: "silence", reason: "ungrounded" });
   return false;
 }

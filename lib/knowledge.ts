@@ -39,7 +39,12 @@ type ProgramLike = Omit<Partial<Program>, "status" | "sources"> & {
   sourceTexts?: Record<string, string>;
 };
 type Section = [string, string];
-interface GithubListingEntry { type?: string; name?: string; download_url?: string; html_url?: string }
+interface GithubListingEntry {
+  type?: string;
+  name?: string;
+  download_url?: string;
+  html_url?: string;
+}
 interface GithubFile {
   name: string;
   title: string;
@@ -48,8 +53,15 @@ interface GithubFile {
   contentUrl: string;
   isHtml: boolean;
 }
-interface GithubSection { title: string; pageUrl: string; body: string }
-interface CrawlPage { content: string; raw: string }
+interface GithubSection {
+  title: string;
+  pageUrl: string;
+  body: string;
+}
+interface CrawlPage {
+  content: string;
+  raw: string;
+}
 interface SourceHealthRow {
   name: string;
   fail_count?: number;
@@ -57,13 +69,19 @@ interface SourceHealthRow {
   last_success_at?: number | null;
   last_error?: string | null;
 }
-interface RetrievalIndex { docs: Array<{ chunk: { source: string } }> }
+interface RetrievalIndex {
+  docs: Array<{ chunk: { source: string } }>;
+}
 
 const SOURCES_PATH = path.join(__dirname, "..", "sources.json");
 const APP_ROOT = path.join(__dirname, "..");
 const JAME_GAM_DOCS_PATH = path.join(APP_ROOT, "data", "jame-gam-complete-docs.md");
 const LIVE_YSWS_DOCS_PATH = path.join(APP_ROOT, "LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md");
-const LIVE_YSWS_SOURCE = { name: "Live YSWS Pixie Knowledge Base", type: "text", url: "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md" };
+const LIVE_YSWS_SOURCE = {
+  name: "Live YSWS Pixie Knowledge Base",
+  type: "text",
+  url: "file://./LIVE_YSWS_PIXIE_KNOWLEDGE_BASE.md",
+};
 
 // Small batches avoid throttling both repository listings and rendered documentation pages.
 const FETCH_BATCH_SIZE = 5;
@@ -100,27 +118,46 @@ function invalidate() {
 
 function registerDraftKnowledge(draftProgram: ProgramLike, sourceTexts: Record<string, string>) {
   // Draft corpora stay isolated from published program indexes until promotion.
-  if (!draftProgram?.id || draftProgram.status !== "suspended" || draftProgram.privateSandboxOnly !== true) throw new Error("invalid draft knowledge registration");
-  const canonicalJameDocs: Section[] | null = draftProgram.id === "jame-gam" && fs.existsSync(JAME_GAM_DOCS_PATH)
-    ? [["Jame Gam Complete Docs", fs.readFileSync(JAME_GAM_DOCS_PATH, "utf8")]]
-    : null;
-  const canonicalLiveDocs: Section[] = draftProgram.id === "live-ysws" && fs.existsSync(LIVE_YSWS_DOCS_PATH)
-    ? [[LIVE_YSWS_SOURCE.name, fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")]]
-    : [];
-  const sections: Section[] = canonicalJameDocs || [...Object.entries(sourceTexts || {}).filter(([, text]) => text), ...canonicalLiveDocs];
-  const generated: Section[] = canonicalJameDocs ? [] : (draftProgram.faqContent ? [["Draft FAQs", draftProgram.faqContent]] : []);
+  if (!draftProgram?.id || draftProgram.status !== "suspended" || draftProgram.privateSandboxOnly !== true)
+    throw new Error("invalid draft knowledge registration");
+  const canonicalJameDocs: Section[] | null =
+    draftProgram.id === "jame-gam" && fs.existsSync(JAME_GAM_DOCS_PATH)
+      ? [["Jame Gam Complete Docs", fs.readFileSync(JAME_GAM_DOCS_PATH, "utf8")]]
+      : null;
+  const canonicalLiveDocs: Section[] =
+    draftProgram.id === "live-ysws" && fs.existsSync(LIVE_YSWS_DOCS_PATH)
+      ? [[LIVE_YSWS_SOURCE.name, fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")]]
+      : [];
+  const sections: Section[] = canonicalJameDocs || [
+    ...Object.entries(sourceTexts || {}).filter(([, text]) => text),
+    ...canonicalLiveDocs,
+  ];
+  const generated: Section[] = canonicalJameDocs
+    ? []
+    : draftProgram.faqContent
+      ? [["Draft FAQs", draftProgram.faqContent]]
+      : [];
   const all = [...generated, ...sections];
   draftCorpusMap.set(draftProgram.id, all.map(([name, text]) => `### ${name}\n${text}`).join("\n\n"));
   draftIndexMap.set(draftProgram.id, retrieve.buildIndex(retrieve.chunkSections(all)));
   const sources = [...(draftProgram.sources || [])];
-  if (draftProgram.id === "live-ysws" && !sources.some((source: SourceRecord) => source?.name === LIVE_YSWS_SOURCE.name)) sources.push(LIVE_YSWS_SOURCE);
+  if (
+    draftProgram.id === "live-ysws" &&
+    !sources.some((source: SourceRecord) => source?.name === LIVE_YSWS_SOURCE.name)
+  )
+    sources.push(LIVE_YSWS_SOURCE);
   draftSandbox.register({ ...draftProgram, sources, sourceTexts: Object.fromEntries(sections) });
-  return { sources: sections.length, chunks: draftIndexMap.get(draftProgram.id)?.docs.length || 0, faq: generated.length };
+  return {
+    sources: sections.length,
+    chunks: draftIndexMap.get(draftProgram.id)?.docs.length || 0,
+    faq: generated.length,
+  };
 }
 
 async function ingestDraftSources(draftProgram: ProgramLike) {
   // Learn draft sources lazily so the normal answer path does not fetch suspended programs.
-  if (!draftProgram?.id || draftProgram.status !== "suspended" || draftProgram.privateSandboxOnly !== true) throw new Error("only private suspended drafts may be ingested");
+  if (!draftProgram?.id || draftProgram.status !== "suspended" || draftProgram.privateSandboxOnly !== true)
+    throw new Error("only private suspended drafts may be ingested");
   const sourceTexts: Record<string, string> = {};
   const skipped: { name: string; reason: string }[] = [];
   for (const source of draftProgram.sources || []) {
@@ -177,29 +214,38 @@ function loadDraftPersisted() {
     } catch (_error: unknown) {
       continue;
     }
-    const canonicalJameDocs: Section[] | null = row.program_id === "jame-gam" && fs.existsSync(JAME_GAM_DOCS_PATH)
-      ? [["Jame Gam Complete Docs", fs.readFileSync(JAME_GAM_DOCS_PATH, "utf8")]]
-      : null;
-    const canonicalLiveDocs: Section[] = row.program_id === "live-ysws" && fs.existsSync(LIVE_YSWS_DOCS_PATH)
-      ? [[LIVE_YSWS_SOURCE.name, fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")]]
-      : [];
+    const canonicalJameDocs: Section[] | null =
+      row.program_id === "jame-gam" && fs.existsSync(JAME_GAM_DOCS_PATH)
+        ? [["Jame Gam Complete Docs", fs.readFileSync(JAME_GAM_DOCS_PATH, "utf8")]]
+        : null;
+    const canonicalLiveDocs: Section[] =
+      row.program_id === "live-ysws" && fs.existsSync(LIVE_YSWS_DOCS_PATH)
+        ? [[LIVE_YSWS_SOURCE.name, fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")]]
+        : [];
     const sections = canonicalJameDocs || [...(byProgram.get(row.program_id) || []), ...canonicalLiveDocs];
     if (!program) continue;
-    const generated: Section[] = canonicalJameDocs ? [] : (program.faqContent ? [["Draft FAQs", program.faqContent]] : []);
+    const generated: Section[] = canonicalJameDocs
+      ? []
+      : program.faqContent
+        ? [["Draft FAQs", program.faqContent]]
+        : [];
     const all = [...generated, ...sections];
     if (all.length === 0) continue;
     draftCorpusMap.set(row.program_id, all.map(([name, text]) => `### ${name}\n${text}`).join("\n\n"));
     try {
       draftIndexMap.set(row.program_id, retrieve.buildIndex(retrieve.chunkSections(all)));
       const sourcesWithCanonical = [...(program.sources || [])];
-      if (row.program_id === "live-ysws" && !sourcesWithCanonical.some((source: SourceRecord) => source?.name === LIVE_YSWS_SOURCE.name)) sourcesWithCanonical.push(LIVE_YSWS_SOURCE);
+      if (
+        row.program_id === "live-ysws" &&
+        !sourcesWithCanonical.some((source: SourceRecord) => source?.name === LIVE_YSWS_SOURCE.name)
+      )
+        sourcesWithCanonical.push(LIVE_YSWS_SOURCE);
       draftSandbox.register({ ...program, sources: sourcesWithCanonical, sourceTexts: Object.fromEntries(sections) });
       rebuilt += 1;
     } catch (_error: unknown) {}
   }
   return { programs: programs.length, sources: sources.length, rebuilt };
 }
-
 
 function loadSources(): SourceRecord[] {
   const allSources: SourceRecord[] = [];
@@ -256,9 +302,7 @@ function preserveLinks(html: string) {
 }
 
 function stripHtml(html: string) {
-  const withoutCode = html
-    .replace(/<script[\s\S]*?<\/script>/gi, "")
-    .replace(/<style[\s\S]*?<\/style>/gi, "");
+  const withoutCode = html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, "");
 
   return preserveLinks(withoutCode)
     .replace(/<\/(?:p|div|li|tr|h[1-6]|section|article|blockquote)>/gi, "\n\n")
@@ -278,11 +322,11 @@ function stripHtml(html: string) {
 }
 
 function textFromJsonFaq(data: unknown) {
-  const items = (data && typeof data === "object" ? (data as { faq?: { items?: unknown } }).faq?.items : null);
+  const items = data && typeof data === "object" ? (data as { faq?: { items?: unknown } }).faq?.items : null;
   if (!Array.isArray(items)) return "";
   return items
     .map((item) => {
-      const record = item && typeof item === "object" ? item as { question?: unknown; answer?: unknown } : {};
+      const record = item && typeof item === "object" ? (item as { question?: unknown; answer?: unknown }) : {};
       return `Q: ${String(record.question)}\nA: ${String(record.answer)}`;
     })
     .join("\n\n");
@@ -290,7 +334,8 @@ function textFromJsonFaq(data: unknown) {
 
 function annotateHeadingAnchors(html: string, baseUrl: string, links: Map<string, string>) {
   let content = html;
-  const articleMatch = content.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i) || content.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i);
+  const articleMatch =
+    content.match(/<article\b[^>]*>([\s\S]*?)<\/article>/i) || content.match(/<main\b[^>]*>([\s\S]*?)<\/main>/i);
   if (articleMatch) {
     content = articleMatch[1];
   } else {
@@ -357,7 +402,12 @@ function dropSharedLines(pages: string[], threshold = SHARED_CHROME_THRESHOLD): 
 
   const counts = new Map<string, number>();
   for (const page of pages) {
-    const distinct = new Set(String(page).split("\n").map((l) => l.trim()).filter(Boolean));
+    const distinct = new Set(
+      String(page)
+        .split("\n")
+        .map((l) => l.trim())
+        .filter(Boolean),
+    );
     for (const line of distinct) counts.set(line, (counts.get(line) || 0) + 1);
   }
 
@@ -415,16 +465,17 @@ function isDynamicSource(source: SourceRecord) {
 function sourceFreshness(source: SourceRecord) {
   // Dynamic sources refresh on their configured cadence; static sources keep their last good snapshot.
   const key = sourceCacheKey(source);
-  if (!key) return {
-    key: null,
-    name: source?.name || null,
-    authority: "unknown",
-    freshness: "unavailable",
-    lastSuccessAt: null,
-    failCount: 0,
-    lastError: null,
-    hasLastGood: false,
-  };
+  if (!key)
+    return {
+      key: null,
+      name: source?.name || null,
+      authority: "unknown",
+      freshness: "unavailable",
+      lastSuccessAt: null,
+      failCount: 0,
+      lastError: null,
+      hasLastGood: false,
+    };
 
   const row = db.getSourceHealth([key])[0] || null;
   const lastSuccessAt = row?.last_success_at || null;
@@ -446,8 +497,8 @@ function sourceFreshness(source: SourceRecord) {
 
 function sourceEligibility(source: SourceRecord) {
   const metadata = sourceFreshness(source);
-  const exactClaimsAllowed = metadata.freshness === "fresh" ||
-    (metadata.authority !== "dynamic" && metadata.freshness === "stale");
+  const exactClaimsAllowed =
+    metadata.freshness === "fresh" || (metadata.authority !== "dynamic" && metadata.freshness === "stale");
   return {
     ...metadata,
     exactClaimsAllowed,
@@ -469,7 +520,6 @@ function getSourceUrl(label: string) {
   if (!label) return null;
   return linkCache.get(label.trim().toLowerCase()) || null;
 }
-
 
 function inlineText(source: SourceRecord) {
   switch (source.type) {
@@ -533,9 +583,7 @@ async function fetchGithubFile(file: GithubFile, sourceName: string): Promise<Gi
   try {
     const fileRes = await sourceGuard.fetchSourceUrl(file.contentUrl, { timeout: SUBPAGE_FETCH_TIMEOUT_MS });
     const raw = typeof fileRes.data === "string" ? fileRes.data : String(fileRes.data);
-    const body = file.isHtml
-      ? stripHtml(annotateHeadingAnchors(raw, file.pageUrl, linkCache)).trim()
-      : raw.trim();
+    const body = file.isHtml ? stripHtml(annotateHeadingAnchors(raw, file.pageUrl, linkCache)).trim() : raw.trim();
     if (!body) return null;
     if (UNRENDERED_PLACEHOLDER_RE.test(body)) {
       log.warn("knowledge", `skipping ${file.name} for "${sourceName}": unrendered placeholders`);
@@ -544,7 +592,10 @@ async function fetchGithubFile(file: GithubFile, sourceName: string): Promise<Gi
     recordLink(file.title, file.pageUrl);
     return { title: file.title, pageUrl: file.pageUrl, body };
   } catch (error: unknown) {
-    log.warn("knowledge", `failed to fetch ${file.name} for "${sourceName}": ${error instanceof Error ? error.message : String(error)}`);
+    log.warn(
+      "knowledge",
+      `failed to fetch ${file.name} for "${sourceName}": ${error instanceof Error ? error.message : String(error)}`,
+    );
     return null;
   }
 }
@@ -572,9 +623,7 @@ function canonicalUrl(href: string, base: string) {
 
 function crawlPrefixes(source: SourceRecord) {
   const rootPath = normalizePath(new URL(source.url || "").pathname);
-  const configured = Array.isArray(source.paths) && source.paths.length
-    ? source.paths.map(normalizePath)
-    : null;
+  const configured = Array.isArray(source.paths) && source.paths.length ? source.paths.map(normalizePath) : null;
   const set = new Set([...(configured || ["/docs"]), rootPath].filter((p) => p && p !== "/"));
   return [...set];
 }
@@ -611,7 +660,10 @@ async function fetchCrawlPage(pageUrl: string, force: boolean): Promise<CrawlPag
         return { content: `## ${title} (${pageUrl})\n\n${md}`, raw: md };
       }
     } catch (error: unknown) {
-      log.warn("knowledge", `firecrawl scrape failed for ${pageUrl}, falling back to guard: ${error instanceof Error ? error.message : String(error)}`);
+      log.warn(
+        "knowledge",
+        `firecrawl scrape failed for ${pageUrl}, falling back to guard: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
   const res = await sourceGuard.fetchSourceUrl(pageUrl, { timeout: SUBPAGE_FETCH_TIMEOUT_MS });
@@ -649,14 +701,19 @@ async function fetchUrlSource(source: SourceRecord, force: boolean) {
     const discovered: string[] = [];
     for (let i = 0; i < frontier.length && pages.length < CRAWL_MAX_PAGES; i += FETCH_BATCH_SIZE) {
       const batch = frontier.slice(i, i + FETCH_BATCH_SIZE);
-      const results = await Promise.all(batch.map(async (url) => {
-        try {
-          return { url, ...(await fetchCrawlPage(url, force)) };
-        } catch (error: unknown) {
-          log.warn("knowledge", `failed to crawl ${url} for "${source.name}": ${error instanceof Error ? error.message : String(error)}`);
-          return null;
-        }
-      }));
+      const results = await Promise.all(
+        batch.map(async (url) => {
+          try {
+            return { url, ...(await fetchCrawlPage(url, force)) };
+          } catch (error: unknown) {
+            log.warn(
+              "knowledge",
+              `failed to crawl ${url} for "${source.name}": ${error instanceof Error ? error.message : String(error)}`,
+            );
+            return null;
+          }
+        }),
+      );
       for (const r of results) {
         if (!r) continue;
         if (r.content) pages.push(r.content);
@@ -702,7 +759,6 @@ async function fetchSourceText(source: SourceRecord, force = false) {
   throw new Error(`unknown source type: ${source.type}`);
 }
 
-
 function restoreFromDisk(source: SourceRecord) {
   const key = sourceCacheKey(source);
   const names = key && key !== source.name && source.url ? [key, source.name] : [key || source.name];
@@ -726,10 +782,15 @@ function persistSourceText(source: SourceRecord, text: string) {
     const key = sourceCacheKey(source) || source.name;
     db.saveSourceText(key, text);
     if (key !== source.name) {
-      try { db.handle().query("DELETE FROM source_cache WHERE name = ?").run(source.name); } catch (_error: unknown) {}
+      try {
+        db.handle().query("DELETE FROM source_cache WHERE name = ?").run(source.name);
+      } catch (_error: unknown) {}
     }
   } catch (error: unknown) {
-    log.warn("knowledge", `could not persist "${source.name}": ${error instanceof Error ? error.message : String(error)}`);
+    log.warn(
+      "knowledge",
+      `could not persist "${source.name}": ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
@@ -747,9 +808,15 @@ async function refreshSource(source: SourceRecord, force = false) {
   } catch (error: unknown) {
     const restored = cache.has(memKey(source)) || restoreFromDisk(source);
     const tail = restored ? "serving last good copy" : "and there is no stored copy to fall back on";
-    log.warn("knowledge", `failed to fetch "${source.name}": ${error instanceof Error ? error.message : String(error)} — ${tail}`);
+    log.warn(
+      "knowledge",
+      `failed to fetch "${source.name}": ${error instanceof Error ? error.message : String(error)} — ${tail}`,
+    );
     try {
-      db.recordSourceFailure(sourceCacheKey(source) || source.name, error instanceof Error ? error.message : String(error));
+      db.recordSourceFailure(
+        sourceCacheKey(source) || source.name,
+        error instanceof Error ? error.message : String(error),
+      );
     } catch (_error: unknown) {}
     if (!force) {
       try {
@@ -782,7 +849,6 @@ function faqQuestions(programId: string | null = null): string[] {
   return questions;
 }
 
-
 function generatedSections(programId: string | null = null, question: string | null = null): Section[] {
   const prog = programs.get(programId);
   const sections: Section[] = [];
@@ -791,7 +857,10 @@ function generatedSections(programId: string | null = null, question: string | n
     const identityText = identity.corpusSection(prog);
     if (identityText) sections.push(["About pixie", identityText]);
   } catch (error: unknown) {
-    log.warn("knowledge", `generated section "About pixie" failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.warn(
+      "knowledge",
+      `generated section "About pixie" failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   try {
@@ -799,14 +868,20 @@ function generatedSections(programId: string | null = null, question: string | n
     const timelineText = programModule.corpusSection(new Date(), milestones, prog);
     if (timelineText) sections.push(["Program timeline", timelineText]);
   } catch (error: unknown) {
-    log.warn("knowledge", `generated section "Program timeline" failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.warn(
+      "knowledge",
+      `generated section "Program timeline" failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   try {
     const learnText = question ? learn.relevantCorpusSection(question, programId) : learn.corpusSection(programId);
     if (learnText) sections.push(["Learned answers", learnText]);
   } catch (error: unknown) {
-    log.warn("knowledge", `generated section "Learned answers" failed: ${error instanceof Error ? error.message : String(error)}`);
+    log.warn(
+      "knowledge",
+      `generated section "Learned answers" failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 
   return sections;
@@ -822,7 +897,10 @@ function memText(source: SourceRecord) {
       text = localFileText(source);
       if (text) cache.set(memKey(source), text);
     } catch (error: unknown) {
-      log.warn("knowledge", `local source unavailable for ${source.name}: ${error instanceof Error ? error.message : String(error)}`);
+      log.warn(
+        "knowledge",
+        `local source unavailable for ${source.name}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
   return text || null;
@@ -850,21 +928,32 @@ function sourceSections(programId: string | null = null): Section[] {
 
 function sourceContainsCitation(source: SourceRecord, citation: string) {
   if (!source?.name || !citation) return false;
-  const expected = String(citation).trim().replace(/^#+\s*/, "").toLowerCase();
+  const expected = String(citation)
+    .trim()
+    .replace(/^#+\s*/, "")
+    .toLowerCase();
   if (!expected) return false;
   if (source.name.trim().toLowerCase() === expected) return true;
-  const text = memText(source) || (source.name.trim().toLowerCase() === LIVE_YSWS_SOURCE.name.toLowerCase() && fs.existsSync(LIVE_YSWS_DOCS_PATH)
-    ? fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")
-    : null);
+  const text =
+    memText(source) ||
+    (source.name.trim().toLowerCase() === LIVE_YSWS_SOURCE.name.toLowerCase() && fs.existsSync(LIVE_YSWS_DOCS_PATH)
+      ? fs.readFileSync(LIVE_YSWS_DOCS_PATH, "utf8")
+      : null);
   if (!text) return false;
-  return String(text).split(/\r?\n/).some((line) => {
-    const match = line.match(/^\s*#{1,6}\s+(.+?)\s*#*\s*$/);
-    if (!match) return false;
-    const heading = match[1].trim().toLowerCase();
-    const unnumbered = heading.replace(/^\d+\.\s*/, "");
-    const expectedUnnumbered = expected.replace(/^\d+\.\s*/, "");
-    return heading === expected || unnumbered === expectedUnnumbered || heading.replace(/[.:]+$/, "") === expected.replace(/[.:]+$/, "");
-  });
+  return String(text)
+    .split(/\r?\n/)
+    .some((line) => {
+      const match = line.match(/^\s*#{1,6}\s+(.+?)\s*#*\s*$/);
+      if (!match) return false;
+      const heading = match[1].trim().toLowerCase();
+      const unnumbered = heading.replace(/^\d+\.\s*/, "");
+      const expectedUnnumbered = expected.replace(/^\d+\.\s*/, "");
+      return (
+        heading === expected ||
+        unnumbered === expectedUnnumbered ||
+        heading.replace(/[.:]+$/, "") === expected.replace(/[.:]+$/, "")
+      );
+    });
 }
 
 function buildCorpus(programId: string | null = null) {
@@ -898,7 +987,7 @@ function getIndex(programId: string | null = null) {
 
 function excludedSources(programId: string | null, question: string) {
   const prog = programs.get(programId);
-  const shared = prog && prog.sharedSources === false ? [] : (programs.shared().sources || []);
+  const shared = prog && prog.sharedSources === false ? [] : programs.shared().sources || [];
   const all = [...(prog?.sources || []), ...shared];
   const shopSources = all.filter((s: SourceRecord) => s && (s.type === "pixl-shop" || s.type === "live-shop"));
   if (shopSources.length === 0) return null;
@@ -931,7 +1020,6 @@ function getContext(question: string, programId: string | null = null) {
   return selectContextFor(question, programId);
 }
 
-
 function sanitizeStatusUrl(url: unknown) {
   if (!url || typeof url !== "string") return null;
   if (url.startsWith("file://")) return url;
@@ -945,13 +1033,18 @@ function sanitizeStatusUrl(url: unknown) {
 }
 
 function sanitizeStatusError(error: unknown) {
-  return String(error || "").replace(/\s+/g, " ").trim().slice(0, 200) || null;
+  return (
+    String(error || "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 200) || null
+  );
 }
 
 function programSourcesForStatus(programId: string | null) {
   const prog = programs.get(programId);
   if (!prog) return { prog: null, sources: [] };
-  const shared = prog.sharedSources === false ? [] : (programs.shared().sources || []);
+  const shared = prog.sharedSources === false ? [] : programs.shared().sources || [];
   const seen = new Set<string>();
   const sources: SourceRecord[] = [];
   for (const src of [...(prog.sources || []), ...shared]) {
@@ -966,7 +1059,9 @@ function sourceStatus(programId: string | null) {
   const { prog, sources } = programSourcesForStatus(programId);
   if (!prog) return [];
   const keys = sources.map((source) => sourceCacheKey(source) || source.name);
-  const healthByName = new Map<string, SourceHealthRow>(db.getSourceHealth(keys).map((row: SourceHealthRow): [string, SourceHealthRow] => [row.name, row]));
+  const healthByName = new Map<string, SourceHealthRow>(
+    db.getSourceHealth(keys).map((row: SourceHealthRow): [string, SourceHealthRow] => [row.name, row]),
+  );
   let chunksBySource: Map<string, number> = new Map();
   try {
     chunksBySource = new Map();
@@ -985,8 +1080,12 @@ function sourceStatus(programId: string | null) {
     const status = inflightSources.has(memKey(source))
       ? "fetching"
       : !hasLastGood
-        ? (failCount > 0 ? "error" : "pending")
-        : (failCount > 0 ? "stale" : "ready");
+        ? failCount > 0
+          ? "error"
+          : "pending"
+        : failCount > 0
+          ? "stale"
+          : "ready";
     return {
       name: source.name,
       type: source.type || null,
@@ -1051,7 +1150,9 @@ async function refreshCorpus(force = false) {
 function startAutoRefresh(intervalMin: number) {
   const ms = intervalMin * 60 * 1000;
   return setInterval(() => {
-    refreshCorpus().catch((error: unknown) => log.error("knowledge", "refresh failed:", error instanceof Error ? error.message : String(error)));
+    refreshCorpus().catch((error: unknown) =>
+      log.error("knowledge", "refresh failed:", error instanceof Error ? error.message : String(error)),
+    );
   }, ms);
 }
 
@@ -1090,5 +1191,7 @@ export = {
   generatedSections,
   excludedSources,
   MAX_SOURCE_TEXT_CHARS,
-  get lastBuiltAt() { return lastBuiltAt; },
+  get lastBuiltAt() {
+    return lastBuiltAt;
+  },
 };

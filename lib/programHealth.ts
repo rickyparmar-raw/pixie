@@ -14,9 +14,20 @@ type Analytics = {
   windowDays: number;
 };
 type SourceHealth = { name: string; fail_count: number };
-interface SourceRef { name: string; type?: string; url?: string }
-interface GapCluster { covered: boolean }
-interface HealthComponents { ticketBacklog: number; sourceHealth: number; knowledgeCoverage: number; resolutionQuality: number }
+interface SourceRef {
+  name: string;
+  type?: string;
+  url?: string;
+}
+interface GapCluster {
+  covered: boolean;
+}
+interface HealthComponents {
+  ticketBacklog: number;
+  sourceHealth: number;
+  knowledgeCoverage: number;
+  resolutionQuality: number;
+}
 interface HealthScore {
   error?: string;
   programId?: string;
@@ -68,7 +79,10 @@ function resolutionQualityComponent(analytics: Analytics): number {
   return clamp(100 - analytics.reopenRate * 150 - escalationRate * 50);
 }
 
-function computeHealthScore(programId: string, { sinceMs = 30 * 24 * 60 * 60 * 1000 }: { sinceMs?: number } = {}): HealthScore {
+function computeHealthScore(
+  programId: string,
+  { sinceMs = 30 * 24 * 60 * 60 * 1000 }: { sinceMs?: number } = {},
+): HealthScore {
   // Quiet programs report insufficient data instead of a misleading perfect score.
   if (!programId) return { error: "programId required" };
   const analytics = supportAnalytics.overview(programId, sinceMs);
@@ -90,7 +104,15 @@ function computeHealthScore(programId: string, { sinceMs = 30 * 24 * 60 * 60 * 1
     resolutionQuality: resolutionQualityComponent(analytics),
   };
   const score = clamp(Object.values(components).reduce((sum, v) => sum + v, 0) / Object.keys(components).length);
-  return { programId, version: SCORE_VERSION, score, label: null, components, windowDays: analytics.windowDays, questionsInWindow: analytics.created };
+  return {
+    programId,
+    version: SCORE_VERSION,
+    score,
+    label: null,
+    components,
+    windowDays: analytics.windowDays,
+    questionsInWindow: analytics.created,
+  };
 }
 
 export = { computeHealthScore, SCORE_VERSION, MIN_QUESTIONS_FOR_SCORE };

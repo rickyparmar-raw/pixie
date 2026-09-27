@@ -3,7 +3,11 @@
 type ConfigValue = boolean | number | string | null | undefined;
 type BehaviorSettings = Record<string, boolean>;
 type ProgramBehavior = { main: BehaviorSettings; help: BehaviorSettings };
-interface BehaviorObject { main?: Record<string, unknown>; help?: Record<string, unknown>; [key: string]: unknown }
+interface BehaviorObject {
+  main?: Record<string, unknown>;
+  help?: Record<string, unknown>;
+  [key: string]: unknown;
+}
 interface ProgramModelInput {
   posture?: string;
   supportActive?: boolean;
@@ -22,8 +26,17 @@ interface ChannelProgram {
   organizerChannel?: string | null;
   channels?: string[];
 }
-interface ChannelClaim { workspace_id: string | null; channel_id: string; program_id: string; kind: string }
-interface ChannelOwner { programId: string; role: string; origin: string }
+interface ChannelClaim {
+  workspace_id: string | null;
+  channel_id: string;
+  program_id: string;
+  kind: string;
+}
+interface ChannelOwner {
+  programId: string;
+  role: string;
+  origin: string;
+}
 const STATUSES = ["sandbox", "live", "paused"];
 
 const MAIN_DEFAULTS = Object.freeze({
@@ -57,7 +70,6 @@ function bool(value: ConfigValue, fallback: boolean | undefined): boolean | unde
   return fallback;
 }
 
-
 function legacyMain(p: ProgramModelInput): BehaviorSettings {
   const posture = p.posture || "active";
   return {
@@ -87,7 +99,12 @@ function pick(obj: unknown, keys: string[]): Record<string, unknown> {
   return out;
 }
 
-function resolveSection(defaults: BehaviorSettings, legacy: BehaviorSettings, stored: Record<string, unknown> | null, keys: string[]): BehaviorSettings {
+function resolveSection(
+  defaults: BehaviorSettings,
+  legacy: BehaviorSettings,
+  stored: Record<string, unknown> | null,
+  keys: string[],
+): BehaviorSettings {
   const out: BehaviorSettings = {};
   for (const k of keys) {
     const fromStored = stored && Object.hasOwn(stored, k) ? bool(stored[k] as ConfigValue, undefined) : undefined;
@@ -103,12 +120,11 @@ function parseStoredBehavior(raw: unknown): BehaviorObject | null {
   if (typeof raw === "object") return raw as BehaviorObject;
   try {
     const parsed: unknown = JSON.parse(raw as string);
-    return parsed && typeof parsed === "object" ? parsed as BehaviorObject : null;
+    return parsed && typeof parsed === "object" ? (parsed as BehaviorObject) : null;
   } catch {
     return null;
   }
 }
-
 
 function behaviorFor(p: ProgramModelInput = {}): ProgramBehavior {
   const stored = parseStoredBehavior(p.behavior);
@@ -124,11 +140,13 @@ function statusFor(p: ProgramModelInput = {}): string {
   return "live";
 }
 
-
 function sanitizeBehaviorPatch(patch: unknown): BehaviorObject {
   const src = parseStoredBehavior(patch) || {};
   const out: BehaviorObject = {};
-  const sections: Array<[string, string[]]> = [["main", MAIN_KEYS], ["help", HELP_KEYS]];
+  const sections: Array<[string, string[]]> = [
+    ["main", MAIN_KEYS],
+    ["help", HELP_KEYS],
+  ];
   for (const [section, keys] of sections) {
     if (!src[section] || typeof src[section] !== "object") continue;
     const clean: Record<string, boolean> = {};
@@ -155,8 +173,12 @@ function mergeBehavior(existing: unknown, patch: unknown): BehaviorObject {
   };
 }
 
-
-function validateChannelRoles({ programs = [], legacyHelp = null, legacyMain = [], claims = [] }: { programs?: ChannelProgram[]; legacyHelp?: string | null; legacyMain?: string[]; claims?: ChannelClaim[] } = {}) {
+function validateChannelRoles({
+  programs = [],
+  legacyHelp = null,
+  legacyMain = [],
+  claims = [],
+}: { programs?: ChannelProgram[]; legacyHelp?: string | null; legacyMain?: string[]; claims?: ChannelClaim[] } = {}) {
   // Compare configured and hosted ownership in the same workspace/channel namespace.
   const errors = [];
   const owners = new Map<string, ChannelOwner>();
@@ -183,7 +205,8 @@ function validateChannelRoles({ programs = [], legacyHelp = null, legacyMain = [
     if (!p || !p.id || p.id === "ysws-global") continue;
     const ws = p.workspaceId || null;
     if (p.helpChannel) assign(ws, p.helpChannel, p.id, "help", "program.helpChannel");
-    if (p.organizerChannel && p.organizerChannel !== p.helpChannel) assign(ws, p.organizerChannel, p.id, "organizer", "program.organizerChannel");
+    if (p.organizerChannel && p.organizerChannel !== p.helpChannel)
+      assign(ws, p.organizerChannel, p.id, "organizer", "program.organizerChannel");
     for (const ch of p.channels || []) {
       if (ch === p.helpChannel || ch === p.organizerChannel) continue;
       assign(ws, ch, p.id, "main", "program.channels");
@@ -197,13 +220,19 @@ function validateChannelRoles({ programs = [], legacyHelp = null, legacyMain = [
   if (legacyHelp) {
     const owner = roleOf(legacyHelp);
     if (owner && owner.role !== "help") {
-      errors.push({ channelId: legacyHelp, message: `SLACK_HELP_CHANNEL ${legacyHelp} is configured as ${owner.role} of ${owner.programId}` });
+      errors.push({
+        channelId: legacyHelp,
+        message: `SLACK_HELP_CHANNEL ${legacyHelp} is configured as ${owner.role} of ${owner.programId}`,
+      });
     }
   }
   for (const ch of legacyMain || []) {
     const owner = roleOf(ch);
     if (owner && owner.role !== "main") {
-      errors.push({ channelId: ch, message: `SLACK_FAQ_CHANNELS entry ${ch} is configured as ${owner.role} of ${owner.programId}` });
+      errors.push({
+        channelId: ch,
+        message: `SLACK_FAQ_CHANNELS entry ${ch} is configured as ${owner.role} of ${owner.programId}`,
+      });
     }
     if (legacyHelp && ch === legacyHelp) {
       errors.push({ channelId: ch, message: `${ch} is in both SLACK_HELP_CHANNEL and SLACK_FAQ_CHANNELS` });
@@ -216,7 +245,8 @@ function validateChannelRoles({ programs = [], legacyHelp = null, legacyMain = [
     const k = key(c.workspace_id, c.channel_id);
     const star = key(null, c.channel_id);
     const prev = owners.get(k) || owners.get(star);
-    const sameProgramOrganizer = prev && prev.programId === c.program_id && role === "organizer" && prev.role === "main";
+    const sameProgramOrganizer =
+      prev && prev.programId === c.program_id && role === "organizer" && prev.role === "main";
     if (prev && !sameProgramOrganizer && (prev.programId !== c.program_id || prev.role !== role)) {
       errors.push({
         channelId: c.channel_id,

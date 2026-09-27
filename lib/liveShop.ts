@@ -41,7 +41,9 @@ async function refreshText(url: string) {
   const catalogue = await refresh(url);
   return [
     "Live rewards unlock after approved build hours.",
-    ...catalogue.map((item) => `Q: How many approved build hours unlock ${item.name}?\nA: About ${item.hours} approved build hours.`),
+    ...catalogue.map(
+      (item) => `Q: How many approved build hours unlock ${item.name}?\nA: About ${item.hours} approved build hours.`,
+    ),
   ].join("\n\n");
 }
 
@@ -54,7 +56,8 @@ function formatMinutes(minutes: number) {
   const rounded = Math.round(minutes);
   const hours = Math.floor(rounded / 60);
   const remaining = rounded % 60;
-  if (hours > 0 && remaining > 0) return `${hours} hour${hours === 1 ? "" : "s"} ${remaining} minute${remaining === 1 ? "" : "s"}`;
+  if (hours > 0 && remaining > 0)
+    return `${hours} hour${hours === 1 ? "" : "s"} ${remaining} minute${remaining === 1 ? "" : "s"}`;
   if (hours > 0) return `${hours} hour${hours === 1 ? "" : "s"}`;
   return `${remaining} minute${remaining === 1 ? "" : "s"}`;
 }
@@ -62,7 +65,10 @@ function formatMinutes(minutes: number) {
 function matchingItem(question: string, catalogue: ShopItem[]) {
   const lower = String(question || "").toLowerCase();
   const matches = catalogue.filter((item) => {
-    const words = item.name.toLowerCase().split(/\W+/).filter((word) => word.length > 2);
+    const words = item.name
+      .toLowerCase()
+      .split(/\W+/)
+      .filter((word) => word.length > 2);
     return words.length > 0 && words.some((word) => lower.includes(word));
   });
   return matches.length === 1 ? matches[0] : null;
@@ -80,7 +86,15 @@ function directAnswer(question: string, catalogue = items, minutesPerHour = 20) 
   );
 }
 
-function answerForStreamTime({ text, hours, minutesPerHour }: { text: string; hours: number | null; minutesPerHour: number }) {
+function answerForStreamTime({
+  text,
+  hours,
+  minutesPerHour,
+}: {
+  text: string;
+  hours: number | null;
+  minutesPerHour: number;
+}) {
   if (hours === null || !/\b(?:stream|time|minutes?|hours? added)\b/i.test(text)) return null;
   return {
     source: "Live rewards",
@@ -98,9 +112,21 @@ function answerForThreshold({ text, item }: { text: string; item: ShopItem | nul
   };
 }
 
-function answerForUnlockable({ text, hours, catalogue }: { text: string; hours: number | null; catalogue: ShopItem[] }) {
-  if (hours === null || !/\b(?:what (?:can i|get)|rewards?|unlock|afford)\b/i.test(text) || catalogue.length === 0) return null;
-  const unlocked = catalogue.filter((candidate: ShopItem) => candidate.hours <= hours).sort((a: ShopItem, b: ShopItem) => b.hours - a.hours).slice(0, 5);
+function answerForUnlockable({
+  text,
+  hours,
+  catalogue,
+}: {
+  text: string;
+  hours: number | null;
+  catalogue: ShopItem[];
+}) {
+  if (hours === null || !/\b(?:what (?:can i|get)|rewards?|unlock|afford)\b/i.test(text) || catalogue.length === 0)
+    return null;
+  const unlocked = catalogue
+    .filter((candidate: ShopItem) => candidate.hours <= hours)
+    .sort((a: ShopItem, b: ShopItem) => b.hours - a.hours)
+    .slice(0, 5);
   if (unlocked.length === 0) return null;
   return {
     source: "Live Shop",
@@ -113,4 +139,14 @@ function current() {
   return items;
 }
 
-export = { parseCatalogue, refresh, refreshText, parseHours, directAnswer, current, answerForStreamTime, answerForThreshold, answerForUnlockable };
+export = {
+  parseCatalogue,
+  refresh,
+  refreshText,
+  parseHours,
+  directAnswer,
+  current,
+  answerForStreamTime,
+  answerForThreshold,
+  answerForUnlockable,
+};

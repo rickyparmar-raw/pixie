@@ -23,13 +23,12 @@ interface ProgramMetadata {
 const PROGRAM_PATH = path.join(__dirname, "..", "program.json");
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-
-const NON_TIMING_RE = /\b(?:hackatime|wakatime|hours?|storage|tracking|tracked|shows|sync|discrepancy|drift|error|why|how do i|how to|npm|code)\b/i;
+const NON_TIMING_RE =
+  /\b(?:hackatime|wakatime|hours?|storage|tracking|tracked|shows|sync|discrepancy|drift|error|why|how do i|how to|npm|code)\b/i;
 const TIMING_DATE_WORDS_RE = /\b(?:deadline|release date|launch date)\b/i;
 
-
-const NON_PROGRAM_DURATION_RE = /how long (?:does|do|is|will) (?:review|quest|sidequest|building|approval|processing|take)/i;
-
+const NON_PROGRAM_DURATION_RE =
+  /how long (?:does|do|is|will) (?:review|quest|sidequest|building|approval|processing|take)/i;
 
 const IGNORED_MILESTONE_WORDS = new Set(["pixl", "ysws", "official", "program", "the", "hack", "club"]);
 
@@ -81,17 +80,12 @@ function questionPairs(entry: Milestone, now: Date) {
   const extra = Array.isArray(entry.questions) ? entry.questions : [];
 
   const pairs = [
-    [
-      [`When is ${entry.name}?`, `What date is ${entry.name}?`, ...extra].join(" / "),
-      `${pretty} — ${when}.`,
-    ],
+    [[`When is ${entry.name}?`, `What date is ${entry.name}?`, ...extra].join(" / "), `${pretty} — ${when}.`],
   ];
 
   pairs.push([
     `Has ${entry.name} happened yet? / Is it out yet? / Is ${entry.name} done?`,
-    passed
-      ? `Yes — ${entry.name} was ${pretty}, ${when}.`
-      : `Not yet — ${entry.name} is ${pretty}, ${when}.`,
+    passed ? `Yes — ${entry.name} was ${pretty}, ${when}.` : `Not yet — ${entry.name} is ${pretty}, ${when}.`,
   ]);
 
   return pairs.map(([q, a]) => `Q: ${q}\nA: ${a}`);
@@ -137,8 +131,8 @@ function buildTimingPattern(metadata: ProgramMetadata | null) {
   if (namesPattern === null) return null;
   return new RegExp(
     `\\b(?:when (?:is|are|does|did|will|do|was|drop)|what date|how long (?:until|left|till)|how many days (?:until|left|till)|release date|launch date|is it out|out yet|come out|coming out|drop(?:s|ping|ped)?|deadline|due date)\\b|` +
-    `\\b(?:is|are|has|have)\\b[^?.!]{0,30}\\blive\\b|` +
-    `\\b(?:is|are|has|have|does|did|will)\\b[^?.!]{0,20}\\b(?:${namesPattern}|it|this|program|chapter)\\b[^?.!]{0,20}\\b(?:start(?:s|ed|ing)?|end(?:s|ed|ing)?|clos(?:es|ed|ing)?|launch(?:ed|ing)?|release[ds]?)\\b`,
+      `\\b(?:is|are|has|have)\\b[^?.!]{0,30}\\blive\\b|` +
+      `\\b(?:is|are|has|have|does|did|will)\\b[^?.!]{0,20}\\b(?:${namesPattern}|it|this|program|chapter)\\b[^?.!]{0,20}\\b(?:start(?:s|ed|ing)?|end(?:s|ed|ing)?|clos(?:es|ed|ing)?|launch(?:ed|ing)?|release[ds]?)\\b`,
     "i",
   );
 }
@@ -158,7 +152,11 @@ function extractMilestones(dataOrMilestones: ProgramData | Milestone[] | null | 
   return [];
 }
 
-function corpusSection(now = new Date(), dataOrMilestones: ProgramData | Milestone[] | null = load(), metadata: ProgramMetadata | null = null) {
+function corpusSection(
+  now = new Date(),
+  dataOrMilestones: ProgramData | Milestone[] | null = load(),
+  metadata: ProgramMetadata | null = null,
+) {
   const entries = extractMilestones(dataOrMilestones);
   if (entries.length === 0) return "";
 
@@ -182,7 +180,12 @@ function corpusSection(now = new Date(), dataOrMilestones: ProgramData | Milesto
   return [...header, ...lines, "", ...pairs, "", ...footer].join("\n");
 }
 
-function directAnswer(question: string, now = new Date(), dataOrMilestones: ProgramData | Milestone[] | null = load(), metadata: ProgramMetadata | null = null) {
+function directAnswer(
+  question: string,
+  now = new Date(),
+  dataOrMilestones: ProgramData | Milestone[] | null = load(),
+  metadata: ProgramMetadata | null = null,
+) {
   // Only a uniquely named or clearly program-level question gets a deterministic date answer.
   if (!isTimingQuestion(question, metadata)) return null;
 
@@ -206,7 +209,7 @@ function directAnswer(question: string, now = new Date(), dataOrMilestones: Prog
     `\\b(?:release|launch|out|deadline|finish|due|drop|schedule)\\b|\\b(?:is|are|has|have|does|did|will)\\b[^?.!]{0,20}\\b(?:${namesPattern}|it|this|program|chapter)\\b[^?.!]{0,20}\\b(?:start(?:s|ed|ing)?|end(?:s|ed|ing)?|launch(?:ed|ing)?|release[ds]?)\\b`,
     "i",
   );
-  const entry = named.length === 1 ? named[0] : (entries.length === 1 && programTerms.test(asked) ? entries[0] : null);
+  const entry = named.length === 1 ? named[0] : entries.length === 1 && programTerms.test(asked) ? entries[0] : null;
   if (!entry) return null;
 
   const date = parseDate(entry.date);

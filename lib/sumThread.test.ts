@@ -57,8 +57,7 @@ test("summarizeThreadForHelper returns null when thread has no messages", async 
   assert.equal(result, null);
 });
 
-
-test("char: sumThread output is a helper string or null — never a write", async () => {
+test("sumThread output is a helper string or null — never a write", async () => {
   const fs = require("fs");
   const path = require("path");
   const src = readSource("sumThread.js");
@@ -77,7 +76,14 @@ test("char: sumThread output is a helper string or null — never a write", asyn
   llm.complete = async () => ({ text: "  • *Asker:* <@U1>\n• *Goal:* x  " });
   try {
     const out = await sumThread.summarizeThreadForHelper({
-      client: { conversations: { replies: async (args: any) => { assert.equal(args.limit, 50); return { messages: [{ user: "U1", text: "my build fails" }] }; } } },
+      client: {
+        conversations: {
+          replies: async (args: any) => {
+            assert.equal(args.limit, 50);
+            return { messages: [{ user: "U1", text: "my build fails" }] };
+          },
+        },
+      },
       channel: "C1",
       threadTs: "char-sum-1",
     });
@@ -130,14 +136,24 @@ test("registry: !sum writes nothing — no tickets, no helper pings, no learned 
   assert.equal(sumFn.includes("captureFromThread"), false, "!sum must not queue pending facts");
 });
 
-test("char: sumThread scope is one thread per call — no cross-thread bleed", async () => {
+test("sumThread scope is one thread per call — no cross-thread bleed", async () => {
   const llm = require("./llm");
   const real = llm.complete;
   let seenPrompt = "";
-  llm.complete = async (args: any) => { seenPrompt = args.messages.map((m: any) => m.content).join("\n"); return { text: "summary" }; };
+  llm.complete = async (args: any) => {
+    seenPrompt = args.messages.map((m: any) => m.content).join("\n");
+    return { text: "summary" };
+  };
   try {
     const seen: any[] = [];
-    const client = { conversations: { replies: async (args: any) => { seen.push(args); return { messages: [{ user: "U9", text: "only this thread" }] }; } } };
+    const client = {
+      conversations: {
+        replies: async (args: any) => {
+          seen.push(args);
+          return { messages: [{ user: "U9", text: "only this thread" }] };
+        },
+      },
+    };
     await sumThread.summarizeThreadForHelper({ client, channel: "C9", threadTs: "char-sum-scope" });
     assert.equal(seen.length, 1);
     assert.equal(seen[0].channel, "C9");

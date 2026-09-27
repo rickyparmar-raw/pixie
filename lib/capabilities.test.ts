@@ -38,7 +38,10 @@ test("registry contains only commands registered by the command module", () => {
   const commands = require("./commands");
   const app = {
     command: (name: TestAny) => registered.add(name),
-    action: () => {}, shortcut: () => {}, event: () => {}, view: () => {},
+    action: () => {},
+    shortcut: () => {},
+    event: () => {},
+    view: () => {},
   };
   commands.register(app);
 

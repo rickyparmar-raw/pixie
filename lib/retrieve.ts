@@ -2,9 +2,22 @@ const log = require("./log");
 
 type Domain = "hardware" | "software" | "general";
 type Section = [string, string];
-interface Chunk { source: string; heading: string | null; domain: Domain; text: string }
-interface IndexedDoc { chunk: Chunk; freq: Map<string, number>; length: number }
-interface SearchIndex { docs: IndexedDoc[]; docFreq: Map<string, number>; avgLength: number }
+interface Chunk {
+  source: string;
+  heading: string | null;
+  domain: Domain;
+  text: string;
+}
+interface IndexedDoc {
+  chunk: Chunk;
+  freq: Map<string, number>;
+  length: number;
+}
+interface SearchIndex {
+  docs: IndexedDoc[];
+  docFreq: Map<string, number>;
+  avgLength: number;
+}
 interface ScoreFlags {
   isAiQuery: boolean;
   isFirmwareQuery: boolean;
@@ -29,8 +42,14 @@ interface AiSignals {
   isVagueHonestyHeading: boolean;
   isVagueAllowance: boolean;
 }
-interface DomainSignals { isHardwareChunk: boolean; isSoftwareChunk: boolean }
-interface ScoredChunk { chunk: Chunk; value: number }
+interface DomainSignals {
+  isHardwareChunk: boolean;
+  isSoftwareChunk: boolean;
+}
+interface ScoredChunk {
+  chunk: Chunk;
+  value: number;
+}
 interface SelectContextOptions {
   generated: Section[];
   learned?: Section[];
@@ -65,26 +84,142 @@ const BOOST_DOMAIN_MATCH = 3.0;
 const DEMOTE_CONTRADICTION = 0.1;
 
 const STOPWORDS = new Set([
-  "the", "a", "an", "and", "or", "but", "if", "of", "to", "in", "on", "at", "for", "with", "is", "are", "was",
-  "were", "be", "been", "it", "its", "this", "that", "these", "those", "i", "im", "my", "me", "you", "your",
-  "we", "our", "they", "them", "do", "does", "did", "how", "what", "when", "where", "why", "who", "can", "could",
-  "should", "would", "will", "get", "got", "have", "has", "had", "not", "no", "yes", "so", "just", "pixie",
-  "whats", "hows", "wheres", "whens", "whos", "whys", "thats", "theres", "heres", "ive", "ill", "youre",
-  "u", "ur", "pls", "plz",
+  "the",
+  "a",
+  "an",
+  "and",
+  "or",
+  "but",
+  "if",
+  "of",
+  "to",
+  "in",
+  "on",
+  "at",
+  "for",
+  "with",
+  "is",
+  "are",
+  "was",
+  "were",
+  "be",
+  "been",
+  "it",
+  "its",
+  "this",
+  "that",
+  "these",
+  "those",
+  "i",
+  "im",
+  "my",
+  "me",
+  "you",
+  "your",
+  "we",
+  "our",
+  "they",
+  "them",
+  "do",
+  "does",
+  "did",
+  "how",
+  "what",
+  "when",
+  "where",
+  "why",
+  "who",
+  "can",
+  "could",
+  "should",
+  "would",
+  "will",
+  "get",
+  "got",
+  "have",
+  "has",
+  "had",
+  "not",
+  "no",
+  "yes",
+  "so",
+  "just",
+  "pixie",
+  "whats",
+  "hows",
+  "wheres",
+  "whens",
+  "whos",
+  "whys",
+  "thats",
+  "theres",
+  "heres",
+  "ive",
+  "ill",
+  "youre",
+  "u",
+  "ur",
+  "pls",
+  "plz",
 ]);
 
 const SOFTWARE_TERMS = new Set([
-  "software", "code", "coding", "repo", "github", "app", "website", "web",
-  "frontend", "backend", "script", "npm", "deploy", "hosting", "git",
-  "python", "javascript", "typescript", "html", "css", "api", "cli",
-  "library", "bot", "pr", "commit", "developer", "browser", "extension"
+  "software",
+  "code",
+  "coding",
+  "repo",
+  "github",
+  "app",
+  "website",
+  "web",
+  "frontend",
+  "backend",
+  "script",
+  "npm",
+  "deploy",
+  "hosting",
+  "git",
+  "python",
+  "javascript",
+  "typescript",
+  "html",
+  "css",
+  "api",
+  "cli",
+  "library",
+  "bot",
+  "pr",
+  "commit",
+  "developer",
+  "browser",
+  "extension",
 ]);
 
 const HARDWARE_TERMS = new Set([
-  "hardware", "pcb", "circuit", "wiring", "wire", "cad", "schematic",
-  "breadboard", "soldering", "gerber", "component", "3d", "kicad",
-  "step", "stl", "electronics", "enclosure", "bom", "resistor",
-  "microcontroller", "devboard", "macropad", "fusion360", "easyeda"
+  "hardware",
+  "pcb",
+  "circuit",
+  "wiring",
+  "wire",
+  "cad",
+  "schematic",
+  "breadboard",
+  "soldering",
+  "gerber",
+  "component",
+  "3d",
+  "kicad",
+  "step",
+  "stl",
+  "electronics",
+  "enclosure",
+  "bom",
+  "resistor",
+  "microcontroller",
+  "devboard",
+  "macropad",
+  "fusion360",
+  "easyeda",
 ]);
 
 const AI_TERMS = ["ai", "chatgpt", "copilot", "claude", "gpt", "llm"];
@@ -99,9 +234,13 @@ const HOURS_TERMS = ["hour", "hours", "deflate", "deflation", "reduce", "payout"
 function detectDomain(text: string): Domain {
   const lowered = String(text || "").toLowerCase();
   const hasHardware =
-    /\b(?:hardware|pcb|wiring\s+diagram|gerber|breadboard|soldering|schematic|cad\b|3d\s+model|\.step\b|\.stl\b|kicad|easyeda|devboard|macropad|circuit|resistor)\b/i.test(lowered);
+    /\b(?:hardware|pcb|wiring\s+diagram|gerber|breadboard|soldering|schematic|cad\b|3d\s+model|\.step\b|\.stl\b|kicad|easyeda|devboard|macropad|circuit|resistor)\b/i.test(
+      lowered,
+    );
   const hasSoftware =
-    /\b(?:software|web\s+app|website|mobile\s+app|playable\s+url|browser\s+extension|frontend|backend|npm|pypi|github\s+repo)\b/i.test(lowered);
+    /\b(?:software|web\s+app|website|mobile\s+app|playable\s+url|browser\s+extension|frontend|backend|npm|pypi|github\s+repo)\b/i.test(
+      lowered,
+    );
 
   if (hasHardware && !hasSoftware) return "hardware";
   if (hasSoftware && !hasHardware) return "software";
@@ -175,7 +314,10 @@ function chunkSection(name: string, rawText: string): Chunk[] {
     .replace(/([.?!])\n([A-Z0-9*-])/g, "$1\n\n$2")
     .trim();
   if (!normalized) return [];
-  const paragraphs = normalized.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  const paragraphs = normalized
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
   const chunks: Chunk[] = [];
   let heading: string | null = null;
   let buffer = "";
@@ -242,8 +384,7 @@ function shouldFlushBeforeMerge(buffer: string, paragraph: string) {
   const bufDomain = detectDomain(buffer);
   const paraDomain = detectDomain(paragraph);
   const domainConflict =
-    (bufDomain === "software" && paraDomain === "hardware") ||
-    (bufDomain === "hardware" && paraDomain === "software");
+    (bufDomain === "software" && paraDomain === "hardware") || (bufDomain === "hardware" && paraDomain === "software");
   if (domainConflict) return true;
   if (/:\s*$/.test(buffer)) return false;
   if (/[.?!]\s*$/.test(buffer) && buffer.length >= 60) return true;
@@ -296,7 +437,13 @@ function bm25TermScore(tf: number, docLength: number, avgLength: number, idf: nu
   return idf * (norm / denom);
 }
 
-function baseScore(doc: IndexedDoc, queryTerms: string[], total: number, docFreq: Map<string, number>, avgLength: number) {
+function baseScore(
+  doc: IndexedDoc,
+  queryTerms: string[],
+  total: number,
+  docFreq: Map<string, number>,
+  avgLength: number,
+) {
   let value = 0;
   for (const term of queryTerms) {
     const tf = doc.freq.get(term);
@@ -313,13 +460,16 @@ function aiChunkSignals(text: string, heading: string, combined: string): AiSign
     has30Percent: /30\s*%|30\s*percent|hard ceiling/i.test(combined),
     isHardwareAiProhibition:
       /(?:hardware|cad|pcb|3d|step)/i.test(text) &&
-      /(?:not allowed|100%\s*original|0%\s*ai|not\s+(?:be\s+)?generated by ai|ai cannot generate|custom designs by you)/i.test(text),
+      /(?:not allowed|100%\s*original|0%\s*ai|not\s+(?:be\s+)?generated by ai|ai cannot generate|custom designs by you)/i.test(
+        text,
+      ),
     isFirmwareAiRule: /firmware/i.test(text) && /(?:30%|standard software code limit|microcontroller)/i.test(text),
     isReadmeAiRule: /readme/i.test(text) && /(?:cannot be built by ai|write your own readme)/i.test(text),
     isDisclosureChunk: /disclose|disclosure/i.test(text),
-    isConsequenceChunk: /(?:exceed|hide|hiding|consequence|fraud|permanent ban|reject your project|penaliz)/i.test(text),
-    isGenericAiAllowance:
-      (/using ai tools|permitted|30% of (?:the total|your project's) code/i.test(combined)),
+    isConsequenceChunk: /(?:exceed|hide|hiding|consequence|fraud|permanent ban|reject your project|penaliz)/i.test(
+      text,
+    ),
+    isGenericAiAllowance: /using ai tools|permitted|30% of (?:the total|your project's) code/i.test(combined),
     isVagueHonestyHeading: /be honest about ai/i.test(heading),
     isVagueAllowance: /using ai tools/i.test(text),
   };
@@ -361,10 +511,16 @@ function applyAiBoost(value: number, flags: ScoreFlags, signals: AiSignals) {
 
 function chunkDomainSignals(domain: Domain, combined: string): DomainSignals {
   return {
-    isHardwareChunk: domain === "hardware" ||
-      /hardware-requirements|hardware\s+requirements|\bpcb\b|wiring\s+diagram|gerber|breadboard|soldering|\bcad\b|3d\s+model|\.step\b|\.stl\b/i.test(combined),
-    isSoftwareChunk: domain === "software" ||
-      /software-requirements|software\s+requirements|\bsoftware\b|web\s+app|website|mobile\s+app|browser\s+extension|\bcli\b/i.test(combined),
+    isHardwareChunk:
+      domain === "hardware" ||
+      /hardware-requirements|hardware\s+requirements|\bpcb\b|wiring\s+diagram|gerber|breadboard|soldering|\bcad\b|3d\s+model|\.step\b|\.stl\b/i.test(
+        combined,
+      ),
+    isSoftwareChunk:
+      domain === "software" ||
+      /software-requirements|software\s+requirements|\bsoftware\b|web\s+app|website|mobile\s+app|browser\s+extension|\bcli\b/i.test(
+        combined,
+      ),
   };
 }
 
@@ -454,7 +610,16 @@ function selectChunks(index: SearchIndex, question: string, budget = DEFAULT_BUD
   return selected;
 }
 
-function selectContext({ generated, learned = [], index, sources, question, budget = DEFAULT_BUDGET, exclude = null, generatedLast = false }: SelectContextOptions) {
+function selectContext({
+  generated,
+  learned = [],
+  index,
+  sources,
+  question,
+  budget = DEFAULT_BUDGET,
+  exclude = null,
+  generatedLast = false,
+}: SelectContextOptions) {
   // Stop when the next ranked chunk does not fit; skipping it would replace relevant evidence with filler.
   // Put evidence first when downstream prompt truncation is possible.
   const dropped = exclude instanceof Set ? exclude : new Set(exclude || []);
@@ -469,11 +634,19 @@ function selectContext({ generated, learned = [], index, sources, question, budg
   const render = ([name, text]: Section) => `### ${name}\n${String(text || "").slice(0, budgetFor(name))}`;
   const renderLearned = ([name, text]: Section) => `### ${name}\n${String(text || "").slice(0, LEARNED_BUDGET)}`;
 
-  const head = generated.filter(kept).filter(([, text]) => text).map(render);
-  const learnedSections = learned.filter(kept).filter(([, text]) => text).map(renderLearned);
+  const head = generated
+    .filter(kept)
+    .filter(([, text]) => text)
+    .map(render);
+  const learnedSections = learned
+    .filter(kept)
+    .filter(([, text]) => text)
+    .map(renderLearned);
   const first = [...head, ...learnedSections];
-  const order = (retrieved: string[]) => (generatedLast ? [...retrieved, ...first] : [...first, ...retrieved]).join("\n\n");
-  const enforceTotal = (text: string) => (text.length > TOTAL_CONTEXT_BUDGET ? text.slice(0, TOTAL_CONTEXT_BUDGET) : text);
+  const order = (retrieved: string[]) =>
+    (generatedLast ? [...retrieved, ...first] : [...first, ...retrieved]).join("\n\n");
+  const enforceTotal = (text: string) =>
+    text.length > TOTAL_CONTEXT_BUDGET ? text.slice(0, TOTAL_CONTEXT_BUDGET) : text;
 
   const chunks = selectChunks(index, question, budget).filter((c) => !dropped.has(c.source));
   if (chunks.length === 0) {

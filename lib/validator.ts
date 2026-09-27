@@ -21,18 +21,31 @@ interface ValidationResult {
   issues?: string[];
   tips?: string[];
 }
-const GITHUB_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)(?:\/|\.git|\/tree\/[a-zA-Z0-9_.-]+)?/i;
+const GITHUB_URL_REGEX =
+  /(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)(?:\/|\.git|\/tree\/[a-zA-Z0-9_.-]+)?/i;
 
 const OPEN_SOURCE_LICENSES = [
   { id: "mit", name: "MIT License", regex: /\bMIT License|\bPermission is hereby granted, free of charge/i },
   { id: "apache-2.0", name: "Apache 2.0", regex: /\bApache License,?\s+Version 2\.0/i },
   { id: "gpl-3.0", name: "GPL v3", regex: /\bGNU GENERAL PUBLIC LICENSE\s+Version 3/i },
   { id: "gpl-2.0", name: "GPL v2", regex: /\bGNU GENERAL PUBLIC LICENSE\s+Version 2/i },
-  { id: "bsd-3-clause", name: "BSD 3-Clause", regex: /\bRedistribution and use in source and binary forms|\bBSD 3-Clause/i },
+  {
+    id: "bsd-3-clause",
+    name: "BSD 3-Clause",
+    regex: /\bRedistribution and use in source and binary forms|\bBSD 3-Clause/i,
+  },
   { id: "bsd-2-clause", name: "BSD 2-Clause", regex: /\bBSD 2-Clause/i },
-  { id: "isc", name: "ISC License", regex: /\bPermission to use, copy, modify, and\/or distribute this software for any purpose/i },
+  {
+    id: "isc",
+    name: "ISC License",
+    regex: /\bPermission to use, copy, modify, and\/or distribute this software for any purpose/i,
+  },
   { id: "mpl-2.0", name: "Mozilla Public License 2.0", regex: /\bMozilla Public License\s+v\.\s*2\.0/i },
-  { id: "unlicense", name: "The Unlicense", regex: /\bThis is free and unencumbered software released into the public domain/i },
+  {
+    id: "unlicense",
+    name: "The Unlicense",
+    regex: /\bThis is free and unencumbered software released into the public domain/i,
+  },
 ];
 
 function parseGithubUrl(text: string | null | undefined) {
@@ -55,8 +68,7 @@ async function fetchRawFile(owner: string, repo: string, filename: string) {
       if (res.status === 200 && typeof res.data === "string") {
         return res.data;
       }
-    } catch {
-    }
+    } catch {}
   }
   return null;
 }
@@ -81,8 +93,14 @@ function analyzeReadme(readmeText: string | null): ReadmeAnalysis {
   }
 
   const words = readmeText.trim().split(/\s+/).length;
-  const hasInstructions = /\b(?:run|build|install|setup|start|usage|getting started|how to|npm (?:run|install|start)|cargo build|python|pip install|yarn|pnpm|make)\b/i.test(readmeText);
-  const hasDemo = /\b(?:demo|live|video|youtube\.com|youtu\.be|loom\.com|playable|deployed|website|play\.pixl|vercel\.app|netlify\.app|github\.io)\b/i.test(readmeText);
+  const hasInstructions =
+    /\b(?:run|build|install|setup|start|usage|getting started|how to|npm (?:run|install|start)|cargo build|python|pip install|yarn|pnpm|make)\b/i.test(
+      readmeText,
+    );
+  const hasDemo =
+    /\b(?:demo|live|video|youtube\.com|youtu\.be|loom\.com|playable|deployed|website|play\.pixl|vercel\.app|netlify\.app|github\.io)\b/i.test(
+      readmeText,
+    );
   const hasScreenshots = /\.(?:png|jpe?g|gif|webp|svg)\b|!\[.*?\]\(.*?\)|<img\s+[^>]*src=/i.test(readmeText);
 
   return {
@@ -143,7 +161,6 @@ async function validateRepository(ownerOrUrl: string, repoName: string | null = 
   };
 }
 
-
 async function fetchFirstHit(owner: string, repo: string, filenames: string[]) {
   for (const fn of filenames) {
     const text = await fetchRawFile(owner, repo, fn);
@@ -152,9 +169,15 @@ async function fetchFirstHit(owner: string, repo: string, filenames: string[]) {
   return { text: null, file: null };
 }
 
-
-function assessReadiness({ licenseName, matchedLicenseFile, readmeAnalysis }: { licenseName: string | null; matchedLicenseFile: string | null; readmeAnalysis: ReadmeAnalysis }) {
-
+function assessReadiness({
+  licenseName,
+  matchedLicenseFile,
+  readmeAnalysis,
+}: {
+  licenseName: string | null;
+  matchedLicenseFile: string | null;
+  readmeAnalysis: ReadmeAnalysis;
+}) {
   const issues = [];
   const passes = [];
   const tips = [];
@@ -169,7 +192,9 @@ function assessReadiness({ licenseName, matchedLicenseFile, readmeAnalysis }: { 
     if (readmeAnalysis.wordCount >= 30) {
       passes.push(`README.md is well-documented (${readmeAnalysis.wordCount} words)`);
     } else {
-      tips.push(`README.md is very brief (${readmeAnalysis.wordCount} words). Add a couple sentences describing what your project does.`);
+      tips.push(
+        `README.md is very brief (${readmeAnalysis.wordCount} words). Add a couple sentences describing what your project does.`,
+      );
     }
 
     if (readmeAnalysis.hasInstructions) {

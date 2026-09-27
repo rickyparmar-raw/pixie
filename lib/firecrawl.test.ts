@@ -124,11 +124,12 @@ test("clearScrapeCache forces the next call to hit the network again", async () 
   assert.equal(calls, 2);
 });
 
-
-test("char: searchWeb returns null without an API key, never calling the network", async () => {
+test("searchWeb returns null without an API key, never calling the network", async () => {
   const saved = config.firecrawlApiKey;
   config.firecrawlApiKey = null;
-  axios.post = async () => { throw new Error("should not have been called"); };
+  axios.post = async () => {
+    throw new Error("should not have been called");
+  };
   try {
     assert.equal(await firecrawl.searchWeb("anything"), null);
   } finally {
@@ -136,7 +137,7 @@ test("char: searchWeb returns null without an API key, never calling the network
   }
 });
 
-test("char: searchWeb maps results to url/title/markdown", async () => {
+test("searchWeb maps results to url/title/markdown", async () => {
   axios.post = async () => ({
     data: { success: true, data: [{ url: "https://a.example", title: "A", markdown: "md", description: "d" }] },
   });
@@ -146,12 +147,12 @@ test("char: searchWeb maps results to url/title/markdown", async () => {
   assert.equal(res[0].markdown, "md");
 });
 
-test("char: unsuccessful scrape payloads yield null, not a throw", async () => {
+test("unsuccessful scrape payloads yield null, not a throw", async () => {
   axios.post = async () => ({ data: { success: false } });
   assert.equal(await firecrawl.scrapeUrl("https://example.com/char-miss"), null);
 });
 
-test("char: getApiKey prefers config, falls back to env, else null", () => {
+test("getApiKey prefers config, falls back to env, else null", () => {
   const savedCfg = config.firecrawlApiKey;
   const savedEnv = process.env.FIRECRAWL_API_KEY;
   try {

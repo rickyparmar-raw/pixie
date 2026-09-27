@@ -63,10 +63,21 @@ interface AppLike {
   shortcut(name: string, handler: unknown): void;
   event(name: string, handler: unknown): void;
 }
-interface ForgetAll { type: "all" }
-interface ForgetPending { type: "pending" }
-interface ForgetRange { type: "range"; from: number; to: number }
-interface ForgetId { type: "id"; id: number }
+interface ForgetAll {
+  type: "all";
+}
+interface ForgetPending {
+  type: "pending";
+}
+interface ForgetRange {
+  type: "range";
+  from: number;
+  to: number;
+}
+interface ForgetId {
+  type: "id";
+  id: number;
+}
 type ForgetInput = ForgetAll | ForgetPending | ForgetRange | ForgetId;
 interface GuideResult {
   message: string;
@@ -75,12 +86,80 @@ interface GuideResult {
   guideName?: string | null;
   [key: string]: unknown;
 }
-const formatHelp = (args: { actorId?: string | null; program?: Program | null }): string => (capabilities.formatHelp as (input: { actorId?: string | null; program?: Program | null }) => string)(args);
-const lookupAnswer = (question: string, context: string, program: Program | null, channel?: string | null): Promise<{ answer: string; source?: string } | null> => (respond.lookupAnswer as (q: string, c: string, p: Program | null, ch?: string | null) => Promise<{ answer: string; source?: string } | null>)(question, context, program, channel);
-const recordGap = (question: string, userId?: string | null, channel?: string | null, messageTs?: string | null, programId?: string | null): unknown => (db.recordGap as (q: string, u?: string | null, c?: string | null, ts?: string | null, p?: string | null) => unknown)(question, userId, channel, messageTs, programId);
-const topGaps = (limit?: number, sinceMs?: number, options?: { kind?: string }): Array<{ ask_count: number; question: string }> => (db.topGaps as (n?: number, since?: number, opts?: { kind?: string }) => Array<{ ask_count: number; question: string }>)(limit, sinceMs, options);
-const teach = (input: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }): number | null => (learn.teach as (value: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }) => number | null)(input);
-const addToThread = (threadTs: string, role: string, content: string, userId?: string | null, channel?: string | null): unknown => (context.addToThread as (ts: string, r: string, text: string, u?: string | null, c?: string | null) => unknown)(threadTs, role, content, userId, channel);
+const formatHelp = (args: { actorId?: string | null; program?: Program | null }): string =>
+  (capabilities.formatHelp as (input: { actorId?: string | null; program?: Program | null }) => string)(args);
+const lookupAnswer = (
+  question: string,
+  context: string,
+  program: Program | null,
+  channel?: string | null,
+): Promise<{ answer: string; source?: string } | null> =>
+  (
+    respond.lookupAnswer as (
+      q: string,
+      c: string,
+      p: Program | null,
+      ch?: string | null,
+    ) => Promise<{ answer: string; source?: string } | null>
+  )(question, context, program, channel);
+const recordGap = (
+  question: string,
+  userId?: string | null,
+  channel?: string | null,
+  messageTs?: string | null,
+  programId?: string | null,
+): unknown =>
+  (db.recordGap as (q: string, u?: string | null, c?: string | null, ts?: string | null, p?: string | null) => unknown)(
+    question,
+    userId,
+    channel,
+    messageTs,
+    programId,
+  );
+const topGaps = (
+  limit?: number,
+  sinceMs?: number,
+  options?: { kind?: string },
+): Array<{ ask_count: number; question: string }> =>
+  (
+    db.topGaps as (
+      n?: number,
+      since?: number,
+      opts?: { kind?: string },
+    ) => Array<{ ask_count: number; question: string }>
+  )(limit, sinceMs, options);
+const teach = (input: {
+  question: string;
+  answer: string;
+  authorId: string;
+  threadTs?: string | null;
+  channel?: string | null;
+  programId?: string | null;
+}): number | null =>
+  (
+    learn.teach as (value: {
+      question: string;
+      answer: string;
+      authorId: string;
+      threadTs?: string | null;
+      channel?: string | null;
+      programId?: string | null;
+    }) => number | null
+  )(input);
+const addToThread = (
+  threadTs: string,
+  role: string,
+  content: string,
+  userId?: string | null,
+  channel?: string | null,
+): unknown =>
+  (context.addToThread as (ts: string, r: string, text: string, u?: string | null, c?: string | null) => unknown)(
+    threadTs,
+    role,
+    content,
+    userId,
+    channel,
+  );
 
 function errorMessage(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("message" in error)) return undefined;
@@ -107,18 +186,19 @@ function plainSpoken(handler: (args: CommandArgs) => Promise<unknown>) {
   // Bolt's respond helper bypasses the normal reply formatter, so normalize both text and blocks here.
   return async (args: CommandArgs): Promise<unknown> => {
     const original = args.respond;
-    const respond = typeof original === "function"
-      ? async (payload: ResponsePayload | string) => {
-          if (payload && typeof payload === "object") {
-            return original({
-              ...payload,
-              ...(payload.text ? { text: reply.plainDashes(payload.text) } : {}),
-              ...(payload.blocks ? { blocks: reply.plainDashesInBlocks(payload.blocks) } : {}),
-            });
+    const respond =
+      typeof original === "function"
+        ? async (payload: ResponsePayload | string) => {
+            if (payload && typeof payload === "object") {
+              return original({
+                ...payload,
+                ...(payload.text ? { text: reply.plainDashes(payload.text) } : {}),
+                ...(payload.blocks ? { blocks: reply.plainDashesInBlocks(payload.blocks) } : {}),
+              });
+            }
+            return original(typeof payload === "string" ? reply.plainDashes(payload) : payload);
           }
-          return original(typeof payload === "string" ? reply.plainDashes(payload) : payload);
-        }
-      : original;
+        : original;
     return handler({ ...args, respond });
   };
 }
@@ -138,15 +218,12 @@ function adminOnlyShortcut(handler: (args: ShortcutArgs) => Promise<unknown>) {
   };
 }
 
-
-
 async function reportCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
 
   const weeksAgo = (command.text || "").trim().toLowerCase() === "last" ? 1 : 0;
   await sendEphemeral({ response_type: "ephemeral", text: report.reportText(weeksAgo) });
 }
-
 
 async function askCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   // Private slash answers resolve documentation from the command channel's program binding.
@@ -162,7 +239,10 @@ async function askCommand({ command, ack, respond: sendEphemeral }: CommandArgs)
     return;
   }
   if (!question) {
-    await sendEphemeral({ response_type: "ephemeral", text: `ask me something! e.g. \`${brand.cmd()} how do i unlock the next region\`` });
+    await sendEphemeral({
+      response_type: "ephemeral",
+      text: `ask me something! e.g. \`${brand.cmd()} how do i unlock the next region\``,
+    });
     return;
   }
 
@@ -191,7 +271,6 @@ async function askCommand({ command, ack, respond: sendEphemeral }: CommandArgs)
   }
 }
 
-
 const validator = require("./validator");
 
 async function checkCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
@@ -215,7 +294,6 @@ async function checkCommand({ command, ack, respond: sendEphemeral }: CommandArg
     await sendEphemeral({ response_type: "ephemeral", text: `Could not inspect repository: ${errorMessage(e)}` });
   }
 }
-
 
 async function calcCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
@@ -246,7 +324,6 @@ async function calcCommand({ command, ack, respond: sendEphemeral }: CommandArgs
   }
 }
 
-
 async function sourcesCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
 
@@ -254,7 +331,9 @@ async function sourcesCommand({ command, ack, respond: sendEphemeral }: CommandA
   try {
     const srcPolicy = require("./channelPolicy").resolve(command?.channel_id, command?.team_id || null);
     const prog = srcPolicy.role === "none" ? null : srcPolicy.program;
-    sources = prog ? [...(prog.sources || []), ...(prog.sharedSources ? require("./programs").shared().sources || [] : [])] : [];
+    sources = prog
+      ? [...(prog.sources || []), ...(prog.sharedSources ? require("./programs").shared().sources || [] : [])]
+      : [];
   } catch (e: unknown) {
     await sendEphemeral({ response_type: "ephemeral", text: `couldn't read sources.json: ${errorMessage(e)}` });
     return;
@@ -273,7 +352,6 @@ async function sourcesCommand({ command, ack, respond: sendEphemeral }: CommandA
   });
 }
 
-
 async function reloadCommand({ ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
   try {
@@ -289,7 +367,6 @@ async function reloadCommand({ ack, respond: sendEphemeral }: CommandArgs): Prom
   }
 }
 
-
 async function gapsCommand({ ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
 
@@ -299,19 +376,20 @@ async function gapsCommand({ ack, respond: sendEphemeral }: CommandArgs): Promis
     return;
   }
 
-  const lines = gaps.map((g: { ask_count: number; question: string }, i: number) => `${i + 1}. *${g.ask_count}×* — ${g.question.slice(0, 160)}`);
+  const lines = gaps.map(
+    (g: { ask_count: number; question: string }, i: number) =>
+      `${i + 1}. *${g.ask_count}×* — ${g.question.slice(0, 160)}`,
+  );
   await sendEphemeral({
     response_type: "ephemeral",
     text: ["*questions the docs didn't cover* (last 30d)", ...lines, "", "_worth adding these to the docs_"].join("\n"),
   });
 }
 
-
 async function statsCommand({ ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   await ack();
   await sendEphemeral({ response_type: "ephemeral", text: statsText() });
 }
-
 
 async function teachCommand({ command, ack, respond: sendEphemeral, client }: CommandArgs): Promise<void> {
   // Learned facts are scoped to the channel's program; an unclaimed channel cannot choose one implicitly.
@@ -320,13 +398,21 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Co
   const text = (command.text || "").trim();
   const teachPolicy = require("./channelPolicy").resolve(command.channel_id as string, command.team_id || null);
   if (teachPolicy.role !== "main" && teachPolicy.role !== "help") {
-    await sendEphemeral({ response_type: "ephemeral", text: "run this in one of the program's channels so i know which program it's for :nono:" });
+    await sendEphemeral({
+      response_type: "ephemeral",
+      text: "run this in one of the program's channels so i know which program it's for :nono:",
+    });
     return;
   }
   const teachProgramId = teachPolicy.program.id;
   const parsed = learn.parseTeach(text);
   if (parsed) {
-    const id = teach({ ...parsed, authorId: command.user_id as string, channel: command.channel_id as string, programId: teachProgramId });
+    const id = teach({
+      ...parsed,
+      authorId: command.user_id as string,
+      channel: command.channel_id as string,
+      programId: teachProgramId,
+    });
     await sendEphemeral({
       response_type: "ephemeral",
       text: id
@@ -343,7 +429,10 @@ async function teachCommand({ command, ack, respond: sendEphemeral, client }: Co
   if (!threadTs && client && client.conversations && client.conversations.history) {
     try {
       const history = await client.conversations.history({ channel, limit: 10 });
-    const recentWithThread = (history.messages || []).find((m: { thread_ts?: string; reply_count?: number; ts?: string }) => m.thread_ts || (m.reply_count && m.reply_count > 0));
+      const recentWithThread = (history.messages || []).find(
+        (m: { thread_ts?: string; reply_count?: number; ts?: string }) =>
+          m.thread_ts || (m.reply_count && m.reply_count > 0),
+      );
       if (recentWithThread) {
         threadTs = recentWithThread.thread_ts || recentWithThread.ts;
       }
@@ -420,7 +509,7 @@ async function pendingCommand({ ack, respond: sendEphemeral }: CommandArgs): Pro
     return;
   }
 
-    const lines = rows.map(
+  const lines = rows.map(
     (r: LearnedRow) =>
       `*#${r.id}* — asked: _${r.question.slice(0, 100)}_\n` +
       `> ${r.answer.slice(0, 240)}\n` +
@@ -469,7 +558,10 @@ async function approveCommand({ command, ack, respond: sendEphemeral }: CommandA
 
   const id = parseId(command.text || "");
   if (!id) {
-    await sendEphemeral({ response_type: "ephemeral", text: `use \`${brand.cmd("approve")} <n>\` — get the number from \`${brand.cmd("pending")}\`` });
+    await sendEphemeral({
+      response_type: "ephemeral",
+      text: `use \`${brand.cmd("approve")} <n>\` — get the number from \`${brand.cmd("pending")}\``,
+    });
     return;
   }
 
@@ -513,7 +605,10 @@ async function forgetCommand({ command, ack, respond: sendEphemeral }: CommandAr
     const count = learn.forgetRange(parsed.from, parsed.to);
     await sendEphemeral({
       response_type: "ephemeral",
-      text: count > 0 ? `forgot ${count} fact${count === 1 ? "" : "s"} (#${parsed.from}-#${parsed.to})` : `no facts found in range #${parsed.from}-#${parsed.to}`,
+      text:
+        count > 0
+          ? `forgot ${count} fact${count === 1 ? "" : "s"} (#${parsed.from}-#${parsed.to})`
+          : `no facts found in range #${parsed.from}-#${parsed.to}`,
     });
     return;
   }
@@ -525,7 +620,6 @@ async function forgetCommand({ command, ack, respond: sendEphemeral }: CommandAr
     });
   }
 }
-
 
 function welcomeText() {
   const prog = programs.all()[0] || null;
@@ -547,11 +641,15 @@ function welcomeText() {
   ].join("\n");
 }
 
-async function onMemberJoined(): Promise<void> {
-}
+async function onMemberJoined(): Promise<void> {}
 
-
-const programs = require("./programs") as { forChannel: (channelId: string | null | undefined, workspaceId?: string | null) => Program; all: () => Program[]; get: (id: string) => Program | null; saveProgram: (program: Partial<Program> & { id: string; name: string }) => unknown; removeProgram: (id: string) => unknown };
+const programs = require("./programs") as {
+  forChannel: (channelId: string | null | undefined, workspaceId?: string | null) => Program;
+  all: () => Program[];
+  get: (id: string) => Program | null;
+  saveProgram: (program: Partial<Program> & { id: string; name: string }) => unknown;
+  removeProgram: (id: string) => unknown;
+};
 
 async function programCommand({ command, ack, respond: sendEphemeral }: CommandArgs): Promise<void> {
   // Ticket toggles are helper-level; program creation and maintenance remain organizer-only.
@@ -563,7 +661,10 @@ async function programCommand({ command, ack, respond: sendEphemeral }: CommandA
   if (sub === "tickets") {
     const prog = programs.forChannel(command.channel_id, command.team_id);
     if (!prog || prog.id === "ysws-global") {
-      await sendEphemeral({ response_type: "ephemeral", text: "run this in a program's help channel — no program is claimed here." });
+      await sendEphemeral({
+        response_type: "ephemeral",
+        text: "run this in a program's help channel — no program is claimed here.",
+      });
       return;
     }
     const actorId = command.user_id;
@@ -573,18 +674,27 @@ async function programCommand({ command, ack, respond: sendEphemeral }: CommandA
     }
     const val = (parts[1] || "").toLowerCase();
     if (val !== "on" && val !== "off") {
-      await sendEphemeral({ response_type: "ephemeral", text: `usage: \`${brand.cmd("program")} tickets on|off\` — toggles auto-opened tickets from this help channel specifically.` });
+      await sendEphemeral({
+        response_type: "ephemeral",
+        text: `usage: \`${brand.cmd("program")} tickets on|off\` — toggles auto-opened tickets from this help channel specifically.`,
+      });
       return;
     }
     programs.saveProgram({ ...prog, publicTicketsEnabled: val === "on" });
     try {
-      require("./audit").record({ programId: prog.id, actorId, action: "program.public_tickets_toggled", metadata: { value: val } });
+      require("./audit").record({
+        programId: prog.id,
+        actorId,
+        action: "program.public_tickets_toggled",
+        metadata: { value: val },
+      });
     } catch (_) {}
     await sendEphemeral({
       response_type: "ephemeral",
-      text: val === "on"
-        ? `ticket auto-creation from this channel is back *on* :yesyes:`
-        : `ticket auto-creation from this channel is *off* — Pixie will still answer, just won't open tickets here until this is turned back on.`,
+      text:
+        val === "on"
+          ? `ticket auto-creation from this channel is back *on* :yesyes:`
+          : `ticket auto-creation from this channel is *off* — Pixie will still answer, just won't open tickets here until this is turned back on.`,
     });
     return;
   }
@@ -596,8 +706,9 @@ async function programCommand({ command, ack, respond: sendEphemeral }: CommandA
 
   if (!raw || sub === "list") {
     const allProgs = programs.all();
-    const lines = allProgs.map((p: Program) =>
-      `• *${p.id}* (${p.name}): posture=\`${p.posture || "active"}\`, scope=\`${p.scope || "any"}\`, help_channel=\`${p.helpChannel || "none"}\`, channels=[\`${(p.channels || []).join("`, `")}\`]`,
+    const lines = allProgs.map(
+      (p: Program) =>
+        `• *${p.id}* (${p.name}): posture=\`${p.posture || "active"}\`, scope=\`${p.scope || "any"}\`, help_channel=\`${p.helpChannel || "none"}\`, channels=[\`${(p.channels || []).join("`, `")}\`]`,
     );
     await sendEphemeral({
       response_type: "ephemeral",
@@ -616,7 +727,10 @@ async function programCommand({ command, ack, respond: sendEphemeral }: CommandA
         const id = parts[1];
         const name = parts.slice(2).join(" ");
         if (!id || !name) {
-          await sendEphemeral({ response_type: "ephemeral", text: `usage: \`${brand.cmd("program")} add <id> <name>\` or \`${brand.cmd("program")} add <json>\`` });
+          await sendEphemeral({
+            response_type: "ephemeral",
+            text: `usage: \`${brand.cmd("program")} add <id> <name>\` or \`${brand.cmd("program")} add <json>\``,
+          });
           return;
         }
         progObj = { id, name, posture: "active" };
@@ -670,13 +784,27 @@ async function programCommand({ command, ack, respond: sendEphemeral }: CommandA
     return;
   }
 
-  await sendEphemeral({ response_type: "ephemeral", text: "unknown subcommand. use `list`, `add`, `set`, or `remove`" });
+  await sendEphemeral({
+    response_type: "ephemeral",
+    text: "unknown subcommand. use `list`, `add`, `set`, or `remove`",
+  });
 }
-
 
 const guides = require("./guides");
 
-async function postGuideFirstStep({ client, channel, threadTs, guideId, userId }: { client: SlackClient; channel: string; threadTs: string; guideId: string; userId: string }): Promise<GuideResult | null> {
+async function postGuideFirstStep({
+  client,
+  channel,
+  threadTs,
+  guideId,
+  userId,
+}: {
+  client: SlackClient;
+  channel: string;
+  threadTs: string;
+  guideId: string;
+  userId: string;
+}): Promise<GuideResult | null> {
   const result = guides.startGuide(guideId, threadTs, userId);
   if (!result) return null;
   const text = respond.formatGuideText(result);
@@ -706,7 +834,9 @@ async function guideCommand({ command, ack, respond: sendEphemeral, client }: Co
       if (client && client.chat && client.chat.postMessage) {
         const root = await client.chat.postMessage({
           channel,
-          text: reply.plainDashes(`📖 <@${user}> started the *${guideName}* walkthrough! Follow along in the thread below 👇`),
+          text: reply.plainDashes(
+            `📖 <@${user}> started the *${guideName}* walkthrough! Follow along in the thread below 👇`,
+          ),
         });
         const threadTs = root.ts as string;
         if (await postGuideFirstStep({ client, channel, threadTs, guideId, userId: user })) return;
@@ -743,7 +873,6 @@ async function guideCommand({ command, ack, respond: sendEphemeral, client }: Co
     });
   }
 }
-
 
 const tickets = require("./tickets");
 

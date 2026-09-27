@@ -32,23 +32,23 @@ interface Violation {
   thresholdMs: number;
 }
 
-// WHY: organizers hear once per day per ticket-rule — faster than that is
+// Organizers hear once per day per ticket-rule — faster than that is
 // nagging, slower lets breaches sit unnoticed over a weekend.
 const NOTIFY_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-// WHY: a ticket with no owner, a parked ticket, and a ticket whose helper
+// A ticket with no owner, a parked ticket, and a ticket whose helper
 // went quiet are all waiting on someone, so every not-yet-closed state is
 // in scope for at least one rule below.
 const SLA_OPEN_STATUSES = ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"];
-// WHY: claimed tickets already have a helper on point, so they share the
+// Claimed tickets already have a helper on point, so they share the
 // assigned-no-response rule instead of the unassigned one.
 const SLA_ASSIGNED_STATUSES = ["assigned", "claimed", "escalated", "reopened"];
-// WHY: 15m catches breaches promptly while staying far below the 24h
+// 15m catches breaches promptly while staying far below the 24h
 // notification cooldown, so a breach pages once, not every check.
 const SLA_LOOP_DEFAULT_MIN = 15;
 const SLA_LEASE_NAME = "sla-check";
-// WHY: the platform-wide program has no owning organizers to notify.
+// The platform-wide program has no owning organizers to notify.
 const SKIPPED_PROGRAM_ID = "ysws-global";
-// WHY: the digest stays readable on a phone screen — 5 lines plus a count.
+// The digest stays readable on a phone screen — 5 lines plus a count.
 const SLA_DIGEST_PREVIEW_LINES = 5;
 
 function errorMessage(error: unknown): string {
@@ -57,17 +57,23 @@ function errorMessage(error: unknown): string {
 }
 
 function programThresholds(programId: string): Thresholds {
-  const row = db.handle().query(
-    "SELECT sla_unassigned_ms, sla_assigned_ms, sla_waiting_ms, sla_target_ms, sla_notify_channel FROM programs WHERE id = ?",
-  ).get(programId) as Thresholds | null;
+  const row = db
+    .handle()
+    .query(
+      "SELECT sla_unassigned_ms, sla_assigned_ms, sla_waiting_ms, sla_target_ms, sla_notify_channel FROM programs WHERE id = ?",
+    )
+    .get(programId) as Thresholds | null;
   return row || {};
 }
 
 function openTickets(programId: string): SlaTicket[] {
-  return db.handle().query(
-    `SELECT id, status, assignee_id, created_at, updated_at, COALESCE(assigned_at, created_at) AS assigned_since
+  return db
+    .handle()
+    .query(
+      `SELECT id, status, assignee_id, created_at, updated_at, COALESCE(assigned_at, created_at) AS assigned_since
      FROM tickets WHERE program_id = ? AND status IN (${SLA_OPEN_STATUSES.map(() => "?").join(",")})`,
-  ).all(programId, ...SLA_OPEN_STATUSES) as SlaTicket[];
+    )
+    .all(programId, ...SLA_OPEN_STATUSES) as SlaTicket[];
 }
 
 function violationForTicket(ticket: SlaTicket, t: Thresholds, now: number): Violation | null {
@@ -75,8 +81,17 @@ function violationForTicket(ticket: SlaTicket, t: Thresholds, now: number): Viol
   if (ticket.status === "open" && t.sla_unassigned_ms && age > t.sla_unassigned_ms) {
     return { ticketId: ticket.id, rule: "unassigned", ageMs: age, thresholdMs: t.sla_unassigned_ms };
   }
-  if (SLA_ASSIGNED_STATUSES.includes(ticket.status) && t.sla_assigned_ms && now - ticket.assigned_since > t.sla_assigned_ms) {
-    return { ticketId: ticket.id, rule: "assigned_no_response", ageMs: now - ticket.assigned_since, thresholdMs: t.sla_assigned_ms };
+  if (
+    SLA_ASSIGNED_STATUSES.includes(ticket.status) &&
+    t.sla_assigned_ms &&
+    now - ticket.assigned_since > t.sla_assigned_ms
+  ) {
+    return {
+      ticketId: ticket.id,
+      rule: "assigned_no_response",
+      ageMs: now - ticket.assigned_since,
+      thresholdMs: t.sla_assigned_ms,
+    };
   }
   if (ticket.status === "waiting_for_helper" && t.sla_waiting_ms && age > t.sla_waiting_ms) {
     return { ticketId: ticket.id, rule: "waiting_for_helper", ageMs: age, thresholdMs: t.sla_waiting_ms };
@@ -84,7 +99,8 @@ function violationForTicket(ticket: SlaTicket, t: Thresholds, now: number): Viol
   return null;
 }
 
-function checkProgram({ programId, now = Date.now() }: { programId?: string; now?: number } = {}): { error: string } | { violations: Violation[]; notifyChannel: string | null } {
+function checkProgram({ programId, now = Date.now() }: { programId?: string; now?: number } = {}):
+  { error: string } | { violations: Violation[]; notifyChannel: string | null } {
   if (!programId) return { error: "programId required" };
   const t = programThresholds(programId);
   const violations = [];
@@ -95,22 +111,46 @@ function checkProgram({ programId, now = Date.now() }: { programId?: string; now
   return { violations, notifyChannel: t.sla_notify_channel || null };
 }
 
-function dueNotifications({ programId, violations, now = Date.now(), cooldownMs = NOTIFY_COOLDOWN_MS }: { programId?: string; violations?: Violation[]; now?: number; cooldownMs?: number } = {}): Violation[] {
+function dueNotifications({
+  programId,
+  violations,
+  now = Date.now(),
+  cooldownMs = NOTIFY_COOLDOWN_MS,
+}: { programId?: string; violations?: Violation[]; now?: number; cooldownMs?: number } = {}): Violation[] {
   const due = [];
   for (const v of violations || []) {
-    const last = db.handle().query("SELECT sent_at FROM sla_notifications WHERE program_id = ? AND ticket_id = ? AND rule = ?")
+    const last = db
+      .handle()
+      .query("SELECT sent_at FROM sla_notifications WHERE program_id = ? AND ticket_id = ? AND rule = ?")
       .get(programId, v.ticketId, v.rule) as { sent_at: number } | null;
     if (!last || now - last.sent_at > cooldownMs) due.push(v);
   }
   return due;
 }
 
-function markNotified({ programId, ticketId, rule, now = Date.now() }: { programId: string; ticketId: number; rule: string; now?: number }): void {
-  db.handle().query(
-    "INSERT OR REPLACE INTO sla_notifications (program_id, ticket_id, rule, sent_at) VALUES (?, ?, ?, ?)",
-  ).run(programId, ticketId, rule, now);
+function markNotified({
+  programId,
+  ticketId,
+  rule,
+  now = Date.now(),
+}: {
+  programId: string;
+  ticketId: number;
+  rule: string;
+  now?: number;
+}): void {
+  db.handle()
+    .query("INSERT OR REPLACE INTO sla_notifications (program_id, ticket_id, rule, sent_at) VALUES (?, ?, ?, ?)")
+    .run(programId, ticketId, rule, now);
   const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
-  recordAudit({ programId, actorId: null, action: "sla.notified", entityType: "ticket", entityId: ticketId, metadata: { rule } });
+  recordAudit({
+    programId,
+    actorId: null,
+    action: "sla.notified",
+    entityType: "ticket",
+    entityId: ticketId,
+    metadata: { rule },
+  });
 }
 
 function suggestAction(violation: Violation, _ticket?: SlaTicket): string {
@@ -119,55 +159,67 @@ function suggestAction(violation: Violation, _ticket?: SlaTicket): string {
   return "follow up or suggest closure to the requester";
 }
 
-function startSlaLoop(client: unknown, intervalMin = Number(process.env.PIXIE_SLA_CHECK_MIN || SLA_LOOP_DEFAULT_MIN)): ReturnType<typeof setInterval> | null {
+function startSlaLoop(
+  client: unknown,
+  intervalMin = Number(process.env.PIXIE_SLA_CHECK_MIN || SLA_LOOP_DEFAULT_MIN),
+): ReturnType<typeof setInterval> | null {
   if (!client || !intervalMin || intervalMin <= 0) return null;
   const log = require("./log");
   const lease = require("./jobLease");
-  const timer = setInterval(() => {
-    lease.runOnce(SLA_LEASE_NAME, intervalMin * 60 * 1000, async () => {
-      const programs = require("./programs");
-      const messages = require("./slackMessages");
-      const reply = require("./reply");
-      for (const prog of programs.all()) {
-        if (!prog || prog.id === SKIPPED_PROGRAM_ID) continue;
-        if (prog.shadowMode === true) continue;
-        try {
-          const swept = require("./assignmentLifecycle").sweepProgramTimeouts({ programId: prog.id });
-          if (swept.swept > 0) log.info("assignmentLifecycle", `${prog.id}: timed out ${swept.swept} unclaimed offer(s)`);
-        } catch (e: unknown) {
-          log.warn("assignmentLifecycle", `timeout sweep failed for ${prog.id}: ${errorMessage(e)}`);
-        }
-        let checked;
-        try {
-          checked = checkProgram({ programId: prog.id });
-        } catch (e: unknown) {
-          log.warn("sla", `check failed for ${prog.id}: ${errorMessage(e)}`);
-          continue;
-        }
-        if ("error" in checked || checked.violations.length === 0) continue;
-        const due = dueNotifications({ programId: prog.id, violations: checked.violations });
-        if (due.length === 0) continue;
-        const channel = checked.notifyChannel || prog.helpChannel;
-        if (!channel) continue;
-        const lines = due.slice(0, SLA_DIGEST_PREVIEW_LINES).map((v) => {
-          const ageMin = Math.round(v.ageMs / 60000);
-          return `• ticket #${v.ticketId} (${v.rule}, waiting ${ageMin}m) — ${suggestAction(v)}`;
-        });
-        const more = due.length > SLA_DIGEST_PREVIEW_LINES ? `\n…and ${due.length - SLA_DIGEST_PREVIEW_LINES} more` : "";
-        try {
-          await messages.sendProgramMessage({
-            client,
-            program: prog,
-            channel,
-            text: reply.plainDashes(`:alarm_clock: ${due.length} stale ticket${due.length === 1 ? "" : "s"} need attention\n${lines.join("\n")}${more}`),
-          });
-          for (const v of due) markNotified({ programId: prog.id, ticketId: v.ticketId, rule: v.rule });
-        } catch (e: unknown) {
-          log.warn("sla", `notify failed for ${prog.id}: ${errorMessage(e)}`);
-        }
-      }
-    }).catch((e: unknown) => log.error("sla", `loop failed: ${errorMessage(e)}`));
-  }, intervalMin * 60 * 1000);
+  const timer = setInterval(
+    () => {
+      lease
+        .runOnce(SLA_LEASE_NAME, intervalMin * 60 * 1000, async () => {
+          const programs = require("./programs");
+          const messages = require("./slackMessages");
+          const reply = require("./reply");
+          for (const prog of programs.all()) {
+            if (!prog || prog.id === SKIPPED_PROGRAM_ID) continue;
+            if (prog.shadowMode === true) continue;
+            try {
+              const swept = require("./assignmentLifecycle").sweepProgramTimeouts({ programId: prog.id });
+              if (swept.swept > 0)
+                log.info("assignmentLifecycle", `${prog.id}: timed out ${swept.swept} unclaimed offer(s)`);
+            } catch (e: unknown) {
+              log.warn("assignmentLifecycle", `timeout sweep failed for ${prog.id}: ${errorMessage(e)}`);
+            }
+            let checked;
+            try {
+              checked = checkProgram({ programId: prog.id });
+            } catch (e: unknown) {
+              log.warn("sla", `check failed for ${prog.id}: ${errorMessage(e)}`);
+              continue;
+            }
+            if ("error" in checked || checked.violations.length === 0) continue;
+            const due = dueNotifications({ programId: prog.id, violations: checked.violations });
+            if (due.length === 0) continue;
+            const channel = checked.notifyChannel || prog.helpChannel;
+            if (!channel) continue;
+            const lines = due.slice(0, SLA_DIGEST_PREVIEW_LINES).map((v) => {
+              const ageMin = Math.round(v.ageMs / 60000);
+              return `• ticket #${v.ticketId} (${v.rule}, waiting ${ageMin}m) — ${suggestAction(v)}`;
+            });
+            const more =
+              due.length > SLA_DIGEST_PREVIEW_LINES ? `\n…and ${due.length - SLA_DIGEST_PREVIEW_LINES} more` : "";
+            try {
+              await messages.sendProgramMessage({
+                client,
+                program: prog,
+                channel,
+                text: reply.plainDashes(
+                  `:alarm_clock: ${due.length} stale ticket${due.length === 1 ? "" : "s"} need attention\n${lines.join("\n")}${more}`,
+                ),
+              });
+              for (const v of due) markNotified({ programId: prog.id, ticketId: v.ticketId, rule: v.rule });
+            } catch (e: unknown) {
+              log.warn("sla", `notify failed for ${prog.id}: ${errorMessage(e)}`);
+            }
+          }
+        })
+        .catch((e: unknown) => log.error("sla", `loop failed: ${errorMessage(e)}`));
+    },
+    intervalMin * 60 * 1000,
+  );
   if (timer.unref) timer.unref();
   return timer;
 }

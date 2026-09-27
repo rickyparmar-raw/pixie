@@ -69,7 +69,7 @@ const inFlight = new Map<number, Promise<unknown>>();
 
 function formatSlackMessage(message: SlackMessage): string | null {
   if (!message?.text) return null;
-  const who = message.bot_id ? "Pixie" : (message.user ? `<@${message.user}>` : "Requester");
+  const who = message.bot_id ? "Pixie" : message.user ? `<@${message.user}>` : "Requester";
   return `${who}: ${message.text}`;
 }
 
@@ -83,7 +83,9 @@ function formatTimeline(events: DbRow[]): string {
   return events
     .map((event) => {
       let detail = event.detail;
-      try { detail = detail ? JSON.stringify(JSON.parse(String(detail))) : null; } catch (_) {}
+      try {
+        detail = detail ? JSON.stringify(JSON.parse(String(detail))) : null;
+      } catch (_) {}
       return `${event.event_type}${event.actor_id ? ` by ${event.actor_id}` : ""}${detail ? ` (${detail})` : ""}`;
     })
     .join("; ");
@@ -92,7 +94,8 @@ function formatTimeline(events: DbRow[]): string {
 function boundTranscript(messages: string[]): string[] {
   const bounded = messages.slice(-MAX_THREAD_MESSAGES);
   while (bounded.length > 0 && bounded.join("\n").length > MAX_TRANSCRIPT_CHARS) bounded.shift();
-  if (bounded.length === 0 && messages.length > 0) return [String(messages[messages.length - 1]).slice(-MAX_TRANSCRIPT_CHARS)];
+  if (bounded.length === 0 && messages.length > 0)
+    return [String(messages[messages.length - 1]).slice(-MAX_TRANSCRIPT_CHARS)];
   return bounded;
 }
 
@@ -106,7 +109,13 @@ function fallbackSummary(ticket: Ticket, timeline: DbRow[], transcript: string[]
   return parts.join("\n\n").slice(0, MAX_TRANSCRIPT_CHARS);
 }
 
-async function loadThread({ ticket, client }: { ticket: Ticket; client?: ThreadClient | SlackClient | null }): Promise<string[]> {
+async function loadThread({
+  ticket,
+  client,
+}: {
+  ticket: Ticket;
+  client?: ThreadClient | SlackClient | null;
+}): Promise<string[]> {
   if (client?.conversations?.replies) {
     try {
       const messages = [];
@@ -121,7 +130,9 @@ async function loadThread({ ticket, client }: { ticket: Ticket; client?: ThreadC
         messages.push(...(response?.messages || []).slice(0, MAX_THREAD_MESSAGES - messages.length));
         cursor = response?.response_metadata?.next_cursor || null;
       } while (cursor && messages.length < MAX_THREAD_MESSAGES);
-      const transcript = boundTranscript(messages.map(formatSlackMessage).filter((message): message is string => message !== null));
+      const transcript = boundTranscript(
+        messages.map(formatSlackMessage).filter((message): message is string => message !== null),
+      );
       if (transcript.length > 0) return transcript;
     } catch (e: unknown) {
       log.warn("resolution", `thread fetch failed for #${ticket.id}: ${errorMessage(e)}`);
@@ -129,14 +140,25 @@ async function loadThread({ ticket, client }: { ticket: Ticket; client?: ThreadC
   }
 
   try {
-    return boundTranscript(db.getThreadMessages(ticket.thread_ts).map((message: SlackMessage) => formatStoredMessage(message)).filter((message: string | null): message is string => message !== null));
+    return boundTranscript(
+      db
+        .getThreadMessages(ticket.thread_ts)
+        .map((message: SlackMessage) => formatStoredMessage(message))
+        .filter((message: string | null): message is string => message !== null),
+    );
   } catch (e: unknown) {
     log.warn("resolution", `stored thread fetch failed for #${ticket.id}: ${errorMessage(e)}`);
     return [];
   }
 }
 
-async function summarizeResolution({ ticket, client }: { ticket: Ticket; client?: ThreadClient | SlackClient | null }): Promise<string> {
+async function summarizeResolution({
+  ticket,
+  client,
+}: {
+  ticket: Ticket;
+  client?: ThreadClient | SlackClient | null;
+}): Promise<string> {
   const timeline = db.listTicketEvents(ticket.id);
   const transcript = await loadThread({ ticket, client });
   const fallback = fallbackSummary(ticket, timeline, transcript);
@@ -146,7 +168,10 @@ async function summarizeResolution({ ticket, client }: { ticket: Ticket; client?
       `Resolution: ${ticket.resolution || "resolved"}`,
       transcript.length > 0 ? `Thread:\n${transcript.join("\n")}` : null,
       timeline.length > 0 ? `Timeline:\n${formatTimeline(timeline)}` : null,
-    ].filter(Boolean).join("\n\n").slice(0, MAX_TRANSCRIPT_CHARS);
+    ]
+      .filter(Boolean)
+      .join("\n\n")
+      .slice(0, MAX_TRANSCRIPT_CHARS);
     const answerConfig = config.answer as import("./types").ProviderTier;
     const { text } = await llm.complete(
       {
@@ -202,7 +227,12 @@ function onResolved({ ticket, client = null, actorId = null, workerId = null }: 
   return run;
 }
 
-async function runSteps({ ticket, client, actorId, workerId }: PipelineArgs): Promise<Array<{ name: string; ok: boolean }>> {
+async function runSteps({
+  ticket,
+  client,
+  actorId,
+  workerId,
+}: PipelineArgs): Promise<Array<{ name: string; ok: boolean }>> {
   try {
     const results = [];
     for (const step of steps) {

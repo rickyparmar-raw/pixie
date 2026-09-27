@@ -48,13 +48,16 @@ test("explicit mentions keep chat behavior on, but general chat off is silent", 
     kind: "general",
     reason: "addressed_general",
   });
-  assert.deepEqual(plan("main", "unrelated_chatter", {
-    addressedHow: "mention",
-    settings: { generalMentionChat: false },
-  }), {
-    proceed: false,
-    reason: "general_chat_off",
-  });
+  assert.deepEqual(
+    plan("main", "unrelated_chatter", {
+      addressedHow: "mention",
+      settings: { generalMentionChat: false },
+    }),
+    {
+      proceed: false,
+      reason: "general_chat_off",
+    },
+  );
 });
 
 test("missing provenance keeps legacy mention behavior and DMs are unchanged", () => {
@@ -83,7 +86,10 @@ test("a ping still admits uncertainty when there is nothing to say, or strict gr
   assert.equal(finalAction({ ...base, hasAnswer: false }), "uncertain");
   assert.equal(finalAction({ ...base, hasAnswer: true, unclear: true }), "uncertain");
   assert.equal(finalAction({ ...base, hasAnswer: true, requireGrounded: true }), "uncertain");
-  assert.equal(finalAction({ ...base, hasAnswer: true, settings: { ...settings, generalMentionChat: false } }), "uncertain");
+  assert.equal(
+    finalAction({ ...base, hasAnswer: true, settings: { ...settings, generalMentionChat: false } }),
+    "uncertain",
+  );
 });
 
 test("an unaddressed message never posts an ungrounded answer", () => {

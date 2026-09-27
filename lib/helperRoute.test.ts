@@ -25,7 +25,6 @@ function newTicket(programId: string, overrides: { category?: string | null } = 
   return db.getTicket(id);
 }
 
-
 test("pingFatigue counts only offers targeting this helper, ignoring pool offers and other helpers", () => {
   prog("fatigue-a", ["U-A", "U-B"]);
   const ticket = newTicket("fatigue-a");
@@ -47,39 +46,64 @@ test("pingFatigue only counts offers within the trailing 24h window", () => {
   prog("fatigue-b", ["U-A"]);
   const ticket = newTicket("fatigue-b");
   const old = Date.now() - 30 * 60 * 60 * 1000; // 30h ago
-  db.addTicketEvent({ ticketId: ticket.id, programId: "fatigue-b", eventType: "helper_assignment_offered", detail: { to: "U-A", source: "ping" } as unknown as null });
-  db.handle().query("UPDATE ticket_events SET created_at = ? WHERE program_id = 'fatigue-b' AND event_type = 'helper_assignment_offered'").run(old);
+  db.addTicketEvent({
+    ticketId: ticket.id,
+    programId: "fatigue-b",
+    eventType: "helper_assignment_offered",
+    detail: { to: "U-A", source: "ping" } as unknown as null,
+  });
+  db.handle()
+    .query(
+      "UPDATE ticket_events SET created_at = ? WHERE program_id = 'fatigue-b' AND event_type = 'helper_assignment_offered'",
+    )
+    .run(old);
 
   const fatigue = helperRoute.pingFatigue("fatigue-b", "U-A");
   assert.equal(fatigue.count, 0, "an offer outside the 24h window must not count toward fatigue");
 });
 
-
 test("fatigue is a small penalty that can only break a near-tie, never outrank real category expertise", () => {
   const specialist = helperRoute.scoreHelper(
     { user_id: "U-specialist", role: "member" },
-    { tag: "review", expertise: [{ tag: "review", solved_count: 5, reply_count: 0 }], load: 0, fatigue: { count: 5, lastPingAt: Date.now() } },
+    {
+      tag: "review",
+      expertise: [{ tag: "review", solved_count: 5, reply_count: 0 }],
+      load: 0,
+      fatigue: { count: 5, lastPingAt: Date.now() },
+    },
   );
   const allRounder = helperRoute.scoreHelper(
     { user_id: "U-allrounder", role: "member" },
     { tag: "review", expertise: [], load: 0, fatigue: { count: 0, lastPingAt: null } },
   );
-  assert.ok(specialist.score > allRounder.score, "5 verified resolutions must still beat a fresh, unpinged all-rounder");
+  assert.ok(
+    specialist.score > allRounder.score,
+    "5 verified resolutions must still beat a fresh, unpinged all-rounder",
+  );
 });
 
 test("fatigue breaks a near-tie in favor of the less-recently/less-frequently pinged helper", () => {
   const fresh = helperRoute.scoreHelper(
     { user_id: "U-fresh", role: "member" },
-    { tag: "review", expertise: [{ tag: "review", solved_count: 1, reply_count: 0 }], load: 0, fatigue: { count: 0, lastPingAt: null } },
+    {
+      tag: "review",
+      expertise: [{ tag: "review", solved_count: 1, reply_count: 0 }],
+      load: 0,
+      fatigue: { count: 0, lastPingAt: null },
+    },
   );
   const fatigued = helperRoute.scoreHelper(
     { user_id: "U-fatigued", role: "member" },
-    { tag: "review", expertise: [{ tag: "review", solved_count: 1, reply_count: 0 }], load: 0, fatigue: { count: 3, lastPingAt: Date.now() - 5 * 60 * 1000 } },
+    {
+      tag: "review",
+      expertise: [{ tag: "review", solved_count: 1, reply_count: 0 }],
+      load: 0,
+      fatigue: { count: 3, lastPingAt: Date.now() - 5 * 60 * 1000 },
+    },
   );
   assert.ok(fresh.score > fatigued.score, "the less-pinged helper must win an otherwise-equal comparison");
   assert.ok(fresh.score - fatigued.score < 2, "the fatigue gap must stay smaller than a single category-match point");
 });
-
 
 test("recommend never returns an inactive or non-roster helper", () => {
   prog("fair-active", ["U-active"]);
@@ -167,6 +191,11 @@ test("a helper who paused pings stays on the roster but is never recommended", (
   const ids = helperRoute.recommend({ programId: "ping-opt", limit: 10 }).map((r) => r.userId);
   assert.deepEqual(ids, ["U-loud"]);
   db.setHelperPingEligible({ programId: "ping-opt", userId: "U-quiet", eligible: true });
-  assert.ok(helperRoute.recommend({ programId: "ping-opt", limit: 10 }).map((r) => r.userId).includes("U-quiet"));
+  assert.ok(
+    helperRoute
+      .recommend({ programId: "ping-opt", limit: 10 })
+      .map((r) => r.userId)
+      .includes("U-quiet"),
+  );
 });
 export {};

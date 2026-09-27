@@ -1,7 +1,12 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-interface ProbeOptions { onText?: (text: string) => void; }
-interface MetricDetail { detail: string; count: number; }
+interface ProbeOptions {
+  onText?: (text: string) => void;
+}
+interface MetricDetail {
+  detail: string;
+  count: number;
+}
 
 const { test, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -56,7 +61,9 @@ test("probe includes BM25 and retrieval trace", async () => {
 });
 
 test("probe handles model errors without crashing", async () => {
-  answer.getAnswerOrChatStream = async () => { throw new Error("model down"); };
+  answer.getAnswerOrChatStream = async () => {
+    throw new Error("model down");
+  };
   intent.classifyIntent = async () => "HELP_NEEDED";
 
   const knowledge = require("./knowledge");
@@ -94,12 +101,14 @@ after(() => {
   intent.classifyIntent = originalIntent;
 });
 
-
-test("char: probe is read-only — it never writes the answer cache", async () => {
+test("probe is read-only — it never writes the answer cache", async () => {
   const cache = require("./cache");
   const seen: unknown[][] = [];
   const origPut = cache.put;
-  cache.put = (...args: never[]) => { seen.push(args); return origPut(...args); };
+  cache.put = (...args: never[]) => {
+    seen.push(args);
+    return origPut(...args);
+  };
   answer.getAnswerOrChatStream = async () => ({ source: "Pixl FAQ", answer: "probe answer" });
   intent.classifyIntent = async () => "HELP_NEEDED";
   try {
@@ -110,7 +119,7 @@ test("char: probe is read-only — it never writes the answer cache", async () =
   }
 });
 
-test("char: probe reports citation membership against retrieved chunks", async () => {
+test("probe reports citation membership against retrieved chunks", async () => {
   answer.getAnswerOrChatStream = async () => ({ source: "Pixl FAQ", answer: "x" });
   intent.classifyIntent = async () => "HELP_NEEDED";
   const result = await probe("how do i submit");
@@ -119,7 +128,7 @@ test("char: probe reports citation membership against retrieved chunks", async (
   assert.ok(typeof result.chunkCount === "number");
 });
 
-test("char: probe surfaces firstTokenMs only when streaming yields text", async () => {
+test("probe surfaces firstTokenMs only when streaming yields text", async () => {
   answer.getAnswerOrChatStream = async (q: string, corpus: string, ctx: unknown, opts: ProbeOptions) => {
     if (opts?.onText) opts.onText("partial");
     return { source: "Pixl FAQ", answer: "partial" };

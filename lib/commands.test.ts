@@ -38,7 +38,6 @@ test("parseId accepts a bare or hashed id and rejects anything else", () => {
   assert.equal(parseId(""), null);
 });
 
-
 function stubEphemeralClient() {
   const posted: any[] = [];
   return { client: { chat: { postEphemeral: async (args: any) => void posted.push(args) } }, posted };
@@ -121,23 +120,43 @@ test("programCommand list, add, set, and remove — admin-only", async () => {
   const responses: any[] = [];
   const sendEphemeral = async (msg: any) => responses.push(msg.text);
 
-  await commands.programCommand({ command: { text: "list", user_id: ADMIN }, ack: async () => {}, respond: sendEphemeral });
+  await commands.programCommand({
+    command: { text: "list", user_id: ADMIN },
+    ack: async () => {},
+    respond: sendEphemeral,
+  });
   assert.match(responses[0], /registered programs/);
 
-  await commands.programCommand({ command: { text: "add testprog Test Program", user_id: ADMIN }, ack: async () => {}, respond: sendEphemeral });
+  await commands.programCommand({
+    command: { text: "add testprog Test Program", user_id: ADMIN },
+    ack: async () => {},
+    respond: sendEphemeral,
+  });
   assert.match(responses[1], /saved program `testprog`/);
 
-  await commands.programCommand({ command: { text: "set testprog posture passive", user_id: ADMIN }, ack: async () => {}, respond: sendEphemeral });
+  await commands.programCommand({
+    command: { text: "set testprog posture passive", user_id: ADMIN },
+    ack: async () => {},
+    respond: sendEphemeral,
+  });
   assert.match(responses[2], /updated `testprog` posture to `passive`/);
 
-  await commands.programCommand({ command: { text: "remove testprog", user_id: ADMIN }, ack: async () => {}, respond: sendEphemeral });
+  await commands.programCommand({
+    command: { text: "remove testprog", user_id: ADMIN },
+    ack: async () => {},
+    respond: sendEphemeral,
+  });
   assert.match(responses[3], /removed program `testprog`/);
 });
 
 test("programCommand rejects list/add/set/remove for a non-admin, non-helper user", async () => {
   const responses: any[] = [];
   const sendEphemeral = async (msg: any) => responses.push(msg.text);
-  await commands.programCommand({ command: { text: "list", user_id: "U0RANDOM" }, ack: async () => {}, respond: sendEphemeral });
+  await commands.programCommand({
+    command: { text: "list", user_id: "U0RANDOM" },
+    ack: async () => {},
+    respond: sendEphemeral,
+  });
   assert.match(responses[0], /helpers-only/);
 });
 
@@ -150,14 +169,26 @@ test("programCommand tickets on|off is reachable by a program's own helper, not 
   db.syncHelper({ programId: "cmd-tix", userId: "U-HELPER-TIX", source: "manual" });
   programs.invalidate();
 
-  await commands.programCommand({ command: { text: "tickets off", channel_id: "C-CMD-TIX", user_id: "U0RANDOM" }, ack: async () => {}, respond: sendEphemeral });
+  await commands.programCommand({
+    command: { text: "tickets off", channel_id: "C-CMD-TIX", user_id: "U0RANDOM" },
+    ack: async () => {},
+    respond: sendEphemeral,
+  });
   assert.match(responses[0], /helpers-only/);
 
-  await commands.programCommand({ command: { text: "tickets off", channel_id: "C-CMD-TIX", user_id: "U-HELPER-TIX" }, ack: async () => {}, respond: sendEphemeral });
+  await commands.programCommand({
+    command: { text: "tickets off", channel_id: "C-CMD-TIX", user_id: "U-HELPER-TIX" },
+    ack: async () => {},
+    respond: sendEphemeral,
+  });
   assert.match(responses[1], /ticket auto-creation from this channel is \*off\*/);
   assert.equal(programs.get("cmd-tix").publicTicketsEnabled, false);
 
-  await commands.programCommand({ command: { text: "tickets on", channel_id: "C-CMD-TIX", user_id: "U-HELPER-TIX" }, ack: async () => {}, respond: sendEphemeral });
+  await commands.programCommand({
+    command: { text: "tickets on", channel_id: "C-CMD-TIX", user_id: "U-HELPER-TIX" },
+    ack: async () => {},
+    respond: sendEphemeral,
+  });
   assert.match(responses[2], /back \*on\*/);
   assert.equal(programs.get("cmd-tix").publicTicketsEnabled, true);
 });
@@ -212,7 +243,6 @@ test("/pixie help returns the actor's filtered runtime command list", async () =
   assert.doesNotMatch(responses[0].text, /\/pixie-teach/);
 });
 
-
 test("REGISTRY: slash defs, CAPABILITIES, and Bolt bindings cover each other", () => {
   const brand = require("./brand");
   const capabilities = require("./capabilities");
@@ -226,7 +256,10 @@ test("REGISTRY: slash defs, CAPABILITIES, and Bolt bindings cover each other", (
     assert.ok(capabilitySuffixes.has(suffixOf(def)), `/${def.name} has no CAPABILITIES entry`);
   }
   for (const suffix of capabilitySuffixes) {
-    assert.ok(slashDefs.some((d: any) => suffixOf(d) === suffix), `CAPABILITIES suffix ${JSON.stringify(suffix)} has no registry def`);
+    assert.ok(
+      slashDefs.some((d: any) => suffixOf(d) === suffix),
+      `CAPABILITIES suffix ${JSON.stringify(suffix)} has no registry def`,
+    );
   }
 
   const bound: any[] = [];
@@ -244,8 +277,7 @@ test("REGISTRY: slash defs, CAPABILITIES, and Bolt bindings cover each other", (
   }
 });
 
-
-test("CHAR: /pixie ask parity — docs hit answers ephemerally, miss chats, error falls back", async () => {
+test("/pixie ask parity — docs hit answers ephemerally, miss chats, error falls back", async () => {
   const respond = require("./respond");
   const chat = require("./chat");
   const sent: any[] = [];
@@ -257,28 +289,52 @@ test("CHAR: /pixie ask parity — docs hit answers ephemerally, miss chats, erro
   config.slack.faqChannels = [...(savedFaq || []), "C1"];
   try {
     let lookedUpFor = null;
-    respond.lookupAnswer = async (_q: any, _c: any, prog: any) => { lookedUpFor = prog; return { source: "Docs", answer: "docs answer here" }; };
-    await commands.askCommand({ command: { text: "how do i join", user_id: "U1", channel_id: "C1" }, ack: async () => {}, respond: sendEphemeral });
+    respond.lookupAnswer = async (_q: any, _c: any, prog: any) => {
+      lookedUpFor = prog;
+      return { source: "Docs", answer: "docs answer here" };
+    };
+    await commands.askCommand({
+      command: { text: "how do i join", user_id: "U1", channel_id: "C1" },
+      ack: async () => {},
+      respond: sendEphemeral,
+    });
     assert.match(sent[0].text, /docs answer here/);
     assert.ok(lookedUpFor, "the lookup is scoped to the channel's program");
 
     sent.length = 0;
     let unscopedLookups = 0;
-    respond.lookupAnswer = async () => { unscopedLookups += 1; return { source: "Docs", answer: "leak" }; };
+    respond.lookupAnswer = async () => {
+      unscopedLookups += 1;
+      return { source: "Docs", answer: "leak" };
+    };
     chat.getChatReply = async () => "chat only";
-    await commands.askCommand({ command: { text: "what is the payout", user_id: "U1", channel_id: "C-NOBODY" }, ack: async () => {}, respond: sendEphemeral });
+    await commands.askCommand({
+      command: { text: "what is the payout", user_id: "U1", channel_id: "C-NOBODY" },
+      ack: async () => {},
+      respond: sendEphemeral,
+    });
     assert.equal(unscopedLookups, 0);
     assert.doesNotMatch(sent[0].text, /leak/);
 
     sent.length = 0;
     respond.lookupAnswer = async () => null;
     chat.getChatReply = async () => "chat reply here";
-    await commands.askCommand({ command: { text: "hey pixie", user_id: "U1", channel_id: "C1" }, ack: async () => {}, respond: sendEphemeral });
+    await commands.askCommand({
+      command: { text: "hey pixie", user_id: "U1", channel_id: "C1" },
+      ack: async () => {},
+      respond: sendEphemeral,
+    });
     assert.match(sent[0].text, /chat reply here/);
 
     sent.length = 0;
-    respond.lookupAnswer = async () => { throw new Error("boom"); };
-    await commands.askCommand({ command: { text: "anything", user_id: "U1", channel_id: "C1" }, ack: async () => {}, respond: sendEphemeral });
+    respond.lookupAnswer = async () => {
+      throw new Error("boom");
+    };
+    await commands.askCommand({
+      command: { text: "anything", user_id: "U1", channel_id: "C1" },
+      ack: async () => {},
+      respond: sendEphemeral,
+    });
     assert.match(sent[0].text, /having trouble thinking/);
   } finally {
     respond.lookupAnswer = origLookup;
@@ -287,7 +343,7 @@ test("CHAR: /pixie ask parity — docs hit answers ephemerally, miss chats, erro
   }
 });
 
-test("CHAR: /pixie-check and /pixie-calc dispatch to their deterministic paths", async () => {
+test("/pixie-check and /pixie-calc dispatch to their deterministic paths", async () => {
   const validator = require("./validator");
   const respond = require("./respond");
   const sent: any[] = [];
@@ -295,13 +351,29 @@ test("CHAR: /pixie-check and /pixie-calc dispatch to their deterministic paths",
   const origValidate = validator.validateRepository;
   const origLookup = respond.lookupAnswer;
   try {
-    validator.validateRepository = async () => ({ ok: true, url: "https://github.com/u/r", fullName: "u/r", isReady: true, passes: ["ok"], issues: [], tips: [] });
-    await commands.checkCommand({ command: { text: "https://github.com/u/r", user_id: "U1" }, ack: async () => {}, respond: sendEphemeral });
+    validator.validateRepository = async () => ({
+      ok: true,
+      url: "https://github.com/u/r",
+      fullName: "u/r",
+      isReady: true,
+      passes: ["ok"],
+      issues: [],
+      tips: [],
+    });
+    await commands.checkCommand({
+      command: { text: "https://github.com/u/r", user_id: "U1" },
+      ack: async () => {},
+      respond: sendEphemeral,
+    });
     assert.match(sent[0], /Ready for submission/);
 
     sent.length = 0;
     respond.lookupAnswer = async () => ({ source: "Pixl Shop", direct: true, answer: "calc answer" });
-    await commands.calcCommand({ command: { text: "20 hours", user_id: "U1", channel_id: "C1" }, ack: async () => {}, respond: sendEphemeral });
+    await commands.calcCommand({
+      command: { text: "20 hours", user_id: "U1", channel_id: "C1" },
+      ack: async () => {},
+      respond: sendEphemeral,
+    });
     assert.match(sent[0], /calc answer/);
   } finally {
     validator.validateRepository = origValidate;
@@ -309,17 +381,21 @@ test("CHAR: /pixie-check and /pixie-calc dispatch to their deterministic paths",
   }
 });
 
-test("CHAR: start_guide action posts dedashed blocks like every other guide entry", async () => {
+test("start_guide action posts dedashed blocks like every other guide entry", async () => {
   const handlers: Record<string, any> = {};
   const app = {
     command: () => {},
-    action: (pattern: any, handler: any) => { handlers[pattern] = handler; },
+    action: (pattern: any, handler: any) => {
+      handlers[pattern] = handler;
+    },
     shortcut: () => {},
     event: () => {},
     view: () => {},
   };
   commands.register(app);
-  const actionHandler = handlers[/^start_guide_.+$/.toString()] || Object.values(handlers).find((h: any) => typeof h === "function" && h !== undefined);
+  const actionHandler =
+    handlers[/^start_guide_.+$/.toString()] ||
+    Object.values(handlers).find((h: any) => typeof h === "function" && h !== undefined);
   assert.ok(actionHandler, "start_guide action registered");
 
   const guides = require("./guides");
@@ -331,11 +407,19 @@ test("CHAR: start_guide action posts dedashed blocks like every other guide entr
   const client = {
     chat: {
       update: async () => ({}),
-      postMessage: async (m: any) => { posted.push(m); return { ts: "9.9" }; },
+      postMessage: async (m: any) => {
+        posted.push(m);
+        return { ts: "9.9" };
+      },
     },
   };
   try {
-    await actionHandler({ action: { value: "create-hackpad" }, body: { channel: { id: "C1" }, message: { ts: "1.1" }, user: { id: "U1" } }, ack: async () => {}, client });
+    await actionHandler({
+      action: { value: "create-hackpad" },
+      body: { channel: { id: "C1" }, message: { ts: "1.1" }, user: { id: "U1" } },
+      ack: async () => {},
+      client,
+    });
   } finally {
     guides.isAvailable = origAvail;
     guides.startGuide = origStart;

@@ -3,19 +3,65 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const shop = require("./shop");
 
-
 const ITEMS = [
-  { id: 27, name: "Signed Org Photo", price: 100, category: "merch", unlock_xp: 0, config_options: null, description: "" },
-  { id: 500, name: "PS5 Digital, 825gb +wireless controller", price: 11400, category: "other", unlock_xp: 0, config_options: null, description: "" },
+  {
+    id: 27,
+    name: "Signed Org Photo",
+    price: 100,
+    category: "merch",
+    unlock_xp: 0,
+    config_options: null,
+    description: "",
+  },
+  {
+    id: 500,
+    name: "PS5 Digital, 825gb +wireless controller",
+    price: 11400,
+    category: "other",
+    unlock_xp: 0,
+    config_options: null,
+    description: "",
+  },
   { id: 66, name: "MacBook Neo", price: 10675, category: "tech", unlock_xp: 0, config_options: null, description: "" },
-  { id: 67, name: "MacBook Air M5", price: 18875, category: "tech", unlock_xp: 0, config_options: null, description: "" },
-  { id: 68, name: "Framework 13 DIY", price: 18850, category: "kits", unlock_xp: 0, config_options: { base_price: 18850 }, description: "" },
-  { id: 481, name: "Huawei MatePad 11.5", price: 0, category: "tech", unlock_xp: 0, config_options: null, description: "" },
-  { id: 99, name: "Founder Trophy", price: 0, category: "merch", unlock_xp: 500, config_options: null, description: "" },
+  {
+    id: 67,
+    name: "MacBook Air M5",
+    price: 18875,
+    category: "tech",
+    unlock_xp: 0,
+    config_options: null,
+    description: "",
+  },
+  {
+    id: 68,
+    name: "Framework 13 DIY",
+    price: 18850,
+    category: "kits",
+    unlock_xp: 0,
+    config_options: { base_price: 18850 },
+    description: "",
+  },
+  {
+    id: 481,
+    name: "Huawei MatePad 11.5",
+    price: 0,
+    category: "tech",
+    unlock_xp: 0,
+    config_options: null,
+    description: "",
+  },
+  {
+    id: 99,
+    name: "Founder Trophy",
+    price: 0,
+    category: "merch",
+    unlock_xp: 500,
+    config_options: null,
+    description: "",
+  },
 ];
 
 const DATA = { items: ITEMS, economy: shop.DEFAULT_ECONOMY };
-
 
 test("pxPerHour walks the payout step table, not a curve", () => {
   const e = shop.DEFAULT_ECONOMY;
@@ -34,7 +80,6 @@ test("rePerHour clamps the tier to the four that exist", () => {
   assert.equal(shop.rePerHour(9, e), 25);
   assert.equal(shop.rePerHour(0, e), 12.5);
 });
-
 
 test("hoursRange reproduces the floor and cap hours the shop page shows", () => {
   const r = shop.hoursRange(11400, shop.DEFAULT_ECONOMY);
@@ -59,7 +104,6 @@ test("hoursForPixels starts from the RE you already have", () => {
   assert.ok(warm < cold);
   assert.ok(Math.abs(warm - 133) < 0.5, `expected ~133h at the cap, got ${warm}`);
 });
-
 
 test("parseTier reads the ways people actually write a tier", () => {
   assert.equal(shop.parseTier("how much hours needed for t4 for ps5"), 4);
@@ -104,7 +148,6 @@ test("isShopQuestion separates shop maths from everything else", () => {
   assert.equal(shop.isShopQuestion("when is pixl launching"), false);
   assert.equal(shop.isShopQuestion("my hackatime isnt tracking"), false);
 });
-
 
 test("directAnswer works out the hours for a named item at a named tier", () => {
   const r = shop.directAnswer("how much hours needed for t4 for ps5", DATA);
@@ -175,11 +218,25 @@ test("directAnswer stays out of the way of questions that aren't about the shop"
   assert.equal(shop.directAnswer("when is pixl launching", DATA), null);
   assert.equal(shop.directAnswer("how do i set up hackatime", DATA), null);
   const hardwareData = {
-    items: [...ITEMS, { id: 700, name: "Hardware Grant", price: 160, category: "grant", unlock_xp: 0, config_options: null, description: "" }],
+    items: [
+      ...ITEMS,
+      {
+        id: 700,
+        name: "Hardware Grant",
+        price: 160,
+        category: "grant",
+        unlock_xp: 0,
+        config_options: null,
+        description: "",
+      },
+    ],
     economy: shop.DEFAULT_ECONOMY,
   };
   assert.equal(
-    shop.directAnswer("for a hardware project, does my bom have to be a csv with links and the total cost?", hardwareData),
+    shop.directAnswer(
+      "for a hardware project, does my bom have to be a csv with links and the total cost?",
+      hardwareData,
+    ),
     null,
   );
   assert.equal(
@@ -191,7 +248,6 @@ test("directAnswer stays out of the way of questions that aren't about the shop"
 test("directAnswer returns nothing when the catalogue never loaded", () => {
   assert.equal(shop.directAnswer("how much is a ps5", { items: [], economy: shop.DEFAULT_ECONOMY }), null);
 });
-
 
 test("corpusText lists the catalogue with prices and the rate table", () => {
   const text = shop.corpusText(DATA);
@@ -205,7 +261,6 @@ test("corpusText lists the catalogue with prices and the rate table", () => {
 test("corpusText survives an empty catalogue", () => {
   assert.equal(shop.corpusText({ items: [], economy: shop.DEFAULT_ECONOMY }), "");
 });
-
 
 test("directAnswer picks the item up from the conversation when the reply is just a tier", () => {
   const history = [
@@ -290,7 +345,6 @@ test("nothing the shop module produces contains a dash", () => {
   for (const text of produced) assert.doesNotMatch(text, /[—–]|\s--\s/);
 });
 
-
 test("naming an item without asking a price gets no reply", () => {
   const quiet = [
     "i wanna buy a ps5 one day fr",
@@ -337,7 +391,6 @@ test("isShopQuestion no longer fires on ordinary chat", () => {
   assert.equal(shop.isShopQuestion("how many pixels for a macbook"), true);
 });
 
-
 test("the catalogue chunks into pieces retrieval can actually pick", () => {
   const retrieve = require("./retrieve");
   const many = Array.from({ length: 60 }, (_, i) => ({
@@ -372,7 +425,10 @@ test("a shop chunk outranks the docs for a question about an item", () => {
   const index = retrieve.buildIndex(
     retrieve.chunkSections([
       ["Pixl Shop", shop.corpusText({ items: many, economy: shop.DEFAULT_ECONOMY })],
-      ["Shipping", "## Shipping\n\nShipping a project means opening the shop page and pressing ship. The shop is where pixels go.\n\nEvery ship is reviewed by a human before any pixels land in your wallet."],
+      [
+        "Shipping",
+        "## Shipping\n\nShipping a project means opening the shop page and pressing ship. The shop is where pixels go.\n\nEvery ship is reviewed by a human before any pixels land in your wallet.",
+      ],
     ]),
   );
 
@@ -405,7 +461,6 @@ test("a question that names no item does not surface an arbitrary one", () => {
   const named = retrieve.selectChunks(index, "how much is a ps5")[0];
   assert.match(named.text, /PS5/, "naming the item should still find it");
 });
-
 
 test("parsePixelAmount reads an amount out of the question", () => {
   assert.equal(shop.parsePixelAmount("how much hours for 275 pixl on each tier?"), 275);
@@ -464,15 +519,14 @@ test("the corpus warns the model off the exact mistake it made", () => {
   assert.match(text, /RE (?:per hour|an hour) is not/i);
 });
 
-
-test("CHAR: naming an item is not asking its price (no talking over conversations)", () => {
+test("naming an item is not asking its price (no talking over conversations)", () => {
   assert.equal(shop.directAnswer("i finally got a ps5", DATA), null);
   assert.equal(shop.directAnswer("is a ps5 even worth it", DATA), null);
   const hit = shop.directAnswer("how much is the PS5 Digital", DATA);
   assert.ok(hit && hit.direct === true);
 });
 
-test("CHAR: pingAnswer vs helpAnswer tier selection (ping outside help uses ping tier)", () => {
+test("pingAnswer vs helpAnswer tier selection (ping outside help uses ping tier)", () => {
   const answer = require("./answer");
   const { config } = require("./config");
   const pingTier = config.pingAnswer || config.answer;

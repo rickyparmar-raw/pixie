@@ -7,7 +7,6 @@ const cache = require("./cache");
 
 db.open(":memory:");
 
-
 test("normalize collapses punctuation, case, spacing and filler", () => {
   assert.equal(cache.normalize("Whats  the DEADLINE??"), "deadline");
 });
@@ -16,12 +15,10 @@ test("normalize drops user mentions so a ping does not split the key", () => {
   assert.equal(cache.normalize("<@U0PIXIE> whats the deadline"), "deadline");
 });
 
-
 test("keyFor treats a contraction and its apostrophe form as one question", () => {
   assert.equal(cache.keyFor("What's Restoration Energy?"), cache.keyFor("whats restoration energy"));
   assert.equal(cache.keyFor("wheres the game"), cache.keyFor("where is the game"));
 });
-
 
 test("keyFor is stable across wording noise", () => {
   const a = cache.keyFor("whats the deadline?");
@@ -35,7 +32,6 @@ test("keyFor preserves the legacy question-only hash when program ID is omitted"
   assert.equal(cache.keyFor("whats the deadline?"), "e23839cd729a3f6017fc6cbf5ef21eeb64d77cdf");
 });
 
-
 test("keyFor survives a reworded question", () => {
   const asked = cache.keyFor("when is the deadline");
   assert.equal(cache.keyFor("the deadline is when?"), asked);
@@ -47,7 +43,6 @@ test("keyFor differs for genuinely different questions", () => {
 
   assert.notEqual(cache.keyFor("how do i submit my project"), cache.keyFor("can i submit late"));
 });
-
 
 test("keyFor refuses a question with no meaningful words", () => {
   assert.equal(cache.normalize("what is it"), "");
@@ -79,7 +74,6 @@ test("cache keeps the same normalized question isolated by program ID", () => {
   assert.deepEqual(cache.get(question, "sprig"), { source: "Sprig FAQ", answer: "september 30" });
 });
 
-
 test("an aged answer is still served, so a popular question stays instant", () => {
   cache.put("how do i unlock a region", { source: "Pixl Docs", answer: "finish the sidequests" });
   db.handle()
@@ -88,7 +82,6 @@ test("an aged answer is still served, so a popular question stays instant", () =
 
   assert.equal(cache.get("how do i unlock a region").answer, "finish the sidequests");
 });
-
 
 test("an aged timeline answer is refused rather than served", () => {
   cache.put("when does pixl launch", { source: "Program timeline", answer: "august 18 — in 21 days" });
@@ -107,7 +100,6 @@ test("isVolatile matches the timeline section however it is cased", () => {
   assert.equal(cache.isVolatile("Pixl FAQ"), false);
   assert.equal(cache.isVolatile(null), false);
 });
-
 
 test("keyFor is sha1(programId:sorted tokens) and strictly tenant-isolated", () => {
   const crypto = require("crypto");

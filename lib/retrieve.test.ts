@@ -21,7 +21,6 @@ A: The launch date has not been announced.
 Q: What do I win?
 A: Prizes ship to your door once your project is approved.`;
 
-
 test("chunkSection splits on headings and keeps the heading with the body", () => {
   const chunks = retrieve.chunkSection("Pixl Docs", DOCS);
 
@@ -42,7 +41,10 @@ test("chunkSection returns nothing for empty input", () => {
 });
 
 test("chunkSection splits an oversized paragraph on sentence ends", () => {
-  const long = Array.from({ length: 60 }, (_: undefined, i: number) => `Sentence number ${i} explains a detail about the thing.`).join(" ");
+  const long = Array.from(
+    { length: 60 },
+    (_: undefined, i: number) => `Sentence number ${i} explains a detail about the thing.`,
+  ).join(" ");
   const chunks = retrieve.chunkSection("Long", long);
 
   assert.ok(chunks.length > 1);
@@ -53,11 +55,13 @@ test("chunkSection splits an oversized paragraph on sentence ends", () => {
 });
 
 test("chunkSection keeps every chunk under the cap for real doc shapes", () => {
-  for (const chunk of retrieve.chunkSections([["Pixl Docs", DOCS], ["Pixl FAQ", FAQ]])) {
+  for (const chunk of retrieve.chunkSections([
+    ["Pixl Docs", DOCS],
+    ["Pixl FAQ", FAQ],
+  ])) {
     assert.ok(chunk.text.length <= retrieve.MAX_CHUNK);
   }
 });
-
 
 const SOURCES = [
   ["Pixl Docs", DOCS],
@@ -90,10 +94,12 @@ test("selectChunks stops at the first chunk that doesn't fit, instead of skippin
   const BIG = "gizmo ".repeat(40) + "widget contraption apparatus mechanism instrument.";
   const SMALL = "gizmo mentioned once, short.";
 
-  const localIndex = retrieve.buildIndex(retrieve.chunkSections([
-    ["Big", BIG],
-    ["Small", SMALL],
-  ]));
+  const localIndex = retrieve.buildIndex(
+    retrieve.chunkSections([
+      ["Big", BIG],
+      ["Small", SMALL],
+    ]),
+  );
 
   const ranked = retrieve.score(localIndex, retrieve.tokenize("gizmo"));
   assert.equal(ranked.length, 2);
@@ -105,7 +111,6 @@ test("selectChunks stops at the first chunk that doesn't fit, instead of skippin
 
   assert.deepEqual(retrieve.selectChunks(localIndex, "gizmo", budget), []);
 });
-
 
 const GENERATED = [
   ["About pixie", "Q: Who are you?\nA: I'm pixie."],
@@ -232,10 +237,12 @@ test("tokenize expands expiration and resubmission synonyms", () => {
   assert.ok(retTokens.includes("return"));
 });
 
-
 test("detectDomain accurately classifies software, hardware, and general text", () => {
   assert.equal(retrieve.detectDomain("A web app built with React, deployed on Vercel with a github repo"), "software");
-  assert.equal(retrieve.detectDomain("Design a custom PCB with KiCad, route traces, and export Gerber files"), "hardware");
+  assert.equal(
+    retrieve.detectDomain("Design a custom PCB with KiCad, route traces, and export Gerber files"),
+    "hardware",
+  );
   assert.equal(retrieve.detectDomain("General community guidelines and age requirements for participants"), "general");
 });
 
@@ -272,7 +279,6 @@ For hardware projects, the repo must contain everything needed to build it from 
   assert.equal(chunks[0].domain, "hardware");
 });
 
-
 const DOMAIN_DOCS = [
   [
     "Submission Guidelines",
@@ -280,8 +286,8 @@ const DOMAIN_DOCS = [
 For software projects, your repository must contain a README explaining what the project is, how to set it up or run it, and how it can be experienced. Software projects must have public open-source code on GitHub and a working playable URL.
 
 ## Hardware Requirements
-For hardware projects, the repository must contain PCB schematics, wiring diagrams, CAD files in STEP format, and a bill of materials with specific part names.`
-  ]
+For hardware projects, the repository must contain PCB schematics, wiring diagrams, CAD files in STEP format, and a bill of materials with specific part names.`,
+  ],
 ];
 const domainIndex = retrieve.buildIndex(retrieve.chunkSections(DOMAIN_DOCS));
 
@@ -312,7 +318,6 @@ test("hardware requirements query retrieves hardware chunks and does not retriev
   }
 });
 
-
 const RETURNED_DOCS = [
   [
     "Review Guide",
@@ -320,8 +325,8 @@ const RETURNED_DOCS = [
 A returned submission (Needs Changes verdict) is not a penalty, fine, or final rejection. If your project is returned, you will receive reviewer feedback on what needs to be changed, and you can make adjustments and resubmit your project for review.
 
 ## Override Hours and Deflation
-Reviewers may deflate approved hours when there is doubt about claimed hours or evidence does not support them. The unified database requires aggressive deflation when hours appear inflated.`
-  ]
+Reviewers may deflate approved hours when there is doubt about claimed hours or evidence does not support them. The unified database requires aggressive deflation when hours appear inflated.`,
+  ],
 ];
 const returnedIndex = retrieve.buildIndex(retrieve.chunkSections(RETURNED_DOCS));
 
@@ -341,9 +346,12 @@ test("returned-submission query retrieves feedback/resubmitting and excludes red
 
   const scores = retrieve.score(returnedIndex, retrieve.tokenize(query));
   const deflationMatch = scores.find((s: { chunk: { text: string } }) => /deflate/i.test(s.chunk.text));
-  assert.equal(deflationMatch, undefined, "deflation chunk must be filtered out when asking about returned submissions");
+  assert.equal(
+    deflationMatch,
+    undefined,
+    "deflation chunk must be filtered out when asking about returned submissions",
+  );
 });
-
 
 const HIERARCHY_DOCS = [
   [
@@ -355,8 +363,8 @@ You can use AI tools like ChatGPT or GitHub Copilot for up to 30% of your projec
 The 30% AI rule does not apply to hardware design. For hardware projects, all CAD assemblies, 3D models (.step files), and PCB designs/schematics must be 100% original, custom designs by you, not generated by AI (0% AI). Submitting fully AI-generated design files will result in rejection and may lead to a permanent ban.
 
 ## README AI Prohibition
-Your project's README cannot be built by AI. You must write your own README by yourself.`
-  ]
+Your project's README cannot be built by AI. You must write your own README by yourself.`,
+  ],
 ];
 const hierarchyIndex = retrieve.buildIndex(retrieve.chunkSections(HIERARCHY_DOCS));
 
@@ -368,8 +376,14 @@ test("hardware AI query strictly ranks 0% AI CAD/PCB prohibition over generic so
   assert.match(scores[0].chunk.text, /100% original/i);
   assert.match(scores[0].chunk.text, /not generated by ai/i);
 
-  const genericMatch = scores.find((s: { chunk: { text: string } }) => /up to 30% of your project's code/i.test(s.chunk.text));
-  assert.equal(genericMatch, undefined, "generic 30% AI allowance must receive score 0 and be filtered out for hardware CAD/PCB queries");
+  const genericMatch = scores.find((s: { chunk: { text: string } }) =>
+    /up to 30% of your project's code/i.test(s.chunk.text),
+  );
+  assert.equal(
+    genericMatch,
+    undefined,
+    "generic 30% AI allowance must receive score 0 and be filtered out for hardware CAD/PCB queries",
+  );
 });
 
 test("README AI query strictly ranks README AI prohibition over generic code AI allowance", () => {
@@ -379,10 +393,11 @@ test("README AI query strictly ranks README AI prohibition over generic code AI 
   assert.ok(scores.length > 0);
   assert.match(scores[0].chunk.text, /README cannot be built by AI/i);
 
-  const genericMatch = scores.find((s: { chunk: { text: string } }) => /up to 30% of your project's code/i.test(s.chunk.text));
+  const genericMatch = scores.find((s: { chunk: { text: string } }) =>
+    /up to 30% of your project's code/i.test(s.chunk.text),
+  );
   assert.equal(genericMatch, undefined, "generic 30% code AI allowance must receive score 0 when asking about README");
 });
-
 
 const AI_POLICY_DOCS = [
   [
@@ -399,8 +414,8 @@ If you hide or do not disclose your AI usage, your project will be rejected and 
 
 ## Hardware and Firmware AI Rules
 The 30% AI rule does not apply to hardware design. For hardware projects, all CAD assemblies, 3D models (.step files), and PCB designs/schematics must be 100% original, custom designs by you — not generated by AI (0% AI).
-For firmware (microcontroller code), AI is permitted only under the standard software code limit of up to 30% with honest disclosure, but AI cannot generate your entire firmware.`
-  ]
+For firmware (microcontroller code), AI is permitted only under the standard software code limit of up to 30% with honest disclosure, but AI cannot generate your entire firmware.`,
+  ],
 ];
 const aiIndex = retrieve.buildIndex(retrieve.chunkSections(AI_POLICY_DOCS));
 
@@ -425,18 +440,17 @@ test("30% AI policy: retrieves code cap, disclosure, fully AI ban, and consequen
   assert.match(q4[0].text, /standard software code limit of up to 30%/i);
 });
 
-
 const REFERRAL_DOCS = [
   [
     "Referral Guide",
     `## Referral Codes and Expiration
-Referral codes expire in 48 hours (2 days) after being generated. Submitter referral links and codes must be redeemed within the 48-hour expiration window before they become invalid.`
+Referral codes expire in 48 hours (2 days) after being generated. Submitter referral links and codes must be redeemed within the 48-hour expiration window before they become invalid.`,
   ],
   [
     "General Rules",
     `## Community Guidelines
-Be respectful, share your work, and help others build cool things.`
-  ]
+Be respectful, share your work, and help others build cool things.`,
+  ],
 ];
 const referralIndex = retrieve.buildIndex(retrieve.chunkSections(REFERRAL_DOCS));
 
@@ -457,13 +471,11 @@ test("referral-code query retrieves 48-hour / 2-day expiration across various ph
   }
 });
 
-
 test("chunk size and budget constants pin the retrieval contract", () => {
   assert.equal(retrieve.MIN_CHUNK, 100);
   assert.equal(retrieve.MAX_CHUNK, 900);
   assert.equal(retrieve.DEFAULT_BUDGET, 2500);
 });
-
 
 test("budget constants pin the per-section and total contract", () => {
   assert.equal(retrieve.IDENTITY_BUDGET, 2500);
@@ -520,7 +532,10 @@ test("selectContext fallback stays within the total budget when nothing matches"
 });
 
 test("chunkSection merges tiny neighbours and never emits an empty chunk", () => {
-  const chunks = retrieve.chunkSection("Tiny", "hi\n\nthere\n\nthis is a longer paragraph that pushes past the minimum chunk size threshold for merging");
+  const chunks = retrieve.chunkSection(
+    "Tiny",
+    "hi\n\nthere\n\nthis is a longer paragraph that pushes past the minimum chunk size threshold for merging",
+  );
   assert.ok(chunks.length >= 1);
   for (const c of chunks) assert.ok(c.text.trim().length > 0);
   const whole = "hi\n\nthere";
@@ -531,7 +546,12 @@ test("chunkSection merges tiny neighbours and never emits an empty chunk", () =>
 test("BM25 length norm prefers the shorter chunk when term frequency ties", () => {
   const short = "gizmo widget";
   const long = `gizmo widget ${"filler padding words ".repeat(30)}`;
-  const idx = retrieve.buildIndex(retrieve.chunkSections([["S", short], ["L", long]]));
+  const idx = retrieve.buildIndex(
+    retrieve.chunkSections([
+      ["S", short],
+      ["L", long],
+    ]),
+  );
   const ranked = retrieve.score(idx, retrieve.tokenize("gizmo widget"));
   assert.equal(ranked.length, 2);
   assert.match(ranked[0].chunk.text, /gizmo widget/);
@@ -539,26 +559,62 @@ test("BM25 length norm prefers the shorter chunk when term frequency ties", () =
 });
 
 test("BM25 idf stays positive for a term in every chunk", () => {
-  const idx = retrieve.buildIndex(retrieve.chunkSections([["A", "gizmo alpha ".repeat(20)], ["B", "gizmo beta ".repeat(20)]]));
+  const idx = retrieve.buildIndex(
+    retrieve.chunkSections([
+      ["A", "gizmo alpha ".repeat(20)],
+      ["B", "gizmo beta ".repeat(20)],
+    ]),
+  );
   const ranked = retrieve.score(idx, retrieve.tokenize("gizmo"));
   assert.equal(ranked.length, 2);
   assert.ok(ranked.every((r: { value: number }) => r.value > 0));
 });
 
 test("selectContext exclude drops a banned source from chunks and fallback", () => {
-  const localIndex = retrieve.buildIndex(retrieve.chunkSections([["Shop", "gizmo price 700 px in the shop catalogue"], ["Docs", "gizmo repair guide for broken widgets"]]));
+  const localIndex = retrieve.buildIndex(
+    retrieve.chunkSections([
+      ["Shop", "gizmo price 700 px in the shop catalogue"],
+      ["Docs", "gizmo repair guide for broken widgets"],
+    ]),
+  );
   const excluded = new Set(["Shop"]);
-  const ctx = retrieve.selectContext({ generated: [], index: localIndex, sources: [["Shop", "gizmo price 700 px"], ["Docs", "gizmo repair guide"]], question: "gizmo shop price", exclude: excluded });
+  const ctx = retrieve.selectContext({
+    generated: [],
+    index: localIndex,
+    sources: [
+      ["Shop", "gizmo price 700 px"],
+      ["Docs", "gizmo repair guide"],
+    ],
+    question: "gizmo shop price",
+    exclude: excluded,
+  });
   assert.doesNotMatch(ctx, /Shop/);
-  const fallback = retrieve.selectContext({ generated: [], index: localIndex, sources: [["Shop", "unrelated shop text"], ["Docs", "unrelated docs text"]], question: "zzzz qqqq", exclude: excluded });
+  const fallback = retrieve.selectContext({
+    generated: [],
+    index: localIndex,
+    sources: [
+      ["Shop", "unrelated shop text"],
+      ["Docs", "unrelated docs text"],
+    ],
+    question: "zzzz qqqq",
+    exclude: excluded,
+  });
   assert.doesNotMatch(fallback, /### Shop/);
   assert.match(fallback, /### Docs/);
 });
 
 test("selectContext passes generated sections through unranked and first", () => {
-  const gen = [["About pixie", "identity text here"], ["Program timeline", "timeline text here"]];
+  const gen = [
+    ["About pixie", "identity text here"],
+    ["Program timeline", "timeline text here"],
+  ];
   const localIndex = retrieve.buildIndex(retrieve.chunkSections([["Docs", "some docs about gizmos and widgets"]]));
-  const ctx = retrieve.selectContext({ generated: gen, index: localIndex, sources: [["Docs", "some docs"]], question: "zzzz qqqq" });
+  const ctx = retrieve.selectContext({
+    generated: gen,
+    index: localIndex,
+    sources: [["Docs", "some docs"]],
+    question: "zzzz qqqq",
+  });
   assert.ok(ctx.indexOf("### About pixie") < ctx.indexOf("### Docs") || ctx.includes("### Docs") === false);
   assert.match(ctx, /identity text here/);
 });

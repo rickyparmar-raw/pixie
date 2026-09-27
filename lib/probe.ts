@@ -1,4 +1,3 @@
-
 // Read-only diagnostics for the web console; probes do not write cache, gaps, or metrics.
 const answer = require("./answer");
 const knowledge = require("./knowledge");
@@ -8,9 +7,22 @@ const intent = require("./intent");
 
 type Chunk = { source: string; heading?: string; text: string };
 type Rank = { chunk: Chunk; value: number };
-interface CacheEntry { source: string; answer: string; askCount: number; ageMs: number }
-interface CacheVerdict { cacheKey: string | null; cacheHit: CacheEntry | null; wouldHit: boolean; wouldMiss: boolean }
-interface AnswerResult { source: string | null; answer: string | null }
+interface CacheEntry {
+  source: string;
+  answer: string;
+  askCount: number;
+  ageMs: number;
+}
+interface CacheVerdict {
+  cacheKey: string | null;
+  cacheHit: CacheEntry | null;
+  wouldHit: boolean;
+  wouldMiss: boolean;
+}
+interface AnswerResult {
+  source: string | null;
+  answer: string | null;
+}
 interface ProbeResult {
   error?: string;
   question?: string;
@@ -133,7 +145,9 @@ async function probe(question: string): Promise<ProbeResult> {
     cacheWouldHit,
     cacheWouldMiss,
     cacheKey,
-    cacheEntry: cacheHit ? { source: cacheHit.source, answer: cacheHit.answer, askCount: cacheHit.askCount, ageMs: cacheHit.ageMs } : null,
+    cacheEntry: cacheHit
+      ? { source: cacheHit.source, answer: cacheHit.answer, askCount: cacheHit.askCount, ageMs: cacheHit.ageMs }
+      : null,
     queryTerms,
     retrievalTrace,
     bm25Trace,

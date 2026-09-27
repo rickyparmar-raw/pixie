@@ -28,21 +28,27 @@ interface DecisionOutcome {
 const MAX_MESSAGES = 40;
 const MAX_CHARS = 8000;
 const LABELS = {
-  resolved: "The issue is solved: the requester confirms success, accepts a helper's completed answer, or withdraws the request because they figured it out.",
-  unresolved: "The issue is still active, broken, disputed, or the requester asks for more help without a clear resolution.",
-  waiting: "The thread is waiting on a person, more information, or a next step; nobody has clearly established that the issue is solved.",
+  resolved:
+    "The issue is solved: the requester confirms success, accepts a helper's completed answer, or withdraws the request because they figured it out.",
+  unresolved:
+    "The issue is still active, broken, disputed, or the requester asks for more help without a clear resolution.",
+  waiting:
+    "The thread is waiting on a person, more information, or a next step; nobody has clearly established that the issue is solved.",
 };
 
 const QUESTIONS = {
   resolution: {
     type: "choice",
-    instructions: "Classify only the outcome of the ticket conversation. Use resolved only when the supplied thread shows a credible resolution, not merely a proposed answer or silence.",
+    instructions:
+      "Classify only the outcome of the ticket conversation. Use resolved only when the supplied thread shows a credible resolution, not merely a proposed answer or silence.",
     criteria: LABELS,
   },
 };
 
 function clean(value: unknown, max = MAX_CHARS): string {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
+  const text = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
   return text.length <= max ? text : `${text.slice(0, max)}…`;
 }
 
@@ -76,7 +82,10 @@ function reasonFor(verdict: string): string {
       : "Jev found that the thread is still waiting or inconclusive.";
 }
 
-async function judgeResolution({ ticket, transcript }: { ticket?: TicketForJudge; transcript?: unknown } = {}, deps: JudgeDeps = {}): Promise<Record<string, unknown>> {
+async function judgeResolution(
+  { ticket, transcript }: { ticket?: TicketForJudge; transcript?: unknown } = {},
+  deps: JudgeDeps = {},
+): Promise<Record<string, unknown>> {
   const state = {
     task: "ticket_resolution",
     question: clean(ticket?.question, 2000),
@@ -85,16 +94,15 @@ async function judgeResolution({ ticket, transcript }: { ticket?: TicketForJudge
   };
   try {
     const evaluateDecision: (input: unknown, deps: unknown) => Promise<DecisionOutcome> =
-      deps.evaluateDecision || jev.evaluateCustomDecision as (input: unknown, deps: unknown) => Promise<DecisionOutcome>;
+      deps.evaluateDecision ||
+      (jev.evaluateCustomDecision as (input: unknown, deps: unknown) => Promise<DecisionOutcome>);
     const outcome = await evaluateDecision({ state, questions: QUESTIONS }, deps.jev || deps);
     if (!outcome || outcome.status !== "ok") return { verdict: "unknown", errorKind: outcome?.errorKind || null };
     const answer = outcome.result?.answers?.resolution;
     const verdict = answer?.choice;
     if (typeof verdict !== "string" || !Object.hasOwn(LABELS, verdict)) return { verdict: "unknown" };
     const probability = answer?.probabilities?.[verdict];
-    const confidence = typeof probability === "number"
-      ? Math.min(1, Math.max(0, probability))
-      : 0;
+    const confidence = typeof probability === "number" ? Math.min(1, Math.max(0, probability)) : 0;
     return { verdict, confidence, reason: reasonFor(verdict) };
   } catch (_) {
     return { verdict: "unknown" };

@@ -51,13 +51,12 @@ Check out the playable demo at https://play.pixl.hackclub.com/
   assert.ok(res.wordCount > 15);
 });
 
-
-test("CHAR: validator fires only on check-queries with a github URL", () => {
+test("validator fires only on check-queries with a github URL", () => {
   assert.ok(validator.parseGithubUrl("can you check https://github.com/u/cool-game for submission"));
   assert.equal(validator.parseGithubUrl("how do i submit my project"), null);
 });
 
-test("CHAR: formatValidationReport degrades on unparseable input", () => {
+test("formatValidationReport degrades on unparseable input", () => {
   assert.match(validator.formatValidationReport({ ok: false, error: "nope" }), /nope/);
   assert.match(validator.formatValidationReport(null), /Could not inspect/);
 });

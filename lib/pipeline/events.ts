@@ -20,7 +20,9 @@ const FIELDS = [
 
 const SAFE_VALUE = /^[A-Za-z0-9_.:-]{0,64}$/;
 type EventValue = string | number | boolean | null | undefined;
-interface EventFields { [key: string]: EventValue }
+interface EventFields {
+  [key: string]: EventValue;
+}
 interface EventOptions {
   programId?: string | null;
   role?: ChannelRole | null;

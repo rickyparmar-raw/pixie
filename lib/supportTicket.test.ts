@@ -48,8 +48,14 @@ function clientSpy() {
       postEphemeral: async () => ({ ok: true }),
     },
     reactions: {
-      add: async (p) => { reactionsAdded.push(p); return { ok: true }; },
-      remove: async (p) => { reactionsRemoved.push(p); return { ok: true }; },
+      add: async (p) => {
+        reactionsAdded.push(p);
+        return { ok: true };
+      },
+      remove: async (p) => {
+        reactionsRemoved.push(p);
+        return { ok: true };
+      },
     },
   };
 }
@@ -101,7 +107,12 @@ afterEach(() => {
 });
 
 let askN = 0;
-async function ask(client, threadTs, question, { messageTs, mode = respond.ALWAYS, userId }: { messageTs?: string; mode?: string; userId?: string } = {}) {
+async function ask(
+  client,
+  threadTs,
+  question,
+  { messageTs, mode = respond.ALWAYS, userId }: { messageTs?: string; mode?: string; userId?: string } = {},
+) {
   return respond.respond({
     client,
     channel: HELP,
@@ -113,9 +124,11 @@ async function ask(client, threadTs, question, { messageTs, mode = respond.ALWAY
   });
 }
 
-
 test("knows the answer: ticket opens, answer posts in the same thread, ticket stays OPEN", async () => {
-  answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "yes, as long as it's public" });
+  answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({
+    source: "Docs",
+    answer: "yes, as long as it's public",
+  });
   const client = clientSpy();
   await ask(client, "t-knows", "does my repo need to be public?");
 
@@ -124,13 +137,18 @@ test("knows the answer: ticket opens, answer posts in the same thread, ticket st
   assert.equal(ticket.status, "open");
 
   const texts = client.posts.map((p) => p.text || "");
-  assert.ok(texts.some((t) => /Someone will be here to help you soon/.test(t)), "open ticket UI in the thread");
-  assert.ok(texts.some((t) => /public/.test(t)), "Pixie's answer in the same thread");
+  assert.ok(
+    texts.some((t) => /Someone will be here to help you soon/.test(t)),
+    "open ticket UI in the thread",
+  );
+  assert.ok(
+    texts.some((t) => /public/.test(t)),
+    "Pixie's answer in the same thread",
+  );
   const uiMsg = client.posts.find((p) => /Someone will be here/.test(p.text || ""));
   assert.ok(uiMsg.blocks.find((b) => b.type === "actions")?.elements.some((e) => e.action_id === "st_resolve"));
   assert.match(JSON.stringify(uiMsg.blocks), /example\.test\/docs/);
 });
-
 
 test("doesn't know the answer: the ticket opens identically and moves to waiting_for_helper", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: null, answer: "", unclear: true });
@@ -141,9 +159,11 @@ test("doesn't know the answer: the ticket opens identically and moves to waiting
   assert.ok(ticket);
   assert.ok(["open", "waiting_for_helper", "assigned"].includes(ticket.status));
   assert.ok(client.posts.some((p) => /Someone will be here to help you soon/.test(p.text || "")));
-  assert.ok(client.posts.some((p) => p.channel === ORG), "organizer card posted");
+  assert.ok(
+    client.posts.some((p) => p.channel === ORG),
+    "organizer card posted",
+  );
 });
-
 
 test("the same root event delivered twice yields exactly one ticket and one ticket UI", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
@@ -157,7 +177,6 @@ test("the same root event delivered twice yields exactly one ticket and one tick
   assert.equal(uiMsgs.length, 1, "the open ticket UI is posted once");
 });
 
-
 test("a reply inside an existing ticket thread does not open a second ticket", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
   const client = clientSpy();
@@ -170,7 +189,6 @@ test("a reply inside an existing ticket thread does not open a second ticket", a
   assert.equal(rows.length, 1);
   assert.equal(rows[0].id, before);
 });
-
 
 test("resolve is idempotent: two clicks, one transition, one confirmation, no stale button", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
@@ -187,10 +205,12 @@ test("resolve is idempotent: two clicks, one transition, one confirmation, no st
   const updates = client.posts.filter((p) => p.isUpdate);
   assert.ok(updates.length > 0);
   assert.ok(client.posts.some((ui) => /Resolved|resolved/i.test(ui.text || "")));
-  assert.ok(updates.every((ui) => !JSON.stringify(ui.blocks).includes("st_resolve")), "no stale Mark as resolved button");
+  assert.ok(
+    updates.every((ui) => !JSON.stringify(ui.blocks).includes("st_resolve")),
+    "no stale Mark as resolved button",
+  );
   assert.ok(updates.some((ui) => JSON.stringify(ui.blocks).includes("st_reopen")));
 });
-
 
 test("resolve -> reopen -> resolve repeats without corrupting state", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
@@ -212,7 +232,6 @@ test("resolve -> reopen -> resolve repeats without corrupting state", async () =
   assert.match(client.posts.map((p) => p.text || "").join(" "), /Ticket reopened by <@U-cyc>/);
 });
 
-
 test("a ticket puts a marker reaction on the requester's message, swapped for a check on resolve", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
   const client = clientSpy();
@@ -224,10 +243,15 @@ test("a ticket puts a marker reaction on the requester's message, swapped for a 
 
   await tickets.publicResolveTicket({ ticketId: db.getTicketByThreadTs("t-react").id, actorId: "U-react", client });
   await new Promise((r) => setImmediate(r)); // the reaction swap is fire-and-forget off syncSupportTicketUI
-  assert.ok(client.reactionsAdded.some((r) => r.timestamp === "t-react" && r.name === "white_check_mark"), "resolve adds the check");
-  assert.ok(client.reactionsRemoved.some((r) => r.timestamp === "t-react" && r.name === "ticket"), "resolve drops the open marker");
+  assert.ok(
+    client.reactionsAdded.some((r) => r.timestamp === "t-react" && r.name === "white_check_mark"),
+    "resolve adds the check",
+  );
+  assert.ok(
+    client.reactionsRemoved.some((r) => r.timestamp === "t-react" && r.name === "ticket"),
+    "resolve drops the open marker",
+  );
 });
-
 
 test("help channel chatter opens no ticket; the engagement classifier filters it (spec §20)", async () => {
   intent.classifyIntent = async () => intent.CASUAL_CHAT;
@@ -238,12 +262,19 @@ test("help channel chatter opens no ticket; the engagement classifier filters it
   assert.equal(client.posts.length, 0, "and nothing is posted");
 });
 
-
 test("a passive program (Pixl) opens no ticket; the active program does", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });
 
   const c1 = clientSpy();
-  await respond.respond({ client: c1, channel: "C-st-pixl-help", threadTs: "t-pixl", messageTs: "t-pixl", userId: "U1", question: "how do i submit?", mode: respond.ALWAYS });
+  await respond.respond({
+    client: c1,
+    channel: "C-st-pixl-help",
+    threadTs: "t-pixl",
+    messageTs: "t-pixl",
+    userId: "U1",
+    question: "how do i submit?",
+    mode: respond.ALWAYS,
+  });
   assert.equal(db.getTicketByThreadTs("t-pixl"), null, "Pixl is passive — answer only, no ticket");
 
   const c2 = clientSpy();
@@ -265,7 +296,6 @@ test("tickets and their organizer channel belong to the question's own program",
   assert.ok(card, "card goes to this program's organizer channel, not another's");
 });
 
-
 test("a classified support message Pixie can't answer still opens a ticket", async () => {
   intent.classifyIntent = async () => intent.HELP_NEEDED;
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: null, answer: "", unclear: true });
@@ -275,9 +305,11 @@ test("a classified support message Pixie can't answer still opens a ticket", asy
   const t = db.getTicketByThreadTs("t-chatter-noans");
   assert.ok(t, "the message is a ticket");
   assert.ok(["open", "waiting_for_helper", "assigned"].includes(t.status));
-  assert.ok(client.posts.some((p) => /Someone will be here to help you soon/.test(p.text || "")), "ticket UI is posted");
+  assert.ok(
+    client.posts.some((p) => /Someone will be here to help you soon/.test(p.text || "")),
+    "ticket UI is posted",
+  );
 });
-
 
 test("escalateTicket (sensitive, no AI answer) opens the Pixorpheus ticket UI and never an ai_answered footer", async () => {
   const client = clientSpy();
@@ -301,7 +333,6 @@ test("escalateTicket (sensitive, no AI answer) opens the Pixorpheus ticket UI an
   assert.ok(!/Answered by/.test(blob), "no legacy 'Answered by' label anywhere");
   assert.ok(!/public_resolve_ticket/.test(blob), "no legacy footer button");
 });
-
 
 test("the requester writing back in a resolved thread reopens it and re-shows the open UI", async () => {
   answer.getAnswerOrChat = answer.getAnswerOrChatStream = async () => ({ source: "Docs", answer: "ok" });

@@ -16,9 +16,16 @@ import type { LearnedRow } from "./db.types";
 
 const { isAdmin } = configModule;
 const { relativeTime, coverageStats, statsText } = stats;
-interface TopicRow { topic: string }
-interface GapRow { question: string; ask_count: number }
-interface SourceRow { name: string }
+interface TopicRow {
+  topic: string;
+}
+interface GapRow {
+  question: string;
+  ask_count: number;
+}
+interface SourceRow {
+  name: string;
+}
 interface HomeActionArgs {
   ack: () => Promise<unknown>;
   body: { user?: { id?: string } };
@@ -181,7 +188,8 @@ function homeBlocks(userId: string): KnownBlock[] {
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*what i can walk you through*\n${guides.availableFor(programs.all()[0])
+        text: `*what i can walk you through*\n${guides
+          .availableFor(programs.all()[0])
           .map(([, g]: [string, { name: string }]) => `• ${g.name}`)
           .join("\n")}`,
       },
@@ -197,7 +205,10 @@ function homeBlocks(userId: string): KnownBlock[] {
       { type: "divider" },
       {
         type: "section",
-        text: { type: "mrkdwn", text: `*you've asked about*\n${(topics as TopicRow[]).map((t) => `• ${t.topic}`).join("\n")}` },
+        text: {
+          type: "mrkdwn",
+          text: `*you've asked about*\n${(topics as TopicRow[]).map((t) => `• ${t.topic}`).join("\n")}`,
+        },
       },
     );
   }
@@ -255,7 +266,13 @@ function reviewAction(apply: (id: number) => unknown, verb: string) {
   };
 }
 
-async function onAppHomeOpened({ event, client }: { event: { tab?: string; user: string }; client: SlackClient }): Promise<void> {
+async function onAppHomeOpened({
+  event,
+  client,
+}: {
+  event: { tab?: string; user: string };
+  client: SlackClient;
+}): Promise<void> {
   if (event.tab !== "home") return;
   try {
     await client.views.publish({

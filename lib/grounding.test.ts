@@ -8,7 +8,9 @@ const supported = {
 };
 
 test("parses fenced JSON with surrounding model prose", () => {
-  const result = grounding.parseGroundingVerdict(`Here is the result:\n\`\`\`json\n${JSON.stringify(supported)}\n\`\`\``);
+  const result = grounding.parseGroundingVerdict(
+    `Here is the result:\n\`\`\`json\n${JSON.stringify(supported)}\n\`\`\``,
+  );
   assert.equal(result.ok, true);
   assert.equal(result.claims[0].evidenceIds[0], "policy-1");
 });
@@ -16,14 +18,22 @@ test("parses fenced JSON with surrounding model prose", () => {
 test("fails closed for malformed or schema-invalid verdicts", () => {
   assert.equal(grounding.parseGroundingVerdict("not json").ok, false);
   assert.equal(grounding.parseGroundingVerdict({ verdict: "supported", claims: [] }).ok, false);
-  assert.equal(grounding.parseGroundingVerdict({ verdict: "supported", claims: [{ claim: "x", supported: true, evidenceIds: [] }] }).ok, false);
+  assert.equal(
+    grounding.parseGroundingVerdict({
+      verdict: "supported",
+      claims: [{ claim: "x", supported: true, evidenceIds: [] }],
+    }).ok,
+    false,
+  );
 });
 
 test("accepts exact support from same-program retrieved evidence", () => {
   const result = grounding.validateClaimSupport({
     verdict: supported,
     programId: "build-grant",
-    evidence: [{ id: "policy-1", programId: "build-grant", supportsClaims: ["The build grant is available to students."] }],
+    evidence: [
+      { id: "policy-1", programId: "build-grant", supportsClaims: ["The build grant is available to students."] },
+    ],
   });
   assert.equal(result.supported, true);
 });
@@ -32,7 +42,9 @@ test("rejects related policy evidence and cross-program evidence", () => {
   const related = grounding.validateClaimSupport({
     verdict: supported,
     programId: "build-grant",
-    evidence: [{ id: "policy-1", programId: "build-grant", supportsClaims: ["The build grant has a student application."] }],
+    evidence: [
+      { id: "policy-1", programId: "build-grant", supportsClaims: ["The build grant has a student application."] },
+    ],
   });
   const crossProgram = grounding.validateClaimSupport({
     verdict: supported,
@@ -44,9 +56,17 @@ test("rejects related policy evidence and cross-program evidence", () => {
 });
 
 test("allows only explicitly listed fixture-supported claims", () => {
-  const result = grounding.validateClaimSupport({ verdict: supported, programId: "build-grant", fixtureClaims: [supported.claims[0].claim] });
+  const result = grounding.validateClaimSupport({
+    verdict: supported,
+    programId: "build-grant",
+    fixtureClaims: [supported.claims[0].claim],
+  });
   assert.equal(result.supported, true);
-  const notExplicit = grounding.validateClaimSupport({ verdict: supported, programId: "build-grant", fixtureClaims: [] });
+  const notExplicit = grounding.validateClaimSupport({
+    verdict: supported,
+    programId: "build-grant",
+    fixtureClaims: [],
+  });
   assert.equal(notExplicit.supported, false);
 });
 

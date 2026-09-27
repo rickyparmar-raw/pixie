@@ -32,7 +32,10 @@ test("detectGuideIntent matches each guide's trigger phrasing", async () => {
 
 test("detectGuideIntent bypasses the model check when the request is explicit", async () => {
   modelChoice = "NONE";
-  assert.equal(await guides.detectGuideIntent("gimme a guide and walkthrough of project submission guidelines"), "submit-ysws-guidelines");
+  assert.equal(
+    await guides.detectGuideIntent("gimme a guide and walkthrough of project submission guidelines"),
+    "submit-ysws-guidelines",
+  );
   assert.equal(await guides.detectGuideIntent("can you start the hackpad setup tutorial?"), "create-hackpad");
   assert.equal(await guides.detectGuideIntent("walk me through setting up a devboard step by step"), "create-devboard");
 });
@@ -107,7 +110,10 @@ test("create-hackpad's no-kicad alternate step gives real Linux install commands
 
 test("availableFor returns only the guides configured for a program", () => {
   const available = guides.availableFor({ guides: ["start-live"] });
-  assert.deepEqual(available.map(([id]: any) => id), ["start-live"]);
+  assert.deepEqual(
+    available.map(([id]: any) => id),
+    ["start-live"],
+  );
 });
 
 test("create-hackpad covers DRC errors, Fusion360 account activation, and plate/PCB size mismatches", () => {
@@ -135,7 +141,13 @@ test("stuckAnswerPrompt gives the model the current step's content to troublesho
   const guide = guides.GUIDES["create-hackpad"];
   const step = guide.steps[3];
   const canned = guide.alternateSteps["stuck on a specific step and googling didn't help"];
-  const prompt = guides.stuckAnswerPrompt(guide, step, "stuck on a specific step and googling didn't help", canned, false);
+  const prompt = guides.stuckAnswerPrompt(
+    guide,
+    step,
+    "stuck on a specific step and googling didn't help",
+    canned,
+    false,
+  );
 
   assert.ok(prompt.includes(step.message), "the exact current step must be quoted for the model to troubleshoot");
   assert.match(prompt, /don't deflect to asking someone else/);
@@ -356,7 +368,6 @@ test("mentionsGuideSubject survives a typo and ignores unrelated messages", () =
   assert.equal(guides.mentionsGuideSubject(""), false);
 });
 
-
 test("buildGuideBlocks always returns sections, even with no screenshot", () => {
   const blocks = guides.buildGuideBlocks({ message: "do the thing", checkNext: "done? (yes/no)" }, "https://x");
 
@@ -393,8 +404,7 @@ test("buildGuideBlocks never shows the reaction hint on a step with no checkNext
   assert.ok(!blocks.some((b: any) => b.type === "context"));
 });
 
-
-test("CHAR: guide detect/start flow — keyword detect, availability gate, first step", async () => {
+test("guide detect/start flow — keyword detect, availability gate, first step", async () => {
   const id = guides.detectGuideByKeyword("how do i build a hackpad");
   assert.ok(id, "keyword pass detects a guide subject");
   const programs = require("./programs");
@@ -407,7 +417,7 @@ test("CHAR: guide detect/start flow — keyword detect, availability gate, first
   assert.equal(guides.isInGuide("t-char-guide-1"), false);
 });
 
-test("CHAR: startGuide refuses to steal another user's guide slot", () => {
+test("startGuide refuses to steal another user's guide slot", () => {
   const id = Object.keys(guides.GUIDES)[0];
   const first = guides.startGuide(id, "t-char-guide-2", "U-alice");
   assert.ok(first);

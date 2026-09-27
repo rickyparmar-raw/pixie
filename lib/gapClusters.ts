@@ -14,7 +14,10 @@ interface GapRow {
   created_at: number;
 }
 
-interface LearnedFactRow { question: string; answer: string }
+interface LearnedFactRow {
+  question: string;
+  answer: string;
+}
 interface ClusterSummary {
   representative: string;
   variants: number;
@@ -55,7 +58,9 @@ const MAX_THREADS_PER_CLUSTER = 3;
 const COVERAGE_FACT_LIMIT = 200;
 
 function despace(s: unknown): string {
-  return String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return String(s || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
 }
 
 function longTokens(question: string, cachedSets: ((question: string) => Set<string>) | null): string[] {
@@ -63,7 +68,11 @@ function longTokens(question: string, cachedSets: ((question: string) => Set<str
   return terms.filter((t: string) => t.length >= KEYWORD_MIN_LEN);
 }
 
-function keywordContained(a: string, b: string, cachedSets: ((question: string) => Set<string>) | null = null): boolean {
+function keywordContained(
+  a: string,
+  b: string,
+  cachedSets: ((question: string) => Set<string>) | null = null,
+): boolean {
   const tokensA = longTokens(a, cachedSets);
   const tokensB = longTokens(b, cachedSets);
   const flatA = despace(a);
@@ -138,9 +147,12 @@ function clusterQuestions(questions: string[], threshold = DEFAULT_THRESHOLD): s
 }
 
 function fetchGapRows(programId: string, sinceMs: number): GapRow[] {
-  return db.handle().query(
-    "SELECT question, user_id, channel, message_ts, created_at FROM doc_gaps WHERE created_at > ? AND program_id = ?",
-  ).all(Date.now() - sinceMs, programId);
+  return db
+    .handle()
+    .query(
+      "SELECT question, user_id, channel, message_ts, created_at FROM doc_gaps WHERE created_at > ? AND program_id = ?",
+    )
+    .all(Date.now() - sinceMs, programId);
 }
 
 function groupRowsByQuestion(rows: GapRow[]): QuestionGroup[] {
@@ -149,7 +161,14 @@ function groupRowsByQuestion(rows: GapRow[]): QuestionGroup[] {
     const q = String(r.question || "").trim();
     if (!q) continue;
     if (!byQuestion.has(q)) {
-      byQuestion.set(q, { question: q, askCount: 0, askers: new Set<string>(), firstSeen: r.created_at, lastSeen: r.created_at, threads: [] });
+      byQuestion.set(q, {
+        question: q,
+        askCount: 0,
+        askers: new Set<string>(),
+        firstSeen: r.created_at,
+        lastSeen: r.created_at,
+        threads: [],
+      });
     }
     const g = byQuestion.get(q);
     if (!g) continue;
@@ -169,7 +188,12 @@ function countEscalated(parts: QuestionGroup[], programId: string): number {
   try {
     for (const p of parts) {
       for (const t of p.threads) {
-        if (db.handle().query("SELECT 1 FROM tickets WHERE thread_ts = ? AND program_id = ? LIMIT 1").get(t.messageTs, programId)) {
+        if (
+          db
+            .handle()
+            .query("SELECT 1 FROM tickets WHERE thread_ts = ? AND program_id = ? LIMIT 1")
+            .get(t.messageTs, programId)
+        ) {
           escalated += 1;
           break;
         }
@@ -184,14 +208,24 @@ function countEscalated(parts: QuestionGroup[], programId: string): number {
 function isCovered(representative: string, programId: string): boolean {
   try {
     const facts = db.approvedFacts(COVERAGE_FACT_LIMIT, programId);
-    return facts.some((f: LearnedFactRow) => pairOverlap(representative, `${f.question} ${f.answer}`.slice(0, 200)) >= COVERAGE_THRESHOLD);
+    return facts.some(
+      (f: LearnedFactRow) =>
+        pairOverlap(representative, `${f.question} ${f.answer}`.slice(0, 200)) >= COVERAGE_THRESHOLD,
+    );
   } catch (e) {
-    log.warn("gapClusters", `failed to check coverage for representative: ${e instanceof Error ? e.message : String(e)}`);
+    log.warn(
+      "gapClusters",
+      `failed to check coverage for representative: ${e instanceof Error ? e.message : String(e)}`,
+    );
     return false;
   }
 }
 
-function summarizeCluster(members: string[], byQuestion: Map<string, QuestionGroup>, programId: string): ClusterSummary {
+function summarizeCluster(
+  members: string[],
+  byQuestion: Map<string, QuestionGroup>,
+  programId: string,
+): ClusterSummary {
   const parts = members.map((q) => byQuestion.get(q) as QuestionGroup);
   const askers = new Set();
   for (const p of parts) for (const u of p.askers) askers.add(u);
@@ -209,7 +243,11 @@ function summarizeCluster(members: string[], byQuestion: Map<string, QuestionGro
   };
 }
 
-function clusterGaps({ programId, sinceMs = DEFAULT_SINCE_MS, minAskers = DEFAULT_MIN_ASKERS }: { programId?: string; sinceMs?: number; minAskers?: number } = {}): ClusterResponse {
+function clusterGaps({
+  programId,
+  sinceMs = DEFAULT_SINCE_MS,
+  minAskers = DEFAULT_MIN_ASKERS,
+}: { programId?: string; sinceMs?: number; minAskers?: number } = {}): ClusterResponse {
   // Legacy unscoped rows may contain another program's questions, so they never cross this boundary.
   if (!programId) return { error: "programId required" };
   let rows = [];
@@ -229,7 +267,15 @@ function clusterGaps({ programId, sinceMs = DEFAULT_SINCE_MS, minAskers = DEFAUL
   return { clusters };
 }
 
-async function proposeFaq({ programId, actorId, question }: { programId: string; actorId?: string | null; question: string }): Promise<ClusterResponse> {
+async function proposeFaq({
+  programId,
+  actorId,
+  question,
+}: {
+  programId: string;
+  actorId?: string | null;
+  question: string;
+}): Promise<ClusterResponse> {
   const program = programs.get(programId);
   if (!program) return { error: "unknown program" };
   const clean = String(question || "").trim();
@@ -257,7 +303,14 @@ async function proposeFaq({ programId, actorId, question }: { programId: string;
     category: "faq-gap",
   });
   if (!id) return { error: "could not store FAQ draft" };
-  audit.record({ programId, actorId, action: "knowledge.faq_proposed", entityType: "learned_fact", entityId: id, metadata: { grounded } });
+  audit.record({
+    programId,
+    actorId,
+    action: "knowledge.faq_proposed",
+    entityType: "learned_fact",
+    entityId: id,
+    metadata: { grounded },
+  });
   return { ok: true, candidate: db.getLearnedFactById(id), grounded };
 }
 

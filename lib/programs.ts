@@ -80,7 +80,6 @@ const PROGRAMS_FILE = path.join(__dirname, "..", "programs.json");
 const SOURCES_FILE = path.join(__dirname, "..", "sources.json");
 const PROGRAM_FILE = path.join(__dirname, "..", "program.json");
 
-
 const DEFAULT_WORKSPACE = "default";
 const SHARED_PROGRAM_ID = "ysws-global";
 
@@ -102,7 +101,7 @@ function readJsonFile(filePath: string, fallback: unknown = null): unknown {
 
 function readSourcesJson(): ProgramSource[] {
   const data = readJsonFile(SOURCES_FILE, []);
-  return Array.isArray(data) ? data as ProgramSource[] : [];
+  return Array.isArray(data) ? (data as ProgramSource[]) : [];
 }
 
 function readProgramJsonMilestones(): unknown[] {
@@ -133,16 +132,21 @@ function normalizeProgram(p: RawProgramConfig): ProgramRecord {
     aiAnswers: p.aiAnswers === false || p.ai_answers === false ? false : true,
     ticketsEnabled,
     autoEscalate: p.autoEscalate === false ? false : true,
-    sensitiveCategories: Array.isArray(p.sensitiveCategories || p.sensitive_categories) ? (p.sensitiveCategories || p.sensitive_categories) as string[] : [],
+    sensitiveCategories: Array.isArray(p.sensitiveCategories || p.sensitive_categories)
+      ? ((p.sensitiveCategories || p.sensitive_categories) as string[])
+      : [],
     supportActive: p.supportActive === false ? false : true,
     autoAssign: p.autoAssign === true || p.auto_assign === 1,
     helperPing: p.helperPing === true || p.helper_ping_enabled === 1,
-    categories: p.categories && typeof p.categories === "object"
-      ? p.categories as Record<string, unknown>
-      : (ticketsEnabled ? ticketCategory.defaultTaxonomy() : null),
+    categories:
+      p.categories && typeof p.categories === "object"
+        ? (p.categories as Record<string, unknown>)
+        : ticketsEnabled
+          ? ticketCategory.defaultTaxonomy()
+          : null,
     learning: p.learning === "review" || p.learning_mode === "review" ? "review" : "auto",
     ticketVisibility: ["thread", "organizer", "dashboard"].includes(p.ticketVisibility || p.ticket_visibility || "")
-      ? (p.ticketVisibility || p.ticket_visibility) as Program["ticketVisibility"]
+      ? ((p.ticketVisibility || p.ticket_visibility) as Program["ticketVisibility"])
       : "thread",
     shadowMode: p.shadowMode === true || p.shadow_mode === 1,
     incidentMode: alt(p, "incidentMode", "incident_mode") || "ANSWER_AND_TRACK",
@@ -155,10 +159,12 @@ function normalizeProgram(p: RawProgramConfig): ProgramRecord {
     sharedSources: p.id === "ysws-global" ? true : false,
     milestones: Array.isArray(p.milestones) ? p.milestones : [],
     guides: Array.isArray(p.guides) ? p.guides : ["submit-ysws-guidelines"],
-    pinnedRules: Array.isArray(p.pinnedRules) ? p.pinnedRules.filter((r): r is string => typeof r === "string" && Boolean(r.trim())) : [],
+    pinnedRules: Array.isArray(p.pinnedRules)
+      ? p.pinnedRules.filter((r): r is string => typeof r === "string" && Boolean(r.trim()))
+      : [],
     links: p.links || {},
     behavior: p.behavior && typeof p.behavior === "object" ? p.behavior : null,
-    status: p.status && ["sandbox", "live", "paused"].includes(p.status) ? p.status as Program["status"] : null,
+    status: p.status && ["sandbox", "live", "paused"].includes(p.status) ? (p.status as Program["status"]) : null,
   };
 }
 
@@ -172,13 +178,20 @@ function loadEnvPrograms(): ProgramRecord[] | null {
   try {
     parsed = JSON.parse(raw);
   } catch (err: unknown) {
-    log.warn("programs", `PIXIE_PROGRAMS_JSON is not valid JSON (${err instanceof Error ? err.message : String(err)}) — falling back to files`);
+    log.warn(
+      "programs",
+      `PIXIE_PROGRAMS_JSON is not valid JSON (${err instanceof Error ? err.message : String(err)}) — falling back to files`,
+    );
     cachedEnvRaw = raw;
     cachedEnvPrograms = null;
     return null;
   }
 
-  const list = Array.isArray(parsed) ? parsed : isRecord(parsed) && Array.isArray(parsed.programs) ? parsed.programs : null;
+  const list = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.programs)
+      ? parsed.programs
+      : null;
   if (!list) {
     log.warn("programs", "PIXIE_PROGRAMS_JSON must be an array or { programs: [...] } — falling back to files");
     cachedEnvRaw = raw;
@@ -202,9 +215,7 @@ function legacyFallbackProgram(): ProgramRecord {
   const milestones = readProgramJsonMilestones();
   const helpChannel = config?.slack?.helpChannel || null;
   const faqChannels = config?.slack?.faqChannels || [];
-  const channels = helpChannel && !faqChannels.includes(helpChannel)
-    ? [helpChannel, ...faqChannels]
-    : faqChannels;
+  const channels = helpChannel && !faqChannels.includes(helpChannel) ? [helpChannel, ...faqChannels] : faqChannels;
 
   return {
     id: "pixl",
@@ -235,7 +246,10 @@ function loadConfiguredPrograms(): ProgramRecord[] | null {
   return loadEnvPrograms() || loadFilePrograms();
 }
 
-function mergeSources(configured: ProgramSource[] | null | undefined, persisted: ProgramSource[] | null | undefined): ProgramSource[] {
+function mergeSources(
+  configured: ProgramSource[] | null | undefined,
+  persisted: ProgramSource[] | null | undefined,
+): ProgramSource[] {
   // File sources remain available when the database has no copy; the key prevents duplicates.
   const merged = [];
   const seen = new Set();
@@ -275,22 +289,30 @@ function all(): ProgramRecord[] {
   }
   for (const p of dbProgs) {
     const configured = map.get(p.id);
-    map.set(p.id, configured ? {
-      ...configured,
-      ...p,
-      sources: mergeSources(configured.sources, p.sources),
-      milestones: p.milestones || configured.milestones || [],
-      guides: p.guides || configured.guides || [],
-      links: p.links || configured.links || {},
-      pinnedRules: p.pinnedRules || configured.pinnedRules || [],
-      categories: p.categories || configured.categories || (p.ticketsEnabled !== false ? ticketCategory.defaultTaxonomy() : null),
-      learning: p.learning || configured.learning || "auto",
-      channels: p.channels?.length ? p.channels : configured.channels || [],
-      helpChannel: p.helpChannel || configured.helpChannel || null,
-      organizerChannel: p.organizerChannel || configured.organizerChannel || null,
-      behavior: p.behavior || configured.behavior || null,
-      status: p.status || configured.status || null,
-    } : p);
+    map.set(
+      p.id,
+      configured
+        ? {
+            ...configured,
+            ...p,
+            sources: mergeSources(configured.sources, p.sources),
+            milestones: p.milestones || configured.milestones || [],
+            guides: p.guides || configured.guides || [],
+            links: p.links || configured.links || {},
+            pinnedRules: p.pinnedRules || configured.pinnedRules || [],
+            categories:
+              p.categories ||
+              configured.categories ||
+              (p.ticketsEnabled !== false ? ticketCategory.defaultTaxonomy() : null),
+            learning: p.learning || configured.learning || "auto",
+            channels: p.channels?.length ? p.channels : configured.channels || [],
+            helpChannel: p.helpChannel || configured.helpChannel || null,
+            organizerChannel: p.organizerChannel || configured.organizerChannel || null,
+            behavior: p.behavior || configured.behavior || null,
+            status: p.status || configured.status || null,
+          }
+        : p,
+    );
   }
 
   cachedPrograms = Array.from(map.values());
@@ -343,7 +365,10 @@ function get(id: string | null | undefined): ProgramRecord | null {
 
 function hostedClaim(workspaceId: string | null, channelId: string): { program_id: string; kind: string } | null {
   try {
-    return db.getChannelOwner(workspaceId || DEFAULT_WORKSPACE, channelId) as { program_id: string; kind: string } | null;
+    return db.getChannelOwner(workspaceId || DEFAULT_WORKSPACE, channelId) as {
+      program_id: string;
+      kind: string;
+    } | null;
   } catch (e: unknown) {
     log.debug("programs", `claim lookup failed (${channelId}): ${e instanceof Error ? e.message : String(e)}`);
     return null;
@@ -392,7 +417,7 @@ function isHelpChannel(channelId: string | null, workspaceId: string | null = nu
 }
 
 function helpChannelName(programId = null) {
-  const p = programId ? get(programId) : (all()[0] || null);
+  const p = programId ? get(programId) : all()[0] || null;
   if (p && p.helpChannel) return p.helpChannel;
   if (config?.slack?.helpChannel) return config.slack.helpChannel;
   return null;
@@ -400,12 +425,12 @@ function helpChannelName(programId = null) {
 
 function posture(programId: string | null) {
   const p = get(programId);
-  return p ? (p.posture || "active") : "active";
+  return p ? p.posture || "active" : "active";
 }
 
 function deploymentMode(programId: string | null) {
   const p = get(programId);
-  return p ? (p.deploymentMode || "dedicated_legacy") : "dedicated_legacy";
+  return p ? p.deploymentMode || "dedicated_legacy" : "dedicated_legacy";
 }
 
 function isShadow(program: string | ProgramRecord | null) {
@@ -452,7 +477,15 @@ function removeProgram(id: string) {
   invalidate();
 }
 
-function channelRow(channelId: string, { programId, programName, isHelp, posture = "active" }: { programId: string; programName: string; isHelp: boolean; posture?: string }) {
+function channelRow(
+  channelId: string,
+  {
+    programId,
+    programName,
+    isHelp,
+    posture = "active",
+  }: { programId: string; programName: string; isHelp: boolean; posture?: string },
+) {
   return {
     channelId,
     programId,
@@ -473,7 +506,12 @@ function getChannelsList() {
     if (p.helpChannel) {
       channelsMap.set(
         p.helpChannel,
-        channelRow(p.helpChannel, { programId: p.id, programName: p.name, isHelp: true, posture: p.posture || "active" }),
+        channelRow(p.helpChannel, {
+          programId: p.id,
+          programName: p.name,
+          isHelp: true,
+          posture: p.posture || "active",
+        }),
       );
     }
     if (Array.isArray(p.channels)) {
@@ -533,7 +571,7 @@ function persistChannels(program: ProgramRecord, channels: string[], helpChannel
 }
 
 function addChannelToProgram(programId: string, channelId: string, isHelp = false, workspaceId: string | null = null) {
-  const p = get(programId) || (all()[0] || null);
+  const p = get(programId) || all()[0] || null;
   if (!p) return false;
   if (stolenByAnother(p.id, workspaceId, channelId)) return false;
 

@@ -24,7 +24,10 @@ const DENY_ALL = Object.freeze({
   expertiseRouting: false,
 });
 
-function ticketPolicy({ program = null, role = "help" }: { program?: Program | null; role?: ChannelRole | "organizer" } = {}): Record<string, boolean> {
+function ticketPolicy({
+  program = null,
+  role = "help",
+}: { program?: Program | null; role?: ChannelRole | "organizer" } = {}): Record<string, boolean> {
   if (!program) return { ...DENY_ALL };
   if (role === "organizer") return { ...DENY_ALL };
   const behavior: ProgramBehavior = programModel.behaviorFor(program);
@@ -54,15 +57,25 @@ function ticketPolicy({ program = null, role = "help" }: { program?: Program | n
   return { ...DENY_ALL };
 }
 
-function resolveTicketRole({ program = null, channel = null, workspaceId = null, role = null }: { program?: Program | null; channel?: string | null; workspaceId?: string | null; role?: ChannelRole | "organizer" | null }): ChannelRole | "organizer" {
+function resolveTicketRole({
+  program = null,
+  channel = null,
+  workspaceId = null,
+  role = null,
+}: {
+  program?: Program | null;
+  channel?: string | null;
+  workspaceId?: string | null;
+  role?: ChannelRole | "organizer" | null;
+}): ChannelRole | "organizer" {
   if (role === "help" || role === "main" || role === "organizer" || role === "dm" || role === "none") return role;
   if (channel) {
     try {
       const channelPolicy = require("../channelPolicy");
       const resolved = channelPolicy.resolve(channel, workspaceId);
-      if (resolved && (resolved.role === "help" || resolved.role === "main" || resolved.role === "organizer")) return resolved.role;
-    } catch (_) {
-    }
+      if (resolved && (resolved.role === "help" || resolved.role === "main" || resolved.role === "organizer"))
+        return resolved.role;
+    } catch (_) {}
     if (program) {
       if (program.helpChannel === channel) return "help";
       if (program.organizerChannel === channel) return "organizer";

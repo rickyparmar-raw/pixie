@@ -34,8 +34,26 @@ function seedProgram(id: string, extra: Record<string, unknown> = {}) {
 
 test("upsertSignal inserts once, then updates the same row on re-detection", () => {
   seedProgram("radar-a");
-  const first = radar.upsertSignal({ programId: "radar-a", type: "STALE_TICKETS", severity: "MEDIUM", title: "t1", summary: "s1", evidence: { count: 1 }, fingerprint: "backlog", now: 1000 });
-  const second = radar.upsertSignal({ programId: "radar-a", type: "STALE_TICKETS", severity: "HIGH", title: "t2", summary: "s2", evidence: { count: 2 }, fingerprint: "backlog", now: 2000 });
+  const first = radar.upsertSignal({
+    programId: "radar-a",
+    type: "STALE_TICKETS",
+    severity: "MEDIUM",
+    title: "t1",
+    summary: "s1",
+    evidence: { count: 1 },
+    fingerprint: "backlog",
+    now: 1000,
+  });
+  const second = radar.upsertSignal({
+    programId: "radar-a",
+    type: "STALE_TICKETS",
+    severity: "HIGH",
+    title: "t2",
+    summary: "s2",
+    evidence: { count: 2 },
+    fingerprint: "backlog",
+    now: 2000,
+  });
   assert.equal(second.id, first.id);
   assert.equal(second.severity, "HIGH");
   assert.equal(second.first_detected_at, 1000);
@@ -45,16 +63,43 @@ test("upsertSignal inserts once, then updates the same row on re-detection", () 
 
 test("a suppressed signal stays suppressed through re-detection until it expires", () => {
   seedProgram("radar-b");
-  const sig = radar.upsertSignal({ programId: "radar-b", type: "REOPEN_SPIKE", severity: "MEDIUM", title: "t", summary: "s", evidence: {}, fingerprint: "reopen", now: 1000 });
+  const sig = radar.upsertSignal({
+    programId: "radar-b",
+    type: "REOPEN_SPIKE",
+    severity: "MEDIUM",
+    title: "t",
+    summary: "s",
+    evidence: {},
+    fingerprint: "reopen",
+    now: 1000,
+  });
   radar.suppressSignal({ id: sig.id, actorId: "U1", duration: "1h" });
   const suppressed = radar.getSignal(sig.id) as SignalRow;
   assert.equal(suppressed.status, "suppressed");
 
-  const stillSuppressed = radar.upsertSignal({ programId: "radar-b", type: "REOPEN_SPIKE", severity: "CRITICAL", title: "worse", summary: "s2", evidence: {}, fingerprint: "reopen", now: suppressed.suppressed_until - 1 });
+  const stillSuppressed = radar.upsertSignal({
+    programId: "radar-b",
+    type: "REOPEN_SPIKE",
+    severity: "CRITICAL",
+    title: "worse",
+    summary: "s2",
+    evidence: {},
+    fingerprint: "reopen",
+    now: suppressed.suppressed_until - 1,
+  });
   assert.equal(stillSuppressed.status, "suppressed");
   assert.equal(stillSuppressed.severity, "CRITICAL"); // evidence still updates
 
-  const reactivated = radar.upsertSignal({ programId: "radar-b", type: "REOPEN_SPIKE", severity: "MEDIUM", title: "t3", summary: "s3", evidence: {}, fingerprint: "reopen", now: suppressed.suppressed_until + 1 });
+  const reactivated = radar.upsertSignal({
+    programId: "radar-b",
+    type: "REOPEN_SPIKE",
+    severity: "MEDIUM",
+    title: "t3",
+    summary: "s3",
+    evidence: {},
+    fingerprint: "reopen",
+    now: suppressed.suppressed_until + 1,
+  });
   assert.equal(reactivated.status, "active");
   assert.equal(reactivated.first_detected_at, suppressed.suppressed_until + 1);
 });
@@ -62,7 +107,16 @@ test("a suppressed signal stays suppressed through re-detection until it expires
 test("acknowledgeSignal and resolveSignal are program-scoped through requireHelper", () => {
   seedProgram("radar-c1");
   seedProgram("radar-c2");
-  const sig = radar.upsertSignal({ programId: "radar-c1", type: "ESCALATION_SPIKE", severity: "HIGH", title: "t", summary: "s", evidence: {}, fingerprint: "spike", now: 1000 });
+  const sig = radar.upsertSignal({
+    programId: "radar-c1",
+    type: "ESCALATION_SPIKE",
+    severity: "HIGH",
+    title: "t",
+    summary: "s",
+    evidence: {},
+    fingerprint: "spike",
+    now: 1000,
+  });
   const requireHelper = (programId: string) => programId === "radar-c1";
 
   const denied = radar.acknowledgeSignal({ id: sig.id, actorId: "U1", requireHelper: () => false });
@@ -79,7 +133,16 @@ test("acknowledgeSignal and resolveSignal are program-scoped through requireHelp
 
 test("evaluateProgram auto-resolves a signal whose condition cleared", () => {
   seedProgram("radar-d");
-  const stale = radar.upsertSignal({ programId: "radar-d", type: "STALE_TICKETS", severity: "HIGH", title: "old", summary: "s", evidence: {}, fingerprint: "backlog", now: 1000 });
+  const stale = radar.upsertSignal({
+    programId: "radar-d",
+    type: "STALE_TICKETS",
+    severity: "HIGH",
+    title: "old",
+    summary: "s",
+    evidence: {},
+    fingerprint: "backlog",
+    now: 1000,
+  });
   radar.evaluateProgram("radar-d");
   const after = radar.getSignal(stale.id);
   assert.equal(after.status, "resolved");
@@ -89,8 +152,16 @@ test("detectStaleTickets flags open tickets past the 12h/24h thresholds with evi
   seedProgram("radar-e");
   const now = Date.now();
   db.createTicket({ programId: "radar-e", channel: "C-radar-e", threadTs: "t1", requesterId: "U1", question: "q1" });
-  const id = db.createTicket({ programId: "radar-e", channel: "C-radar-e", threadTs: "t2", requesterId: "U2", question: "q2" });
-  db.handle().query("UPDATE tickets SET created_at = ? WHERE id = ?").run(now - 25 * 60 * 60 * 1000, id);
+  const id = db.createTicket({
+    programId: "radar-e",
+    channel: "C-radar-e",
+    threadTs: "t2",
+    requesterId: "U2",
+    question: "q2",
+  });
+  db.handle()
+    .query("UPDATE tickets SET created_at = ? WHERE id = ?")
+    .run(now - 25 * 60 * 60 * 1000, id);
   const found = radar.detectStaleTickets("radar-e", now);
   assert.ok(found);
   assert.equal(found.severity, "HIGH");
@@ -101,8 +172,16 @@ test("detectStaleTickets flags open tickets past the 12h/24h thresholds with evi
 test("detectStaleTickets ignores resolved/closed/duplicate/spam tickets", () => {
   seedProgram("radar-f");
   const now = Date.now();
-  const id = db.createTicket({ programId: "radar-f", channel: "C-radar-f", threadTs: "t1", requesterId: "U1", question: "q1" });
-  db.handle().query("UPDATE tickets SET created_at = ?, status = 'resolved' WHERE id = ?").run(now - 30 * 60 * 60 * 1000, id);
+  const id = db.createTicket({
+    programId: "radar-f",
+    channel: "C-radar-f",
+    threadTs: "t1",
+    requesterId: "U1",
+    question: "q1",
+  });
+  db.handle()
+    .query("UPDATE tickets SET created_at = ?, status = 'resolved' WHERE id = ?")
+    .run(now - 30 * 60 * 60 * 1000, id);
   assert.equal(radar.detectStaleTickets("radar-f", now), null);
 });
 
@@ -139,20 +218,30 @@ test("detectSourceFailures reports nothing once a source has since succeeded", (
   assert.deepEqual(radar.detectSourceFailures("radar-i"), []);
 });
 
-
 function charTicket(programId: string, threadTs: string, ageMs: number, extra: TicketOverrides = {}) {
   const id = db.createTicket({ programId, channel: `C-${programId}`, threadTs, requesterId: "U1", question: "q" });
   const sets = ["created_at = ?"];
   const params: Array<string | number> = [Date.now() - ageMs];
-  if (extra.status) { sets.push("status = ?"); params.push(extra.status); }
-  if (extra.category !== undefined) { sets.push("category = ?"); params.push(extra.category); }
-  if (extra.confidence !== undefined) { sets.push("ai_confidence = ?"); params.push(extra.confidence); }
+  if (extra.status) {
+    sets.push("status = ?");
+    params.push(extra.status);
+  }
+  if (extra.category !== undefined) {
+    sets.push("category = ?");
+    params.push(extra.category);
+  }
+  if (extra.confidence !== undefined) {
+    sets.push("ai_confidence = ?");
+    params.push(extra.confidence);
+  }
   params.push(id);
-  db.handle().query(`UPDATE tickets SET ${sets.join(", ")} WHERE id = ?`).run(...params);
+  db.handle()
+    .query(`UPDATE tickets SET ${sets.join(", ")} WHERE id = ?`)
+    .run(...params);
   return id;
 }
 
-test("char: STALE pins the 12h warn / 24h high boundary and the 'backlog' fingerprint", () => {
+test("STALE pins the 12h warn / 24h high boundary and the 'backlog' fingerprint", () => {
   seedProgram("char-stale-fresh");
   seedProgram("char-stale-med");
   seedProgram("char-stale-high");
@@ -174,12 +263,18 @@ test("char: STALE pins the 12h warn / 24h high boundary and the 'backlog' finger
   assert.ok(high.evidence.oldestWaitMs > 24 * 60 * 60 * 1000);
 });
 
-test("char: ESCALATION pins min-3, 1h window, 6h baseline, 2x jump", () => {
+test("ESCALATION pins min-3, 1h window, 6h baseline, 2x jump", () => {
   seedProgram("char-esc-fire");
   seedProgram("char-esc-base");
   const now = Date.now();
   for (const t of ["e1", "e2", "e3", "e4", "e5"]) {
-    db.createTicket({ programId: "char-esc-fire", channel: "C-char-esc-fire", threadTs: t, requesterId: "U1", question: "q" });
+    db.createTicket({
+      programId: "char-esc-fire",
+      channel: "C-char-esc-fire",
+      threadTs: t,
+      requesterId: "U1",
+      question: "q",
+    });
   }
   const fired = radar.detectEscalationSpike("char-esc-fire", now);
   assert.ok(fired);
@@ -188,12 +283,18 @@ test("char: ESCALATION pins min-3, 1h window, 6h baseline, 2x jump", () => {
   assert.equal(fired.severity, "CRITICAL");
   for (let i = 0; i < 30; i++) charTicket("char-esc-base", `cb-old-${i}`, 2 * 60 * 60 * 1000);
   for (const t of ["cb-n1", "cb-n2", "cb-n3"]) {
-    db.createTicket({ programId: "char-esc-base", channel: "C-char-esc-base", threadTs: t, requesterId: "U1", question: "q" });
+    db.createTicket({
+      programId: "char-esc-base",
+      channel: "C-char-esc-base",
+      threadTs: t,
+      requesterId: "U1",
+      question: "q",
+    });
   }
   assert.equal(radar.detectEscalationSpike("char-esc-base", now), null);
 });
 
-test("char: FAQ pins 24h window, min-5 askers, sha1 fingerprint", () => {
+test("FAQ pins 24h window, min-5 askers, sha1 fingerprint", () => {
   const crypto = require("crypto");
   seedProgram("char-faq-fire");
   seedProgram("char-faq-few");
@@ -209,7 +310,7 @@ test("char: FAQ pins 24h window, min-5 askers, sha1 fingerprint", () => {
   assert.deepEqual(radar.detectFaqClusters("char-faq-few"), []);
 });
 
-test("char: LOW_CONF pins 7d window, n>=5, mean<0.5, HIGH below 0.3", () => {
+test("LOW_CONF pins 7d window, n>=5, mean<0.5, HIGH below 0.3", () => {
   seedProgram("char-lc-high");
   seedProgram("char-lc-med");
   seedProgram("char-lc-few");
@@ -229,16 +330,35 @@ test("char: LOW_CONF pins 7d window, n>=5, mean<0.5, HIGH below 0.3", () => {
   assert.deepEqual(radar.detectLowConfidenceTopics("char-lc-ok", Date.now()), []);
 });
 
-test("char: REOPEN pins n>=3, rate>=0.2, HIGH at 0.4, 'reopen' fingerprint", () => {
+test("REOPEN pins n>=3, rate>=0.2, HIGH at 0.4, 'reopen' fingerprint", () => {
   seedProgram("char-re-low");
   seedProgram("char-re-high");
   seedProgram("char-re-rate");
   const idsLow = [];
-  for (let i = 0; i < 5; i++) idsLow.push(db.createTicket({ programId: "char-re-low", channel: "C-char-re-low", threadTs: `rl-${i}`, requesterId: "U1", question: "q" }));
-  db.reopenTicket(idsLow[0]); db.reopenTicket(idsLow[1]);
+  for (let i = 0; i < 5; i++)
+    idsLow.push(
+      db.createTicket({
+        programId: "char-re-low",
+        channel: "C-char-re-low",
+        threadTs: `rl-${i}`,
+        requesterId: "U1",
+        question: "q",
+      }),
+    );
+  db.reopenTicket(idsLow[0]);
+  db.reopenTicket(idsLow[1]);
   assert.equal(radar.detectReopenSpike("char-re-low", Date.now()), null);
   const idsHigh = [];
-  for (let i = 0; i < 5; i++) idsHigh.push(db.createTicket({ programId: "char-re-high", channel: "C-char-re-high", threadTs: `rh-${i}`, requesterId: "U1", question: "q" }));
+  for (let i = 0; i < 5; i++)
+    idsHigh.push(
+      db.createTicket({
+        programId: "char-re-high",
+        channel: "C-char-re-high",
+        threadTs: `rh-${i}`,
+        requesterId: "U1",
+        question: "q",
+      }),
+    );
   for (let i = 0; i < 3; i++) db.reopenTicket(idsHigh[i]);
   const high = radar.detectReopenSpike("char-re-high", Date.now());
   assert.ok(high);
@@ -246,43 +366,142 @@ test("char: REOPEN pins n>=3, rate>=0.2, HIGH at 0.4, 'reopen' fingerprint", () 
   assert.equal(high.fingerprint, "reopen");
   assert.equal(high.evidence.rate, 0.6);
   const idsRate = [];
-  for (let i = 0; i < 20; i++) idsRate.push(db.createTicket({ programId: "char-re-rate", channel: "C-char-re-rate", threadTs: `rr-${i}`, requesterId: "U1", question: "q" }));
+  for (let i = 0; i < 20; i++)
+    idsRate.push(
+      db.createTicket({
+        programId: "char-re-rate",
+        channel: "C-char-re-rate",
+        threadTs: `rr-${i}`,
+        requesterId: "U1",
+        question: "q",
+      }),
+    );
   for (let i = 0; i < 3; i++) db.reopenTicket(idsRate[i]);
   assert.equal(radar.detectReopenSpike("char-re-rate", Date.now()), null); // 3/20 = 0.15 < 0.2
 });
 
-test("char: fingerprints dedup by (program,type,fingerprint) only", () => {
+test("fingerprints dedup by (program,type,fingerprint) only", () => {
   seedProgram("char-dd-a");
   seedProgram("char-dd-b");
-  const a1 = radar.upsertSignal({ programId: "char-dd-a", type: "STALE_TICKETS", severity: "MEDIUM", title: "t", summary: "s", evidence: {}, fingerprint: "backlog", now: 1000 });
-  const a2 = radar.upsertSignal({ programId: "char-dd-a", type: "STALE_TICKETS", severity: "MEDIUM", title: "t", summary: "s", evidence: {}, fingerprint: "backlog", now: 2000 });
+  const a1 = radar.upsertSignal({
+    programId: "char-dd-a",
+    type: "STALE_TICKETS",
+    severity: "MEDIUM",
+    title: "t",
+    summary: "s",
+    evidence: {},
+    fingerprint: "backlog",
+    now: 1000,
+  });
+  const a2 = radar.upsertSignal({
+    programId: "char-dd-a",
+    type: "STALE_TICKETS",
+    severity: "MEDIUM",
+    title: "t",
+    summary: "s",
+    evidence: {},
+    fingerprint: "backlog",
+    now: 2000,
+  });
   assert.equal(a2.id, a1.id);
-  const b = radar.upsertSignal({ programId: "char-dd-b", type: "STALE_TICKETS", severity: "MEDIUM", title: "t", summary: "s", evidence: {}, fingerprint: "backlog", now: 1000 });
+  const b = radar.upsertSignal({
+    programId: "char-dd-b",
+    type: "STALE_TICKETS",
+    severity: "MEDIUM",
+    title: "t",
+    summary: "s",
+    evidence: {},
+    fingerprint: "backlog",
+    now: 1000,
+  });
   assert.notEqual(b.id, a1.id); // same fingerprint, other program -> separate row
-  const otherType = radar.upsertSignal({ programId: "char-dd-a", type: "REOPEN_SPIKE", severity: "MEDIUM", title: "t", summary: "s", evidence: {}, fingerprint: "backlog", now: 1000 });
+  const otherType = radar.upsertSignal({
+    programId: "char-dd-a",
+    type: "REOPEN_SPIKE",
+    severity: "MEDIUM",
+    title: "t",
+    summary: "s",
+    evidence: {},
+    fingerprint: "backlog",
+    now: 1000,
+  });
   assert.notEqual(otherType.id, a1.id); // same program+fingerprint, other type -> separate row
 });
 
-test("char: acknowledged re-fire stays acknowledged; resolved re-fires fresh", () => {
+test("acknowledged re-fire stays acknowledged; resolved re-fires fresh", () => {
   seedProgram("char-life");
-  const sig = radar.upsertSignal({ programId: "char-life", type: "STALE_TICKETS", severity: "MEDIUM", title: "t", summary: "s", evidence: {}, fingerprint: "backlog", now: 1000 });
+  const sig = radar.upsertSignal({
+    programId: "char-life",
+    type: "STALE_TICKETS",
+    severity: "MEDIUM",
+    title: "t",
+    summary: "s",
+    evidence: {},
+    fingerprint: "backlog",
+    now: 1000,
+  });
   radar.acknowledgeSignal({ id: sig.id, actorId: "U1" });
-  const refired = radar.upsertSignal({ programId: "char-life", type: "STALE_TICKETS", severity: "HIGH", title: "t2", summary: "s2", evidence: {}, fingerprint: "backlog", now: 2000 });
+  const refired = radar.upsertSignal({
+    programId: "char-life",
+    type: "STALE_TICKETS",
+    severity: "HIGH",
+    title: "t2",
+    summary: "s2",
+    evidence: {},
+    fingerprint: "backlog",
+    now: 2000,
+  });
   assert.equal(refired.status, "acknowledged");
   assert.equal(refired.first_detected_at, 1000);
   radar.resolveSignal({ id: sig.id, actorId: "U1" });
-  const fresh = radar.upsertSignal({ programId: "char-life", type: "STALE_TICKETS", severity: "MEDIUM", title: "t3", summary: "s3", evidence: {}, fingerprint: "backlog", now: 3000 });
+  const fresh = radar.upsertSignal({
+    programId: "char-life",
+    type: "STALE_TICKETS",
+    severity: "MEDIUM",
+    title: "t3",
+    summary: "s3",
+    evidence: {},
+    fingerprint: "backlog",
+    now: 3000,
+  });
   assert.equal(fresh.status, "active");
   assert.equal(fresh.first_detected_at, 3000);
   assert.equal(fresh.resolved_at, null);
 });
 
-test("char: suppress rejects unknown durations; evaluate auto-resolves active+acknowledged but never suppressed", () => {
+test("suppress rejects unknown durations; evaluate auto-resolves active+acknowledged but never suppressed", () => {
   seedProgram("char-auto");
-  const active = radar.upsertSignal({ programId: "char-auto", type: "STALE_TICKETS", severity: "HIGH", title: "t", summary: "s", evidence: {}, fingerprint: "backlog", now: 1000 });
-  const acked = radar.upsertSignal({ programId: "char-auto", type: "ESCALATION_SPIKE", severity: "HIGH", title: "t", summary: "s", evidence: {}, fingerprint: "spike", now: 1000 });
+  const active = radar.upsertSignal({
+    programId: "char-auto",
+    type: "STALE_TICKETS",
+    severity: "HIGH",
+    title: "t",
+    summary: "s",
+    evidence: {},
+    fingerprint: "backlog",
+    now: 1000,
+  });
+  const acked = radar.upsertSignal({
+    programId: "char-auto",
+    type: "ESCALATION_SPIKE",
+    severity: "HIGH",
+    title: "t",
+    summary: "s",
+    evidence: {},
+    fingerprint: "spike",
+    now: 1000,
+  });
   radar.acknowledgeSignal({ id: acked.id, actorId: "U1" });
-  const supp = radar.upsertSignal({ programId: "char-auto", type: "REOPEN_SPIKE", severity: "MEDIUM", title: "t", summary: "s", evidence: {}, fingerprint: "reopen", now: 1000 });
+  const supp = radar.upsertSignal({
+    programId: "char-auto",
+    type: "REOPEN_SPIKE",
+    severity: "MEDIUM",
+    title: "t",
+    summary: "s",
+    evidence: {},
+    fingerprint: "reopen",
+    now: 1000,
+  });
   assert.ok(radar.suppressSignal({ id: supp.id, actorId: "U1", duration: "bogus" }).error);
   radar.suppressSignal({ id: supp.id, actorId: "U1", duration: "24h" });
   radar.evaluateProgram("char-auto");
@@ -291,7 +510,7 @@ test("char: suppress rejects unknown durations; evaluate auto-resolves active+ac
   assert.equal(radar.getSignal(supp.id).status, "suppressed");
 });
 
-test("char: evaluateProgram is program-scoped — no cross-program leakage", () => {
+test("evaluateProgram is program-scoped — no cross-program leakage", () => {
   seedProgram("char-leak-a");
   seedProgram("char-leak-b");
   charTicket("char-leak-a", "leak-1", 25 * 60 * 60 * 1000);
@@ -303,14 +522,14 @@ test("char: evaluateProgram is program-scoped — no cross-program leakage", () 
   assert.deepEqual(radar.listSignals("char-leak-b"), []);
 });
 
-test("char: KNOWLEDGE_GAP is a listed type no detector emits", () => {
+test("KNOWLEDGE_GAP is a listed type no detector emits", () => {
   assert.ok(radar.TYPES.includes("KNOWLEDGE_GAP"));
   seedProgram("char-kg");
   const { signals } = radar.evaluateProgram("char-kg");
   assert.ok(!signals.some((s: SignalRow) => s.type === "KNOWLEDGE_GAP"));
 });
 
-test("char: startRadarLoop guards non-positive intervals", () => {
+test("startRadarLoop guards non-positive intervals", () => {
   assert.equal(radar.startRadarLoop(0), null);
   assert.equal(radar.startRadarLoop(-1), null);
   const timer = radar.startRadarLoop(100000);

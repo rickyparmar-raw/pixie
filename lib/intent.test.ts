@@ -7,7 +7,9 @@ const llm = require("./llm");
 const db = require("./db");
 const { worthClassifying, looksLikeHelpRequest, buildUserPrompt, HISTORY_LIMIT } = intent;
 
-try { db.open(":memory:"); } catch (_) {}
+try {
+  db.open(":memory:");
+} catch (_) {}
 
 // Classifier calls are stubbed; these tests pin the fail-soft and context-shaping contract.
 // No test depends on provider wording: only the normalized labels and prompt boundaries matter.
@@ -46,7 +48,6 @@ test("worthClassifying keeps a real message that opens with a reaction word", ()
   assert.equal(worthClassifying("w or l on using godot for this"), true);
 });
 
-
 test("a scoped program gets the OFF_TOPIC verdict offered", () => {
   const prompt = intent.intentSystemPrompt({ name: "Pixl" }, { scoped: true });
   assert.match(prompt, /OFF_TOPIC/);
@@ -73,7 +74,6 @@ test("addressing pixie lifts the scope restriction", () => {
   assert.equal(intent.scopedFor(null, false), false);
 });
 
-
 test("buildUserPrompt puts the history first and the message under judgement last", () => {
   const prompt = buildUserPrompt("still nothing", ["my build broke", "tried reinstalling"]);
   assert.match(prompt, /oldest first/);
@@ -91,7 +91,6 @@ test("buildUserPrompt says so plainly when there is no history", () => {
 test("HISTORY_LIMIT is three — enough to see what someone is in the middle of", () => {
   assert.equal(HISTORY_LIMIT, 3);
 });
-
 
 test("looksLikeHelpRequest accepts someone asking the room for something", () => {
   assert.equal(looksLikeHelpRequest("how do i connect hackatime"), true);
@@ -132,8 +131,7 @@ test("looksLikeHelpRequest rejects fragments but not short code", () => {
   assert.equal(looksLikeHelpRequest("```segfault```"), true);
 });
 
-
-test("char: short HELP_ONLY inputs pin current verdict", async () => {
+test("short HELP_ONLY inputs pin current verdict", async () => {
   assert.equal(worthClassifying("how"), false);
   assert.equal(worthClassifying("what"), false);
   assert.equal(worthClassifying("ok"), false);
@@ -145,16 +143,21 @@ test("char: short HELP_ONLY inputs pin current verdict", async () => {
   assert.equal(await intent.classifyIntent("ok", null, { history: [] }), null);
 });
 
-test("char: duplicate-text history pins current context", async () => {
+test("duplicate-text history pins current context", async () => {
   process.env.PIXIE_DB_PATH = ":memory:";
   const db = require("./db");
-  try { db.open(":memory:"); } catch (_) {}
+  try {
+    db.open(":memory:");
+  } catch (_) {}
   const user = `char-dup-${Date.now()}`;
   db.recordUserMessage({ userId: user, channel: "C1", threadTs: "1.1", text: "my build broke" });
   db.recordUserMessage({ userId: user, channel: "C1", threadTs: "1.1", text: "still nothing" });
   db.recordUserMessage({ userId: user, channel: "C1", threadTs: "1.1", text: "still nothing" });
   const recent = db.recentUserMessages(user, { channel: "C1", limit: 3 });
-  assert.deepEqual(recent.map((r: any) => r.text), ["my build broke", "still nothing", "still nothing"]);
+  assert.deepEqual(
+    recent.map((r: any) => r.text),
+    ["my build broke", "still nothing", "still nothing"],
+  );
   const rows = recent.map((r: any) => (r.text || "").trim()).filter(Boolean);
   const current = "still nothing";
   if (rows.length > 0 && rows[rows.length - 1] === current.trim()) rows.pop();
@@ -167,7 +170,10 @@ test("char: duplicate-text history pins current context", async () => {
 
 test("buildUserPrompt preserves bounded thread and recent speaker boundaries", () => {
   const prompt = intent.buildUserPrompt("please help Pixie", [], {
-    threadMessages: [{ speaker: "human", text: "my build fails" }, { speaker: "pixie", text: "What error do you see?" }],
+    threadMessages: [
+      { speaker: "human", text: "my build fails" },
+      { speaker: "pixie", text: "What error do you see?" },
+    ],
     recentMessages: [{ userId: "U1", text: "talking to another human" }],
   });
   assert.match(prompt, /Thread context/);
@@ -178,9 +184,14 @@ test("buildUserPrompt preserves bounded thread and recent speaker boundaries", (
 });
 
 test("parseContextResult is strict and fails closed", () => {
-  const valid = '{"verdict":"HELP_NEEDED","addressedToPixie":true,"directedAtHuman":false,"recentPixieParticipation":true,"programRelevance":"relevant"}';
+  const valid =
+    '{"verdict":"HELP_NEEDED","addressedToPixie":true,"directedAtHuman":false,"recentPixieParticipation":true,"programRelevance":"relevant"}';
   assert.deepEqual(intent.parseContextResult(valid), {
-    verdict: "HELP_NEEDED", addressedToPixie: true, directedAtHuman: false, recentPixieParticipation: true, programRelevance: "relevant",
+    verdict: "HELP_NEEDED",
+    addressedToPixie: true,
+    directedAtHuman: false,
+    recentPixieParticipation: true,
+    programRelevance: "relevant",
   });
   assert.equal(intent.parseContextResult("HELP_NEEDED"), null);
   assert.equal(intent.parseContextResult(`${valid.slice(0, -1)},"extra":true}`), null);
@@ -189,19 +200,30 @@ test("parseContextResult is strict and fails closed", () => {
 
 test("parseContextResult tolerates a markdown code fence and surrounding prose", () => {
   const obj = {
-    verdict: "HELP_NEEDED", addressedToPixie: false, directedAtHuman: false, recentPixieParticipation: false, programRelevance: "relevant",
+    verdict: "HELP_NEEDED",
+    addressedToPixie: false,
+    directedAtHuman: false,
+    recentPixieParticipation: false,
+    programRelevance: "relevant",
   };
   const body = JSON.stringify(obj, null, 2);
   assert.deepEqual(intent.parseContextResult("```json\n" + body + "\n```"), obj);
   assert.deepEqual(intent.parseContextResult("```\n" + body + "\n```"), obj);
   assert.deepEqual(intent.parseContextResult("Here is the JSON:\n" + body), obj);
-  assert.equal(intent.parseContextResult("```json\n{\"verdict\":\"MAYBE\"}\n```"), null);
+  assert.equal(intent.parseContextResult('```json\n{"verdict":"MAYBE"}\n```'), null);
 });
 
 test("a fenced HELP_NEEDED verdict still reaches shouldAttemptAnswer", () => {
-  const fenced = "```json\n" + JSON.stringify({
-    verdict: "HELP_NEEDED", addressedToPixie: false, directedAtHuman: false, recentPixieParticipation: false, programRelevance: "relevant",
-  }) + "\n```";
+  const fenced =
+    "```json\n" +
+    JSON.stringify({
+      verdict: "HELP_NEEDED",
+      addressedToPixie: false,
+      directedAtHuman: false,
+      recentPixieParticipation: false,
+      programRelevance: "relevant",
+    }) +
+    "\n```";
   const norm = intent.normalizeIntentResult(intent.parseContextResult(fenced));
   assert.equal(norm.shouldAttemptAnswer, true);
 });
@@ -231,7 +253,7 @@ test("structured intent is enriched into the canonical engagement decision", () 
   assert.equal(intent.normalizeIntentResult(null), null);
 });
 
-test("char: short-input ticket gate pins current", () => {
+test("short-input ticket gate pins current", () => {
   assert.equal(looksLikeHelpRequest("how"), false);
   assert.equal(looksLikeHelpRequest("ok"), false);
   assert.equal(null !== intent.HELP_NEEDED, true);
@@ -249,8 +271,12 @@ test("short-input: length<5 fail-softs to null", async () => {
 
 {
   let realComplete: any;
-  before(() => { realComplete = llm.complete; });
-  after(() => { llm.complete = realComplete; });
+  before(() => {
+    realComplete = llm.complete;
+  });
+  after(() => {
+    llm.complete = realComplete;
+  });
 
   test("unparseable classifier output records intent_parse_failure and fails soft to null", async () => {
     const baseline = db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = 'intent_parse_failure'").get().c;
@@ -264,10 +290,16 @@ test("short-input: length<5 fail-softs to null", async () => {
   test("a fenced-but-valid verdict parses and records no parse failure", async () => {
     const baseline = db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = 'intent_parse_failure'").get().c;
     llm.complete = async () => ({
-      text: "```json\n" + JSON.stringify({
-        verdict: "HELP_NEEDED", addressedToPixie: false, directedAtHuman: false,
-        recentPixieParticipation: false, programRelevance: "relevant",
-      }) + "\n```",
+      text:
+        "```json\n" +
+        JSON.stringify({
+          verdict: "HELP_NEEDED",
+          addressedToPixie: false,
+          directedAtHuman: false,
+          recentPixieParticipation: false,
+          programRelevance: "relevant",
+        }) +
+        "\n```",
     });
     const verdict = await intent.classifyIntent("how do i submit my project to pixl", null, { history: [] });
     assert.equal(verdict, "HELP_NEEDED");

@@ -37,11 +37,19 @@ function buildTranscript(messages: ThreadMessage[]): string {
   // Keep speaker identity in the transcript so helper summaries distinguish bot and human replies.
   return messages
     .filter((m) => m && m.text)
-    .map((m) => `${m.bot_id ? "assistant (bot)" : (m.user ? `<@${m.user}>` : "user")}: ${m.text}`)
+    .map((m) => `${m.bot_id ? "assistant (bot)" : m.user ? `<@${m.user}>` : "user"}: ${m.text}`)
     .join("\n");
 }
 
-async function summarizeThreadForHelper({ client, channel, threadTs }: { client: ThreadClient; channel: string; threadTs: string }): Promise<string | null> {
+async function summarizeThreadForHelper({
+  client,
+  channel,
+  threadTs,
+}: {
+  client: ThreadClient;
+  channel: string;
+  threadTs: string;
+}): Promise<string | null> {
   const { messages } = await client.conversations.replies({
     channel,
     ts: threadTs,

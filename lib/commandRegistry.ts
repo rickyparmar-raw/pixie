@@ -18,7 +18,8 @@ interface CommandMatch {
   command: CommandDefinition | null;
   args: string;
 }
-type AuthorizationReason = "unknown_command" | "not_organizer" | "not_helper" | "wrong_channel" | "commands_disabled" | "allowed";
+type AuthorizationReason =
+  "unknown_command" | "not_organizer" | "not_helper" | "wrong_channel" | "commands_disabled" | "allowed";
 
 function escapeRegex(value: string): string {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -205,9 +206,7 @@ function byHandlerKey(handlerKey: string, surface: Surface | null = null): Comma
 
 function byName(name: string, surface: Surface | null = null): CommandDefinition | null {
   const want = String(name || "").toLowerCase();
-  return (
-    COMMANDS.find((c) => c.name === want && (surface === null || c.surface === surface)) || null
-  );
+  return COMMANDS.find((c) => c.name === want && (surface === null || c.surface === surface)) || null;
 }
 
 function knownNames(botNames: string[] = []): string[] {
@@ -250,7 +249,9 @@ function tryMatch(source: string, text: string): string | null {
 
 function tryGuideMatch(text: string, names: string[]): string | null {
   const prefix = guidePrefixSource(names);
-  const exact = String(text || "").trim().match(new RegExp(`^(?:${prefix})$`, "i"));
+  const exact = String(text || "")
+    .trim()
+    .match(new RegExp(`^(?:${prefix})$`, "i"));
   if (exact) return "";
   const m = String(text || "").match(new RegExp(`^(?:${prefix})\\s+([\\s\\S]+)$`, "i"));
   if (!m) return null;
@@ -264,7 +265,10 @@ function stripMention(text: string, botUserId: string | null): string {
     .trim();
 }
 
-function match(text: string, { botUserId = null, botNames = [] }: { botUserId?: string | null; botNames?: string[] } = {}): CommandMatch | null {
+function match(
+  text: string,
+  { botUserId = null, botNames = [] }: { botUserId?: string | null; botNames?: string[] } = {},
+): CommandMatch | null {
   const raw = String(text || "");
   if (!raw.trim()) return null;
   const names = knownNames(botNames);
@@ -301,7 +305,22 @@ function match(text: string, { botUserId = null, botNames = [] }: { botUserId?: 
   return null;
 }
 
-function authorize(command: CommandDefinition | string | null, { userId = null, isHelper = false, isOrganizer = false, role = null, commandsEnabled = true }: { userId?: string | null; isHelper?: boolean; isOrganizer?: boolean; role?: ChannelRole | null; commandsEnabled?: boolean } = {}): { ok: boolean; reason: AuthorizationReason } {
+function authorize(
+  command: CommandDefinition | string | null,
+  {
+    userId = null,
+    isHelper = false,
+    isOrganizer = false,
+    role = null,
+    commandsEnabled = true,
+  }: {
+    userId?: string | null;
+    isHelper?: boolean;
+    isOrganizer?: boolean;
+    role?: ChannelRole | null;
+    commandsEnabled?: boolean;
+  } = {},
+): { ok: boolean; reason: AuthorizationReason } {
   const def = typeof command === "string" ? byName(command) : command;
   void userId;
   if (!def) return { ok: false, reason: "unknown_command" };

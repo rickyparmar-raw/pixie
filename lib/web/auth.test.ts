@@ -39,8 +39,7 @@ test("handleLogout sets an expired cookie", () => {
   assert.ok(result.headers["Set-Cookie"]?.includes("Max-Age=0"));
 });
 
-
-test("char: sign/verify roundtrips in-process; tampered or malformed tokens fail", () => {
+test("sign/verify roundtrips in-process; tampered or malformed tokens fail", () => {
   const token = auth.signSession("U-char", "Char", "user");
   assert.ok(typeof token === "string" && token.includes("."));
   const sess = auth.verifySession(token);
@@ -53,7 +52,7 @@ test("char: sign/verify roundtrips in-process; tampered or malformed tokens fail
   assert.equal(auth.verifySession("no-dot-here"), null);
 });
 
-test("char: expired sessions and sessions without userId are rejected", () => {
+test("expired sessions and sessions without userId are rejected", () => {
   const crypto = require("crypto");
   const good = auth.signSession("U-exp", "Exp", "user");
   assert.ok(auth.verifySession(good));
@@ -69,7 +68,7 @@ test("char: expired sessions and sessions without userId are rejected", () => {
   }
 });
 
-test("char: requireAdmin matrix — 401 no session, 403 non-admin, ok admin", () => {
+test("requireAdmin matrix — 401 no session, 403 non-admin, ok admin", () => {
   const noSess = { headers: { get: () => "" } };
   assert.equal(auth.requireAdmin(noSess).status, 401);
   const userTok = auth.signSession("U-plain-user", "Plain", "user");
@@ -83,7 +82,7 @@ test("char: requireAdmin matrix — 401 no session, 403 non-admin, ok admin", ()
   assert.equal(auth.requireSession(adminReq).userId, "admin");
 });
 
-test("char: dev-testing bypass is gated on SLACK_CLIENT_ID=dev-testing only", () => {
+test("dev-testing bypass is gated on SLACK_CLIENT_ID=dev-testing only", () => {
   const saved = process.env.SLACK_CLIENT_ID;
   try {
     process.env.SLACK_CLIENT_ID = "dev-testing";
@@ -101,7 +100,7 @@ test("char: dev-testing bypass is gated on SLACK_CLIENT_ID=dev-testing only", ()
   }
 });
 
-test("char: loginUrl needs Slack env; handleLogout clears the session cookie", () => {
+test("loginUrl needs Slack env; handleLogout clears the session cookie", () => {
   const cSaved = process.env.SLACK_CLIENT_ID;
   const wSaved = process.env.PIXIE_WEB_URL;
   try {

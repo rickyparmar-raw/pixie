@@ -4,11 +4,30 @@ const db = require("./db");
 const log = require("./log");
 import type { SlackClient } from "./types";
 
-interface ThreadMessage { role: "user" | "assistant"; content: string; user_id: string | null }
-interface SlackMessage { ts?: string; text?: string; user?: string; bot_id?: string }
-interface ThreadRow { seeded?: boolean; pixie_spoke?: boolean }
-interface TopicRow { topic: string; was_helpful: boolean }
-interface RecentMessage { text: string; speaker: "pixie" | "human"; userId: string | null }
+interface ThreadMessage {
+  role: "user" | "assistant";
+  content: string;
+  user_id: string | null;
+}
+interface SlackMessage {
+  ts?: string;
+  text?: string;
+  user?: string;
+  bot_id?: string;
+}
+interface ThreadRow {
+  seeded?: boolean;
+  pixie_spoke?: boolean;
+}
+interface TopicRow {
+  topic: string;
+  was_helpful: boolean;
+}
+interface RecentMessage {
+  text: string;
+  speaker: "pixie" | "human";
+  userId: string | null;
+}
 
 const SEED_LIMIT = 30;
 const INTENT_CONTEXT_LIMIT = 8;
@@ -20,7 +39,13 @@ function threadRows(threadTs: string): ThreadMessage[] {
   return transientThreads.get(threadTs) || [];
 }
 
-function addToThread(threadTs: string, role: ThreadMessage["role"], content: string, userId: string | null = null, channel: string | null = null) {
+function addToThread(
+  threadTs: string,
+  role: ThreadMessage["role"],
+  content: string,
+  userId: string | null = null,
+  channel: string | null = null,
+) {
   if (!threadTs) return;
   const rows = threadRows(threadTs);
   rows.push({ role, content, user_id: userId });
@@ -48,18 +73,20 @@ function overlap(left: Set<string>, right: Set<string>) {
 function selectContextMessages(messages: ThreadMessage[], currentQuestion: string | null = null): ThreadMessage[] {
   // Select related recent turns instead of blindly filling the prompt with a long transcript.
   const lastMessage = messages.at(-1);
-  const questionAlreadyStored = currentQuestion && lastMessage?.role === "user"
-    && lastMessage.content === currentQuestion;
-  const candidates = currentQuestion && !questionAlreadyStored
-    ? [...messages, { role: "user" as const, content: currentQuestion, user_id: null }]
-    : messages;
+  const questionAlreadyStored =
+    currentQuestion && lastMessage?.role === "user" && lastMessage.content === currentQuestion;
+  const candidates =
+    currentQuestion && !questionAlreadyStored
+      ? [...messages, { role: "user" as const, content: currentQuestion, user_id: null }]
+      : messages;
   if (candidates.length <= MAX_CONTEXT_MESSAGES) return candidates;
 
   const latestQuestionIndex = [...candidates]
     .map((message, index) => ({ message, index }))
     .filter(({ message }) => message.role === "user")
     .at(-1)?.index;
-  const question = currentQuestion || (latestQuestionIndex === undefined ? "" : candidates[latestQuestionIndex]?.content || "");
+  const question =
+    currentQuestion || (latestQuestionIndex === undefined ? "" : candidates[latestQuestionIndex]?.content || "");
   const questionTokens = contextTokens(question);
   const selected = new Set<number>();
 
@@ -81,10 +108,15 @@ function selectContextMessages(messages: ThreadMessage[], currentQuestion: strin
 
   for (const { index } of ranked) {
     if (selected.size >= MAX_CONTEXT_MESSAGES) break;
-    const adjacentAssistant = candidates[index].role === "user"
-      ? [index - 1, index + 1].find((neighbor) => candidates[neighbor]?.role === "assistant")
-      : undefined;
-    if (selected.size + (adjacentAssistant !== undefined && !selected.has(adjacentAssistant) ? 2 : 1) > MAX_CONTEXT_MESSAGES) continue;
+    const adjacentAssistant =
+      candidates[index].role === "user"
+        ? [index - 1, index + 1].find((neighbor) => candidates[neighbor]?.role === "assistant")
+        : undefined;
+    if (
+      selected.size + (adjacentAssistant !== undefined && !selected.has(adjacentAssistant) ? 2 : 1) >
+      MAX_CONTEXT_MESSAGES
+    )
+      continue;
     selected.add(index);
     if (adjacentAssistant !== undefined) {
       selected.add(adjacentAssistant);
@@ -132,7 +164,13 @@ function hasSpokenInThread(threadTs: string) {
   return !!db.getThread(threadTs)?.pixie_spoke;
 }
 
-async function seedFromSlack(client: SlackClient, channel: string, threadTs: string, botUserId: string, currentTs: string | null = null) {
+async function seedFromSlack(
+  client: SlackClient,
+  channel: string,
+  threadTs: string,
+  botUserId: string,
+  currentTs: string | null = null,
+) {
   const existing = db.getThread(threadTs);
   if (existing?.seeded && threadRows(threadTs).length) return;
 
@@ -146,11 +184,14 @@ async function seedFromSlack(client: SlackClient, channel: string, threadTs: str
       if (currentTs && m.ts === currentTs) continue;
       const text = (m.text || "").trim();
       if (!text) continue;
-       addToThread(threadTs, roleForMessage(m, botUserId), text, m.user || null, channel);
+      addToThread(threadTs, roleForMessage(m, botUserId), text, m.user || null, channel);
     }
     log.debug("context", `seeded thread ${threadTs} with ${messages.length} messages`);
   } catch (error: unknown) {
-    log.debug("context", `could not seed thread ${threadTs}: ${error instanceof Error ? error.message : String(error)}`);
+    log.debug(
+      "context",
+      `could not seed thread ${threadTs}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
 }
 
@@ -167,7 +208,24 @@ function threadCrowd(messages: SlackMessage[], userId: string, botUserId: string
 
 const CROWD_CHECK_LIMIT = 200;
 
-async function fetchThreadCrowd(client: SlackClient, { channel, threadTs, messageTs, userId, botUserId, parentUserId = null }: { channel: string; threadTs: string; messageTs: string; userId: string; botUserId: string; parentUserId?: string | null }) {
+async function fetchThreadCrowd(
+  client: SlackClient,
+  {
+    channel,
+    threadTs,
+    messageTs,
+    userId,
+    botUserId,
+    parentUserId = null,
+  }: {
+    channel: string;
+    threadTs: string;
+    messageTs: string;
+    userId: string;
+    botUserId: string;
+    parentUserId?: string | null;
+  },
+) {
   // Crowd checks include the parent so a reply to a busy thread does not look like an isolated ask.
   const fallback = {
     pixieIn: false,
@@ -184,7 +242,13 @@ async function fetchThreadCrowd(client: SlackClient, { channel, threadTs, messag
   }
 }
 
-async function recentChannelMessages(client: SlackClient, channel: string, latestTs: string, botUserId: string, limit = INTENT_CONTEXT_LIMIT): Promise<RecentMessage[]> {
+async function recentChannelMessages(
+  client: SlackClient,
+  channel: string,
+  latestTs: string,
+  botUserId: string,
+  limit = INTENT_CONTEXT_LIMIT,
+): Promise<RecentMessage[]> {
   if (!client?.conversations?.history || !channel) return [];
   try {
     const result = await client.conversations.history({
@@ -202,16 +266,20 @@ async function recentChannelMessages(client: SlackClient, channel: string, lates
       }))
       .filter((message) => message.text);
   } catch (error: unknown) {
-    log.debug("context", `could not fetch recent channel context: ${error instanceof Error ? error.message : String(error)}`);
+    log.debug(
+      "context",
+      `could not fetch recent channel context: ${error instanceof Error ? error.message : String(error)}`,
+    );
     return [];
   }
 }
 
 const STOPWORDS = new Set(
-  ("a an the is are was were do does did how what when where why who which can could should would will i you my me" +
+  (
+    "a an the is are was were do does did how what when where why who which can could should would will i you my me" +
     " to of in on for with and or but if it its this that these those get got have has had am be been im ive dont" +
-    " cant whats hows pls plz help there here about from any some so just like need want know")
-    .split(" "),
+    " cant whats hows pls plz help there here about from any some so just like need want know"
+  ).split(" "),
 );
 
 const MAX_TOPIC_WORDS = 5;

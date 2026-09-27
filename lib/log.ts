@@ -14,7 +14,6 @@ function subscribe(fn: (kind: string, scope: string, args: unknown[]) => void) {
   };
 }
 
-
 function notify(kind: string, scope: string, args: unknown[]) {
   // Observers are optional diagnostics and cannot become an application failure path.
   if (subscribers.length === 0) return;

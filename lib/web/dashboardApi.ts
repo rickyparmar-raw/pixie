@@ -26,7 +26,10 @@ interface DashboardParams {
   active?: boolean;
   pingEligible?: boolean;
 }
-interface SearchTicket extends Ticket { first_responder_id?: string | null; notes_count?: number }
+interface SearchTicket extends Ticket {
+  first_responder_id?: string | null;
+  notes_count?: number;
+}
 interface MetricTicketRow {
   created_at: number;
   first_response_at: number | null;
@@ -36,8 +39,16 @@ interface MetricTicketRow {
   assignee_id: string | null;
   status: string;
 }
-interface MetricRow { kind: string; detail: string | null }
-interface VolumeDay { date: string; questions: number; aiOnly: number; human: number }
+interface MetricRow {
+  kind: string;
+  detail: string | null;
+}
+interface VolumeDay {
+  date: string;
+  questions: number;
+  aiOnly: number;
+  human: number;
+}
 interface SourceStatusRow {
   name?: string;
   label?: string;
@@ -79,7 +90,6 @@ function ticketActorAllowed(programId: string, actorId: string | null): boolean 
   }
 }
 
-
 const OPEN_GROUP = ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"];
 const RESOLVED_GROUP = ["resolved"];
 
@@ -100,9 +110,7 @@ function ticketSearchScoped(programId: string, params: DashboardParams = {}) {
   if (missing) return missing;
   const sortKey = typeof params.sort === "string" ? params.sort : "";
   const sort = SORTS[sortKey] ? sortKey : "created";
-  const dir = params.dir === "asc" || params.dir === "desc"
-    ? params.dir.toUpperCase()
-    : SORTS[sort].dir;
+  const dir = params.dir === "asc" || params.dir === "desc" ? params.dir.toUpperCase() : SORTS[sort].dir;
   const clauses = ["program_id = ?"];
   const values: Array<string | number> = [programId];
   if (params.status) {
@@ -115,12 +123,30 @@ function ticketSearchScoped(programId: string, params: DashboardParams = {}) {
     clauses.push(`status IN (${RESOLVED_GROUP.map(() => "?").join(",")})`);
     values.push(...RESOLVED_GROUP);
   }
-  if (params.assigneeId) { clauses.push("assignee_id = ?"); values.push(params.assigneeId); }
-  if (params.requesterId) { clauses.push("requester_id = ?"); values.push(params.requesterId); }
-  if (params.category) { clauses.push("category = ?"); values.push(params.category); }
-  if (params.priority) { clauses.push("priority = ?"); values.push(params.priority); }
-  if (params.since) { clauses.push("created_at > ?"); values.push(Number(params.since)); }
-  if (params.until) { clauses.push("created_at <= ?"); values.push(Number(params.until)); }
+  if (params.assigneeId) {
+    clauses.push("assignee_id = ?");
+    values.push(params.assigneeId);
+  }
+  if (params.requesterId) {
+    clauses.push("requester_id = ?");
+    values.push(params.requesterId);
+  }
+  if (params.category) {
+    clauses.push("category = ?");
+    values.push(params.category);
+  }
+  if (params.priority) {
+    clauses.push("priority = ?");
+    values.push(params.priority);
+  }
+  if (params.since) {
+    clauses.push("created_at > ?");
+    values.push(Number(params.since));
+  }
+  if (params.until) {
+    clauses.push("created_at <= ?");
+    values.push(Number(params.until));
+  }
   if (params.q) {
     clauses.push("(question LIKE ? ESCAPE '\\' OR summary LIKE ? ESCAPE '\\')");
     values.push(`%${escapeLike(params.q)}%`, `%${escapeLike(params.q)}%`);
@@ -128,21 +154,32 @@ function ticketSearchScoped(programId: string, params: DashboardParams = {}) {
   const where = clauses.join(" AND ");
   const safeLimit = Math.min(Math.max(Number(params.limit) || 50, 1), 200);
   const safeOffset = Math.max(Number(params.offset) || 0, 0);
-  const total = db.handle().query(`SELECT COUNT(*) AS n FROM tickets WHERE ${where}`).get(...values)?.n || 0;
-  const rows = db.handle().query(
-    `SELECT * FROM tickets WHERE ${where} ORDER BY ${SORTS[sort].column} ${dir} LIMIT ? OFFSET ?`,
-  ).all(...values, safeLimit, safeOffset) as SearchTicket[];
+  const total =
+    db
+      .handle()
+      .query(`SELECT COUNT(*) AS n FROM tickets WHERE ${where}`)
+      .get(...values)?.n || 0;
+  const rows = db
+    .handle()
+    .query(`SELECT * FROM tickets WHERE ${where} ORDER BY ${SORTS[sort].column} ${dir} LIMIT ? OFFSET ?`)
+    .all(...values, safeLimit, safeOffset) as SearchTicket[];
   if (rows.length === 0) return { total, rows };
   const ids = rows.map((r: SearchTicket) => r.id);
   const placeholders = ids.map(() => "?").join(",");
-  const firstReplies = db.handle().query(
-    `SELECT ticket_id, actor_id, MIN(created_at) AS at FROM ticket_events
+  const firstReplies = db
+    .handle()
+    .query(
+      `SELECT ticket_id, actor_id, MIN(created_at) AS at FROM ticket_events
      WHERE ticket_id IN (${placeholders}) AND event_type = 'helper_reply' GROUP BY ticket_id`,
-  ).all(...ids);
-  const noteCounts = db.handle().query(
-    `SELECT ticket_id, COUNT(*) AS n FROM ticket_notes WHERE ticket_id IN (${placeholders}) GROUP BY ticket_id`,
-  ).all(...ids);
-  const firstByTicket = new Map((firstReplies as Array<{ ticket_id: number; actor_id: string | null }>).map((r) => [r.ticket_id, r.actor_id]));
+    )
+    .all(...ids);
+  const noteCounts = db
+    .handle()
+    .query(`SELECT ticket_id, COUNT(*) AS n FROM ticket_notes WHERE ticket_id IN (${placeholders}) GROUP BY ticket_id`)
+    .all(...ids);
+  const firstByTicket = new Map(
+    (firstReplies as Array<{ ticket_id: number; actor_id: string | null }>).map((r) => [r.ticket_id, r.actor_id]),
+  );
   const notesByTicket = new Map((noteCounts as Array<{ ticket_id: number; n: number }>).map((r) => [r.ticket_id, r.n]));
   for (const row of rows) {
     row.first_responder_id = firstByTicket.get(row.id) || null;
@@ -164,7 +201,6 @@ function ticketDetailScoped(programId: string, ticketId: number) {
     notes: db.listTicketNotes(ticket.id),
   };
 }
-
 
 function median(values: number[]): number | null {
   const sorted = [...values].filter((n) => Number.isFinite(n) && n >= 0).sort((a, b) => a - b);
@@ -215,10 +251,13 @@ function metricsOverview(programId: string, query: DashboardParams = {}) {
 
   const totals = ticketMetrics.programTotals(programId, { since: cutoff });
 
-  const rows = db.handle().query(
-    `SELECT created_at, first_response_at, first_human_response_at, resolved_at, resolved_by, assignee_id, status
+  const rows = db
+    .handle()
+    .query(
+      `SELECT created_at, first_response_at, first_human_response_at, resolved_at, resolved_by, assignee_id, status
      FROM tickets WHERE program_id = ? AND created_at > ?`,
-  ).all(programId, cutoff) as MetricTicketRow[];
+    )
+    .all(programId, cutoff) as MetricTicketRow[];
 
   const firstLags = rows
     .filter((r: MetricTicketRow) => r.first_response_at)
@@ -229,9 +268,10 @@ function metricsOverview(programId: string, query: DashboardParams = {}) {
   const pixieAnswered = rows.filter((r: MetricTicketRow) => r.first_response_at && !r.first_human_response_at).length;
   const humanHandled = rows.filter((r: MetricTicketRow) => r.first_human_response_at).length;
 
-  const metricRows = db.handle().query(
-    "SELECT kind, detail FROM metrics WHERE program_id = ? AND created_at > ?",
-  ).all(programId, cutoff) as MetricRow[];
+  const metricRows = db
+    .handle()
+    .query("SELECT kind, detail FROM metrics WHERE program_id = ? AND created_at > ?")
+    .all(programId, cutoff) as MetricRow[];
   const byReason: Record<string, number> = {};
   let blocked = 0;
   let answered = 0;
@@ -248,12 +288,16 @@ function metricsOverview(programId: string, query: DashboardParams = {}) {
     }
   }
 
-  const openLoad = db.handle().query(
-    `SELECT assignee_id AS userId, COUNT(*) AS openAssigned FROM tickets
+  const openLoad = db
+    .handle()
+    .query(
+      `SELECT assignee_id AS userId, COUNT(*) AS openAssigned FROM tickets
      WHERE program_id = ? AND assignee_id IS NOT NULL
      AND created_at > ? AND status IN (${OPEN_GROUP.map(() => "?").join(",")}) GROUP BY assignee_id`,
-  ).all(programId, cutoff, ...OPEN_GROUP) as Array<{ userId: string; openAssigned: number }>;
-  const resolvedBy: Array<{ userId: string; resolved: number }> = ticketMetrics.leaderboard(programId, { since: cutoff })
+    )
+    .all(programId, cutoff, ...OPEN_GROUP) as Array<{ userId: string; openAssigned: number }>;
+  const resolvedBy: Array<{ userId: string; resolved: number }> = ticketMetrics
+    .leaderboard(programId, { since: cutoff })
     .filter((row: { resolved: number }) => row.resolved > 0)
     .map((row: { userId: string; resolved: number }) => ({ userId: row.userId, resolved: row.resolved }));
   const resolvedMap = new Map(resolvedBy.map((r) => [r.userId, r.resolved]));
@@ -267,7 +311,7 @@ function metricsOverview(programId: string, query: DashboardParams = {}) {
       helpers.push({ userId: r.userId, openAssigned: 0, resolved: r.resolved });
     }
   }
-  helpers.sort((a, b) => (b.openAssigned + b.resolved) - (a.openAssigned + a.resolved));
+  helpers.sort((a, b) => b.openAssigned + b.resolved - (a.openAssigned + a.resolved));
 
   return {
     programId,
@@ -284,7 +328,6 @@ function metricsOverview(programId: string, query: DashboardParams = {}) {
     helpers,
   };
 }
-
 
 function publicSourceUrl(value: unknown): string | null {
   if (!value) return null;
@@ -317,7 +360,10 @@ function sanitizeSourceRow(row: SourceStatusRow) {
     lastSyncedAt: Number.isFinite(Number(row.lastSyncedAt)) ? Number(row.lastSyncedAt) : null,
     lastSuccessAt: Number.isFinite(Number(row.lastSuccessAt)) ? Number(row.lastSuccessAt) : null,
     error: typeof row.error === "string" && row.error ? row.error.slice(0, 500) : null,
-    chunks: Number.isInteger(row.chunks) && row.chunks !== null && row.chunks !== undefined && row.chunks >= 0 ? row.chunks : null,
+    chunks:
+      Number.isInteger(row.chunks) && row.chunks !== null && row.chunks !== undefined && row.chunks >= 0
+        ? row.chunks
+        : null,
   };
 }
 
@@ -344,9 +390,8 @@ function knowledgeStatus(programId: string) {
   const sources = declared.map((source: SourceStatusRow) => {
     let key = null;
     try {
-      key = knowledge && typeof knowledge.sourceCacheKey === "function"
-        ? knowledge.sourceCacheKey(source)
-        : source.name;
+      key =
+        knowledge && typeof knowledge.sourceCacheKey === "function" ? knowledge.sourceCacheKey(source) : source.name;
     } catch (_) {
       key = source.name;
     }
@@ -358,10 +403,14 @@ function knowledgeStatus(programId: string) {
     }
     const failCount = Number(health?.fail_count || 0);
     const hasLastGood = Boolean(health?.last_success_at);
-    const status = !hasLastGood && failCount === 0 ? "Pending"
-      : failCount > 0 && !hasLastGood ? "Error"
-      : failCount > 0 ? "Stale"
-      : "Ready";
+    const status =
+      !hasLastGood && failCount === 0
+        ? "Pending"
+        : failCount > 0 && !hasLastGood
+          ? "Error"
+          : failCount > 0
+            ? "Stale"
+            : "Ready";
     return sanitizeSourceRow({
       name: source.name || source.label,
       type: source.type,
@@ -391,14 +440,18 @@ function knowledgeRefresh(programId: string) {
   try {
     const res = knowledge.refreshProgramSources(programId, { force: true });
     if (res && typeof res.catch === "function") {
-      res.catch((e: unknown) => log.warn("web/dashboardApi", `program source refresh failed (${programId}): ${e instanceof Error ? e.message : e}`));
+      res.catch((e: unknown) =>
+        log.warn(
+          "web/dashboardApi",
+          `program source refresh failed (${programId}): ${e instanceof Error ? e.message : e}`,
+        ),
+      );
     }
     return { started: true };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "knowledge refresh failed" };
   }
 }
-
 
 function helperRoster(programId: string) {
   const missing = needProgram(programId);
@@ -427,7 +480,7 @@ function helperRoster(programId: string) {
       lastActivity: s ? s.lastActivity : null,
     };
   });
-  helpers.sort((a, b) => (b.openAssigned + b.resolved) - (a.openAssigned + a.resolved));
+  helpers.sort((a, b) => b.openAssigned + b.resolved - (a.openAssigned + a.resolved));
   return { programId, categories: program.categories || null, helpers };
 }
 
@@ -453,9 +506,14 @@ function helperSetActive(programId: string, body: DashboardParams = {}) {
     require("../audit").record({
       programId,
       actorId,
-      action: typeof body.pingEligible === "boolean"
-        ? (body.pingEligible ? "helper.pings_resumed" : "helper.pings_paused")
-        : body.active === false ? "helper.deactivated" : "helper.activated",
+      action:
+        typeof body.pingEligible === "boolean"
+          ? body.pingEligible
+            ? "helper.pings_resumed"
+            : "helper.pings_paused"
+          : body.active === false
+            ? "helper.deactivated"
+            : "helper.activated",
       entityType: "helper",
       entityId: userId,
     });
@@ -463,7 +521,17 @@ function helperSetActive(programId: string, body: DashboardParams = {}) {
     log.warn("web/dashboardApi", `helper availability audit failed: ${e instanceof Error ? e.message : String(e)}`);
   }
   const updated = (db.listHelpers(programId, false) as HelperDbRow[]).find((h: HelperDbRow) => h.user_id === userId);
-  return { ok: true, helper: updated ? { userId: updated.user_id, active: Boolean(updated.active), pingEligible: updated.ping_eligible !== 0, role: updated.role } : null };
+  return {
+    ok: true,
+    helper: updated
+      ? {
+          userId: updated.user_id,
+          active: Boolean(updated.active),
+          pingEligible: updated.ping_eligible !== 0,
+          role: updated.role,
+        }
+      : null,
+  };
 }
 
 export = {

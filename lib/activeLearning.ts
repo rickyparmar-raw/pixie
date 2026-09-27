@@ -65,7 +65,10 @@ const CLOSED = new Set(["resolved", "closed"]);
 const EXCLUDED = new Set(["duplicate", "spam"]);
 
 function normalizeAnswer(value: unknown): string {
-  return String(value || "").replace(/\s+/g, " ").trim().toLowerCase();
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function similarity(left: string, right: string): number {
@@ -91,7 +94,9 @@ function canSupersede(existingQuestion: string, nextQuestion: string): boolean {
   }
   const existingTokens = new Set<string>(retrieve.tokenize(existingQuestion) as string[]);
   const nextTokens = new Set<string>(retrieve.tokenize(nextQuestion) as string[]);
-  const informativeShared = [...existingTokens].filter((token) => nextTokens.has(token) && !PROGRAM_OBJECT_TOKENS.has(token));
+  const informativeShared = [...existingTokens].filter(
+    (token) => nextTokens.has(token) && !PROGRAM_OBJECT_TOKENS.has(token),
+  );
   return informativeShared.length >= 2;
 }
 
@@ -110,7 +115,10 @@ function excludedTicket(ticket: ActiveTicket): boolean {
 
 function answerFromExtraction(extraction: Extraction | null, ticket: ActiveTicket): FactDraft | null {
   if (!extraction) return null;
-  const answer = [extraction.solution, extraction.cause ? `Cause: ${extraction.cause}` : null].filter(Boolean).join("\n").trim();
+  const answer = [extraction.solution, extraction.cause ? `Cause: ${extraction.cause}` : null]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
   if (!answer) return null;
   return {
     question: extraction.problem,
@@ -124,16 +132,27 @@ async function extractFact(ticket: ActiveTicket): Promise<FactDraft> {
   try {
     extraction = await resolutionMemory.extractCandidate(ticket, db.listTicketEvents(ticket.id, 50));
   } catch (error) {
-    log.warn("active-learning", `extraction failed for #${ticket.id}: ${error instanceof Error ? error.message : String(error)}`);
+    log.warn(
+      "active-learning",
+      `extraction failed for #${ticket.id}: ${error instanceof Error ? error.message : String(error)}`,
+    );
   }
-  return answerFromExtraction(extraction, ticket) || {
-    question: ticket.question,
-    answer: String(ticket.resolution || "").trim(),
-    category: ticket.category || null,
-  };
+  return (
+    answerFromExtraction(extraction, ticket) || {
+      question: ticket.question,
+      answer: String(ticket.resolution || "").trim(),
+      category: ticket.category || null,
+    }
+  );
 }
 
-async function learnFromResolution({ ticket, workerId = null }: { ticket: ActiveTicket; workerId?: string | null }): Promise<LearningResult> {
+async function learnFromResolution({
+  ticket,
+  workerId = null,
+}: {
+  ticket: ActiveTicket;
+  workerId?: string | null;
+}): Promise<LearningResult> {
   if (!ticket || !CLOSED.has(ticket.status) || excludedTicket(ticket) || !helperAnswered(ticket)) {
     return { ok: false, skipped: true };
   }
@@ -150,8 +169,9 @@ async function learnFromResolution({ ticket, workerId = null }: { ticket: Active
   const mode = program?.learning === "review" ? "review" : "auto";
   const status = mode === "review" ? "candidate" : "approved";
   const overlaps = fact.category
-    ? db.learnedFactsForOverlap(ticket.program_id, fact.category)
-      .filter((row: LearnedFact) => canSupersede(row.question, fact.question))
+    ? db
+        .learnedFactsForOverlap(ticket.program_id, fact.category)
+        .filter((row: LearnedFact) => canSupersede(row.question, fact.question))
     : [];
   const same = overlaps.find((row: LearnedFact) => normalizeAnswer(row.answer) === normalizeAnswer(fact.answer));
   if (same) {
@@ -189,7 +209,12 @@ async function learnFromResolution({ ticket, workerId = null }: { ticket: Active
     entityId: id,
     metadata: { ticketId: ticket.id, resolverId: helperId, autoLearned: mode === "auto" },
   });
-  return { ok: true, fact: stored, autoLearned: mode === "auto", superseded: overlaps.map((row: LearnedFact) => row.id) };
+  return {
+    ok: true,
+    fact: stored,
+    autoLearned: mode === "auto",
+    superseded: overlaps.map((row: LearnedFact) => row.id),
+  };
 }
 
 export = {

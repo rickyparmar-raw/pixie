@@ -26,10 +26,14 @@ function isOrganizerChannel(program: Program | null, channelId: string | null, w
   }
 }
 
-
 function organizerSettings(main: Record<string, unknown>) {
   // Organizers receive ticket cards but are never an ambient reply or ticket target.
-  return Object.freeze({ ...main, ambientProgramReplies: false, ticketsEnabled: false, helperEscalationEnabled: false });
+  return Object.freeze({
+    ...main,
+    ambientProgramReplies: false,
+    ticketsEnabled: false,
+    helperEscalationEnabled: false,
+  });
 }
 
 function resolve(channelId: string, workspaceId: string | null = null, { isDm = false }: { isDm?: boolean } = {}) {
@@ -43,16 +47,19 @@ function resolve(channelId: string, workspaceId: string | null = null, { isDm = 
 
   const behavior = programModel.behaviorFor(program || {});
   const status = programModel.statusFor(program || {});
-  let settings = role === "help" ? behavior.help
-    : role === "main" ? behavior.main
-      : role === "organizer" ? organizerSettings(behavior.main)
-        : null;
+  let settings =
+    role === "help"
+      ? behavior.help
+      : role === "main"
+        ? behavior.main
+        : role === "organizer"
+          ? organizerSettings(behavior.main)
+          : null;
 
   // Paused programs remain resolvable for display but cannot answer through any role.
   if (settings && status === "paused") settings = Object.freeze({ ...settings, enabled: false });
   return { program, role, settings, behavior, status };
 }
-
 
 function validate() {
   let claims = [];

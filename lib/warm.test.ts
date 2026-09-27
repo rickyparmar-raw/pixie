@@ -10,8 +10,14 @@ const warm = require("./warm");
 
 db.open(":memory:");
 
-interface WarmAnswer { source: string | null; answer: string }
-async function withAnswers(impl: (question: string, contextPrompt: string) => Promise<WarmAnswer>, fn: (asked: string[]) => Promise<void>) {
+interface WarmAnswer {
+  source: string | null;
+  answer: string;
+}
+async function withAnswers(
+  impl: (question: string, contextPrompt: string) => Promise<WarmAnswer>,
+  fn: (asked: string[]) => Promise<void>,
+) {
   const original = lookup.answerOrChat;
   const asked: string[] = [];
   lookup.answerOrChat = async (question: string, contextPrompt: string) => {
@@ -39,10 +45,13 @@ test("warmOne caches a doc-grounded answer", async () => {
 
 test("warmOne refuses to cache an answer the docs did not cover", async () => {
   cache.clearCache();
-  await withAnswers(async () => ({ source: null, answer: "no clue, ask a helper" }), async () => {
-    assert.equal(await warm.warmOne("something undocumented"), false);
-    assert.equal(cache.get("something undocumented"), null);
-  });
+  await withAnswers(
+    async () => ({ source: null, answer: "no clue, ask a helper" }),
+    async () => {
+      assert.equal(await warm.warmOne("something undocumented"), false);
+      assert.equal(cache.get("something undocumented"), null);
+    },
+  );
 });
 
 test("warmFaq answers the FAQ questions and skips the ones already known", async () => {
@@ -135,20 +144,22 @@ test("a failing answer does not abort the rest of the pass", async () => {
   knowledge.faqQuestions = () => ["explodes", "fine"];
 
   try {
-    await withAnswers(async (question: string) => {
-      if (question === "explodes") throw new Error("model on fire");
-      return { source: "Pixl FAQ", answer: "ok" };
-    }, async () => {
-      assert.equal(await warm.warmFaq({ spacingMs: 0 }), 1);
-      assert.equal(cache.get("fine").answer, "ok");
-    });
+    await withAnswers(
+      async (question: string) => {
+        if (question === "explodes") throw new Error("model on fire");
+        return { source: "Pixl FAQ", answer: "ok" };
+      },
+      async () => {
+        assert.equal(await warm.warmFaq({ spacingMs: 0 }), 1);
+        assert.equal(cache.get("fine").answer, "ok");
+      },
+    );
   } finally {
     knowledge.faqQuestions = original;
   }
 });
 
-
-test("char: warmFaq asks nothing when the corpus has no questions", async () => {
+test("warmFaq asks nothing when the corpus has no questions", async () => {
   cache.clearCache();
   const original = knowledge.faqQuestions;
   knowledge.faqQuestions = () => [];
@@ -162,7 +173,7 @@ test("char: warmFaq asks nothing when the corpus has no questions", async () => 
   }
 });
 
-test("char: warmFaq honors an explicit limit", async () => {
+test("warmFaq honors an explicit limit", async () => {
   cache.clearCache();
   const original = knowledge.faqQuestions;
   knowledge.faqQuestions = () => ["q1?", "q2?", "q3?"];
@@ -176,7 +187,7 @@ test("char: warmFaq honors an explicit limit", async () => {
   }
 });
 
-test("char: faqQuestions trims and drops blanks", () => {
+test("faqQuestions trims and drops blanks", () => {
   const original = knowledge.faqQuestions;
   knowledge.faqQuestions = () => ["  who?  ", "", "   "];
   try {
@@ -186,7 +197,7 @@ test("char: faqQuestions trims and drops blanks", () => {
   }
 });
 
-test("char: pacing consts keep background work off the hot path", () => {
+test("pacing consts keep background work off the hot path", () => {
   assert.ok(warm.CYCLE_MS >= 60 * 1000);
   assert.ok(warm.PER_CYCLE <= 10);
   assert.ok(warm.SPACING_MS >= 1000);

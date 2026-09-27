@@ -2,7 +2,6 @@
 // to Pixie, so hosted deployments can explain who they serve without leaking scope.
 import brand = require("./brand");
 
-
 interface IdentityProgram {
   id: string;
   name: string;
@@ -18,7 +17,6 @@ function isDefaultBot() {
   // The default bot keeps the historical Pixorpheus wording; named deployments do not.
   return brand.slug() === brand.DEFAULT_SLUG;
 }
-
 
 function makerLine(programName: string) {
   if (isDefaultBot()) return "A: Ricky built me to help out around Hack Club YSWS channels.";
@@ -68,7 +66,6 @@ function defaultIdentity() {
   ].join("\n");
 }
 
-
 function otherProgramNames(currentId: string) {
   try {
     return require("./programs")
@@ -114,7 +111,6 @@ function corpusSection(program: IdentityProgram | null = null) {
     `A: Ping me or say my name anywhere, DM me, or use ${brand.cmd()} <question> for a private answer. I can also walk you through step-by-step build guides, read screenshots, and help debug error messages if you upload them. ${brand.cmd("sources")} shows what docs I've got loaded.`,
     "",
 
-
     ...(walled ? [] : pixorpheusPair()),
     ...memoryPair(),
     "",
@@ -131,7 +127,6 @@ function corpusSection(program: IdentityProgram | null = null) {
 export = {
   corpusSection,
   defaultIdentity,
-
 
   get IDENTITY() {
     return defaultIdentity();

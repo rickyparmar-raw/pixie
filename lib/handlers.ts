@@ -21,8 +21,15 @@ import type { Program, SlackClient, Ticket } from "./types";
 
 const { config, isAdmin } = configModule;
 const { worthClassifying } = intent;
-interface SlackFile { mimetype?: string; url_private?: string }
-interface ReactionItem { channel: string; ts: string; type?: string }
+interface SlackFile {
+  mimetype?: string;
+  url_private?: string;
+}
+interface ReactionItem {
+  channel: string;
+  ts: string;
+  type?: string;
+}
 interface HandlerEvent {
   ts: string;
   channel: string;
@@ -39,27 +46,65 @@ interface HandlerEvent {
   item_user?: string;
   reaction?: string;
 }
-interface ReactionEvent extends HandlerEvent { item: ReactionItem }
-interface HandlerArgs { event: HandlerEvent; client: SlackClient }
-interface ImageArgs extends HandlerArgs { imageFile: SlackFile; program?: Program | null }
-interface ProgramPolicy { role: string; program: Program; settings?: { enabled?: boolean; commandsEnabled?: boolean } }
-interface MacroRow { id?: number; trigger?: string; enabled?: number }
-interface TicketTarget { ticket: { id: number } | null; program: Program | null }
-interface MacroTrigger { trigger: string }
-interface ThreadCrowd { othersPresent: boolean; pixieIn: boolean }
-interface GuideStepResult { message: string; checkNext?: string | null; screenshot?: string | null; [key: string]: unknown }
+interface ReactionEvent extends HandlerEvent {
+  item: ReactionItem;
+}
+interface HandlerArgs {
+  event: HandlerEvent;
+  client: SlackClient;
+}
+interface ImageArgs extends HandlerArgs {
+  imageFile: SlackFile;
+  program?: Program | null;
+}
+interface ProgramPolicy {
+  role: string;
+  program: Program;
+  settings?: { enabled?: boolean; commandsEnabled?: boolean };
+}
+interface MacroRow {
+  id?: number;
+  trigger?: string;
+  enabled?: number;
+}
+interface TicketTarget {
+  ticket: { id: number } | null;
+  program: Program | null;
+}
+interface MacroTrigger {
+  trigger: string;
+}
+interface ThreadCrowd {
+  othersPresent: boolean;
+  pixieIn: boolean;
+}
+interface GuideStepResult {
+  message: string;
+  checkNext?: string | null;
+  screenshot?: string | null;
+  [key: string]: unknown;
+}
 interface HandlerDb {
   claimMessage(ts: string, channel?: string | null): boolean;
   clearTakeover(threadTs: string): void;
   getGuide(threadTs: string): { thread_ts: string; user_id?: string | null } | null;
   getGuideByMessageTs(messageTs: string): { thread_ts: string; user_id?: string | null } | null;
-  getTicketByThreadTs(threadTs?: string, workspaceId?: string | null): (Pick<Ticket, "id" | "channel" | "program_id" | "status"> & { workspace_id?: string | null }) | null;
+  getTicketByThreadTs(
+    threadTs?: string,
+    workspaceId?: string | null,
+  ): (Pick<Ticket, "id" | "channel" | "program_id" | "status"> & { workspace_id?: string | null }) | null;
   isHelper(programId: string, userId: string): boolean;
   isTakeover(threadTs: string): boolean;
   isThreadMuted(threadTs: string): boolean;
   markTakeover(threadTs: string, channel: string, userId: string): void;
   recordFeedback(messageTs: string, userId: string, vote: number | string): void;
-  recordGap(question: string, userId?: string | null, channel?: string | null, messageTs?: string | null, programId?: string | null): void;
+  recordGap(
+    question: string,
+    userId?: string | null,
+    channel?: string | null,
+    messageTs?: string | null,
+    programId?: string | null,
+  ): void;
   recordMetric(name: string, latency?: number | null, detail?: string | null, programId?: string | null): void;
   recordUserMessage(input: { userId: string; channel: string; threadTs: string; text: string }): void;
   removeFeedback(messageTs: string, userId: string): void;
@@ -68,7 +113,17 @@ interface HandlerDb {
 }
 interface HandlerContext {
   addToThread(threadTs: string, role: string, content: string, userId?: string | null, channel?: string | null): void;
-  fetchThreadCrowd(client: SlackClient, input: { channel: string; threadTs?: string; messageTs: string; userId: string; botUserId: string; parentUserId?: string | null }): Promise<ThreadCrowd>;
+  fetchThreadCrowd(
+    client: SlackClient,
+    input: {
+      channel: string;
+      threadTs?: string;
+      messageTs: string;
+      userId: string;
+      botUserId: string;
+      parentUserId?: string | null;
+    },
+  ): Promise<ThreadCrowd>;
   getThreadContext(threadTs: string): string;
   hasSpokenInThread(threadTs: string): boolean;
   updateUserHistory(userId: string, question: string, answered: boolean): void;
@@ -80,17 +135,32 @@ interface HandlerRespond {
   postGuideStep(args: object): Promise<unknown>;
   respond(args: object): Promise<unknown>;
 }
-interface HandlerGuides { advanceGuideByReaction(message: string | { messageTs: string; userId: string }, userId?: string): GuideStepResult | null }
-interface HandlerPrograms { forChannel(channel: string | null | undefined, workspaceId?: string | null, options?: object): Program; get(id: string): Program | null; shared(): Program }
+interface HandlerGuides {
+  advanceGuideByReaction(
+    message: string | { messageTs: string; userId: string },
+    userId?: string,
+  ): GuideStepResult | null;
+}
+interface HandlerPrograms {
+  forChannel(channel: string | null | undefined, workspaceId?: string | null, options?: object): Program;
+  get(id: string): Program | null;
+  shared(): Program;
+}
 interface HandlerMacros {
   list(programId: string, options?: { enabledOnly?: boolean }): MacroRow[];
   normalizeTrigger(value: string): string;
   send(args: object): Promise<{ ok?: boolean; error?: string }>;
   sendToThread(args: object): Promise<{ ok?: boolean; error?: string }>;
 }
-interface HandlerPolicy { resolve(channel: string, workspaceId?: string | null, options?: { isDm?: boolean }): ProgramPolicy }
-interface HandlerWorkspace { workspaceOf(event: HandlerEvent): string | null }
-interface HandlerVision { analyzeImage(url?: string, question?: string, context?: string, token?: string): Promise<string | null> }
+interface HandlerPolicy {
+  resolve(channel: string, workspaceId?: string | null, options?: { isDm?: boolean }): ProgramPolicy;
+}
+interface HandlerWorkspace {
+  workspaceOf(event: HandlerEvent): string | null;
+}
+interface HandlerVision {
+  analyzeImage(url?: string, question?: string, context?: string, token?: string): Promise<string | null>;
+}
 interface HandlerLearn {
   parseTeach(text: string): { question: string; answer: string } | null;
   teach(input: {
@@ -102,9 +172,19 @@ interface HandlerLearn {
     programId?: string | null;
   }): number | null;
 }
-interface HandlerTeachThread { summarizeThread(input: { client: SlackClient; channel: string; threadTs: string }): Promise<{ question: string; answer: string } | null> }
-interface HandlerSumThread { summarizeThreadForHelper(input: { client: SlackClient; channel: string; threadTs: string }): Promise<string | null> }
-interface HandlerRateLimit { check(input: object, options: object): { allowed: boolean; reason?: string } }
+interface HandlerTeachThread {
+  summarizeThread(input: {
+    client: SlackClient;
+    channel: string;
+    threadTs: string;
+  }): Promise<{ question: string; answer: string } | null>;
+}
+interface HandlerSumThread {
+  summarizeThreadForHelper(input: { client: SlackClient; channel: string; threadTs: string }): Promise<string | null>;
+}
+interface HandlerRateLimit {
+  check(input: object, options: object): { allowed: boolean; reason?: string };
+}
 
 function errorMessage(error: unknown): string | undefined {
   if (typeof error !== "object" || error === null || !("message" in error)) return undefined;
@@ -115,7 +195,7 @@ function errorMessage(error: unknown): string | undefined {
 function errorData(error: unknown): Record<string, unknown> | undefined {
   if (typeof error !== "object" || error === null || !("data" in error)) return undefined;
   const data = (error as { data?: unknown }).data;
-  return typeof data === "object" && data !== null ? data as Record<string, unknown> : undefined;
+  return typeof data === "object" && data !== null ? (data as Record<string, unknown>) : undefined;
 }
 const context = contextModule as HandlerContext;
 const vision = visionModule as HandlerVision;
@@ -132,7 +212,18 @@ const channelPolicy = channelPolicyModule as HandlerPolicy;
 const workspace = workspaceModule as HandlerWorkspace;
 
 const DELETE_REACTIONS = new Set(["pixl-delete", "x", "heavy_multiplication_x"]);
-const UP_REACTIONS = new Set(["yay", "thumbs-up", "+1", "yesyes", "white_check_mark", "heavy_check_mark", "upvote", "sparkling_heart", "heart", "heart_eyes"]);
+const UP_REACTIONS = new Set([
+  "yay",
+  "thumbs-up",
+  "+1",
+  "yesyes",
+  "white_check_mark",
+  "heavy_check_mark",
+  "upvote",
+  "sparkling_heart",
+  "heart",
+  "heart_eyes",
+]);
 const DOWN_REACTIONS = new Set(["nono", "-1", "thumbsdown", "sad-pf"]);
 const GUIDE_ADVANCE_REACTION = "upvote";
 
@@ -154,12 +245,16 @@ function mentionsPixieByName(text: string): boolean {
 
 function teachPattern(mentionOnly = false): RegExp {
   const slug = escapeRegex(brand.slug());
-  const base = mentionOnly ? `teach|learn|remember|memorize|!teach|/${slug}-teach` : `!teach|${slug}-teach|/${slug}-teach|teach\\s+this|teach\\s+thread`;
+  const base = mentionOnly
+    ? `teach|learn|remember|memorize|!teach|/${slug}-teach`
+    : `!teach|${slug}-teach|/${slug}-teach|teach\\s+this|teach\\s+thread`;
   return new RegExp(`^\\s*(?:${base})\\b`, "i");
 }
 
 function stripTeachCommand(text: string, mentionOnly = false): string {
-  return String(text || "").replace(teachPattern(mentionOnly), "").trim();
+  return String(text || "")
+    .replace(teachPattern(mentionOnly), "")
+    .trim();
 }
 
 function actorRunsCommands(userId: string, prog: Program | null): boolean {
@@ -188,13 +283,15 @@ function isDirectMessage(event: HandlerEvent): boolean {
 
 const DM_RATE_LIMIT_NOTICE = "woah slow down a sec — gimme a minute to catch up :sob-pray:";
 
-async function checkDmRateLimit({ event, client, program = null, threadTs = null }: HandlerArgs & { program?: Program | null; threadTs?: string | null }): Promise<boolean> {
+async function checkDmRateLimit({
+  event,
+  client,
+  program = null,
+  threadTs = null,
+}: HandlerArgs & { program?: Program | null; threadTs?: string | null }): Promise<boolean> {
   if (!isDirectMessage(event)) return true;
 
-  const limit = rateLimit.check(
-    { userId: event.user || null, scope: event.channel, dm: true },
-    { dm: true },
-  );
+  const limit = rateLimit.check({ userId: event.user || null, scope: event.channel, dm: true }, { dm: true });
   if (limit.allowed) return true;
 
   db.recordMetric("rate_limited", null, limit.reason || "limit", program?.id || null);
@@ -234,7 +331,13 @@ async function handleImage({ event, client, imageFile, program = null }: ImageAr
     );
 
     if (reply) {
-      await require("./slackMessages").sendProgramMessage({ client, program, channel: event.channel, threadTs, text: replyText.plainDashes(reply) });
+      await require("./slackMessages").sendProgramMessage({
+        client,
+        program,
+        channel: event.channel,
+        threadTs,
+        text: replyText.plainDashes(reply),
+      });
       context.addToThread(threadTs, "assistant", reply, null, event.channel);
       context.updateUserHistory(event.user, question || "image analysis", true);
       db.recordMetric("answer_vision");
@@ -242,11 +345,16 @@ async function handleImage({ event, client, imageFile, program = null }: ImageAr
   } catch (e: unknown) {
     log.error("vision", "analysis failed:", errorMessage(e));
     if (!program || !program.shadowMode) {
-      await require("./slackMessages").sendProgramMessage({ client, program, channel: event.channel, threadTs, text: replyText.plainDashes(respond.ERROR_FALLBACK) });
+      await require("./slackMessages").sendProgramMessage({
+        client,
+        program,
+        channel: event.channel,
+        threadTs,
+        text: replyText.plainDashes(respond.ERROR_FALLBACK),
+      });
     }
   }
 }
-
 
 async function untaggedThreadTurn({ event, client }: HandlerArgs): Promise<string> {
   // A thread stays addressed while only Pixie and the asker are present; human chatter makes it ambient.
@@ -262,22 +370,58 @@ async function untaggedThreadTurn({ event, client }: HandlerArgs): Promise<strin
   return crowd.pixieIn ? "addressed" : "ambient";
 }
 
-function stayOutOfHumanThread({ event, threadTs, question, prog }: { event: HandlerEvent; threadTs: string; question: string; prog: Program }): void {
+function stayOutOfHumanThread({
+  event,
+  threadTs,
+  question,
+  prog,
+}: {
+  event: HandlerEvent;
+  threadTs: string;
+  question: string;
+  prog: Program;
+}): void {
   log.debug("intent", "skipping thread reply — other people are talking and nobody called pixie");
   context.addToThread(threadTs, "user", question, event.user, event.channel);
   db.recordMetric("silent", null, "thread_humans_talking", prog.id);
 }
 
-const HUMAN_ONLY_REPLY = "That one needs a person to decide, so I won't guess. A helper or organizer can sort it out :hii:";
-const HUMAN_ONLY_PINGED_REPLY = "That one needs a person to decide, so I won't guess. I've asked a helper to take a look :hii:";
+const HUMAN_ONLY_REPLY =
+  "That one needs a person to decide, so I won't guess. A helper or organizer can sort it out :hii:";
+const HUMAN_ONLY_PINGED_REPLY =
+  "That one needs a person to decide, so I won't guess. I've asked a helper to take a look :hii:";
 
-async function escalateSensitive({ event, client, prog, workspaceId, threadTs, question, addressed }: { event: HandlerEvent; client: SlackClient; prog: Program; workspaceId: string | null; threadTs: string; question: string; addressed: boolean }): Promise<void> {
+async function escalateSensitive({
+  event,
+  client,
+  prog,
+  workspaceId,
+  threadTs,
+  question,
+  addressed,
+}: {
+  event: HandlerEvent;
+  client: SlackClient;
+  prog: Program;
+  workspaceId: string | null;
+  threadTs: string;
+  question: string;
+  addressed: boolean;
+}): Promise<void> {
   // Sensitive requests record the gap first, then try a ticket and helper handoff before replying.
   const tickets = require("./tickets");
   db.recordGap(question, event.user, event.channel, threadTs, prog.id);
   let ticket = null;
   try {
-    ticket = await tickets.escalateTicket({ program: prog, channel: event.channel, threadTs, requesterId: event.user, question, client, workspaceId });
+    ticket = await tickets.escalateTicket({
+      program: prog,
+      channel: event.channel,
+      threadTs,
+      requesterId: event.user,
+      question,
+      client,
+      workspaceId,
+    });
   } catch (e: unknown) {
     log.warn("handlers", `sensitive escalation ticket failed: ${errorMessage(e)}`);
   }
@@ -287,7 +431,15 @@ async function escalateSensitive({ event, client, prog, workspaceId, threadTs, q
   }
   let helper = null;
   try {
-    helper = await tickets.handOffToHelper({ client, program: prog, channel: event.channel, threadTs, question, requesterId: event.user, workspaceId });
+    helper = await tickets.handOffToHelper({
+      client,
+      program: prog,
+      channel: event.channel,
+      threadTs,
+      question,
+      requesterId: event.user,
+      workspaceId,
+    });
   } catch (e: unknown) {
     log.warn("handlers", `sensitive escalation helper ping failed: ${errorMessage(e)}`);
   }
@@ -296,13 +448,22 @@ async function escalateSensitive({ event, client, prog, workspaceId, threadTs, q
     return;
   }
   const text = helper ? HUMAN_ONLY_PINGED_REPLY : HUMAN_ONLY_REPLY;
-  await require("./slackMessages").sendProgramMessage({ client, program: prog, channel: event.channel, threadTs, text: replyText.plainDashes(text) });
+  await require("./slackMessages").sendProgramMessage({
+    client,
+    program: prog,
+    channel: event.channel,
+    threadTs,
+    text: replyText.plainDashes(text),
+  });
   context.addToThread(threadTs, "assistant", text, null, event.channel);
   db.recordMetric("fallback", null, "sensitive_unticketed", prog.id);
 }
 
 function threadRequiresMention(prog: Program | null): boolean {
-  return process.env.PIXIE_THREAD_REQUIRE_MENTION === "1" || Boolean((prog as (Program & { threadRequireMention?: boolean }) | null)?.threadRequireMention);
+  return (
+    process.env.PIXIE_THREAD_REQUIRE_MENTION === "1" ||
+    Boolean((prog as (Program & { threadRequireMention?: boolean }) | null)?.threadRequireMention)
+  );
 }
 
 function shouldConsiderThreadReply(event: HandlerEvent, prog: Program | null = null): boolean {
@@ -317,7 +478,21 @@ function shouldConsiderThreadReply(event: HandlerEvent, prog: Program | null = n
   return context.hasSpokenInThread(event.thread_ts);
 }
 
-function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }: { event: HandlerEvent; prog: Program; workspaceId: string | null; threadTs: string; question: string; isDm: boolean }): string {
+function checkEligibility({
+  event,
+  prog,
+  workspaceId,
+  threadTs,
+  question,
+  isDm,
+}: {
+  event: HandlerEvent;
+  prog: Program;
+  workspaceId: string | null;
+  threadTs: string;
+  question: string;
+  isDm: boolean;
+}): string {
   // An open ticket suppresses ambient room replies, while direct mentions still reach the eligibility gate.
   const elig = require("./eligibility");
   const isTopLevel = !event.thread_ts || event.thread_ts === event.ts;
@@ -354,8 +529,14 @@ function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }
   if (decision.markTakeover && event.thread_ts) {
     db.markTakeover(event.thread_ts, event.channel, event.user);
     try {
-      require("./audit").record({ programId: prog.id, actorId: event.user, action: "thread.takeover", entityType: "thread", entityId: event.thread_ts });
-  } catch (e: unknown) {
+      require("./audit").record({
+        programId: prog.id,
+        actorId: event.user,
+        action: "thread.takeover",
+        entityType: "thread",
+        entityId: event.thread_ts,
+      });
+    } catch (e: unknown) {
       log.debug("handlers", `takeover audit failed: ${errorMessage(e)}`);
     }
   }
@@ -373,10 +554,25 @@ function checkEligibility({ event, prog, workspaceId, threadTs, question, isDm }
   return "proceed";
 }
 
-async function refuseUnauthorizedCommand({ event, client, question, prog, policy }: { event: HandlerEvent; client: SlackClient; question: string; prog: Program; policy: ProgramPolicy }): Promise<boolean> {
+async function refuseUnauthorizedCommand({
+  event,
+  client,
+  question,
+  prog,
+  policy,
+}: {
+  event: HandlerEvent;
+  client: SlackClient;
+  question: string;
+  prog: Program;
+  policy: ProgramPolicy;
+}): Promise<boolean> {
   // Command identity and permission are decided before conversational routing can answer the same text.
   const commandRegistry = require("./commandRegistry");
-  const hit = commandRegistry.match(question, { botUserId: config.slack.botUserId, botNames: [brand.name(), brand.slug()] });
+  const hit = commandRegistry.match(question, {
+    botUserId: config.slack.botUserId,
+    botNames: [brand.name(), brand.slug()],
+  });
   if (!hit) return false;
   const verdict = commandRegistry.authorize(hit.command, {
     userId: event.user,
@@ -387,20 +583,39 @@ async function refuseUnauthorizedCommand({ event, client, question, prog, policy
   });
   if (verdict.ok) return false;
   db.claimMessage(event.ts, event.channel);
-  const text = verdict.reason === "commands_disabled"
-    ? "commands are switched off in this channel :nono:"
-    : verdict.reason === "wrong_channel"
-      ? "that command doesn't work in this channel :nono:"
-      : "that one's helpers-only :nono:";
+  const text =
+    verdict.reason === "commands_disabled"
+      ? "commands are switched off in this channel :nono:"
+      : verdict.reason === "wrong_channel"
+        ? "that command doesn't work in this channel :nono:"
+        : "that one's helpers-only :nono:";
   await client.chat.postEphemeral({ channel: event.channel, user: event.user, text });
   return true;
 }
 
-async function handleTeachRequest({ event, client, question, prog, mentionOnly, claimFirst }: { event: HandlerEvent; client: SlackClient; question: string; prog: Program; mentionOnly: boolean; claimFirst: boolean }): Promise<boolean> {
+async function handleTeachRequest({
+  event,
+  client,
+  question,
+  prog,
+  mentionOnly,
+  claimFirst,
+}: {
+  event: HandlerEvent;
+  client: SlackClient;
+  question: string;
+  prog: Program;
+  mentionOnly: boolean;
+  claimFirst: boolean;
+}): Promise<boolean> {
   // Teaching is a helper action and claims the message before writing shared memory when requested.
   if (!event.thread_ts || !teachPattern(mentionOnly).test(question)) return false;
   if (!actorRunsCommands(event.user, prog)) {
-    await client.chat.postEphemeral({ channel: event.channel, user: event.user, text: "that one's helpers-only :nono:" });
+    await client.chat.postEphemeral({
+      channel: event.channel,
+      user: event.user,
+      text: "that one's helpers-only :nono:",
+    });
     return true;
   }
   if (!(await checkDmRateLimit({ event, client, program: prog, threadTs: event.thread_ts }))) return true;
@@ -409,7 +624,13 @@ async function handleTeachRequest({ event, client, question, prog, mentionOnly, 
   const strippedCommand = stripTeachCommand(question, mentionOnly);
   const parsedDirect = learn.parseTeach(strippedCommand);
   if (parsedDirect) {
-    const id = learn.teach({ ...parsedDirect, authorId: event.user, threadTs: event.thread_ts, channel: event.channel, programId: prog.id });
+    const id = learn.teach({
+      ...parsedDirect,
+      authorId: event.user,
+      threadTs: event.thread_ts,
+      channel: event.channel,
+      programId: prog.id,
+    });
     await client.chat.postEphemeral({
       channel: event.channel,
       user: event.user,
@@ -432,7 +653,13 @@ async function handleTeachRequest({ event, client, question, prog, mentionOnly, 
       });
       return true;
     }
-    const id = learn.teach({ ...parsed, authorId: event.user, threadTs: event.thread_ts, channel: event.channel, programId: prog.id });
+    const id = learn.teach({
+      ...parsed,
+      authorId: event.user,
+      threadTs: event.thread_ts,
+      channel: event.channel,
+      programId: prog.id,
+    });
     await client.chat.postEphemeral({
       channel: event.channel,
       user: event.user,
@@ -443,16 +670,37 @@ async function handleTeachRequest({ event, client, question, prog, mentionOnly, 
     });
     return true;
   } catch (e: unknown) {
-    log.error("handlers", mentionOnly ? `teach thread on mention failed: ${errorMessage(e)}` : `!teach failed: ${errorMessage(e)}`);
+    log.error(
+      "handlers",
+      mentionOnly ? `teach thread on mention failed: ${errorMessage(e)}` : `!teach failed: ${errorMessage(e)}`,
+    );
     return false;
   }
 }
 
-async function handleSumRequest({ event, client, question, prog, mentionOnly, claimFirst }: { event: HandlerEvent; client: SlackClient; question: string; prog: Program; mentionOnly: boolean; claimFirst: boolean }): Promise<boolean> {
+async function handleSumRequest({
+  event,
+  client,
+  question,
+  prog,
+  mentionOnly,
+  claimFirst,
+}: {
+  event: HandlerEvent;
+  client: SlackClient;
+  question: string;
+  prog: Program;
+  mentionOnly: boolean;
+  claimFirst: boolean;
+}): Promise<boolean> {
   // Summaries follow the same helper-only and single-claim boundary as direct teaching.
   if (!sumPattern(mentionOnly).test(question)) return false;
   if (!actorRunsCommands(event.user, prog)) {
-    await client.chat.postEphemeral({ channel: event.channel, user: event.user, text: "that one's helpers-only :nono:" });
+    await client.chat.postEphemeral({
+      channel: event.channel,
+      user: event.user,
+      text: "that one's helpers-only :nono:",
+    });
     return true;
   }
   if (!(await checkDmRateLimit({ event, client, program: prog, threadTs: event.thread_ts }))) return true;
@@ -525,7 +773,10 @@ async function handleSumRequest({ event, client, question, prog, mentionOnly, cl
     }
     return true;
   } catch (e: unknown) {
-    log.error("handlers", mentionOnly ? `sum on mention failed: ${errorMessage(e)}` : `!sum failed: ${errorMessage(e)}`);
+    log.error(
+      "handlers",
+      mentionOnly ? `sum on mention failed: ${errorMessage(e)}` : `!sum failed: ${errorMessage(e)}`,
+    );
     await client.chat.postEphemeral({
       channel: event.channel,
       user: event.user,
@@ -565,10 +816,12 @@ async function reactToMacroMessage(client: SlackClient, event: HandlerEvent, nam
 function findMacro(programId: string, trigger: string): MacroRow | null {
   const bare = trigger.slice(1);
   const candidates = macros.list(programId).filter((row: MacroRow) => String(row.trigger || "").slice(1) === bare);
-  return candidates.find((row: MacroRow) => row.trigger === trigger && row.enabled)
-    || candidates.find((row: MacroRow) => row.enabled)
-    || candidates[0]
-    || null;
+  return (
+    candidates.find((row: MacroRow) => row.trigger === trigger && row.enabled) ||
+    candidates.find((row: MacroRow) => row.enabled) ||
+    candidates[0] ||
+    null
+  );
 }
 
 async function postMacroEphemeral(client: SlackClient, event: HandlerEvent, text: string): Promise<void> {
@@ -582,14 +835,20 @@ async function postMacroEphemeral(client: SlackClient, event: HandlerEvent, text
 function macroTargetFor(event: HandlerEvent, workspaceId: string | null): TicketTarget {
   let ticket = db.getTicketByThreadTs(event.thread_ts, workspaceId);
   if (!ticket && workspaceId) ticket = db.getTicketByThreadTs(event.thread_ts);
-  const foreign = ticket && (ticket.channel !== event.channel || (ticket.workspace_id && workspaceId && ticket.workspace_id !== workspaceId));
+  const foreign =
+    ticket &&
+    (ticket.channel !== event.channel || (ticket.workspace_id && workspaceId && ticket.workspace_id !== workspaceId));
   if (ticket && !foreign) return { ticket, program: programs.get(ticket.program_id) };
   const program = programs.forChannel(event.channel, workspaceId);
   if (!program || program.id === programs.shared().id) return { ticket: null, program: null };
   return { ticket: null, program };
 }
 
-async function handleMacroTrigger({ event, client, workspaceId }: HandlerArgs & { workspaceId: string | null }): Promise<boolean> {
+async function handleMacroTrigger({
+  event,
+  client,
+  workspaceId,
+}: HandlerArgs & { workspaceId: string | null }): Promise<boolean> {
   // Macros are thread-only and resolve against the ticket or channel's program before permission checks.
   if (!event.thread_ts || event.thread_ts === event.ts || !event.user) return false;
   if (teachPattern(false).test(event.text) || sumPattern(false).test(event.text)) return false;
@@ -609,7 +868,10 @@ async function handleMacroTrigger({ event, client, workspaceId }: HandlerArgs & 
   if (!db.claimMessage(event.ts, event.channel)) return true;
   if (!macro || !macro.enabled) {
     await reactToMacroMessage(client, event, "question");
-    const enabled = macros.list(program.id, { enabledOnly: true }).slice(0, 5).map((row: MacroRow) => row.trigger);
+    const enabled = macros
+      .list(program.id, { enabledOnly: true })
+      .slice(0, 5)
+      .map((row: MacroRow) => row.trigger);
     const suggestion = enabled.length > 0 ? enabled.join(", ") : "none yet, add one on the Macros page";
     await postMacroEphemeral(client, event, `No macro \`${parsed.trigger}\` for ${program.name}. Try: ${suggestion}`);
     return true;
@@ -617,11 +879,21 @@ async function handleMacroTrigger({ event, client, workspaceId }: HandlerArgs & 
 
   const sent = ticket
     ? await macros.send({ id: macro.id, ticketId: ticket.id, actorId: event.user, client })
-    : await macros.sendToThread({ id: macro.id, program, channel: event.channel, threadTs: event.thread_ts, actorId: event.user, client });
+    : await macros.sendToThread({
+        id: macro.id,
+        program,
+        channel: event.channel,
+        threadTs: event.thread_ts,
+        actorId: event.user,
+        client,
+      });
   if (sent?.ok) {
     await reactToMacroMessage(client, event, "white_check_mark");
   } else {
-    log.warn("macros", `send failed for ${parsed.trigger} in ${event.channel}/${event.thread_ts}: ${sent?.error || "unknown error"}`);
+    log.warn(
+      "macros",
+      `send failed for ${parsed.trigger} in ${event.channel}/${event.thread_ts}: ${sent?.error || "unknown error"}`,
+    );
     await postMacroEphemeral(client, event, `Couldn't send \`${macro.trigger}\`: ${sent?.error || "unknown error"}`);
   }
   return true;
@@ -654,8 +926,11 @@ async function onMessage({ event, client }: HandlerArgs): Promise<void> {
     let draftBinding = null;
     try {
       draftBinding = require("./draftSandbox").getForChannel(event.channel, workspaceId);
-  } catch (e: unknown) {
-      log.warn("draft", `channel_id=${event.channel} message_ts=${event.ts} production_program_match=null draft_binding_match=error draft_safety_pass=false suppression_reason=binding_lookup_failed`);
+    } catch (e: unknown) {
+      log.warn(
+        "draft",
+        `channel_id=${event.channel} message_ts=${event.ts} production_program_match=null draft_binding_match=error draft_safety_pass=false suppression_reason=binding_lookup_failed`,
+      );
     }
     if (draftBinding && draftBinding.enabled) {
       const draftProgramId = draftBinding.draftProgramId;
@@ -690,53 +965,94 @@ async function onMessage({ event, client }: HandlerArgs): Promise<void> {
           question,
           client,
         });
-        if (!ticket) log.warn("draft", `${baseLog} draft_safety_pass=true suppression_reason=sandbox_ticket_unavailable`);
-  } catch (e: unknown) {
+        if (!ticket)
+          log.warn("draft", `${baseLog} draft_safety_pass=true suppression_reason=sandbox_ticket_unavailable`);
+      } catch (e: unknown) {
         log.warn("draft", `${baseLog} draft_safety_pass=true suppression_reason=sandbox_ticket_failed`);
       }
       let corpus = "";
       try {
         corpus = require("./knowledge").getDraftContext(draftProgramId, question);
-  } catch (e: unknown) {
+      } catch (e: unknown) {
         log.warn("draft", `${baseLog} draft_safety_pass=true suppression_reason=retrieval_error`);
         return;
       }
       const retrievalCount = corpus ? corpus.length : 0;
       if (!corpus) {
-        log.warn("draft", `${baseLog} draft_safety_pass=true classification=support retrieval_count=0 suppression_reason=empty_corpus`);
+        log.warn(
+          "draft",
+          `${baseLog} draft_safety_pass=true classification=support retrieval_count=0 suppression_reason=empty_corpus`,
+        );
         return;
       }
       let answer = null;
       try {
-        answer = await require("./answer").getGroundedAnswer(question, corpus, "", draftProgram, event.channel, { inHelpChannel: true });
-  } catch (e: unknown) {
-        log.warn("draft", `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=error suppression_reason=generation_failed`);
+        answer = await require("./answer").getGroundedAnswer(question, corpus, "", draftProgram, event.channel, {
+          inHelpChannel: true,
+        });
+      } catch (e: unknown) {
+        log.warn(
+          "draft",
+          `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=error suppression_reason=generation_failed`,
+        );
         return;
       }
       if (!answer?.answer) {
         const draftName = draftProgram?.name || draftProgramId;
         const fallback = `I don't have that in the ${draftName} draft knowledge yet — I'm scoped to ${draftName} sources only in this sandbox.`;
         try {
-          await require("./slackMessages").sendProgramMessage({ client, program: draftProgram, channel: event.channel, threadTs, text: fallback });
-          log.info("draft", `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=fallback slack_post_result=sent suppression_reason=no_grounded_answer`);
-  } catch (e: unknown) {
-          log.warn("draft", `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=fallback slack_post_result=failed suppression_reason=slack_post_failed`);
+          await require("./slackMessages").sendProgramMessage({
+            client,
+            program: draftProgram,
+            channel: event.channel,
+            threadTs,
+            text: fallback,
+          });
+          log.info(
+            "draft",
+            `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=fallback slack_post_result=sent suppression_reason=no_grounded_answer`,
+          );
+        } catch (e: unknown) {
+          log.warn(
+            "draft",
+            `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=fallback slack_post_result=failed suppression_reason=slack_post_failed`,
+          );
         }
         return;
       }
       try {
-        await require("./slackMessages").sendProgramMessage({ client, program: draftProgram, channel: event.channel, threadTs, text: answer.answer });
-        log.info("draft", `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=answered slack_post_result=sent`);
-  } catch (e: unknown) {
-        log.warn("draft", `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=answered slack_post_result=failed suppression_reason=slack_post_failed`);
+        await require("./slackMessages").sendProgramMessage({
+          client,
+          program: draftProgram,
+          channel: event.channel,
+          threadTs,
+          text: answer.answer,
+        });
+        log.info(
+          "draft",
+          `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=answered slack_post_result=sent`,
+        );
+      } catch (e: unknown) {
+        log.warn(
+          "draft",
+          `${baseLog} draft_safety_pass=true classification=support retrieval_count=${retrievalCount} generation_result=answered slack_post_result=failed suppression_reason=slack_post_failed`,
+        );
       }
       return;
     }
   }
   if (event.thread_ts && event.thread_ts !== event.ts && !event.bot_id) {
     try {
-      await require("./tickets").noteThreadActivity({ channel: event.channel, threadTs: event.thread_ts, userId: event.user, text: event.text || null, workspaceId, client, parentUserId: event.parent_user_id || null });
-  } catch (e: unknown) {
+      await require("./tickets").noteThreadActivity({
+        channel: event.channel,
+        threadTs: event.thread_ts,
+        userId: event.user,
+        text: event.text || null,
+        workspaceId,
+        client,
+        parentUserId: event.parent_user_id || null,
+      });
+    } catch (e: unknown) {
       log.debug("handlers", `thread activity tracking: ${errorMessage(e)}`);
     }
   }
@@ -765,11 +1081,18 @@ async function onMessage({ event, client }: HandlerArgs): Promise<void> {
     }
     if (elig === "escalate") {
       if (!db.claimMessage(event.ts, event.channel)) return;
-      await escalateSensitive({ event, client, prog, workspaceId, threadTs: event.thread_ts || event.ts, question, addressed: pinged || named || isDm });
+      await escalateSensitive({
+        event,
+        client,
+        prog,
+        workspaceId,
+        threadTs: event.thread_ts || event.ts,
+        question,
+        addressed: pinged || named || isDm,
+      });
       return;
     }
   }
-
 
   if (await refuseUnauthorizedCommand({ event, client, question, prog, policy })) return;
 
@@ -803,19 +1126,18 @@ async function onMessage({ event, client }: HandlerArgs): Promise<void> {
       mode: respond.ALWAYS,
       addressedHow: "dm",
       seedClient: event.thread_ts ? client : null,
-       scope: event.channel,
-       dm: true,
-       rateLimitReserved: true,
+      scope: event.channel,
+      dm: true,
+      rateLimitReserved: true,
     });
     return;
   }
-
 
   if (isProgChannel && !inHelpChannel) {
     if (named) {
       if (!db.claimMessage(event.ts, event.channel)) return;
       await respond.respond({
-      workspaceId,
+        workspaceId,
         client,
         channel: event.channel,
         threadTs,
@@ -906,7 +1228,7 @@ async function onMessage({ event, client }: HandlerArgs): Promise<void> {
 
   if (!db.claimMessage(event.ts, event.channel)) return;
   await respond.respond({
-      workspaceId,
+    workspaceId,
     client,
     channel: event.channel,
     threadTs,
@@ -993,7 +1315,7 @@ async function onAppMention({ event, client }: HandlerArgs): Promise<void> {
   if (!db.claimMessage(event.ts, event.channel)) return;
 
   await respond.respond({
-      workspaceId,
+    workspaceId,
     client,
     channel: event.channel,
     threadTs,
@@ -1042,7 +1364,7 @@ async function onReactionAdded({ event, client }: { event: ReactionEvent; client
 
       await client.chat.delete({ channel, ts: event.item.ts });
       log.info("handlers", `deleted message ${event.item.ts} via reaction`);
-  } catch (e: unknown) {
+    } catch (e: unknown) {
       log.warn("handlers", `could not delete ${event.item.ts}: ${errorData(e)?.error || errorMessage(e)}`);
     }
     return;
@@ -1072,7 +1394,7 @@ async function onReactionAdded({ event, client }: { event: ReactionEvent; client
           return;
         }
       }
-  } catch (e: unknown) {
+    } catch (e: unknown) {
       log.debug("guides", `reaction advance failed: ${errorMessage(e)}`);
     }
   }

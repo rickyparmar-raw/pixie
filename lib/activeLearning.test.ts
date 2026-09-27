@@ -55,7 +55,11 @@ function resolvedTicket(programId: string, suffix: string, options: TicketOption
     question: options.question || "How do I reset my account access?",
     category: options.category || "account_access",
   });
-  db.resolveTicket(id, options.resolution === undefined ? "Reset the account password and sign in again." : options.resolution, options.resolvedBy || "U-helper");
+  db.resolveTicket(
+    id,
+    options.resolution === undefined ? "Reset the account password and sign in again." : options.resolution,
+    options.resolvedBy || "U-helper",
+  );
   return db.getTicket(id);
 }
 
@@ -63,14 +67,20 @@ function stubExtraction(results: Array<Record<string, string>>) {
   const original = llm.complete;
   let index = 0;
   llm.complete = async () => ({ text: JSON.stringify(results[Math.min(index++, results.length - 1)]) });
-  return () => { llm.complete = original; };
+  return () => {
+    llm.complete = original;
+  };
 }
 
 test("auto learning approves helper-verified resolutions with provenance", async () => {
   programs.saveProgram({ id: "al-auto", name: "Auto", learning: "auto" });
-  const restore = stubExtraction([{ problem: "account access reset", solution: "Reset the password.", category: "account_access" }]);
+  const restore = stubExtraction([
+    { problem: "account access reset", solution: "Reset the password.", category: "account_access" },
+  ]);
   try {
-    const result = await activeLearning.learnFromResolution({ ticket: resolvedTicket("al-auto", "one") }) as LearningResult;
+    const result = (await activeLearning.learnFromResolution({
+      ticket: resolvedTicket("al-auto", "one"),
+    })) as LearningResult;
     assert.equal(result.ok, true);
     assert.equal(result.autoLearned, true);
     assert.equal(result.fact.status, "approved");
@@ -87,9 +97,13 @@ test("auto learning approves helper-verified resolutions with provenance", async
 
 test("review mode keeps the learned resolution in the review list", async () => {
   programs.saveProgram({ id: "al-review", name: "Review", learning: "review" });
-  const restore = stubExtraction([{ problem: "account access reset", solution: "Reset the password.", category: "account_access" }]);
+  const restore = stubExtraction([
+    { problem: "account access reset", solution: "Reset the password.", category: "account_access" },
+  ]);
   try {
-    const result = await activeLearning.learnFromResolution({ ticket: resolvedTicket("al-review", "one") }) as LearningResult;
+    const result = (await activeLearning.learnFromResolution({
+      ticket: resolvedTicket("al-review", "one"),
+    })) as LearningResult;
     assert.equal(result.fact.status, "candidate");
     assert.equal(result.fact.auto_learned, 0);
     assert.ok(db.listReviewableLearnedFacts("al-review").some((row: FactRow) => row.id === result.fact.id));
@@ -105,14 +119,26 @@ test("overlapping newer answers supersede older facts", async () => {
     { problem: "reset account access", solution: "Use the new reset page.", category: "account_access" },
   ]);
   try {
-    const first = await activeLearning.learnFromResolution({ ticket: resolvedTicket("al-overlap", "one") }) as LearningResult;
-    const second = await activeLearning.learnFromResolution({ ticket: resolvedTicket("al-overlap", "two") }) as LearningResult;
+    const first = (await activeLearning.learnFromResolution({
+      ticket: resolvedTicket("al-overlap", "one"),
+    })) as LearningResult;
+    const second = (await activeLearning.learnFromResolution({
+      ticket: resolvedTicket("al-overlap", "two"),
+    })) as LearningResult;
     const old = db.getLearnedFactById(first.fact.id);
     assert.equal(old.status, "superseded");
     assert.equal(old.superseded_by, second.fact.id);
     assert.equal(second.fact.status, "approved");
-    assert.equal(db.approvedFacts(20, "al-overlap").some((row: FactRow) => row.answer.includes("old reset")), false);
-    assert.equal(learn.relevantFacts("reset account access", "al-overlap").some((row: FactRow) => row.answer.includes("old reset")), false);
+    assert.equal(
+      db.approvedFacts(20, "al-overlap").some((row: FactRow) => row.answer.includes("old reset")),
+      false,
+    );
+    assert.equal(
+      learn
+        .relevantFacts("reset account access", "al-overlap")
+        .some((row: FactRow) => row.answer.includes("old reset")),
+      false,
+    );
   } finally {
     restore();
   }
@@ -125,8 +151,12 @@ test("same overlapping answer refreshes support count instead of duplicating", a
     { problem: "reset account access", solution: "Use the reset page.", category: "account_access" },
   ]);
   try {
-    const first = await activeLearning.learnFromResolution({ ticket: resolvedTicket("al-refresh", "one") }) as LearningResult;
-    const second = await activeLearning.learnFromResolution({ ticket: resolvedTicket("al-refresh", "two") }) as LearningResult;
+    const first = (await activeLearning.learnFromResolution({
+      ticket: resolvedTicket("al-refresh", "one"),
+    })) as LearningResult;
+    const second = (await activeLearning.learnFromResolution({
+      ticket: resolvedTicket("al-refresh", "two"),
+    })) as LearningResult;
     assert.equal(second.refreshed, true);
     assert.equal(second.fact.id, first.fact.id);
     assert.equal(second.fact.support_count, 2);
@@ -143,13 +173,27 @@ test("requester-only resolutions and empty answers never enter learned facts", a
   const before = db.handle().query("SELECT COUNT(*) AS n FROM learned_facts WHERE program_id = ?").get("al-safety").n;
   assert.equal((await activeLearning.learnFromResolution({ ticket: requester })).skipped, true);
   assert.equal((await activeLearning.learnFromResolution({ ticket: empty })).skipped, true);
-  assert.equal(db.handle().query("SELECT COUNT(*) AS n FROM learned_facts WHERE program_id = ?").get("al-safety").n, before);
+  assert.equal(
+    db.handle().query("SELECT COUNT(*) AS n FROM learned_facts WHERE program_id = ?").get("al-safety").n,
+    before,
+  );
 });
 
 test("default taxonomy classifies and requester follow-ups reclassify open tickets", async () => {
-  const program = { id: "al-category", name: "Category", posture: "active", helpChannel: "C-al-category", channels: ["C-al-category"] };
+  const program = {
+    id: "al-category",
+    name: "Category",
+    posture: "active",
+    helpChannel: "C-al-category",
+    channels: ["C-al-category"],
+  };
   assert.deepEqual(ticketCategory.configuredCategories(ticketCategory.defaultTaxonomy()), [
-    "account_access", "advice_how_to", "fulfillment_shipping", "other", "review", "site_bug",
+    "account_access",
+    "advice_how_to",
+    "fulfillment_shipping",
+    "other",
+    "review",
+    "site_bug",
   ]);
   const first = await tickets.ensureSupportTicket({
     program,

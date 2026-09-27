@@ -31,7 +31,12 @@ const MAX_RETRY_AFTER_MS = 30 * 1000;
 function recordSendFailure(program: Program | null | undefined, err: SlackError): void {
   try {
     const code = (err && (err.code || (err.data && err.data.error))) || "unknown";
-    require("./db").recordMetric("slack_send_failure", null, String(code).slice(0, 40), program && program.id ? program.id : null);
+    require("./db").recordMetric(
+      "slack_send_failure",
+      null,
+      String(code).slice(0, 40),
+      program && program.id ? program.id : null,
+    );
   } catch (_) {}
 }
 
@@ -75,15 +80,35 @@ function retryAfterMs(err: SlackError | null | undefined): number | null {
 function isPermanentError(err: SlackError | null | undefined): boolean {
   // Permission and malformed-request errors are permanent; transport failures may still succeed on retry.
   const code = err && (err.code || (err.data && err.data.error));
-  return code === "channel_not_found" || code === "not_in_channel" || code === "is_archived"
-    || code === "msg_too_long" || code === "invalid_blocks" || code === "account_inactive";
+  return (
+    code === "channel_not_found" ||
+    code === "not_in_channel" ||
+    code === "is_archived" ||
+    code === "msg_too_long" ||
+    code === "invalid_blocks" ||
+    code === "account_inactive"
+  );
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function sendProgramMessage({ client, program = null, channel, threadTs = null, text, blocks = null }: { client: MessageClient; program?: Program | null; channel: string; threadTs?: string | null; text?: string; blocks?: unknown[] | null }): Promise<SendResult> {
+async function sendProgramMessage({
+  client,
+  program = null,
+  channel,
+  threadTs = null,
+  text,
+  blocks = null,
+}: {
+  client: MessageClient;
+  program?: Program | null;
+  channel: string;
+  threadTs?: string | null;
+  text?: string;
+  blocks?: unknown[] | null;
+}): Promise<SendResult> {
   // Try customized identity first, then resend without it when Slack rejects the extra fields.
   if (!client || !client.chat || typeof client.chat.postMessage !== "function") {
     throw new Error("slack client unavailable");
@@ -98,23 +123,34 @@ async function sendProgramMessage({ client, program = null, channel, threadTs = 
 
   const brand = brandingFor(program);
   // Customize the message first; a rejected customization is retried once without branding.
-  const base = { channel, ...(threadTs ? { thread_ts: threadTs } : {}), ...(text ? { text } : {}), ...(blocks ? { blocks } : {}) };
+  const base = {
+    channel,
+    ...(threadTs ? { thread_ts: threadTs } : {}),
+    ...(text ? { text } : {}),
+    ...(blocks ? { blocks } : {}),
+  };
 
   let useBrand = Object.keys(brand).length > 0;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const payload = useBrand ? { ...base, ...brand } : base;
     try {
-      return await client.chat.postMessage(payload as ChatPostMessageArguments) as SendResult;
+      return (await client.chat.postMessage(payload as ChatPostMessageArguments)) as SendResult;
     } catch (err) {
       const error = (err && typeof err === "object" ? err : {}) as SlackError;
       const code = error.code || (error.data && error.data.error);
       if (useBrand && (code === "invalid_arguments" || code === "not_allowed" || code === "missing_scope")) {
-        if (attempt >= MAX_ATTEMPTS - 1) { recordSendFailure(program, error); throw err; }
+        if (attempt >= MAX_ATTEMPTS - 1) {
+          recordSendFailure(program, error);
+          throw err;
+        }
         log.warn("slackMessages", `program branding rejected (${code}) — retrying as Pixie`);
         useBrand = false;
         continue;
       }
-      if (isPermanentError(error)) { recordSendFailure(program, error); throw err; }
+      if (isPermanentError(error)) {
+        recordSendFailure(program, error);
+        throw err;
+      }
       const wait = retryAfterMs(error);
       if (wait !== null && attempt < MAX_ATTEMPTS - 1) {
         await sleep(wait);

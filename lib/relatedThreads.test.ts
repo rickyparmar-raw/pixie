@@ -15,25 +15,13 @@ test("isSimpleLookupQuestion identifies simple link and navigation lookups", () 
 });
 
 test("isSimpleLookupQuestion identifies direct calculation results", () => {
-  assert.equal(
-    relatedThreads.isSimpleLookupQuestion("how many hours for macbook", { direct: true }),
-    true
-  );
+  assert.equal(relatedThreads.isSimpleLookupQuestion("how many hours for macbook", { direct: true }), true);
 });
 
 test("isSimpleLookupQuestion allows nuanced and troubleshooting questions", () => {
-  assert.equal(
-    relatedThreads.isSimpleLookupQuestion("how do i fix sprite rendering artifacts in Godot export"),
-    false
-  );
-  assert.equal(
-    relatedThreads.isSimpleLookupQuestion("can i change my project idea midway through the jam"),
-    false
-  );
-  assert.equal(
-    relatedThreads.isSimpleLookupQuestion("is custom hardware allowed if i built the PCB myself"),
-    false
-  );
+  assert.equal(relatedThreads.isSimpleLookupQuestion("how do i fix sprite rendering artifacts in Godot export"), false);
+  assert.equal(relatedThreads.isSimpleLookupQuestion("can i change my project idea midway through the jam"), false);
+  assert.equal(relatedThreads.isSimpleLookupQuestion("is custom hardware allowed if i built the PCB myself"), false);
 });
 
 test("tokenize cleans text and drops stop words", () => {
@@ -86,26 +74,28 @@ test("findRelatedThread finds past thread and ignores current active thread", as
   assert.ok(line.includes("view previous thread"));
 });
 
-
-test("char: thin token queries never match", async () => {
+test("thin token queries never match", async () => {
   assert.equal(await relatedThreads.findRelatedThread("", { currentThreadTs: "x" }), null);
   assert.equal(await relatedThreads.findRelatedThread("supercalifragilistic", { currentThreadTs: "x" }), null);
 });
 
-test("char: similarity needs two shared tokens — single-word overlap is zero", () => {
+test("similarity needs two shared tokens — single-word overlap is zero", () => {
   assert.equal(relatedThreads.calculateTokenSimilarity(["godot"], ["godot", "export", "wasm"]), 0);
   assert.ok(relatedThreads.calculateTokenSimilarity(["godot", "export"], ["godot", "export", "wasm"]) > 0);
 });
 
-test("char: malformed thread ts yields no permalink and empty line", () => {
+test("malformed thread ts yields no permalink and empty line", () => {
   assert.equal(relatedThreads.buildSlackPermalink("C1", "not-a-ts"), null);
   assert.equal(relatedThreads.buildSlackPermalink(null, "1.2"), null);
   assert.equal(relatedThreads.formatRelatedThreadLine(null), "");
   assert.equal(relatedThreads.formatRelatedThreadLine({}), "");
 });
 
-test("char: tokenize drops short tokens and punctuation", () => {
+test("tokenize drops short tokens and punctuation", () => {
   assert.deepEqual(relatedThreads.tokenize("a be go!"), []);
-  assert.ok(relatedThreads.tokenize("PCB-order stuck?").includes("pcb-order") || relatedThreads.tokenize("PCB-order stuck?").includes("pcb"));
+  assert.ok(
+    relatedThreads.tokenize("PCB-order stuck?").includes("pcb-order") ||
+      relatedThreads.tokenize("PCB-order stuck?").includes("pcb"),
+  );
 });
 export {};

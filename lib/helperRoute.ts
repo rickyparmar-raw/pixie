@@ -41,36 +41,36 @@ interface ScoringContext {
   now?: number;
 }
 
-// WHY: a member with no other signal still outranks nobody — empty rosters
+// A member with no other signal still outranks nobody — empty rosters
 // return [] and every listed helper starts from the same floor.
 const BASE_SCORE = 1;
-// WHY: self-declared tags alone prove nothing, so the match bonus must clear
+// Self-declared tags alone prove nothing, so the match bonus must clear
 // the noise floor of load/recency/role swings combined.
 const CATEGORY_MATCH_BASE = 2;
-// WHY: one prolific helper must not starve every newcomer forever.
+// One prolific helper must not starve every newcomer forever.
 const CATEGORY_SOLVED_CAP = 10;
 const CATEGORY_REPLY_WEIGHT = 0.2;
 const CATEGORY_REPLY_CAP = 15;
-// WHY: breadth across categories is weaker evidence than depth in the ticket's
+// Breadth across categories is weaker evidence than depth in the ticket's
 // own category, so it accrues at a fraction of the match rate.
 const TOTAL_SOLVED_WEIGHT = 0.2;
-// WHY: same anti-monopoly reasoning as the per-category cap.
+// Same anti-monopoly reasoning as the per-category cap.
 const TOTAL_SOLVED_CAP = 5;
-// WHY: an overloaded helper answers slowly; the penalty must outweigh recency
+// An overloaded helper answers slowly; the penalty must outweigh recency
 // and role bonuses combined so load actually reroutes.
 const LOAD_WEIGHT = 0.5;
-// WHY: beyond a full plate, extra tickets add no new information about slowness.
+// Beyond a full plate, extra tickets add no new information about slowness.
 const LOAD_CAP = 5;
-// WHY: recent presence predicts availability, but weakly — it must never beat
+// Recent presence predicts availability, but weakly — it must never beat
 // real category experience.
 const RECENT_BONUS = 0.5;
-// WHY: 7 days separates currently-around helpers from drive-bys without
+// 7 days separates currently-around helpers from drive-bys without
 // punishing a normal week offline.
 const RECENT_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
-// WHY: organizers/owners can unblock process issues a helper cannot, worth a
+// Organizers/owners can unblock process issues a helper cannot, worth a
 // nudge but never worth overriding verified expertise.
 const ROLE_BONUS = 0.5;
-// WHY: the card select the recommendation feeds has no room for a phone book.
+// The card select the recommendation feeds has no room for a phone book.
 const MAX_RECOMMENDATIONS = 10;
 
 const PING_FATIGUE_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -79,12 +79,33 @@ const PING_FATIGUE_CAP = 5;
 const PING_FATIGUE_RECENT_MS = 60 * 60 * 1000;
 const PING_FATIGUE_RECENT_PENALTY = 0.25;
 
-function setExpertise({ programId, userId, tags = [] }: { programId: string; userId: string; tags?: unknown[] }): string[] {
-  const clean = [...new Set(tags.map((t) => String(t || "").trim().toLowerCase()).filter(Boolean))].slice(0, 20);
-  const existing = db.handle().query(
-    "SELECT tag, solved_count, reply_count FROM helper_expertise WHERE program_id = ? AND user_id = ?",
-  ).all(programId, userId) as ExpertiseRow[];
-  const counts = new Map<string, { solved: number; replies: number }>(existing.map((r) => [r.tag, { solved: r.solved_count || 0, replies: r.reply_count || 0 }]));
+function setExpertise({
+  programId,
+  userId,
+  tags = [],
+}: {
+  programId: string;
+  userId: string;
+  tags?: unknown[];
+}): string[] {
+  const clean = [
+    ...new Set(
+      tags
+        .map((t) =>
+          String(t || "")
+            .trim()
+            .toLowerCase(),
+        )
+        .filter(Boolean),
+    ),
+  ].slice(0, 20);
+  const existing = db
+    .handle()
+    .query("SELECT tag, solved_count, reply_count FROM helper_expertise WHERE program_id = ? AND user_id = ?")
+    .all(programId, userId) as ExpertiseRow[];
+  const counts = new Map<string, { solved: number; replies: number }>(
+    existing.map((r) => [r.tag, { solved: r.solved_count || 0, replies: r.reply_count || 0 }]),
+  );
   const observed = existing
     .filter((r) => !clean.includes(r.tag) && ((r.solved_count || 0) > 0 || (r.reply_count || 0) > 0))
     .map((r) => r.tag);
@@ -93,57 +114,95 @@ function setExpertise({ programId, userId, tags = [] }: { programId: string; use
   const t = Date.now();
   for (const tag of [...clean, ...observed]) {
     const prior = counts.get(tag) || { solved: 0, replies: 0 };
-    db.handle().query(
-      "INSERT INTO helper_expertise (program_id, user_id, tag, solved_count, reply_count, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-    ).run(programId, userId, tag, prior.solved, prior.replies, t);
+    db.handle()
+      .query(
+        "INSERT INTO helper_expertise (program_id, user_id, tag, solved_count, reply_count, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(programId, userId, tag, prior.solved, prior.replies, t);
   }
   return clean;
 }
 
 function getExpertise(programId: string | undefined, userId: string): ExpertiseRow[] {
-  return db.handle().query("SELECT tag, solved_count, reply_count FROM helper_expertise WHERE program_id = ? AND user_id = ?").all(programId, userId) as ExpertiseRow[];
+  return db
+    .handle()
+    .query("SELECT tag, solved_count, reply_count FROM helper_expertise WHERE program_id = ? AND user_id = ?")
+    .all(programId, userId) as ExpertiseRow[];
 }
 
-function recordResolution({ programId, userId, category = null }: { programId?: string; userId?: string; category?: unknown }): void {
+function recordResolution({
+  programId,
+  userId,
+  category = null,
+}: {
+  programId?: string;
+  userId?: string;
+  category?: unknown;
+}): void {
   if (!programId || !userId) return;
-  const tag = String(category || "general").trim().toLowerCase().slice(0, 60);
+  const tag = String(category || "general")
+    .trim()
+    .toLowerCase()
+    .slice(0, 60);
   const t = Date.now();
-  db.handle().query(
-    `INSERT INTO helper_expertise (program_id, user_id, tag, solved_count, updated_at) VALUES (?, ?, ?, 1, ?)
+  db.handle()
+    .query(
+      `INSERT INTO helper_expertise (program_id, user_id, tag, solved_count, updated_at) VALUES (?, ?, ?, 1, ?)
      ON CONFLICT(program_id, user_id, tag) DO UPDATE SET solved_count = solved_count + 1, updated_at = excluded.updated_at`,
-  ).run(programId, userId, tag, t);
+    )
+    .run(programId, userId, tag, t);
 }
 
-function recordReply({ programId, userId, category = null }: { programId?: string; userId?: string; category?: unknown }): void {
+function recordReply({
+  programId,
+  userId,
+  category = null,
+}: {
+  programId?: string;
+  userId?: string;
+  category?: unknown;
+}): void {
   if (!programId || !userId) return;
-  const tag = String(category || "general").trim().toLowerCase().slice(0, 60);
+  const tag = String(category || "general")
+    .trim()
+    .toLowerCase()
+    .slice(0, 60);
   const t = Date.now();
-  db.handle().query(
-    `INSERT INTO helper_expertise (program_id, user_id, tag, solved_count, reply_count, updated_at) VALUES (?, ?, ?, 0, 1, ?)
+  db.handle()
+    .query(
+      `INSERT INTO helper_expertise (program_id, user_id, tag, solved_count, reply_count, updated_at) VALUES (?, ?, ?, 0, 1, ?)
      ON CONFLICT(program_id, user_id, tag) DO UPDATE SET reply_count = reply_count + 1, updated_at = excluded.updated_at`,
-  ).run(programId, userId, tag, t);
+    )
+    .run(programId, userId, tag, t);
 }
 
 function openLoad(programId: string | undefined, userId: string): number {
-  const row = db.handle().query(
-    "SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND assignee_id = ? AND status IN ('claimed','assigned','waiting_for_helper','escalated','reopened')",
-  ).get(programId, userId);
+  const row = db
+    .handle()
+    .query(
+      "SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND assignee_id = ? AND status IN ('claimed','assigned','waiting_for_helper','escalated','reopened')",
+    )
+    .get(programId, userId);
   return row ? Number((row as DbRow).n || 0) : 0;
 }
 
 function recentActivity(programId: string | undefined, userId: string): number | null {
-  const row = db.handle().query(
-    "SELECT MAX(created_at) AS at FROM ticket_events WHERE program_id = ? AND actor_id = ?",
-  ).get(programId, userId);
+  const row = db
+    .handle()
+    .query("SELECT MAX(created_at) AS at FROM ticket_events WHERE program_id = ? AND actor_id = ?")
+    .get(programId, userId);
   return row ? Number((row as DbRow).at) : null;
 }
 
 function pingFatigue(programId: string | undefined, userId: string, now = Date.now()): Fatigue {
-  const rows = db.handle().query(
-    `SELECT created_at, detail FROM ticket_events
+  const rows = db
+    .handle()
+    .query(
+      `SELECT created_at, detail FROM ticket_events
       WHERE program_id = ? AND event_type = 'helper_assignment_offered' AND created_at >= ?
       ORDER BY created_at DESC`,
-  ).all(programId, now - PING_FATIGUE_WINDOW_MS) as DbRow[];
+    )
+    .all(programId, now - PING_FATIGUE_WINDOW_MS) as DbRow[];
   let count = 0;
   let lastPingAt = null;
   for (const row of rows) {
@@ -165,7 +224,10 @@ function normalizeCategory(category: unknown): string | null {
   return String(category).trim().toLowerCase();
 }
 
-function matchBonus(expertise: ExpertiseRow[], tag: string | null): { match: ExpertiseRow; solved: number; replies: number; pts: number } | null {
+function matchBonus(
+  expertise: ExpertiseRow[],
+  tag: string | null,
+): { match: ExpertiseRow; solved: number; replies: number; pts: number } | null {
   if (!tag) return null;
   const match = expertise.find((e) => e.tag === tag);
   if (!match) return null;
@@ -201,7 +263,10 @@ function hasRoleBonus(role: string): boolean {
   return role === "organizer" || role === "owner";
 }
 
-function scoreHelper(helper: HelperRow, ctx: ScoringContext = {}): { userId: string; role: string; score: number; load: number; reasons: string[] } {
+function scoreHelper(
+  helper: HelperRow,
+  ctx: ScoringContext = {},
+): { userId: string; role: string; score: number; load: number; reasons: string[] } {
   const { tag = null, expertise = [], load = 0, lastActiveAt = null, fatigue = null, now = Date.now() } = ctx;
   const reasons = ["active program member"];
   let score = BASE_SCORE;
@@ -258,7 +323,10 @@ function botUserId() {
   }
 }
 
-function scoreWorkload(helper: HelperRow, load: number): { userId: string; role: string; score: number; load: number; reasons: string[] } {
+function scoreWorkload(
+  helper: HelperRow,
+  load: number,
+): { userId: string; role: string; score: number; load: number; reasons: string[] } {
   return {
     userId: helper.user_id,
     role: helper.role,
@@ -268,7 +336,21 @@ function scoreWorkload(helper: HelperRow, load: number): { userId: string; role:
   };
 }
 
-function recommend({ programId, category = null, limit = 3, exclude = [], expertiseRouting = true, now = Date.now() }: { programId?: string; category?: string | null; limit?: number; exclude?: string[]; expertiseRouting?: boolean; now?: number } = {}): Array<{ userId: string; role: string; score: number; load: number; reasons: string[] }> {
+function recommend({
+  programId,
+  category = null,
+  limit = 3,
+  exclude = [],
+  expertiseRouting = true,
+  now = Date.now(),
+}: {
+  programId?: string;
+  category?: string | null;
+  limit?: number;
+  exclude?: string[];
+  expertiseRouting?: boolean;
+  now?: number;
+} = {}): Array<{ userId: string; role: string; score: number; load: number; reasons: string[] }> {
   const helpers = db.listHelpers(programId, true) as HelperRow[];
   if (helpers.length === 0) return [];
   const skip = new Set((exclude || []).filter(Boolean));
@@ -280,17 +362,14 @@ function recommend({ programId, category = null, limit = 3, exclude = [], expert
   const baseOrder = new Map(helpers.map((h, i) => [h.user_id, i]));
   const ranked = eligible.map((h) => ({
     entry: expertiseRouting
-      ? scoreHelper(
-        h,
-        {
+      ? scoreHelper(h, {
           tag,
           expertise: getExpertise(programId, h.user_id),
           load: openLoad(programId, h.user_id),
           lastActiveAt: recentActivity(programId, h.user_id),
           fatigue: pingFatigue(programId, h.user_id, now),
           now,
-        },
-      )
+        })
       : scoreWorkload(h, openLoad(programId, h.user_id)),
     rosterIndex: baseOrder.get(h.user_id) ?? 0,
   }));
@@ -298,4 +377,14 @@ function recommend({ programId, category = null, limit = 3, exclude = [], expert
   return ranked.slice(0, clampLimit(limit)).map((r) => r.entry);
 }
 
-export = { setExpertise, getExpertise, recordResolution, recordReply, openLoad, pingFatigue, recommend, scoreHelper, scoreWorkload };
+export = {
+  setExpertise,
+  getExpertise,
+  recordResolution,
+  recordReply,
+  openLoad,
+  pingFatigue,
+  recommend,
+  scoreHelper,
+  scoreWorkload,
+};

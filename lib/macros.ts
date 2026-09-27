@@ -25,8 +25,14 @@ interface Row {
 
 const TRIGGER_RE = /^[?!][a-z0-9][a-z0-9_-]{0,30}$/;
 const SAFE_KEYS = new Set([
-  "requester", "ticket_id", "program", "status", "helper",
-  "queue_depth", "typical_wait", "position",
+  "requester",
+  "ticket_id",
+  "program",
+  "status",
+  "helper",
+  "queue_depth",
+  "typical_wait",
+  "position",
 ]);
 const SEND_TRANSITIONS = new Set(["resolved", "closed", "snoozed"]);
 const OPEN_STATUSES = new Set(["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"]);
@@ -42,35 +48,45 @@ const SUGGESTED_TEMPLATES = [
     trigger: "!queue-update",
     name: "Queue backed up / review delay",
     description: "Explain that reviews are delayed by the current queue.",
-    content: "Hey {requester} — reviews are taking longer than usual because the queue is backed up ({queue_depth} waiting, usually {typical_wait}). You're #{position}; hang tight until your review is done!",
+    content:
+      "Hey {requester} — reviews are taking longer than usual because the queue is backed up ({queue_depth} waiting, usually {typical_wait}). You're #{position}; hang tight until your review is done!",
   },
   {
     key: "shipping-delay",
     trigger: "!shipping-delay",
     name: "Shipping delay",
     description: "Let a requester know that shipping is taking longer than expected.",
-    content: "Hey {requester} — your shipment is taking a little longer than expected. We'll share an update as soon as we have one. (Ticket #{ticket_id})",
+    content:
+      "Hey {requester} — your shipment is taking a little longer than expected. We'll share an update as soon as we have one. (Ticket #{ticket_id})",
   },
   {
     key: "need-more-info",
     trigger: "!need-info",
     name: "Need more info",
     description: "Ask the requester for the details needed to investigate.",
-    content: "Hey {requester} — could you share a little more detail so we can investigate this properly? Please include what you expected, what happened, and any relevant links or screenshots.",
+    content:
+      "Hey {requester} — could you share a little more detail so we can investigate this properly? Please include what you expected, what happened, and any relevant links or screenshots.",
   },
   {
     key: "resolved-follow-up",
     trigger: "!resolved-follow-up",
     name: "Resolved follow-up",
     description: "Confirm that the request is resolved and invite a follow-up.",
-    content: "Hey {requester} — this should be resolved now. If anything still looks wrong, reply here and we'll take another look.",
+    content:
+      "Hey {requester} — this should be resolved now. If anything still looks wrong, reply here and we'll take another look.",
     onSendTransition: "resolved",
   },
 ];
 
 const PLACEHOLDER_DOCS = [
-  { token: "{queue_depth}", description: "Open queue tickets waiting for a helper; category-scoped when this ticket has a category." },
-  { token: "{typical_wait}", description: "The recent median wait in human-friendly text, or \"a little while\" with insufficient history." },
+  {
+    token: "{queue_depth}",
+    description: "Open queue tickets waiting for a helper; category-scoped when this ticket has a category.",
+  },
+  {
+    token: "{typical_wait}",
+    description: 'The recent median wait in human-friendly text, or "a little while" with insufficient history.',
+  },
   { token: "{position}", description: "This ticket's one-based place in the program/category waiting queue." },
 ];
 
@@ -79,7 +95,9 @@ function now(): number {
 }
 
 function normalizeTrigger(raw: unknown): string | null {
-  const t = String(raw || "").trim().toLowerCase();
+  const t = String(raw || "")
+    .trim()
+    .toLowerCase();
   if (!TRIGGER_RE.test(t)) return null;
   return t;
 }
@@ -93,7 +111,11 @@ function interpolate(content: unknown, values: Row = {}): string {
   });
 }
 
-function valuesFor({ ticket = null, program = null, actorId = null }: { ticket?: Row | null; program?: Row | null; actorId?: string | null } = {}): Row {
+function valuesFor({
+  ticket = null,
+  program = null,
+  actorId = null,
+}: { ticket?: Row | null; program?: Row | null; actorId?: string | null } = {}): Row {
   return {
     requester: ticket ? `<@${ticket.requester_id}>` : "",
     ticket_id: ticket ? String(ticket.id) : "",
@@ -103,7 +125,11 @@ function valuesFor({ ticket = null, program = null, actorId = null }: { ticket?:
   };
 }
 
-function contextValuesFor({ ticket = null, program = null, actorId = null }: { ticket?: Row | null; program?: Row | null; actorId?: string | null } = {}): Row {
+function contextValuesFor({
+  ticket = null,
+  program = null,
+  actorId = null,
+}: { ticket?: Row | null; program?: Row | null; actorId?: string | null } = {}): Row {
   const values = valuesFor({ ticket, program, actorId });
   if (!ticket || !ticket.program_id) {
     return { ...values, queue_depth: "", typical_wait: "a little while", position: "" };
@@ -128,7 +154,17 @@ function placeholderDocs(): Row[] {
   return PLACEHOLDER_DOCS.map((item) => ({ ...item }));
 }
 
-function validate({ trigger, name, content, onSendTransition = null }: { trigger?: unknown; name?: unknown; content?: unknown; onSendTransition?: string | null }): string | null {
+function validate({
+  trigger,
+  name,
+  content,
+  onSendTransition = null,
+}: {
+  trigger?: unknown;
+  name?: unknown;
+  content?: unknown;
+  onSendTransition?: string | null;
+}): string | null {
   if (!normalizeTrigger(trigger)) return "trigger must look like ?shipping (lowercase, ?/! prefix)";
   if (!String(name || "").trim() || String(name).length > MAX_NAME) return "name required (max 80 chars)";
   if (!String(content || "").trim() || String(content).length > MAX_CONTENT) return "content required (max 2000 chars)";
@@ -142,16 +178,50 @@ function isUniqueConflict(e: unknown): boolean {
   return String(message || "").includes("UNIQUE");
 }
 
-function create({ programId, trigger, name, description = null, content, enabled = true, allowedRoles = null, onSendTransition = null, createdBy = null }: { programId: string; trigger: unknown; name: unknown; description?: string | null; content: unknown; enabled?: boolean; allowedRoles?: string[] | null; onSendTransition?: string | null; createdBy?: string | null }): Row {
+function create({
+  programId,
+  trigger,
+  name,
+  description = null,
+  content,
+  enabled = true,
+  allowedRoles = null,
+  onSendTransition = null,
+  createdBy = null,
+}: {
+  programId: string;
+  trigger: unknown;
+  name: unknown;
+  description?: string | null;
+  content: unknown;
+  enabled?: boolean;
+  allowedRoles?: string[] | null;
+  onSendTransition?: string | null;
+  createdBy?: string | null;
+}): Row {
   const problem = validate({ trigger, name, content, onSendTransition });
   if (problem) return { error: problem };
   const t = now();
   try {
-    const res = db.handle().query(
-      `INSERT INTO program_macros (program_id, trigger, name, description, content, enabled, allowed_roles, on_send_transition, created_by, created_at, updated_at)
+    const res = db
+      .handle()
+      .query(
+        `INSERT INTO program_macros (program_id, trigger, name, description, content, enabled, allowed_roles, on_send_transition, created_by, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    ).run(programId, normalizeTrigger(trigger), String(name).trim(), description, String(content).trim(),
-      enabled ? 1 : 0, allowedRoles ? JSON.stringify(allowedRoles) : null, onSendTransition || null, createdBy, t, t);
+      )
+      .run(
+        programId,
+        normalizeTrigger(trigger),
+        String(name).trim(),
+        description,
+        String(content).trim(),
+        enabled ? 1 : 0,
+        allowedRoles ? JSON.stringify(allowedRoles) : null,
+        onSendTransition || null,
+        createdBy,
+        t,
+        t,
+      );
     const row = get(Number(res.lastInsertRowid)) as Row;
     const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
     recordAudit({ programId, actorId: createdBy, action: "macro.created", entityType: "macro", entityId: row.id });
@@ -167,13 +237,21 @@ function get(id: number): Row | null {
 }
 
 function matchesQuery(row: Row, needle: string): boolean {
-  return String(row.trigger || "").includes(needle)
-    || (row.name || "").toLowerCase().includes(needle)
-    || (row.description || "").toLowerCase().includes(needle);
+  return (
+    String(row.trigger || "").includes(needle) ||
+    (row.name || "").toLowerCase().includes(needle) ||
+    (row.description || "").toLowerCase().includes(needle)
+  );
 }
 
-function list(programId: string, { enabledOnly = false, q = null }: { enabledOnly?: boolean; q?: string | null } = {}): Row[] {
-  let rows = db.handle().query("SELECT * FROM program_macros WHERE program_id = ? ORDER BY trigger ASC").all(programId) as Row[];
+function list(
+  programId: string,
+  { enabledOnly = false, q = null }: { enabledOnly?: boolean; q?: string | null } = {},
+): Row[] {
+  let rows = db
+    .handle()
+    .query("SELECT * FROM program_macros WHERE program_id = ? ORDER BY trigger ASC")
+    .all(programId) as Row[];
   if (enabledOnly) rows = rows.filter((r: Row) => r.enabled);
   if (!q) return rows;
   const needle = String(q).toLowerCase();
@@ -197,18 +275,34 @@ function update(id: number, patch: Row = {}, actorId: string | null = null): Row
     return { error: "invalid content" };
   }
   const merged: Row = { ...row, ...next, updated_at: now() };
-  const problem = validate({ trigger: merged.trigger, name: merged.name, content: merged.content, onSendTransition: merged.on_send_transition });
+  const problem = validate({
+    trigger: merged.trigger,
+    name: merged.name,
+    content: merged.content,
+    onSendTransition: merged.on_send_transition,
+  });
   if (problem) return { error: problem };
   try {
-    db.handle().query(
-      `UPDATE program_macros SET trigger = ?, name = ?, description = ?, content = ?, enabled = ?, allowed_roles = ?, on_send_transition = ?, updated_at = ? WHERE id = ?`,
-    ).run(merged.trigger, merged.name, merged.description, merged.content, merged.enabled ? 1 : 0,
-      merged.allowed_roles, merged.on_send_transition, merged.updated_at, id);
+    db.handle()
+      .query(
+        `UPDATE program_macros SET trigger = ?, name = ?, description = ?, content = ?, enabled = ?, allowed_roles = ?, on_send_transition = ?, updated_at = ? WHERE id = ?`,
+      )
+      .run(
+        merged.trigger,
+        merged.name,
+        merged.description,
+        merged.content,
+        merged.enabled ? 1 : 0,
+        merged.allowed_roles,
+        merged.on_send_transition,
+        merged.updated_at,
+        id,
+      );
   } catch (e: any) {
     if (isUniqueConflict(e)) return { error: "that trigger already exists for this program" };
     return { error: e.message };
   }
-    const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: row.program_id, actorId, action: "macro.updated", entityType: "macro", entityId: id });
   return { ok: true, macro: get(id) };
 }
@@ -217,22 +311,38 @@ function remove(id: number, actorId: string | null = null): Row {
   const row = get(id);
   if (!row) return { error: "macro not found" };
   db.handle().query("DELETE FROM program_macros WHERE id = ?").run(id);
-    const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
+  const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
   recordAudit({ programId: row.program_id, actorId, action: "macro.deleted", entityType: "macro", entityId: id });
   return { ok: true };
 }
 
 function scoreMacro(macro: Row, qterms: Set<string>): Row {
   const retrieve = require("./retrieve");
-  const hay = new Set(retrieve.tokenize(`${macro.trigger} ${macro.name} ${macro.description || ""} ${macro.content}`.slice(0, 500)));
+  const hay = new Set(
+    retrieve.tokenize(`${macro.trigger} ${macro.name} ${macro.description || ""} ${macro.content}`.slice(0, 500)),
+  );
   let overlap = 0;
   for (const t of qterms) {
     if (hay.has(t)) overlap += 1;
   }
-  return { id: macro.id, trigger: macro.trigger, name: macro.name, description: macro.description, score: Number((overlap / qterms.size).toFixed(3)) };
+  return {
+    id: macro.id,
+    trigger: macro.trigger,
+    name: macro.name,
+    description: macro.description,
+    score: Number((overlap / qterms.size).toFixed(3)),
+  };
 }
 
-function suggestFor({ programId, question, limit = 3 }: { programId: string; question: string; limit?: number }): Row[] {
+function suggestFor({
+  programId,
+  question,
+  limit = 3,
+}: {
+  programId: string;
+  question: string;
+  limit?: number;
+}): Row[] {
   const enabled = list(programId, { enabledOnly: true });
   if (!question || enabled.length === 0) return [];
   const retrieve = require("./retrieve");
@@ -255,14 +365,32 @@ function actorRole(programId: string, actorId: string): string | null {
 function applySendTransition(macro: Row, ticketId: number, actorId: string, client: unknown): Row {
   if (macro.on_send_transition === "resolved") {
     const tickets = require("./tickets");
-    return tickets.resolveTicket({ ticketId, actorId, resolution: `resolved via macro ${macro.trigger}`, source: "macro", programId: macro.program_id, client });
-  }
-  else if (macro.on_send_transition === "closed") db.closeTicket(ticketId);
+    return tickets.resolveTicket({
+      ticketId,
+      actorId,
+      resolution: `resolved via macro ${macro.trigger}`,
+      source: "macro",
+      programId: macro.program_id,
+      client,
+    });
+  } else if (macro.on_send_transition === "closed") db.closeTicket(ticketId);
   else if (macro.on_send_transition === "snoozed") db.snoozeTicket(ticketId, Date.now() + SNOOZE_MS);
   return { ok: true };
 }
 
-async function send({ id, ticketId, actorId, client, requireOpen = false }: { id: number; ticketId: number; actorId: string; client: unknown; requireOpen?: boolean }): Promise<Row> {
+async function send({
+  id,
+  ticketId,
+  actorId,
+  client,
+  requireOpen = false,
+}: {
+  id: number;
+  ticketId: number;
+  actorId: string;
+  client: unknown;
+  requireOpen?: boolean;
+}): Promise<Row> {
   const macro = get(id);
   if (!macro) return { error: "macro not found" };
   if (!macro.enabled) return { error: "macro is disabled" };
@@ -277,16 +405,39 @@ async function send({ id, ticketId, actorId, client, requireOpen = false }: { id
   if (allowed && !allowed.includes(role)) return { error: `macro requires role: ${allowed.join("/")}` };
 
   const programs = require("./programs");
-  const text = interpolate(macro.content, contextValuesFor({ ticket, program: programs.get(ticket.program_id), actorId }));
+  const text = interpolate(
+    macro.content,
+    contextValuesFor({ ticket, program: programs.get(ticket.program_id), actorId }),
+  );
   const tickets = require("./tickets");
-  const sent = await tickets.replyToTicket({ ticketId, authorId: actorId, text, client, programId: macro.program_id, requireOpen: guardOpen });
+  const sent = await tickets.replyToTicket({
+    ticketId,
+    authorId: actorId,
+    text,
+    client,
+    programId: macro.program_id,
+    requireOpen: guardOpen,
+  });
   if (sent.error) return sent;
   const transition = applySendTransition(macro, ticketId, actorId, client);
   if (transition?.error) return transition;
   const addTicketEvent = db.addTicketEvent as (event: Record<string, unknown>) => unknown;
-  addTicketEvent({ ticketId, programId: ticket.program_id, actorId, eventType: "macro_sent", detail: { macroId: id, trigger: macro.trigger } });
+  addTicketEvent({
+    ticketId,
+    programId: ticket.program_id,
+    actorId,
+    eventType: "macro_sent",
+    detail: { macroId: id, trigger: macro.trigger },
+  });
   const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
-  recordAudit({ programId: ticket.program_id, actorId, action: "macro.sent", entityType: "macro", entityId: id, metadata: { ticketId } });
+  recordAudit({
+    programId: ticket.program_id,
+    actorId,
+    action: "macro.sent",
+    entityType: "macro",
+    entityId: id,
+    metadata: { ticketId },
+  });
   return { ok: true, ts: sent.ts, ticket: db.getTicket(ticketId) };
 }
 
@@ -301,7 +452,21 @@ async function threadStarter(client: Row, channel: string, threadTs: string): Pr
   }
 }
 
-async function sendToThread({ id, program, channel, threadTs, actorId, client }: { id: number; program: Row; channel: string; threadTs: string; actorId: string; client: Row }): Promise<Row> {
+async function sendToThread({
+  id,
+  program,
+  channel,
+  threadTs,
+  actorId,
+  client,
+}: {
+  id: number;
+  program: Row;
+  channel: string;
+  threadTs: string;
+  actorId: string;
+  client: Row;
+}): Promise<Row> {
   const macro = get(id);
   if (!macro) return { error: "macro not found" };
   if (!macro.enabled) return { error: "macro is disabled" };
@@ -327,11 +492,23 @@ async function sendToThread({ id, program, channel, threadTs, actorId, client }:
     return { error: e.message };
   }
   const recordAudit = audit.record as (entry: Record<string, unknown>) => unknown;
-  recordAudit({ programId: program.id, actorId, action: "macro.sent", entityType: "macro", entityId: id, metadata: { channel, threadTs } });
+  recordAudit({
+    programId: program.id,
+    actorId,
+    action: "macro.sent",
+    entityType: "macro",
+    entityId: id,
+    metadata: { channel, threadTs },
+  });
   return { ok: true, ts: res?.ts || null };
 }
 
-function waitingTicketIds({ programId, category = null }: { programId: string; category?: string | null } = {} as { programId: string; category?: string | null }): number[] {
+function waitingTicketIds(
+  { programId, category = null }: { programId: string; category?: string | null } = {} as {
+    programId: string;
+    category?: string | null;
+  },
+): number[] {
   return (db.getTicketsForProgram as (id: string, status: string) => Row[])(programId, "waiting_for_helper")
     .filter((ticket: Row) => !category || ticket.category === category)
     .sort((a: Row, b: Row) => Number(b.created_at) - Number(a.created_at) || Number(b.id) - Number(a.id))
@@ -342,9 +519,24 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function sendBulk({ macroId, ticketIds, actorId, client, delayMs = BULK_DELAY_MS }: { macroId: number; ticketIds: unknown[]; actorId: string; client: unknown; delayMs?: number } = {} as { macroId: number; ticketIds: unknown[]; actorId: string; client: unknown; delayMs?: number }): Promise<Row> {
+async function sendBulk(
+  {
+    macroId,
+    ticketIds,
+    actorId,
+    client,
+    delayMs = BULK_DELAY_MS,
+  }: { macroId: number; ticketIds: unknown[]; actorId: string; client: unknown; delayMs?: number } = {} as {
+    macroId: number;
+    ticketIds: unknown[];
+    actorId: string;
+    client: unknown;
+    delayMs?: number;
+  },
+): Promise<Row> {
   if (!Array.isArray(ticketIds)) return { error: "ticketIds must be an array" };
-  if (ticketIds.length > BULK_MAX_TICKETS) return { error: `at most ${BULK_MAX_TICKETS} ticketIds may be sent at once` };
+  if (ticketIds.length > BULK_MAX_TICKETS)
+    return { error: `at most ${BULK_MAX_TICKETS} ticketIds may be sent at once` };
   const macro = get(Number(macroId));
   if (!macro) return { error: "macro not found" };
   if (!macro.enabled) return { error: "macro is disabled" };

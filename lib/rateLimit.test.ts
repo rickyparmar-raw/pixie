@@ -8,13 +8,13 @@ const rateLimit = require("./rateLimit");
 
 db.open(":memory:");
 
-test("char: missing user is always allowed", () => {
+test("missing user is always allowed", () => {
   assert.deepEqual(rateLimit.check(null), { allowed: true, retryInMs: 0, reason: "no_identity" });
   assert.deepEqual(rateLimit.check(undefined), { allowed: true, retryInMs: 0, reason: "no_identity" });
   assert.deepEqual(rateLimit.check(""), { allowed: true, retryInMs: 0, reason: "no_identity" });
 });
 
-test("char: first N requests allowed, N+1 denied within the window", () => {
+test("first N requests allowed, N+1 denied within the window", () => {
   const user = `char-rl-${Date.now()}-1`;
   const max = 3;
   for (let i = 0; i < max; i++) {
@@ -25,7 +25,7 @@ test("char: first N requests allowed, N+1 denied within the window", () => {
   assert.equal(denied.retryInMs, 60000);
 });
 
-test("char: limits are per-user, never global", () => {
+test("limits are per-user, never global", () => {
   const a = `char-rl-${Date.now()}-a`;
   const b = `char-rl-${Date.now()}-b`;
   const max = 1;
@@ -34,14 +34,16 @@ test("char: limits are per-user, never global", () => {
   assert.equal(rateLimit.check(b, { windowMs: 60000, max }).allowed, true);
 });
 
-test("char: window expiry re-allows", () => {
+test("window expiry re-allows", () => {
   const user = `char-rl-${Date.now()}-w`;
   assert.equal(rateLimit.check(user, { windowMs: 1, max: 1 }).allowed, true);
-  db.handle().query("UPDATE rate_limits SET created_at = ? WHERE user_id = ?").run(Date.now() - 10000, user);
+  db.handle()
+    .query("UPDATE rate_limits SET created_at = ? WHERE user_id = ?")
+    .run(Date.now() - 10000, user);
   assert.equal(rateLimit.check(user, { windowMs: 1, max: 1 }).allowed, true);
 });
 
-test("char: denied checks do not consume further budget rows", () => {
+test("denied checks do not consume further budget rows", () => {
   const user = `char-rl-${Date.now()}-d`;
   const max = 1;
   rateLimit.check(user, { windowMs: 60000, max });
@@ -81,7 +83,10 @@ test("scoped reservations count legacy bare-user rows", () => {
   const result = rateLimit.check({ userId: user, channelId: scope }, { max: 1 });
 
   assert.deepEqual(result, { allowed: false, retryInMs: 60000, reason: "limit" });
-  assert.equal(db.handle().query("SELECT COUNT(*) AS count FROM rate_limits WHERE user_id = ?").get(`${scope}:${user}`).count, 0);
+  assert.equal(
+    db.handle().query("SELECT COUNT(*) AS count FROM rate_limits WHERE user_id = ?").get(`${scope}:${user}`).count,
+    0,
+  );
 });
 
 test("scoped reservations retain their own accounting after legacy compatibility", () => {
@@ -95,7 +100,7 @@ test("scoped reservations retain their own accounting after legacy compatibility
   assert.equal(db.countRecentRequests(user, 60000), 0);
 });
 
-test("char: default window and max are sane", () => {
+test("default window and max are sane", () => {
   assert.ok(rateLimit.WINDOW_MS >= 1000);
   assert.ok(rateLimit.MAX_PER_WINDOW >= 1 && rateLimit.MAX_PER_WINDOW <= 100);
 });

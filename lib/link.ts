@@ -60,12 +60,7 @@ function isPrivateOrLoopbackIp(ip: string) {
   const lower = ip.toLowerCase();
   if (lower === "::1" || lower === "0:0:0:0:0:0:0:1") return true;
   if (lower.startsWith("fc") || lower.startsWith("fd")) return true;
-  if (
-    lower.startsWith("fe8") ||
-    lower.startsWith("fe9") ||
-    lower.startsWith("fea") ||
-    lower.startsWith("feb")
-  ) {
+  if (lower.startsWith("fe8") || lower.startsWith("fe9") || lower.startsWith("fea") || lower.startsWith("feb")) {
     return true;
   }
 

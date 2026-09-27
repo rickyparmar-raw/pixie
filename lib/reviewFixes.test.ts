@@ -36,14 +36,24 @@ test("macro selector routes require actorId and authorize the program helper", a
   process.env.PIXIE_INTERNAL_TOKEN = token;
   try {
     const headers = { Authorization: `Bearer ${token}` };
-    const waiting = await serve.handleRequest(new Request(`http://localhost/internal/v1/programs/${programId}/macros/waiting?actorId=${helperId}`, { headers }));
+    const waiting = await serve.handleRequest(
+      new Request(`http://localhost/internal/v1/programs/${programId}/macros/waiting?actorId=${helperId}`, { headers }),
+    );
     assert.equal(waiting.status, 200);
-    const templates = await serve.handleRequest(new Request(`http://localhost/internal/v1/programs/${programId}/macros/templates?actorId=${helperId}`, { headers }));
+    const templates = await serve.handleRequest(
+      new Request(`http://localhost/internal/v1/programs/${programId}/macros/templates?actorId=${helperId}`, {
+        headers,
+      }),
+    );
     assert.equal(templates.status, 200);
 
-    const unauthWaiting = await serve.handleRequest(new Request(`http://localhost/internal/v1/programs/${programId}/macros/waiting`, { headers }));
+    const unauthWaiting = await serve.handleRequest(
+      new Request(`http://localhost/internal/v1/programs/${programId}/macros/waiting`, { headers }),
+    );
     assert.equal(unauthWaiting.status, 403);
-    const unauthTemplates = await serve.handleRequest(new Request(`http://localhost/internal/v1/programs/${programId}/macros/templates`, { headers }));
+    const unauthTemplates = await serve.handleRequest(
+      new Request(`http://localhost/internal/v1/programs/${programId}/macros/templates`, { headers }),
+    );
     assert.equal(unauthTemplates.status, 403);
   } finally {
     if (previousToken === undefined) delete process.env.PIXIE_INTERNAL_TOKEN;
@@ -53,7 +63,12 @@ test("macro selector routes require actorId and authorize the program helper", a
 
 test("active incident matching requires an affected service and outage language", () => {
   const programId = "review-incident";
-  db.saveProgram({ id: programId, name: "Incident", helpChannel: "C-review-incident", channels: ["C-review-incident"] });
+  db.saveProgram({
+    id: programId,
+    name: "Incident",
+    helpChannel: "C-review-incident",
+    channels: ["C-review-incident"],
+  });
   programs.invalidate();
   const created = incidents.createIncident({
     programId,
@@ -94,7 +109,10 @@ test("resolution transcripts stop at message and character caps", async () => {
   db.resolveTicket(ticketId, "Use the form.", "U-helper");
   const ticket = db.getTicket(ticketId);
   let calls = 0;
-  const transcriptPage = Array.from({ length: 100 }, (_: unknown, i: number) => ({ user: "U-requester", text: `${i} ${"x".repeat(300)}` }));
+  const transcriptPage = Array.from({ length: 100 }, (_: unknown, i: number) => ({
+    user: "U-requester",
+    text: `${i} ${"x".repeat(300)}`,
+  }));
   const client = {
     conversations: {
       replies: async () => {
@@ -132,10 +150,22 @@ test("active learning supersedes only questions with matching intent or informat
   const extractions = [
     { problem: "Where is my YSWS submission?", solution: "Check the submissions page.", category: "review" },
     { problem: "Can I edit my YSWS submission?", solution: "No, contact a helper.", category: "review" },
-    { problem: "When do payouts arrive?", solution: "Payouts arrive after approval.", category: "fulfillment_shipping" },
-    { problem: "Am I eligible for a payout?", solution: "Check the eligibility rules.", category: "fulfillment_shipping" },
+    {
+      problem: "When do payouts arrive?",
+      solution: "Payouts arrive after approval.",
+      category: "fulfillment_shipping",
+    },
+    {
+      problem: "Am I eligible for a payout?",
+      solution: "Check the eligibility rules.",
+      category: "fulfillment_shipping",
+    },
     { problem: "How long does review take?", solution: "Reviews usually take a few days.", category: "review" },
-    { problem: "How long does the review take right now?", solution: "The current review queue is moving today.", category: "review" },
+    {
+      problem: "How long does the review take right now?",
+      solution: "The current review queue is moving today.",
+      category: "review",
+    },
   ];
   const originalComplete = llm.complete;
   let index = 0;
@@ -174,43 +204,105 @@ test("requester follow-up reclassifies by its own signal but preserves human cat
   };
   db.saveProgram(program);
   programs.invalidate();
-  const ticketId = db.createTicket({ programId, channel: program.helpChannel, threadTs: "review-reclassify-thread", requesterId: "U-requester", question: "Can I submit my project for review?" });
+  const ticketId = db.createTicket({
+    programId,
+    channel: program.helpChannel,
+    threadTs: "review-reclassify-thread",
+    requesterId: "U-requester",
+    question: "Can I submit my project for review?",
+  });
   db.setTicketTriage(ticketId, { category: "review", categorySource: "classifier" });
-  tickets.noteThreadActivity({ channel: program.helpChannel, threadTs: "review-reclassify-thread", userId: "U-requester", text: "Where is my payout for the project?" });
+  tickets.noteThreadActivity({
+    channel: program.helpChannel,
+    threadTs: "review-reclassify-thread",
+    userId: "U-requester",
+    text: "Where is my payout for the project?",
+  });
   assert.equal(db.getTicket(ticketId).category, "fulfillment_shipping");
 
-  const humanId = db.createTicket({ programId, channel: program.helpChannel, threadTs: "review-reclassify-human", requesterId: "U-requester", question: "Can I submit my project for review?" });
+  const humanId = db.createTicket({
+    programId,
+    channel: program.helpChannel,
+    threadTs: "review-reclassify-human",
+    requesterId: "U-requester",
+    question: "Can I submit my project for review?",
+  });
   db.setTicketTriage(humanId, { category: "review" });
-  tickets.noteThreadActivity({ channel: program.helpChannel, threadTs: "review-reclassify-human", userId: "U-requester", text: "Where is my payout for the project?" });
+  tickets.noteThreadActivity({
+    channel: program.helpChannel,
+    threadTs: "review-reclassify-human",
+    userId: "U-requester",
+    text: "Where is my payout for the project?",
+  });
   assert.equal(db.getTicket(humanId).category, "review");
-  const resolvedId = db.createTicket({ programId, channel: program.helpChannel, threadTs: "review-reclassify-resolved", requesterId: "U-requester", question: "Can I submit my project for review?" });
+  const resolvedId = db.createTicket({
+    programId,
+    channel: program.helpChannel,
+    threadTs: "review-reclassify-resolved",
+    requesterId: "U-requester",
+    question: "Can I submit my project for review?",
+  });
   db.resolveTicket(resolvedId, "done", "U-helper");
-  tickets.noteThreadActivity({ channel: program.helpChannel, threadTs: "review-reclassify-resolved", userId: "U-requester", text: "Where is my payout for the project?" });
+  tickets.noteThreadActivity({
+    channel: program.helpChannel,
+    threadTs: "review-reclassify-resolved",
+    userId: "U-requester",
+    text: "Where is my payout for the project?",
+  });
   assert.equal(db.getTicket(resolvedId).category, null);
 });
 
 test("resolved macro uses canonical resolution attribution and schedules learning", async () => {
   const programId = "review-macro-resolve";
   const helperId = "U-macro-worker";
-  db.saveProgram({ id: programId, name: "Macro resolve", helpChannel: "C-macro-resolve", channels: ["C-macro-resolve"] });
+  db.saveProgram({
+    id: programId,
+    name: "Macro resolve",
+    helpChannel: "C-macro-resolve",
+    channels: ["C-macro-resolve"],
+  });
   db.syncHelper({ programId, userId: helperId, source: "manual" });
   programs.invalidate();
-  const macro = macros.create({ programId, trigger: "?resolve-review", name: "Resolve", content: "Done.", onSendTransition: "resolved", createdBy: helperId });
-  const ticketId = db.createTicket({ programId, channel: "C-macro-resolve", threadTs: "review-macro-resolve-thread", requesterId: "U-requester", question: "help" });
+  const macro = macros.create({
+    programId,
+    trigger: "?resolve-review",
+    name: "Resolve",
+    content: "Done.",
+    onSendTransition: "resolved",
+    createdBy: helperId,
+  });
+  const ticketId = db.createTicket({
+    programId,
+    channel: "C-macro-resolve",
+    threadTs: "review-macro-resolve-thread",
+    requesterId: "U-requester",
+    question: "help",
+  });
   const scheduled: Array<{ workerId: string }> = [];
   const originalSchedule = pipeline.schedule;
   pipeline.schedule = ((args: { workerId: string }) => scheduled.push(args)) as typeof pipeline.schedule;
   try {
-    const result = await macros.send({ id: macro.macro.id, ticketId, actorId: helperId, client: { chat: { postMessage: async () => ({ ts: "macro-ts" }) } } });
+    const result = await macros.send({
+      id: macro.macro.id,
+      ticketId,
+      actorId: helperId,
+      client: { chat: { postMessage: async () => ({ ts: "macro-ts" }) } },
+    });
     assert.equal(result.ok, true);
   } finally {
     pipeline.schedule = originalSchedule;
   }
   assert.equal(db.getTicket(ticketId).status, "resolved");
-  assert.equal(helperRoute.getExpertise(programId, helperId).find((row: { tag: string }) => row.tag === "general")?.solved_count, 1);
+  assert.equal(
+    helperRoute.getExpertise(programId, helperId).find((row: { tag: string }) => row.tag === "general")?.solved_count,
+    1,
+  );
   assert.equal(scheduled.length, 1);
   assert.equal(scheduled[0].workerId, helperId);
-  assert.equal(db.listTicketEvents(ticketId).some((event: { event_type: string }) => event.event_type === "macro_sent"), true);
+  assert.equal(
+    db.listTicketEvents(ticketId).some((event: { event_type: string }) => event.event_type === "macro_sent"),
+    true,
+  );
 });
 
 test("reply final open guard reports a close race before posting", async () => {
@@ -219,7 +311,13 @@ test("reply final open guard reports a close race before posting", async () => {
   db.saveProgram({ id: programId, name: "Bulk race", helpChannel: "C-bulk-race", channels: ["C-bulk-race"] });
   db.syncHelper({ programId, userId: helperId, source: "manual" });
   programs.invalidate();
-  const ticketId = db.createTicket({ programId, channel: "C-bulk-race", threadTs: "review-bulk-race-thread", requesterId: "U-requester", question: "help" });
+  const ticketId = db.createTicket({
+    programId,
+    channel: "C-bulk-race",
+    threadTs: "review-bulk-race-thread",
+    requesterId: "U-requester",
+    question: "help",
+  });
   db.markTicketWaitingForHelper(ticketId);
   db.resolveTicket(ticketId, "closed by another helper", "U-other");
   let posted = false;
@@ -227,7 +325,14 @@ test("reply final open guard reports a close race before posting", async () => {
     ticketId,
     authorId: helperId,
     text: "not sent",
-    client: { chat: { postMessage: async () => { posted = true; return { ts: "race" }; } } },
+    client: {
+      chat: {
+        postMessage: async () => {
+          posted = true;
+          return { ts: "race" };
+        },
+      },
+    },
     programId,
     requireOpen: true,
   });

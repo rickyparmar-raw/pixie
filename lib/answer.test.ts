@@ -96,7 +96,6 @@ test("parseReply strips a leading ### from the source if the model echoes the he
   assert.deepEqual(result, { source: "Pixl FAQ", answer: "Anyone can join." });
 });
 
-
 test("parseAnswerOrChat reports a grounded answer with its source", () => {
   const result = parseAnswerOrChat("SOURCE: Pixl FAQ\nANSWER: Anyone can join, no team needed.");
   assert.deepEqual(result, { source: "Pixl FAQ", answer: "Anyone can join, no team needed." });
@@ -136,7 +135,6 @@ test("parseAnswerOrChat returns null when the model gave us nothing", () => {
   assert.equal(parseAnswerOrChat(undefined), null);
 });
 
-
 function streamOf(text: string) {
   return async (_options: unknown, onDelta: (delta: string, text: string) => boolean | void) => {
     let seen = "";
@@ -153,7 +151,9 @@ test("getAnswerOrChatStream emits the answer only, never the SOURCE line", async
   llm.completeStream = streamOf("SOURCE: Pixl FAQ\nANSWER: just sign up at play.pixl.rsvp :yay:");
   try {
     const seen: string[] = [];
-    const result = await answer.getAnswerOrChatStream("how do i join", "docs", "", { onText: (t: string) => seen.push(t) });
+    const result = await answer.getAnswerOrChatStream("how do i join", "docs", "", {
+      onText: (t: string) => seen.push(t),
+    });
 
     assert.ok(seen.length > 1, "should have streamed more than once");
     for (const text of seen) assert.doesNotMatch(text, /SOURCE|ANSWER:/);
@@ -189,7 +189,6 @@ test("getAnswerOrChatStream returns null rather than calling the model on an emp
     llm.completeStream = original;
   }
 });
-
 
 test("pixlGuardrail points elsewhere by default and stays local when already in the help channel", () => {
   assert.match(pixlGuardrail(false), /point them at (?:<#|#pixl-help)/);
@@ -255,7 +254,6 @@ test("getAnswerOrChatStream threads inHelpChannel through to the actual system p
 
   assert.match(seenPrompt, /a helper in this channel will pick it up/);
 });
-
 
 test("whereYouAre names the channel and the program that owns it", () => {
   const block = answer.whereYouAre({ id: "pixl", name: "Pixl", helpChannel: "C-help" }, "C-help");
@@ -324,10 +322,7 @@ test("parseAnswerOrChat leaves an ordinary reply alone", () => {
 });
 
 test("the prompts forbid working out shop numbers by hand", () => {
-  for (const prompt of [
-    answer.systemPrompt("corpus"),
-    answer.answerOrChatPrompt("corpus", "", false),
-  ]) {
+  for (const prompt of [answer.systemPrompt("corpus"), answer.answerOrChatPrompt("corpus", "", false)]) {
     assert.match(prompt, /only source of reward thresholds/);
     assert.match(prompt, /never estimate a reward threshold/i);
   }
@@ -366,7 +361,8 @@ Proceed`;
 });
 
 test("sanitizeAnswer strips template placeholder echoes while preserving Slack links and channels", () => {
-  const withPlaceholder = "<a normal, friendly reply, 1-3 sentences>\nCheck out the docs at <https://example.com> or ask in <#C123|pixl-help>!";
+  const withPlaceholder =
+    "<a normal, friendly reply, 1-3 sentences>\nCheck out the docs at <https://example.com> or ask in <#C123|pixl-help>!";
   assert.equal(
     answer.sanitizeAnswer(withPlaceholder),
     "Check out the docs at <https://example.com> or ask in <#C123|pixl-help>!",
@@ -395,7 +391,7 @@ test("getAnswerOrChatStream does not emit scratchpad or template placeholders to
         "We should give some ideas.\n",
         "Let's produce: \"Sure! ",
         "Build a CLI tool or ",
-        "a game.\"\n",
+        'a game."\n',
         "Proceed",
       ];
       let text = "";
@@ -450,7 +446,8 @@ test("looksTruncated accurately detects dangling ends, unfinished blocks, and pu
 });
 
 test("parseAnswerOrChat fails closed when model output is only instruction echo or deliberation", () => {
-  const echoRaw = "my short, casual answer in your voice, 1-3 sentences\nwe need to determine whether the docs cover this\nchecking docs structure and section names";
+  const echoRaw =
+    "my short, casual answer in your voice, 1-3 sentences\nwe need to determine whether the docs cover this\nchecking docs structure and section names";
   const result = answer.parseAnswerOrChat(echoRaw);
   assert.equal(result, null);
 });
@@ -460,7 +457,6 @@ test("answer prompt preserves an explicit request for ideas", () => {
   assert.match(answer.answerOrChatPrompt("docs", "", false), /Preserve explicit user intent/);
   assert.equal(answer.isExplicitIdeasRequest("what is the current policy?"), false);
 });
-
 
 test("prompts enforce domain specificity isolating software and hardware terms", () => {
   for (const prompt of [
@@ -509,8 +505,7 @@ test("another program's prompt carries none of Pixl's pinned policy", () => {
   }
 });
 
-
-test("CHAR: selectAnswerTier routes pings outside help to the ping tier", () => {
+test("selectAnswerTier routes pings outside help to the ping tier", () => {
   const { config } = require("./config");
   const pingTier = config.pingAnswer || config.answer;
   const helpTier = config.helpAnswer || config.answer;
@@ -518,7 +513,7 @@ test("CHAR: selectAnswerTier routes pings outside help to the ping tier", () => 
   assert.ok(helpTier.model || helpTier.baseUrl, "help tier is configured");
 });
 
-test("CHAR: UNCLEAR marker parses to unclear:true and never leaks as prose", () => {
+test("UNCLEAR marker parses to unclear:true and never leaks as prose", () => {
   const parsed = answer.parseAnswerOrChat("SOURCE: NONE\nANSWER: UNCLEAR");
   assert.equal(parsed.unclear, true);
   assert.equal(parsed.answer, "");

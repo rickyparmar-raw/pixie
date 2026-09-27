@@ -1,9 +1,17 @@
-
 // Grounding accepts model claims, but only retrieved records or explicit fixtures can support them.
 const VERDICTS = new Set(["supported", "unsupported", "needs_review"]);
 type JsonRecord = Record<string, unknown>;
-interface GroundingClaim { claim: string; supported: boolean; evidenceIds: string[] }
-interface ParsedVerdict { ok: boolean; verdict: string; claims: GroundingClaim[]; errors: string[] }
+interface GroundingClaim {
+  claim: string;
+  supported: boolean;
+  evidenceIds: string[];
+}
+interface ParsedVerdict {
+  ok: boolean;
+  verdict: string;
+  claims: GroundingClaim[];
+  errors: string[];
+}
 interface EvidenceRecord extends JsonRecord {
   id?: unknown;
   programId?: unknown;
@@ -67,8 +75,7 @@ function decodeJson(text: unknown): JsonRecord | null {
     try {
       const value = JSON.parse(candidate);
       if (value && typeof value === "object" && !Array.isArray(value)) return value;
-    } catch (_error: unknown) {
-    }
+    } catch (_error: unknown) {}
   }
   return null;
 }
@@ -77,7 +84,8 @@ function parseGroundingVerdict(raw: unknown): ParsedVerdict {
   const value = typeof raw === "string" ? decodeJson(raw) : raw;
   if (!value || typeof value !== "object" || Array.isArray(value)) return fail(["verdict must be a JSON object"]);
   const record = value as JsonRecord;
-  if (typeof record.verdict !== "string" || !VERDICTS.has(record.verdict)) return fail(["verdict must be supported, unsupported, or needs_review"]);
+  if (typeof record.verdict !== "string" || !VERDICTS.has(record.verdict))
+    return fail(["verdict must be supported, unsupported, or needs_review"]);
   if (!Array.isArray(record.claims) || record.claims.length === 0) return fail(["claims must be a non-empty array"]);
 
   const claims: GroundingClaim[] = [];
@@ -90,7 +98,8 @@ function parseGroundingVerdict(raw: unknown): ParsedVerdict {
     if (!Array.isArray(claimRecord.evidenceIds) || claimRecord.evidenceIds.some((id) => !asString(id))) {
       return fail([`claims[${index}].evidenceIds must be an array of strings`]);
     }
-    if (claimRecord.supported && claimRecord.evidenceIds.length === 0) return fail([`claims[${index}] supported claims need evidenceIds`]);
+    if (claimRecord.supported && claimRecord.evidenceIds.length === 0)
+      return fail([`claims[${index}] supported claims need evidenceIds`]);
     claims.push({
       claim,
       supported: claimRecord.supported,
@@ -108,15 +117,24 @@ function evidenceProgramId(evidence: EvidenceRecord | undefined) {
   return asString(evidence && (evidence.programId || evidence.program_id));
 }
 
-function validateClaimSupport({ verdict, evidence = [], programId, fixtureClaims = [], parse = parseGroundingVerdict }: ValidateOptions = {}) {
+function validateClaimSupport({
+  verdict,
+  evidence = [],
+  programId,
+  fixtureClaims = [],
+  parse = parseGroundingVerdict,
+}: ValidateOptions = {}) {
   // Callers inject the parser so validation stays independent of model transport.
-  if (typeof parse !== "function") return { ok: false, supported: false, claims: [], errors: ["parse must be a function"] };
-  const parsed: ParsedVerdict = verdict && typeof verdict === "object" && "ok" in verdict && verdict.ok === true
-    ? verdict as ParsedVerdict
-    : parse(verdict);
+  if (typeof parse !== "function")
+    return { ok: false, supported: false, claims: [], errors: ["parse must be a function"] };
+  const parsed: ParsedVerdict =
+    verdict && typeof verdict === "object" && "ok" in verdict && verdict.ok === true
+      ? (verdict as ParsedVerdict)
+      : parse(verdict);
   if (!parsed.ok) return { ok: false, supported: false, claims: [], errors: parsed.errors };
   if (!asString(programId)) return { ok: false, supported: false, claims: [], errors: ["programId is required"] };
-  if (!Array.isArray(evidence) || !Array.isArray(fixtureClaims)) return { ok: false, supported: false, claims: [], errors: ["evidence and fixtureClaims must be arrays"] };
+  if (!Array.isArray(evidence) || !Array.isArray(fixtureClaims))
+    return { ok: false, supported: false, claims: [], errors: ["evidence and fixtureClaims must be arrays"] };
 
   const byId = new Map(evidence.map((item) => [asString(item && item.id), item]));
   const fixtures = new Set(fixtureClaims.map(claimKey));
@@ -126,7 +144,10 @@ function validateClaimSupport({ verdict, evidence = [], programId, fixtureClaims
       const item = byId.get(id);
       if (!item || evidenceProgramId(item) !== programId) return false;
       const supportedClaims = item.supportsClaims || item.supportedClaims || [];
-      return Array.isArray(supportedClaims) && supportedClaims.some((supported) => claimKey(supported) === claimKey(claim.claim));
+      return (
+        Array.isArray(supportedClaims) &&
+        supportedClaims.some((supported) => claimKey(supported) === claimKey(claim.claim))
+      );
     });
     const supported = claim.supported && (explicitFixture || (claim.evidenceIds.length > 0 && validEvidence));
     return { claim: claim.claim, supported, reason: supported ? "explicit evidence" : "no exact same-program support" };

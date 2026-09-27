@@ -13,9 +13,21 @@ const brand = require("./brand");
 const { coverageStats, relativeTime } = require("./stats");
 import type { Program, SlackClient } from "./types";
 
-interface GapSummary { id: number; question: string; ask_count: number }
-interface MetricRow { kind: string; count: number }
-interface AnsweredCounts { docs: number; chat: number; linked: number; total: number }
+interface GapSummary {
+  id: number;
+  question: string;
+  ask_count: number;
+}
+interface MetricRow {
+  kind: string;
+  count: number;
+}
+interface AnsweredCounts {
+  docs: number;
+  chat: number;
+  linked: number;
+  total: number;
+}
 interface ReportCollection {
   until: number;
   counts: Record<string, number>;
@@ -24,7 +36,10 @@ interface ReportCollection {
   gaps: GapSummary[];
   gapKinds: Record<string, number>;
 }
-interface ReportBlock { type: string; text: { type: string; text: string } }
+interface ReportBlock {
+  type: string;
+  text: { type: string; text: string };
+}
 
 function programName() {
   try {
@@ -32,8 +47,7 @@ function programName() {
       .all()
       .filter((p: Program) => p.id !== "ysws-global");
     if (progs.length === 1 && progs[0].name) return progs[0].name;
-  } catch (e) {
-  }
+  } catch (e) {}
   return "Pixl";
 }
 
@@ -64,7 +78,6 @@ let timer: ReturnType<typeof setInterval> | null = null;
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
-
 
 function judgePrompt() {
   const program = programName();
@@ -138,7 +151,10 @@ async function judgeGap(question: string): Promise<string | null> {
   }
 }
 
-async function classifyGaps({ limit = JUDGE_PER_PASS, spacingMs = JUDGE_SPACING_MS }: { limit?: number; spacingMs?: number } = {}): Promise<number> {
+async function classifyGaps({
+  limit = JUDGE_PER_PASS,
+  spacingMs = JUDGE_SPACING_MS,
+}: { limit?: number; spacingMs?: number } = {}): Promise<number> {
   const pending = db.unclassifiedGaps(limit);
   if (pending.length === 0) return 0;
 
@@ -156,7 +172,6 @@ async function classifyGaps({ limit = JUDGE_PER_PASS, spacingMs = JUDGE_SPACING_
   if (judged > 0) log.info("report", `judged ${judged} gap(s)`);
   return judged;
 }
-
 
 const DRAFT_MAX_TOKENS = 400;
 const DRAFT_TIMEOUT_MS = 15000;
@@ -250,7 +265,14 @@ async function gatherThreadContext(client: SlackClient | null, question: string)
   return transcripts.join("\n\n---\n\n").slice(0, THREAD_CONTEXT_CHAR_CAP);
 }
 
-async function draftGaps(client: SlackClient | null, { limit = DRAFT_PER_PASS, spacingMs = JUDGE_SPACING_MS, sinceMs = WEEK_MS }: { limit?: number; spacingMs?: number; sinceMs?: number } = {}): Promise<number> {
+async function draftGaps(
+  client: SlackClient | null,
+  {
+    limit = DRAFT_PER_PASS,
+    spacingMs = JUDGE_SPACING_MS,
+    sinceMs = WEEK_MS,
+  }: { limit?: number; spacingMs?: number; sinceMs?: number } = {},
+): Promise<number> {
   const candidates = db
     .topGaps(GAP_LIMIT, sinceMs, { kind: DOCS, minAskers: 1 })
     .filter((gap: GapSummary) => !db.hasCapturedSource(draftSourceTs(gap.id)))
@@ -281,7 +303,6 @@ async function draftGaps(client: SlackClient | null, { limit = DRAFT_PER_PASS, s
   return drafted;
 }
 
-
 function pct(part: number, whole: number): number {
   return whole > 0 ? Math.round((part / whole) * 100) : 0;
 }
@@ -303,7 +324,10 @@ function collect(weeksAgo = 0, programId: string | null = null): ReportCollectio
   const until = Date.now() - weeksAgo * WEEK_MS;
   const sinceMs = (weeksAgo + 1) * WEEK_MS;
 
-  const counts = Object.fromEntries(db.metricCounts(sinceMs, until).map((r: MetricRow) => [r.kind, r.count])) as Record<string, number>;
+  const counts = Object.fromEntries(db.metricCounts(sinceMs, until).map((r: MetricRow) => [r.kind, r.count])) as Record<
+    string,
+    number
+  >;
   const answered = answeredFrom(counts);
 
   return {
@@ -334,10 +358,7 @@ function reportLines(weeksAgo = 0, programId: string | null = null): string[] {
   const comparable = previous.answered.total > 0;
   const trend = comparable ? ` (${delta(week.coverage, previous.coverage)} vs the week before)` : "";
 
-  lines.push(
-    "",
-    `*${week.answered.total}* questions answered — *${week.coverage}%* straight from the docs${trend}.`,
-  );
+  lines.push("", `*${week.answered.total}* questions answered — *${week.coverage}%* straight from the docs${trend}.`);
 
   lines.push("", "*the docs should answer these*");
   if (week.gaps.length === 0) {
@@ -375,7 +396,10 @@ function reportLines(weeksAgo = 0, programId: string | null = null): string[] {
   const pending = learn.pending(PENDING_CAP + 1, programId).length;
   if (pending > 0) {
     const shown = pending > PENDING_CAP ? `${PENDING_CAP}+` : String(pending);
-    lines.push("", `*waiting on you*\n${shown} candidate answer(s) to review — open ${brand.name()}'s Home tab to approve or drop.`);
+    lines.push(
+      "",
+      `*waiting on you*\n${shown} candidate answer(s) to review — open ${brand.name()}'s Home tab to approve or drop.`,
+    );
   }
 
   return lines;
@@ -388,7 +412,6 @@ function reportText(weeksAgo = 0, programId: string | null = null): string {
 function reportBlocks(weeksAgo = 0, programId: string | null = null): ReportBlock[] {
   return [{ type: "section", text: { type: "mrkdwn", text: reportText(weeksAgo, programId) } }];
 }
-
 
 const programs = require("./programs");
 
@@ -431,20 +454,29 @@ async function postWeekly(client: SlackClient, programId: string | null = null):
 }
 
 async function tick(client: SlackClient): Promise<boolean> {
-  await classifyGaps().catch((e: unknown) => log.debug("report", `classify pass failed: ${e instanceof Error ? e.message : String(e)}`));
-  await draftGaps(client).catch((e: unknown) => log.debug("report", `draft pass failed: ${e instanceof Error ? e.message : String(e)}`));
+  await classifyGaps().catch((e: unknown) =>
+    log.debug("report", `classify pass failed: ${e instanceof Error ? e.message : String(e)}`),
+  );
+  await draftGaps(client).catch((e: unknown) =>
+    log.debug("report", `draft pass failed: ${e instanceof Error ? e.message : String(e)}`),
+  );
   if (!isReportDue()) return false;
   return postWeekly(client);
 }
 
-function start(client: SlackClient, { cycleMs = JUDGE_CYCLE_MS }: { cycleMs?: number } = {}): ReturnType<typeof setInterval> | null {
+function start(
+  client: SlackClient,
+  { cycleMs = JUDGE_CYCLE_MS }: { cycleMs?: number } = {},
+): ReturnType<typeof setInterval> | null {
   if (timer) return timer;
   if (!reportChannel()) {
     log.info("report", `no report channel configured — weekly report disabled, ${brand.cmd("report")} still works`);
   }
 
   timer = setInterval(() => {
-    tick(client).catch((e: unknown) => log.error("report", "weekly tick failed:", e instanceof Error ? e.message : String(e)));
+    tick(client).catch((e: unknown) =>
+      log.error("report", "weekly tick failed:", e instanceof Error ? e.message : String(e)),
+    );
   }, cycleMs);
   if (timer.unref) timer.unref();
   return timer;

@@ -17,7 +17,10 @@ interface ReplyBlock {
   elements?: ReplyBlock[];
   [key: string]: unknown;
 }
-interface SourceLike extends Partial<ProgramSource> { hidden?: boolean; siteUrl?: string }
+interface SourceLike extends Partial<ProgramSource> {
+  hidden?: boolean;
+  siteUrl?: string;
+}
 interface StreamWriterOptions {
   client: SlackClient;
   channel: string;
@@ -25,9 +28,14 @@ interface StreamWriterOptions {
   threadTs?: string | null;
   silencedBefore?: { muted: boolean; takeover: boolean } | null;
 }
-interface SilenceState { muted: boolean; takeover: boolean }
+interface SilenceState {
+  muted: boolean;
+  takeover: boolean;
+}
 
-function errorMessage(error: unknown) { return error instanceof Error ? error.message : String(error); }
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
+}
 
 function sendProgramMessage(args: Record<string, unknown>) {
   return require("./slackMessages").sendProgramMessage(args);
@@ -39,16 +47,14 @@ const DASH_LINE_START = /^\s*(?:[\u2014\u2013]|--)\s*/gm;
 const CODE_SPANS = /(```[\s\S]*?```|`[^`\n]*`)/g;
 
 function dedash(part: string) {
-  return (
-    part
-      .replace(DASH_LINE_END, "")
-      .replace(DASH_LINE_START, "")
-      .replace(DASH_ANYWHERE, ", ")
-      .replace(/,[\s,]*,/g, ",")
-      .replace(/\s+,/g, ",")
-      .replace(/,\s*([.!?;:)\]])/g, "$1")
-      .replace(/([(\[])\s*,\s*/g, "$1")
-  );
+  return part
+    .replace(DASH_LINE_END, "")
+    .replace(DASH_LINE_START, "")
+    .replace(DASH_ANYWHERE, ", ")
+    .replace(/,[\s,]*,/g, ",")
+    .replace(/\s+,/g, ",")
+    .replace(/,\s*([.!?;:)\]])/g, "$1")
+    .replace(/([(\[])\s*,\s*/g, "$1");
 }
 
 function plainDashes(text: string) {
@@ -108,7 +114,9 @@ function sourceLineFor(source: SourceLike | string, program: ProgramLike | strin
   if (!isHidden) {
     try {
       const allSources = knowledge.loadSources();
-      const matched = allSources.find((s: SourceLike) => s && s.name && s.name.toLowerCase() === sourceName.toLowerCase());
+      const matched = allSources.find(
+        (s: SourceLike) => s && s.name && s.name.toLowerCase() === sourceName.toLowerCase(),
+      );
       if (matched && matched.hidden) {
         isHidden = true;
       }
@@ -121,8 +129,12 @@ function sourceLineFor(source: SourceLike | string, program: ProgramLike | strin
   let url = knowledge.getSourceUrl(sourceName);
   if (program) {
     const record = typeof program === "string" ? require("./programs").get(program) : program;
-    const owned = (record?.sources || []).find((candidate: SourceLike) => candidate?.name &&
-      (candidate.name.toLowerCase() === sourceName.toLowerCase() || knowledge.sourceContainsCitation(candidate, sourceName)));
+    const owned = (record?.sources || []).find(
+      (candidate: SourceLike) =>
+        candidate?.name &&
+        (candidate.name.toLowerCase() === sourceName.toLowerCase() ||
+          knowledge.sourceContainsCitation(candidate, sourceName)),
+    );
     if (!owned) return "";
     url = owned.siteUrl || knowledge.getSourceUrl(owned.name) || null;
   }
@@ -133,7 +145,10 @@ function sourceLineFor(source: SourceLike | string, program: ProgramLike | strin
 }
 
 function escapeSlack(text: string) {
-  return String(text || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return String(text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function blocksFor(text: string): ReplyBlock[] {
@@ -161,15 +176,21 @@ function stripReasoning(text: string) {
     .trim();
 
   while (true) {
-    const next = clean.replace(
-      /^(?:User\s+Safety|Safety\s+Assessment|Safety|Content\s+Filter|Safety\s+Category|Safety\s+Verdict):\s*[^\n]+\s*\n*/i,
-      "",
-    ).trim();
+    const next = clean
+      .replace(
+        /^(?:User\s+Safety|Safety\s+Assessment|Safety|Content\s+Filter|Safety\s+Category|Safety\s+Verdict):\s*[^\n]+\s*\n*/i,
+        "",
+      )
+      .trim();
     if (next === clean) break;
     clean = next;
   }
 
-  if (/^(?:Here(?:\x27s|\x20is) (?:a |the )?thinking process:?|\*\*Thinking Process:?\*\*|Thinking Process:?)/i.test(clean)) {
+  if (
+    /^(?:Here(?:\x27s|\x20is) (?:a |the )?thinking process:?|\*\*Thinking Process:?\*\*|Thinking Process:?)/i.test(
+      clean,
+    )
+  ) {
     const markers = [
       /\n(?:SOURCE|ANSWER|OUTPUT|FINAL ANSWER):\s*/i,
       /\n[•\*]\s*\*Asker:\*/i,
@@ -186,7 +207,10 @@ function stripReasoning(text: string) {
 
   while (true) {
     const next = clean
-      .replace(/^(?:(?:\*{1,2})?(?:Here(?:\x27s|\x20is) (?:a |the )?)?(?:thinking\s+process|scratchpad|reasoning|internal\s+notes)(?:\*{1,2})?:?\s*[^\n]*\n*)/i, "")
+      .replace(
+        /^(?:(?:\*{1,2})?(?:Here(?:\x27s|\x20is) (?:a |the )?)?(?:thinking\s+process|scratchpad|reasoning|internal\s+notes)(?:\*{1,2})?:?\s*[^\n]*\n*)/i,
+        "",
+      )
       .trim();
     if (next === clean) break;
     clean = next;
@@ -206,7 +230,13 @@ function stripReasoningInBlocks(blocks: ReplyBlock[]): ReplyBlock[] {
   });
 }
 
-function makeStreamWriter({ client, channel, ensurePlaceholder, threadTs = null, silencedBefore = null }: StreamWriterOptions) {
+function makeStreamWriter({
+  client,
+  channel,
+  ensurePlaceholder,
+  threadTs = null,
+  silencedBefore = null,
+}: StreamWriterOptions) {
   let latest = "";
   let sent = "";
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -273,14 +303,35 @@ function newlySilenced(threadTs: string, before: SilenceState | null = null) {
   return (now.muted && !before.muted) || (now.takeover && !before.takeover);
 }
 
-function decidePostSuppression({ program, threadTs, placeholderTs, silencedBefore = null }: { program?: ProgramLike | null; threadTs: string; placeholderTs: string | null; silencedBefore?: SilenceState | null }) {
+function decidePostSuppression({
+  program,
+  threadTs,
+  placeholderTs,
+  silencedBefore = null,
+}: {
+  program?: ProgramLike | null;
+  threadTs: string;
+  placeholderTs: string | null;
+  silencedBefore?: SilenceState | null;
+}) {
   // Preserve the silence baseline from before generation; a new mute or takeover suppresses the answer.
   if (program && program.shadowMode === true) return "shadow";
   if (placeholderTs && newlySilenced(threadTs, silencedBefore)) return "silenced";
   return null;
 }
 
-async function finalize(client: SlackClient, channel: string, threadTs: string, placeholder: Promise<string | null>, text: string, { blocks = null, program = null, silencedBefore = null }: { blocks?: ReplyBlock[] | null; program?: ProgramLike | null; silencedBefore?: SilenceState | null } = {}) {
+async function finalize(
+  client: SlackClient,
+  channel: string,
+  threadTs: string,
+  placeholder: Promise<string | null>,
+  text: string,
+  {
+    blocks = null,
+    program = null,
+    silencedBefore = null,
+  }: { blocks?: ReplyBlock[] | null; program?: ProgramLike | null; silencedBefore?: SilenceState | null } = {},
+) {
   // Final posting rechecks suppression because mute or takeover can change while generation runs.
   const cleanText = stripReasoning(text);
   const cleanBlocks = blocks ? stripReasoningInBlocks(blocks) : null;
@@ -307,11 +358,22 @@ async function finalize(client: SlackClient, channel: string, threadTs: string, 
     }
   }
 
-  const res = await sendProgramMessage({ client, program, channel, threadTs, text: payload.text, blocks: payload.blocks || null });
+  const res = await sendProgramMessage({
+    client,
+    program,
+    channel,
+    threadTs,
+    text: payload.text,
+    blocks: payload.blocks || null,
+  });
   return res ? res.ts : null;
 }
 
-async function discardPlaceholder(client: SlackClient, channel: string, placeholder: string | Promise<string | null> | null) {
+async function discardPlaceholder(
+  client: SlackClient,
+  channel: string,
+  placeholder: string | Promise<string | null> | null,
+) {
   try {
     const ts = await Promise.resolve(placeholder).catch(() => null);
     if (!ts || !client?.chat?.delete) return;
@@ -349,7 +411,15 @@ async function discardPlaceholder(client: SlackClient, channel: string, placehol
   } catch (_error: unknown) {}
 }
 
-async function flagForHumans(client: SlackClient, channel: string, messageTs: string, question = "", requesterId: string | null = null, workspaceId: string | null = null, placeholder: string | Promise<string | null> | null = null) {
+async function flagForHumans(
+  client: SlackClient,
+  channel: string,
+  messageTs: string,
+  question = "",
+  requesterId: string | null = null,
+  workspaceId: string | null = null,
+  placeholder: string | Promise<string | null> | null = null,
+) {
   if (!programs.isHelpChannel(channel) || !messageTs) {
     if (placeholder) await discardPlaceholder(client, channel, placeholder);
     return;
@@ -398,7 +468,6 @@ async function seedFeedbackReactions(client: SlackClient, channel: string, messa
     });
   }
 }
-
 
 export = {
   escapeSlack,

@@ -11,8 +11,12 @@ const helperRoute = require("./helperRoute");
 before(() => {
   db.close();
   db.open(":memory:");
-  db.handle().query("INSERT INTO programs (id, name, scope, updated_at) VALUES ('pixl', 'Pixl', 'program', ?)").run(Date.now());
-  db.handle().query("INSERT INTO programs (id, name, scope, updated_at) VALUES ('other', 'Other', 'program', ?)").run(Date.now());
+  db.handle()
+    .query("INSERT INTO programs (id, name, scope, updated_at) VALUES ('pixl', 'Pixl', 'program', ?)")
+    .run(Date.now());
+  db.handle()
+    .query("INSERT INTO programs (id, name, scope, updated_at) VALUES ('other', 'Other', 'program', ?)")
+    .run(Date.now());
   db.syncHelper({ programId: "pixl", userId: "U-REVIEW", role: "helper" });
   db.syncHelper({ programId: "pixl", userId: "U-GONE", role: "helper" });
   db.removeHelper({ programId: "pixl", userId: "U-GONE" });
@@ -22,10 +26,13 @@ before(() => {
 
 function addTicket(programId: TestAny, suffix: TestAny, category = "review") {
   const createdAt = Date.now();
-  const result = db.handle().query(
-    `INSERT INTO tickets (program_id, channel, thread_ts, requester_id, question, category, status, created_at, updated_at)
+  const result = db
+    .handle()
+    .query(
+      `INSERT INTO tickets (program_id, channel, thread_ts, requester_id, question, category, status, created_at, updated_at)
      VALUES (?, 'C', ?, 'U-REQUESTER', 'question', ?, 'open', ?, ?)`,
-  ).run(programId, suffix, category, createdAt, createdAt);
+    )
+    .run(programId, suffix, category, createdAt, createdAt);
   return db.getTicket(Number(result.lastInsertRowid));
 }
 
@@ -44,7 +51,6 @@ test("shadow snapshot stores the recommendation and is append-only", () => {
 
 test("shadow snapshots are program-scoped and exclude inactive helpers", () => {
   const ticket = addTicket("other", "shadow-2", "review");
-
 
   const snap = shadowRouting.snapshotForTicket(ticket);
   assert.ok(snap);

@@ -109,20 +109,19 @@ test("getUserContext returns null for an unseen user", () => {
   assert.equal(context.getUserContext("U-nobody"), null);
 });
 
-
-test("char: threads are isolated by ts", () => {
+test("threads are isolated by ts", () => {
   context.addToThread("char-t-a", "user", "alpha question", "U1", "C1");
   context.addToThread("char-t-b", "user", "beta question", "U1", "C1");
   assert.match(context.getThreadContext("char-t-a"), /alpha question/);
   assert.doesNotMatch(context.getThreadContext("char-t-a"), /beta question/);
 });
 
-test("char: addToThread with no ts is a no-op, never throws", () => {
+test("addToThread with no ts is a no-op, never throws", () => {
   assert.doesNotThrow(() => context.addToThread(null, "user", "lost message", "U1", "C1"));
   assert.doesNotThrow(() => context.addToThread(undefined, "user", "lost message", "U1", "C1"));
 });
 
-test("char: seedFromSlack skips the live message and empty texts", async () => {
+test("seedFromSlack skips the live message and empty texts", async () => {
   const client = {
     conversations: {
       replies: async () => ({
@@ -142,13 +141,19 @@ test("char: seedFromSlack skips the live message and empty texts", async () => {
   assert.equal(context.getThreadContext("char-seed-1"), ctx);
 });
 
-test("char: seedFromSlack failure is non-fatal and still marks seeded", async () => {
-  const failing = { conversations: { replies: async () => { throw new Error("channel_not_found"); } } };
+test("seedFromSlack failure is non-fatal and still marks seeded", async () => {
+  const failing = {
+    conversations: {
+      replies: async () => {
+        throw new Error("channel_not_found");
+      },
+    },
+  };
   await assert.doesNotReject(() => context.seedFromSlack(failing, "C1", "char-seed-fail", "UBOT"));
   assert.equal(context.getThreadContext("char-seed-fail"), null);
 });
 
-test("char: bot messages seed as assistant role", async () => {
+test("bot messages seed as assistant role", async () => {
   const client = {
     conversations: {
       replies: async () => ({ messages: [{ ts: "20.1", text: "bot reply", user: "UBOT" }] }),
@@ -164,22 +169,49 @@ test("threadCrowd: Pixie follows a thread alone only while it is her and one per
   const me = (ts: string) => ({ user: "UME", ts });
   const other = (ts: string) => ({ user: "UOTHER", ts });
   assert.deepEqual(context.threadCrowd([me("0"), pixie], "UME", BOT), { pixieIn: true, othersPresent: false });
-  assert.deepEqual(context.threadCrowd([me("0"), pixie, other("2")], "UME", BOT), { pixieIn: true, othersPresent: true });
-  assert.deepEqual(context.threadCrowd([other("0"), pixie], "UME", BOT), { pixieIn: true, othersPresent: true }, "someone else started it");
+  assert.deepEqual(context.threadCrowd([me("0"), pixie, other("2")], "UME", BOT), {
+    pixieIn: true,
+    othersPresent: true,
+  });
+  assert.deepEqual(
+    context.threadCrowd([other("0"), pixie], "UME", BOT),
+    { pixieIn: true, othersPresent: true },
+    "someone else started it",
+  );
   assert.deepEqual(context.threadCrowd([me("0")], "UME", BOT), { pixieIn: false, othersPresent: false });
   assert.equal(context.threadCrowd([{ bot_id: "B1", ts: "1" }], "UME", BOT).pixieIn, true, "bot_id counts as Pixie");
 });
 
 test("fetchThreadCrowd falls back to the thread starter when Slack fails", async () => {
-  const client = { conversations: { replies: async () => { throw new Error("ratelimited"); } } };
-  const crowd = await context.fetchThreadCrowd(client, { channel: "C1", threadTs: "fc.1", messageTs: "fc.2", userId: "UME", botUserId: "UBOT", parentUserId: "UOTHER" });
+  const client = {
+    conversations: {
+      replies: async () => {
+        throw new Error("ratelimited");
+      },
+    },
+  };
+  const crowd = await context.fetchThreadCrowd(client, {
+    channel: "C1",
+    threadTs: "fc.1",
+    messageTs: "fc.2",
+    userId: "UME",
+    botUserId: "UBOT",
+    parentUserId: "UOTHER",
+  });
   assert.equal(crowd.othersPresent, true);
 });
 
 test("seedFromSlack re-seeds a thread whose in-memory transcript was lost", async () => {
   db.touchThread("seed-restart", "C1", { seeded: true });
   let calls = 0;
-  const client = { conversations: { replies: async () => { calls += 1; return { messages: [{ user: "U1", text: "what is pixl", ts: "1" }] }; } } };
+  const client = {
+    conversations: {
+      replies: async () => {
+        calls += 1;
+        return { messages: [{ user: "U1", text: "what is pixl", ts: "1" }] };
+      },
+    },
+  };
   await context.seedFromSlack(client, "C1", "seed-restart", "UBOT");
   assert.equal(calls, 1);
   assert.match(context.getThreadContext("seed-restart") || "", /what is pixl/);

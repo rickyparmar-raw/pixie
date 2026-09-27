@@ -8,14 +8,21 @@ const audit = require("./audit");
 
 db.open(":memory:");
 
-test("char: record persists a tenant-scoped row and returns its id", () => {
-  const id = audit.record({ programId: "char-audit", actorId: "U1", action: "char.tested", entityType: "ticket", entityId: 7, metadata: { k: "v" } });
+test("record persists a tenant-scoped row and returns its id", () => {
+  const id = audit.record({
+    programId: "char-audit",
+    actorId: "U1",
+    action: "char.tested",
+    entityType: "ticket",
+    entityId: 7,
+    metadata: { k: "v" },
+  });
   assert.ok(typeof id === "number");
   const rows = db.listAuditEvents({ programId: "char-audit" });
   assert.ok(rows.some((r: TestAny) => r.id === id && r.action === "char.tested" && r.entity_id === "7"));
 });
 
-test("char: metadata objects are stringified, strings pass through", () => {
+test("metadata objects are stringified, strings pass through", () => {
   const id = audit.record({ programId: "char-audit", actorId: "U1", action: "char.meta", metadata: { a: 1 } });
   const row = db.listAuditEvents({ programId: "char-audit" }).find((r: TestAny) => r.id === id);
   assert.equal(row.metadata, JSON.stringify({ a: 1 }));
@@ -24,14 +31,16 @@ test("char: metadata objects are stringified, strings pass through", () => {
   assert.equal(row2.metadata, "raw-string");
 });
 
-test("char: missing action records nothing", () => {
+test("missing action records nothing", () => {
   assert.equal(audit.record({ programId: "char-audit", actorId: "U1" }), null);
   assert.equal(audit.record({}), null);
 });
 
-test("char: write failures return null instead of throwing", () => {
+test("write failures return null instead of throwing", () => {
   const orig = db.recordAuditEvent;
-  db.recordAuditEvent = () => { throw new Error("db down"); };
+  db.recordAuditEvent = () => {
+    throw new Error("db down");
+  };
   try {
     assert.equal(audit.record({ programId: "char-audit", actorId: "U1", action: "char.fail" }), null);
   } finally {
@@ -39,14 +48,14 @@ test("char: write failures return null instead of throwing", () => {
   }
 });
 
-test("char: the module exposes no update or delete path", () => {
+test("the module exposes no update or delete path", () => {
   assert.equal(typeof audit.record, "function");
   assert.equal(audit.update, undefined);
   assert.equal(audit.delete, undefined);
   assert.equal(audit.remove, undefined);
 });
 
-test("char: audit rows are tenant-isolated on read", () => {
+test("audit rows are tenant-isolated on read", () => {
   audit.record({ programId: "char-audit-a", actorId: "U1", action: "char.a" });
   const rows = db.listAuditEvents({ programId: "char-audit-b" });
   assert.ok(!rows.some((r: TestAny) => r.action === "char.a"));

@@ -1,6 +1,8 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-interface ProgramOptions { [key: string]: unknown; }
+interface ProgramOptions {
+  [key: string]: unknown;
+}
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -34,7 +36,13 @@ test("computes a versioned score with all four components once there's enough vo
   seedProgram("health-b");
   const now = Date.now();
   for (let i = 0; i < 6; i++) {
-    const id = db.createTicket({ programId: "health-b", channel: "C-health-b", threadTs: `t${i}`, requesterId: `U${i}`, question: "q" });
+    const id = db.createTicket({
+      programId: "health-b",
+      channel: "C-health-b",
+      threadTs: `t${i}`,
+      requesterId: `U${i}`,
+      question: "q",
+    });
     db.resolveTicket(id, `U${i}`, "fixed");
   }
   const res = health.computeHealthScore("health-b");
@@ -48,7 +56,14 @@ test("computes a versioned score with all four components once there's enough vo
 
 test("a failing configured source drags sourceHealth down but never below zero", () => {
   seedProgram("health-c", { sources: [{ name: "Docs", url: "https://example.com/hc", type: "url" }] });
-  for (let i = 0; i < 6; i++) db.createTicket({ programId: "health-c", channel: "C-health-c", threadTs: `t${i}`, requesterId: `U${i}`, question: "q" });
+  for (let i = 0; i < 6; i++)
+    db.createTicket({
+      programId: "health-c",
+      channel: "C-health-c",
+      threadTs: `t${i}`,
+      requesterId: `U${i}`,
+      question: "q",
+    });
   for (let i = 0; i < 10; i++) db.recordSourceFailure("Docs::https://example.com/hc", "down");
   const res = health.computeHealthScore("health-c");
   assert.equal(res.components.sourceHealth, 0);
@@ -57,14 +72,26 @@ test("a failing configured source drags sourceHealth down but never below zero",
 test("reopened tickets pull resolutionQuality down more than a plain escalation", () => {
   seedProgram("health-d");
   for (let i = 0; i < 5; i++) {
-    const id = db.createTicket({ programId: "health-d", channel: "C-health-d", threadTs: `t${i}`, requesterId: `U${i}`, question: "q" });
+    const id = db.createTicket({
+      programId: "health-d",
+      channel: "C-health-d",
+      threadTs: `t${i}`,
+      requesterId: `U${i}`,
+      question: "q",
+    });
     db.resolveTicket(id, `U${i}`, "fixed");
   }
   const clean = health.computeHealthScore("health-d");
 
   seedProgram("health-e");
   for (let i = 0; i < 5; i++) {
-    const id = db.createTicket({ programId: "health-e", channel: "C-health-e", threadTs: `t${i}`, requesterId: `U${i}`, question: "q" });
+    const id = db.createTicket({
+      programId: "health-e",
+      channel: "C-health-e",
+      threadTs: `t${i}`,
+      requesterId: `U${i}`,
+      question: "q",
+    });
     db.resolveTicket(id, `U${i}`, "fixed");
     db.reopenTicket(id, `U${i}`);
   }

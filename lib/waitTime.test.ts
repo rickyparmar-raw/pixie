@@ -15,15 +15,24 @@ after(() => {
   programs.invalidate();
 });
 
-
 function seedLag(programId, threadTs, createdAgoMs, lagMs, category = null) {
-  const id = db.createTicket({ programId, workspaceId: "T1", channel: `C-${programId}`, threadTs, requesterId: "U1", question: "q", category });
+  const id = db.createTicket({
+    programId,
+    workspaceId: "T1",
+    channel: `C-${programId}`,
+    threadTs,
+    requesterId: "U1",
+    question: "q",
+    category,
+  });
   const created = Date.now() - createdAgoMs;
-  db.handle().query("UPDATE tickets SET created_at = ?, first_human_response_at = ?, status = 'resolved' WHERE id = ?").run(created, created + lagMs, id);
+  db.handle()
+    .query("UPDATE tickets SET created_at = ?, first_human_response_at = ?, status = 'resolved' WHERE id = ?")
+    .run(created, created + lagMs, id);
   return id;
 }
 
-test("char: wait estimate admits insufficient history (no data, single ticket)", () => {
+test("wait estimate admits insufficient history (no data, single ticket)", () => {
   db.saveProgram({ id: "char-wait-empty", name: "E", helpChannel: "C-E", channels: ["C-E"] });
   programs.invalidate();
   const empty = wait.estimate({ programId: "char-wait-empty" });
@@ -43,7 +52,7 @@ test("char: wait estimate admits insufficient history (no data, single ticket)",
   assert.equal(wait.formatWait(null), null);
 });
 
-test("char: wait median is upper-median over non-negative finite lags", () => {
+test("wait median is upper-median over non-negative finite lags", () => {
   assert.equal(wait.median([]), null);
   assert.equal(wait.median([300000, 60000, 180000]), 180000);
   assert.equal(wait.median([1, 2, 3, 4]), 3);
@@ -60,7 +69,7 @@ test("char: wait median is upper-median over non-negative finite lags", () => {
   assert.equal(est.windowDays, 7);
 });
 
-test("char: wait category falls back to program below the category floor", () => {
+test("wait category falls back to program below the category floor", () => {
   db.saveProgram({ id: "char-wait-cat", name: "C", helpChannel: "C-C", channels: ["C-C"] });
   programs.invalidate();
   for (let i = 0; i < 2; i++) seedLag("char-wait-cat", `char-wc-cat-${i}`, 100000, 60000, "billing");
@@ -80,7 +89,7 @@ test("char: wait category falls back to program below the category floor", () =>
   assert.equal(scoped.medianWaitMs, 60000);
 });
 
-test("char: wait never bleeds across programs and ignores stale/negative lags", () => {
+test("wait never bleeds across programs and ignores stale/negative lags", () => {
   db.saveProgram({ id: "char-wait-iso-a", name: "A", helpChannel: "C-A", channels: ["C-A"] });
   db.saveProgram({ id: "char-wait-iso-b", name: "B", helpChannel: "C-B", channels: ["C-B"] });
   programs.invalidate();
@@ -90,21 +99,62 @@ test("char: wait never bleeds across programs and ignores stale/negative lags", 
   assert.equal(a.sampleSize, 3);
   assert.equal(a.medianWaitMs, 60000);
 
-  const stale = db.createTicket({ programId: "char-wait-iso-a", workspaceId: "T1", channel: "C-A", threadTs: "char-wiso-stale", requesterId: "U1", question: "q" });
-  db.handle().query("UPDATE tickets SET created_at = ?, first_human_response_at = ?, status='resolved' WHERE id = ?").run(Date.now() - 8 * 86400000, Date.now() - 8 * 86400000 + 60000, stale);
-  const neg = db.createTicket({ programId: "char-wait-iso-a", workspaceId: "T1", channel: "C-A", threadTs: "char-wiso-neg", requesterId: "U1", question: "q" });
-  db.handle().query("UPDATE tickets SET created_at = ?, first_human_response_at = ?, status='resolved' WHERE id = ?").run(Date.now() - 50000, Date.now() - 60000, neg);
+  const stale = db.createTicket({
+    programId: "char-wait-iso-a",
+    workspaceId: "T1",
+    channel: "C-A",
+    threadTs: "char-wiso-stale",
+    requesterId: "U1",
+    question: "q",
+  });
+  db.handle()
+    .query("UPDATE tickets SET created_at = ?, first_human_response_at = ?, status='resolved' WHERE id = ?")
+    .run(Date.now() - 8 * 86400000, Date.now() - 8 * 86400000 + 60000, stale);
+  const neg = db.createTicket({
+    programId: "char-wait-iso-a",
+    workspaceId: "T1",
+    channel: "C-A",
+    threadTs: "char-wiso-neg",
+    requesterId: "U1",
+    question: "q",
+  });
+  db.handle()
+    .query("UPDATE tickets SET created_at = ?, first_human_response_at = ?, status='resolved' WHERE id = ?")
+    .run(Date.now() - 50000, Date.now() - 60000, neg);
   assert.equal(wait.responseLags("char-wait-iso-a").length, 3);
 });
 
-test("char: wait queueAhead counts older open-family tickets in-program only", () => {
+test("wait queueAhead counts older open-family tickets in-program only", () => {
   db.saveProgram({ id: "char-wait-q", name: "Q", helpChannel: "C-Q", channels: ["C-Q"] });
   db.saveProgram({ id: "char-wait-q-other", name: "QO", helpChannel: "C-QO", channels: ["C-QO"] });
   programs.invalidate();
-  const first = db.createTicket({ programId: "char-wait-q", workspaceId: "T1", channel: "C-Q", threadTs: "char-wq-1", requesterId: "U1", question: "q" });
-  const second = db.createTicket({ programId: "char-wait-q", workspaceId: "T1", channel: "C-Q", threadTs: "char-wq-2", requesterId: "U1", question: "q" });
-  db.createTicket({ programId: "char-wait-q-other", workspaceId: "T1", channel: "C-QO", threadTs: "char-wq-o", requesterId: "U1", question: "q" });
-  db.handle().query("UPDATE tickets SET created_at = ? WHERE id = ?").run(Date.now() - 10000, first);
+  const first = db.createTicket({
+    programId: "char-wait-q",
+    workspaceId: "T1",
+    channel: "C-Q",
+    threadTs: "char-wq-1",
+    requesterId: "U1",
+    question: "q",
+  });
+  const second = db.createTicket({
+    programId: "char-wait-q",
+    workspaceId: "T1",
+    channel: "C-Q",
+    threadTs: "char-wq-2",
+    requesterId: "U1",
+    question: "q",
+  });
+  db.createTicket({
+    programId: "char-wait-q-other",
+    workspaceId: "T1",
+    channel: "C-QO",
+    threadTs: "char-wq-o",
+    requesterId: "U1",
+    question: "q",
+  });
+  db.handle()
+    .query("UPDATE tickets SET created_at = ? WHERE id = ?")
+    .run(Date.now() - 10000, first);
   const noHist = wait.estimate({ programId: "char-wait-q", ticketId: second });
   assert.equal(noHist.available, false);
   assert.equal("queueAhead" in noHist, false);
@@ -117,7 +167,7 @@ test("char: wait queueAhead counts older open-family tickets in-program only", (
   assert.equal(wait.estimate({ programId: "char-wait-q", ticketId: second }).queueAhead, 0);
 });
 
-test("char: wait formatWait labels minutes/hours, never fake precision", () => {
+test("wait formatWait labels minutes/hours, never fake precision", () => {
   assert.equal(wait.formatWait({ available: true, medianWaitMs: 10000 }), "usually under a minute");
   assert.equal(wait.formatWait({ available: true, medianWaitMs: 30000 }), "usually around 1 minute");
   assert.equal(wait.formatWait({ available: true, medianWaitMs: 60000 }), "usually around 1 minute");

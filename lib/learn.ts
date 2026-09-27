@@ -53,7 +53,21 @@ function invalidateCorpus() {
   require("./knowledge").invalidate();
 }
 
-function teach({ question, answer, authorId, threadTs = null, channel = null, programId = null }: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }): number | null {
+function teach({
+  question,
+  answer,
+  authorId,
+  threadTs = null,
+  channel = null,
+  programId = null,
+}: {
+  question: string;
+  answer: string;
+  authorId: string;
+  threadTs?: string | null;
+  channel?: string | null;
+  programId?: string | null;
+}): number | null {
   const id = db.addLearnedFact({
     question,
     answer,
@@ -67,7 +81,23 @@ function teach({ question, answer, authorId, threadTs = null, channel = null, pr
   return id;
 }
 
-function captureFromThread({ question, answer, authorId, threadTs, channel, programId = null, autoApprove = false }: { question: string; answer: string; authorId: string; threadTs: string; channel: string; programId?: string | null; autoApprove?: boolean }): number | null {
+function captureFromThread({
+  question,
+  answer,
+  authorId,
+  threadTs,
+  channel,
+  programId = null,
+  autoApprove = false,
+}: {
+  question: string;
+  answer: string;
+  authorId: string;
+  threadTs: string;
+  channel: string;
+  programId?: string | null;
+  autoApprove?: boolean;
+}): number | null {
   const status = autoApprove ? APPROVED : PENDING;
   const id = db.addLearnedFact({ question, answer, authorId, status, sourceTs: threadTs, channel, programId });
   if (id && status === APPROVED) invalidateCorpus();
@@ -173,7 +203,14 @@ function corpusSection(programId: string | null = null): string {
   return facts.map((f: Fact) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
 }
 
-function relevantFacts(question: string, programId: string | null = null, { maxFacts = retrieve.LEARNED_MAX_FACTS, maxChars = retrieve.LEARNED_BUDGET }: { maxFacts?: number; maxChars?: number } = {}): Fact[] {
+function relevantFacts(
+  question: string,
+  programId: string | null = null,
+  {
+    maxFacts = retrieve.LEARNED_MAX_FACTS,
+    maxChars = retrieve.LEARNED_BUDGET,
+  }: { maxFacts?: number; maxChars?: number } = {},
+): Fact[] {
   // Only relevant facts enter the prompt; the full taught section would crowd out retrieval evidence.
   const questionTokens = retrieve.tokenize(question);
   if (questionTokens.length === 0) return [];
@@ -200,7 +237,11 @@ function relevantFacts(question: string, programId: string | null = null, { maxF
   return picked;
 }
 
-function relevantCorpusSection(question: string, programId: string | null = null, opts: { maxFacts?: number; maxChars?: number } = {}): string {
+function relevantCorpusSection(
+  question: string,
+  programId: string | null = null,
+  opts: { maxFacts?: number; maxChars?: number } = {},
+): string {
   const facts = relevantFacts(question, programId, opts);
   if (facts.length === 0) return "";
   return facts.map((f: Fact) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");

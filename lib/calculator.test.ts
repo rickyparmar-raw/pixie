@@ -3,7 +3,14 @@ const assert = require("node:assert/strict");
 const calculator = require("./calculator");
 
 const ITEMS = [
-  { id: 500, name: "PS5 Digital, 825gb +wireless controller", price: 11400, category: "other", unlock_xp: 0, config_options: null },
+  {
+    id: 500,
+    name: "PS5 Digital, 825gb +wireless controller",
+    price: 11400,
+    category: "other",
+    unlock_xp: 0,
+    config_options: null,
+  },
   { id: 27, name: "Soldering Iron Kit", price: 650, category: "tech", unlock_xp: 0, config_options: null },
   { id: 10, name: "Sticker Pack", price: 50, category: "merch", unlock_xp: 0, config_options: null },
 ];
@@ -60,8 +67,7 @@ test("directAnswer calculates general payout", () => {
   assert.match(r.answer, /Restoration Energy/);
 });
 
-
-test("CHAR: calculator only fires on calculator-shaped queries (hands back otherwise)", () => {
+test("calculator only fires on calculator-shaped queries (hands back otherwise)", () => {
   assert.equal(calculator.isCalculatorQuery("how much is a PS5"), false);
   assert.equal(calculator.isCalculatorQuery("calculate payout for 20 hours at T3"), true);
   assert.equal(calculator.directAnswer("how much is a PS5", DATA), null);

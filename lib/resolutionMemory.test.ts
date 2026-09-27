@@ -25,20 +25,36 @@ function seedProgram() {
 }
 
 function resolvedTicket() {
-  const id = db.createTicket({ programId: "rm-hwy", workspaceId: "T1", channel: "C-HWY", threadTs: `rm-t-${Date.now()}-${Math.random()}`, requesterId: "U1", question: "pcb order stuck" });
+  const id = db.createTicket({
+    programId: "rm-hwy",
+    workspaceId: "T1",
+    channel: "C-HWY",
+    threadTs: `rm-t-${Date.now()}-${Math.random()}`,
+    requesterId: "U1",
+    question: "pcb order stuck",
+  });
   db.resolveTicket(id, "reorder from the approved vendor list");
   return db.getTicket(id);
 }
 
 test("unresolved tickets yield no candidates; resolved ones do (deduped)", async () => {
   seedProgram();
-  const open = db.createTicket({ programId: "rm-hwy", workspaceId: "T1", channel: "C-HWY", threadTs: "rm-open", requesterId: "U1", question: "q" });
+  const open = db.createTicket({
+    programId: "rm-hwy",
+    workspaceId: "T1",
+    channel: "C-HWY",
+    threadTs: "rm-open",
+    requesterId: "U1",
+    question: "q",
+  });
   const refused = await memory.proposeFromTicket({ ticketId: open, actorId: "U-helper" });
   assert.match(refused.error, /only resolved/);
 
   const llm = require("./llm");
   const real = llm.complete;
-  llm.complete = async () => ({ text: '{"problem": "pcb order stuck", "cause": "wrong vendor", "solution": "reorder approved", "category": "ordering"}' });
+  llm.complete = async () => ({
+    text: '{"problem": "pcb order stuck", "cause": "wrong vendor", "solution": "reorder approved", "category": "ordering"}',
+  });
   try {
     const first = await memory.proposeFromTicket({ ticketId: resolvedTicket().id, actorId: "U-helper" });
     assert.equal(first.ok, true);
@@ -68,7 +84,14 @@ test("extraction failure still yields a reviewable candidate, never nothing", as
 });
 
 test("approval enters the corpus with verification; rejection excludes", async () => {
-  const id = db.createTicket({ programId: "rm-hwy", workspaceId: "T1", channel: "C-HWY", threadTs: "rm-appr", requesterId: "U1", question: "unique rm question" });
+  const id = db.createTicket({
+    programId: "rm-hwy",
+    workspaceId: "T1",
+    channel: "C-HWY",
+    threadTs: "rm-appr",
+    requesterId: "U1",
+    question: "unique rm question",
+  });
   db.resolveTicket(id, "unique rm resolution");
   const llm = require("./llm");
   const real = llm.complete;
@@ -87,7 +110,14 @@ test("approval enters the corpus with verification; rejection excludes", async (
   const facts = db.approvedFacts(200, "rm-hwy").map((f) => f.question);
   assert.ok(facts.includes(candidate.question));
 
-  const id2 = db.createTicket({ programId: "rm-hwy", workspaceId: "T1", channel: "C-HWY", threadTs: "rm-rej", requesterId: "U1", question: "bad idea" });
+  const id2 = db.createTicket({
+    programId: "rm-hwy",
+    workspaceId: "T1",
+    channel: "C-HWY",
+    threadTs: "rm-rej",
+    requesterId: "U1",
+    question: "bad idea",
+  });
   db.resolveTicket(id2, "do the bad thing");
   const prop = await memory.proposeFromTicket({ ticketId: id2, actorId: "U-helper" });
   const rej = memory.rejectCandidate({ id: prop.candidate.id, actorId: "U-helper" });
@@ -105,24 +135,26 @@ test("candidate API is tenant- and actor-gated", async () => {
   assert.ok(Array.isArray(listed));
 });
 
-
-test("char: validateExtraction enforces shape and size bounds", () => {
+test("validateExtraction enforces shape and size bounds", () => {
   assert.equal(memory.validateExtraction(null), null);
   assert.equal(memory.validateExtraction({}), null);
   assert.equal(memory.validateExtraction({ problem: "p" }), null);
-  assert.equal(memory.validateExtraction({ problem: "p", solution: "s", category: "c".repeat(100) }).category.length, 60);
+  assert.equal(
+    memory.validateExtraction({ problem: "p", solution: "s", category: "c".repeat(100) }).category.length,
+    60,
+  );
   assert.equal(memory.validateExtraction({ problem: "p".repeat(600), solution: "s" }), null);
   assert.equal(memory.validateExtraction({ problem: "p", solution: "s".repeat(3000) }), null);
   const ok = memory.validateExtraction({ problem: " p ", solution: " s ", category: " cat ", cause: " why " });
   assert.deepEqual(ok, { problem: "p", solution: "s", category: "cat", cause: "why" });
 });
 
-test("char: approve/reject fail closed on unknown ids", () => {
+test("approve/reject fail closed on unknown ids", () => {
   assert.match(memory.approveCandidate({ id: 999999999, actorId: "U-helper" }).error, /not found/);
   assert.match(memory.rejectCandidate({ id: 999999999, actorId: "U-helper" }).error, /not found/);
 });
 
-test("char: listCandidates is scoped and bounded", () => {
+test("listCandidates is scoped and bounded", () => {
   const rows = memory.listCandidates("rm-hwy", memory.CANDIDATE, 5);
   assert.ok(Array.isArray(rows) && rows.length <= 5);
   assert.ok(rows.every((r) => r.status === memory.CANDIDATE));

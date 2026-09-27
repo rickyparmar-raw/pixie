@@ -8,16 +8,47 @@ const { helperStats, listHelperStats, median, rate } = require("./helperStats");
 db.open(":memory:");
 
 function program(id: string, userId: string, active = 1): void {
-  db.handle().query("INSERT INTO programs (id, name, scope, updated_at) VALUES (?, ?, 'program', ?)").run(id, id, Date.now());
+  db.handle()
+    .query("INSERT INTO programs (id, name, scope, updated_at) VALUES (?, ?, 'program', ?)")
+    .run(id, id, Date.now());
   db.syncHelper({ programId: id, userId, role: "helper" });
   if (!active) db.removeHelper({ programId: id, userId });
 }
 
-function ticket(programId: string, assigneeId: string, createdAt: number, overrides: { status?: string; category?: string; assignedAt?: number; firstResponseAt?: number | null; resolvedAt?: number | null; resolvedBy?: string; reopenCount?: number } = {}): number {
-  const result = db.handle().query(
-    `INSERT INTO tickets (program_id, channel, thread_ts, requester_id, question, status, assignee_id, category, created_at, updated_at, assigned_at, first_human_response_at, resolved_at, resolved_by, reopen_count)
+function ticket(
+  programId: string,
+  assigneeId: string,
+  createdAt: number,
+  overrides: {
+    status?: string;
+    category?: string;
+    assignedAt?: number;
+    firstResponseAt?: number | null;
+    resolvedAt?: number | null;
+    resolvedBy?: string;
+    reopenCount?: number;
+  } = {},
+): number {
+  const result = db
+    .handle()
+    .query(
+      `INSERT INTO tickets (program_id, channel, thread_ts, requester_id, question, status, assignee_id, category, created_at, updated_at, assigned_at, first_human_response_at, resolved_at, resolved_by, reopen_count)
      VALUES (?, 'C', ?, 'requester', 'question', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).run(programId, `${programId}-${createdAt}-${Math.random()}`, overrides.status || "resolved", assigneeId, overrides.category || "support", createdAt, createdAt, overrides.assignedAt || createdAt, overrides.firstResponseAt || null, overrides.resolvedAt || null, overrides.resolvedBy || assigneeId, overrides.reopenCount || 0);
+    )
+    .run(
+      programId,
+      `${programId}-${createdAt}-${Math.random()}`,
+      overrides.status || "resolved",
+      assigneeId,
+      overrides.category || "support",
+      createdAt,
+      createdAt,
+      overrides.assignedAt || createdAt,
+      overrides.firstResponseAt || null,
+      overrides.resolvedAt || null,
+      overrides.resolvedBy || assigneeId,
+      overrides.reopenCount || 0,
+    );
   return Number(result.lastInsertRowid);
 }
 
@@ -37,15 +68,43 @@ test("helper stats are program-scoped and expose real lifecycle metrics", () => 
   program("stats-b", "U-A");
   const base = Date.now() - 100000;
   const first = ticket("stats-a", "U-A", base, { firstResponseAt: base + 1000, resolvedAt: base + 5000 });
-  const reopened = ticket("stats-a", "U-A", base + 10000, { status: "reopened", firstResponseAt: base + 11000, reopenCount: 1 });
+  const reopened = ticket("stats-a", "U-A", base + 10000, {
+    status: "reopened",
+    firstResponseAt: base + 11000,
+    reopenCount: 1,
+  });
   ticket("stats-b", "U-A", base, { resolvedAt: base + 9000 });
-  db.handle().query("INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, detail, created_at) VALUES (?, 'stats-a', 'U-A', 'helper_reply', ?, ?)").run(first, JSON.stringify({ ts: "reply-a" }), base + 1000);
-  db.handle().query("INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, created_at) VALUES (?, 'stats-a', 'U-A', 'resolved', ?)").run(first, base + 5000);
-  db.handle().query("INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, created_at) VALUES (?, 'stats-a', 'U-A', 'resolved', ?)").run(reopened, base + 15000);
-  db.handle().query("INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, created_at) VALUES (?, 'stats-a', 'requester', 'reopened', ?)").run(reopened, base + 20000);
-  db.handle().query("INSERT INTO feedback (message_ts, user_id, vote, created_at) VALUES ('reply-a', 'requester', 1, ?)").run(base + 2000);
-  db.handle().query("INSERT INTO feedback (message_ts, user_id, vote, created_at) VALUES ('other', 'requester', -1, ?)").run(base + 2000);
-  db.handle().query("INSERT INTO helper_expertise (program_id, user_id, tag, solved_count, updated_at) VALUES ('stats-a', 'U-A', 'support', 1, ?)").run(base);
+  db.handle()
+    .query(
+      "INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, detail, created_at) VALUES (?, 'stats-a', 'U-A', 'helper_reply', ?, ?)",
+    )
+    .run(first, JSON.stringify({ ts: "reply-a" }), base + 1000);
+  db.handle()
+    .query(
+      "INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, created_at) VALUES (?, 'stats-a', 'U-A', 'resolved', ?)",
+    )
+    .run(first, base + 5000);
+  db.handle()
+    .query(
+      "INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, created_at) VALUES (?, 'stats-a', 'U-A', 'resolved', ?)",
+    )
+    .run(reopened, base + 15000);
+  db.handle()
+    .query(
+      "INSERT INTO ticket_events (ticket_id, program_id, actor_id, event_type, created_at) VALUES (?, 'stats-a', 'requester', 'reopened', ?)",
+    )
+    .run(reopened, base + 20000);
+  db.handle()
+    .query("INSERT INTO feedback (message_ts, user_id, vote, created_at) VALUES ('reply-a', 'requester', 1, ?)")
+    .run(base + 2000);
+  db.handle()
+    .query("INSERT INTO feedback (message_ts, user_id, vote, created_at) VALUES ('other', 'requester', -1, ?)")
+    .run(base + 2000);
+  db.handle()
+    .query(
+      "INSERT INTO helper_expertise (program_id, user_id, tag, solved_count, updated_at) VALUES ('stats-a', 'U-A', 'support', 1, ?)",
+    )
+    .run(base);
   const stats = helperStats("stats-a", "U-A");
   assert.equal(stats.totals.resolved, 1);
   assert.equal(stats.totals.open, 1);

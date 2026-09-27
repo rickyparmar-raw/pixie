@@ -5,8 +5,14 @@ import configModule = require("./config");
 
 const { config } = configModule;
 
-interface MetricCount { kind: string; count: number }
-interface CachedQuestion { question: string; ask_count: number }
+interface MetricCount {
+  kind: string;
+  count: number;
+}
+interface CachedQuestion {
+  question: string;
+  ask_count: number;
+}
 
 function relativeTime(ms: number | null | undefined) {
   if (!ms) return "never";

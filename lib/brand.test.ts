@@ -4,7 +4,6 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const brand = require("./brand");
 
-
 function withEnv(vars: Record<string, string | undefined>, fn: () => void) {
   const saved: Record<string, string | undefined> = {};
   for (const [k, v] of Object.entries(vars)) {
@@ -46,7 +45,6 @@ test("the slug is derived from the name when only the name is set", () => {
   });
 });
 
-
 test("a display name with spaces or caps is slugified before becoming a command", () => {
   withEnv({ PIXIE_BOT_NAME: "Sol Helper Bot", PIXIE_BOT_SLUG: undefined }, () => {
     assert.equal(brand.slug(), "sol-helper-bot");
@@ -59,7 +57,6 @@ test("punctuation is stripped rather than passed into a command name", () => {
     assert.equal(brand.slug(), "solvable-ysws-2026");
   });
 });
-
 
 test("a slug that slugifies to nothing falls back rather than producing '/'", () => {
   withEnv({ PIXIE_BOT_SLUG: "!!!" }, () => {
@@ -75,13 +72,11 @@ test("an empty or whitespace value is treated as unset", () => {
   });
 });
 
-
 test("payload ids are underscored", () => {
   withEnv({ PIXIE_BOT_SLUG: "sol-helper" }, () => {
     assert.equal(brand.id("teach_thread"), "sol_helper_teach_thread");
   });
 });
-
 
 test("brand values are read per call, not captured at require time", () => {
   withEnv({ PIXIE_BOT_SLUG: "first" }, () => {
@@ -92,15 +87,14 @@ test("brand values are read per call, not captured at require time", () => {
   });
 });
 
-
-test("char: defaults are the pixie identity", () => {
+test("defaults are the pixie identity", () => {
   withEnv({ PIXIE_BOT_NAME: undefined, PIXIE_BOT_SLUG: undefined }, () => {
     assert.equal(brand.name(), brand.DEFAULT_NAME);
     assert.equal(brand.slug(), brand.DEFAULT_SLUG);
   });
 });
 
-test("char: rebranded commands carry no pixie residue", () => {
+test("rebranded commands carry no pixie residue", () => {
   withEnv({ PIXIE_BOT_NAME: "Sol", PIXIE_BOT_SLUG: "sol" }, () => {
     assert.doesNotMatch(brand.cmd(), /pixie/);
     assert.doesNotMatch(brand.cmd("teach"), /pixie/);
@@ -108,7 +102,7 @@ test("char: rebranded commands carry no pixie residue", () => {
   });
 });
 
-test("char: cmd with empty suffix is the bare ask command", () => {
+test("cmd with empty suffix is the bare ask command", () => {
   withEnv({ PIXIE_BOT_SLUG: "sol" }, () => {
     assert.equal(brand.cmd(""), "/sol");
     assert.match(brand.cmd("report"), /^\/sol-report$/);

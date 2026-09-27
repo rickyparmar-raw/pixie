@@ -1,0 +1,6 @@
+node_modules
+pixie-wizard
+data
+graphify-out
+*.md
+*.json

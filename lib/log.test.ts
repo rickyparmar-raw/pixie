@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const { config } = require("./config");
 const log = require("./log");
 
-test("char: subscribers see every level with scope and args", () => {
+test("subscribers see every level with scope and args", () => {
   const seen: unknown[][] = [];
   const unsub = log.subscribe((kind: string, scope: string, args: unknown[]) => seen.push([kind, scope, args]));
   try {
@@ -19,16 +19,20 @@ test("char: subscribers see every level with scope and args", () => {
   }
 });
 
-test("char: unsubscribe stops delivery", () => {
+test("unsubscribe stops delivery", () => {
   let calls = 0;
-  const unsub = log.subscribe(() => { calls += 1; });
+  const unsub = log.subscribe(() => {
+    calls += 1;
+  });
   unsub();
   log.info("char", "after unsub");
   assert.equal(calls, 0);
 });
 
-test("char: a throwing subscriber never breaks logging", () => {
-  const unsub = log.subscribe(() => { throw new Error("subscriber on fire"); });
+test("a throwing subscriber never breaks logging", () => {
+  const unsub = log.subscribe(() => {
+    throw new Error("subscriber on fire");
+  });
   try {
     assert.doesNotThrow(() => log.info("char", "still logs"));
     assert.doesNotThrow(() => log.warn("char", "still warns"));
@@ -37,7 +41,7 @@ test("char: a throwing subscriber never breaks logging", () => {
   }
 });
 
-test("char: debug notifies even when console output is gated", () => {
+test("debug notifies even when console output is gated", () => {
   const saved = config.debug;
   config.debug = false;
   const seen: string[] = [];
@@ -51,8 +55,11 @@ test("char: debug notifies even when console output is gated", () => {
   }
 });
 
-test("char: subscribe returns an idempotent unsubscriber", () => {
+test("subscribe returns an idempotent unsubscriber", () => {
   const unsub = log.subscribe(() => {});
-  assert.doesNotThrow(() => { unsub(); unsub(); });
+  assert.doesNotThrow(() => {
+    unsub();
+    unsub();
+  });
 });
 export {};

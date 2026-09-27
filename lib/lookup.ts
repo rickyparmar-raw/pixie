@@ -42,7 +42,11 @@ interface AnswerOptions {
   isPing?: boolean;
   skipCache?: boolean;
 }
-interface WebResult { title?: string; url?: string; markdown?: string }
+interface WebResult {
+  title?: string;
+  url?: string;
+  markdown?: string;
+}
 
 type AnswerMode = "docs-only" | "help-only" | "always";
 const DOCS_ONLY: AnswerMode = "docs-only";
@@ -59,8 +63,9 @@ function cacheScope(program: ProgramLike | string | null | undefined) {
 
 function programSources(record: ProgramLike | string | null | undefined): SourceLike[] {
   // Resolve program references before selecting sources so cross-program knowledge cannot leak.
-  const resolved: ProgramLike | null = (typeof record === "string" ? programs.get(record) as ProgramLike : record) || null;
-  const shared = resolved && resolved.sharedSources === false ? [] : (programs.shared().sources || []);
+  const resolved: ProgramLike | null =
+    (typeof record === "string" ? (programs.get(record) as ProgramLike) : record) || null;
+  const shared = resolved && resolved.sharedSources === false ? [] : programs.shared().sources || [];
   return [...(resolved?.sources || []), ...shared];
 }
 
@@ -79,7 +84,9 @@ function dateFallback(question: string, contextPrompt: string, prog: ProgramLike
   const record = typeof prog === "string" ? programs.get(prog) : prog;
   const programId = idOf(record || prog);
   const milestones = record
-    ? (record.sharedSources === false ? (record.milestones || []) : (record.milestones || programs.shared().milestones))
+    ? record.sharedSources === false
+      ? record.milestones || []
+      : record.milestones || programs.shared().milestones
     : programs.shared().milestones;
 
   const direct = program.directAnswer(question, new Date(), milestones, record);
@@ -123,7 +130,10 @@ function liveKnowledgeAnswer(question: string, prog: ProgramLike | string | null
     return { source, answer: "Yes, you can include multiple Lapse links in one submission, separated by commas." };
   }
   if (/fully.*cad|cad.*hardware/i.test(text) && /allowed|submit|project/i.test(text)) {
-    return { source, answer: "Yes, fully CAD hardware projects are allowed in Live YSWS when they meet the submission requirements." };
+    return {
+      source,
+      answer: "Yes, fully CAD hardware projects are allowed in Live YSWS when they meet the submission requirements.",
+    };
   }
   return null;
 }
@@ -149,14 +159,15 @@ function arithmeticAnswer(question: string) {
     try {
       const value = arithmetic.calculateMoney(expression.trim());
       return { source: "Arithmetic", direct: true, answer: `${expression.trim()} = ${value}` };
-    } catch (_error: unknown) {
-    }
+    } catch (_error: unknown) {}
   }
   return null;
 }
 
 async function repoValidatorAnswer(question: string) {
-  const isCheckQuery = /\b(?:check|inspect|validate|review|audit|ready for submission|submission check)\b/i.test(question);
+  const isCheckQuery = /\b(?:check|inspect|validate|review|audit|ready for submission|submission check)\b/i.test(
+    question,
+  );
   const parsed = validator.parseGithubUrl(question);
   if (parsed && (isCheckQuery || /^\s*https?:\/\/github\.com\/[^\s]+\s*$/i.test(question))) {
     const report = await validator.validateRepository(parsed.url);
@@ -230,10 +241,13 @@ function isAuthoritativeOnlyTopic(question: string, result: AnswerResult | null)
   return AUTHORITATIVE_ONLY_RES.some((re) => re.test(text));
 }
 
-const NUMERIC_CLAIM_RE = /\$\s?\d[\d,.]*|\b\d[\d,.]*\s?%|\b\d[\d,.]*\s?(?:percent|px|pixels?|hours?|hrs?|days?|weeks?|months?|dollars?)\b/gi;
+const NUMERIC_CLAIM_RE =
+  /\$\s?\d[\d,.]*|\b\d[\d,.]*\s?%|\b\d[\d,.]*\s?(?:percent|px|pixels?|hours?|hrs?|days?|weeks?|months?|dollars?)\b/gi;
 
 function normalizeForMatch(text: string) {
-  return String(text || "").toLowerCase().replace(/\s+/g, " ");
+  return String(text || "")
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 function numericClaimsGrounded(answerText: string, corpusText: string) {
@@ -266,9 +280,12 @@ function exactClaimAllowed(result: AnswerResult | null, prog: ProgramLike | stri
   const source = sources.find((candidate) => {
     if (!candidate?.name || !reportedSource) return false;
     if (candidate.name.toLowerCase() === reportedSource) return true;
-    if (idOf(prog) === "jame-gam" &&
+    if (
+      idOf(prog) === "jame-gam" &&
       reportedSource === "jame gam — support & program docs" &&
-      candidate.name.toLowerCase() === "jame gam complete docs") return true;
+      candidate.name.toLowerCase() === "jame gam complete docs"
+    )
+      return true;
     return knowledge.sourceContainsCitation(candidate, reportedSource);
   });
   if (!source) return !isAuthoritativeOnlyTopic(question, result);
@@ -277,12 +294,20 @@ function exactClaimAllowed(result: AnswerResult | null, prog: ProgramLike | stri
   return numericClaimsGrounded(result.answer || "", corpus);
 }
 
-function applyGroundingBoundary(result: AnswerResult | null, prog: ProgramLike | string | null, question = "", corpus = "") {
+function applyGroundingBoundary(
+  result: AnswerResult | null,
+  prog: ProgramLike | string | null,
+  question = "",
+  corpus = "",
+) {
   // Reject unsupported numeric and source claims before they become cacheable answers.
   if (!result) return result;
   const allowed = exactClaimAllowed(result, prog, question, corpus);
   if (!allowed) {
-    log.warn("grounding", `rejected program=${idOf(prog) || "none"} source=${result.source || "NONE"} answer_chars=${result.answer?.length || 0} authoritative_only=${isAuthoritativeOnlyTopic(question, result)}`);
+    log.warn(
+      "grounding",
+      `rejected program=${idOf(prog) || "none"} source=${result.source || "NONE"} answer_chars=${result.answer?.length || 0} authoritative_only=${isAuthoritativeOnlyTopic(question, result)}`,
+    );
     return null;
   }
   return result;
@@ -292,7 +317,7 @@ function retrievalQuery(question: string, contextPrompt = "", prog: ProgramLike 
   let q = (question || "").trim();
   if (!contextPrompt || !contextPrompt.trim()) return q;
 
-  const resolved = typeof prog === "string" ? programs.get(prog) as ProgramLike : prog;
+  const resolved = typeof prog === "string" ? (programs.get(prog) as ProgramLike) : prog;
   const rawProgName = resolved?.name || (resolved?.id && resolved.id !== "ysws-global" ? resolved.id : "");
   const progName = /sandbox|test|staging/i.test(rawProgName) ? "" : rawProgName;
 
@@ -316,7 +341,13 @@ function retrievalQuery(question: string, contextPrompt = "", prog: ProgramLike 
   return q;
 }
 
-async function lookupAnswer(question: string, contextPrompt = "", prog: ProgramLike | string | null = null, channel: string | null = null, { isPing = false, skipCache = false }: Pick<AnswerOptions, "isPing" | "skipCache"> = {}) {
+async function lookupAnswer(
+  question: string,
+  contextPrompt = "",
+  prog: ProgramLike | string | null = null,
+  channel: string | null = null,
+  { isPing = false, skipCache = false }: Pick<AnswerOptions, "isPing" | "skipCache"> = {},
+) {
   const programId = idOf(prog);
   const hit = cacheHit(question, contextPrompt, cacheScope(prog), skipCache);
   if (hit) return hit;
@@ -340,7 +371,15 @@ async function lookupAnswer(question: string, contextPrompt = "", prog: ProgramL
 async function answerOrChat(
   question: string,
   contextPrompt = "",
-  { onText = null, inHelpChannel = false, program: prog = null, channel = null, allowWebSearch = false, isPing = false, skipCache = false }: AnswerOptions = {},
+  {
+    onText = null,
+    inHelpChannel = false,
+    program: prog = null,
+    channel = null,
+    allowWebSearch = false,
+    isPing = false,
+    skipCache = false,
+  }: AnswerOptions = {},
 ) {
   const programId = idOf(prog);
   const hit = cacheHit(question, contextPrompt, cacheScope(prog), skipCache);
@@ -352,14 +391,22 @@ async function answerOrChat(
   const query = retrievalQuery(question, contextPrompt, prog);
   const corpus = knowledge.getContext(query, programId);
   let result = onText
-    ? await answer.getAnswerOrChatStream(question, corpus, contextPrompt, { onText, inHelpChannel, program: prog, channel, isPing })
+    ? await answer.getAnswerOrChatStream(question, corpus, contextPrompt, {
+        onText,
+        inHelpChannel,
+        program: prog,
+        channel,
+        isPing,
+      })
     : await answer.getAnswerOrChat(question, corpus, contextPrompt, inHelpChannel, prog, channel, { isPing });
 
   if (!result?.source) {
     const direct = dateFallback(question, contextPrompt, prog);
     if (direct) return direct;
 
-    result = await webFallback({ question, contextPrompt, corpus, prog, channel, isPing, inHelpChannel, allowWebSearch }) || result;
+    result =
+      (await webFallback({ question, contextPrompt, corpus, prog, channel, isPing, inHelpChannel, allowWebSearch })) ||
+      result;
   }
 
   result = applyGroundingBoundary(result, prog, question, corpus);
@@ -367,13 +414,29 @@ async function answerOrChat(
   return result;
 }
 
-async function webFallback({ question, contextPrompt, corpus, prog, channel, isPing, inHelpChannel, allowWebSearch }: { question: string; contextPrompt: string; corpus: string; prog: ProgramLike | string | null; channel: string | null; isPing: boolean; inHelpChannel: boolean; allowWebSearch: boolean }) {
+async function webFallback({
+  question,
+  contextPrompt,
+  corpus,
+  prog,
+  channel,
+  isPing,
+  inHelpChannel,
+  allowWebSearch,
+}: {
+  question: string;
+  contextPrompt: string;
+  corpus: string;
+  prog: ProgramLike | string | null;
+  channel: string | null;
+  isPing: boolean;
+  inHelpChannel: boolean;
+  allowWebSearch: boolean;
+}) {
   if (!allowWebSearch) return null;
   const webResults = await firecrawl.searchWeb(question).catch(() => null);
   if (!webResults || webResults.length === 0) return null;
-  const webSnippet = webResults
-    .map((r: WebResult) => `Title: ${r.title}\nURL: ${r.url}\n${r.markdown}`)
-    .join("\n\n");
+  const webSnippet = webResults.map((r: WebResult) => `Title: ${r.title}\nURL: ${r.url}\n${r.markdown}`).join("\n\n");
   const webContextPrompt = `${contextPrompt}\n\n=== WEB RESEARCH ===\n${webSnippet}`;
   return answer
     .getGroundedAnswer(question, corpus, webContextPrompt, prog, channel, { isPing, inHelpChannel })

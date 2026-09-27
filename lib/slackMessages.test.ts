@@ -75,7 +75,12 @@ test("Pixl's branding can never appear on a message sent for a different program
   };
 
   const pixl = { id: "pixl", name: "Pixl", supportName: "Pixl Help", iconUrl: "https://cdn.example.com/pixl.png" };
-  const sandbox = { id: "pixie-sandbox-e2e", name: "Sandbox", supportName: "Sandbox Help", iconUrl: "https://cdn.example.com/sandbox.png" };
+  const sandbox = {
+    id: "pixie-sandbox-e2e",
+    name: "Sandbox",
+    supportName: "Sandbox Help",
+    iconUrl: "https://cdn.example.com/sandbox.png",
+  };
 
   await sendProgramMessage({ client, program: pixl, channel: "C-PIXL", text: "pixl answer" });
   await sendProgramMessage({ client, program: sandbox, channel: "C-SANDBOX", text: "sandbox answer" });
@@ -128,7 +133,14 @@ async function withCapturedSleeps(fn: any) {
 
 test("characterization: shadow mode returns fixed shape and sends nothing", async () => {
   let called = false;
-  const client = { chat: { postMessage: async () => { called = true; return { ts: "x" }; } } };
+  const client = {
+    chat: {
+      postMessage: async () => {
+        called = true;
+        return { ts: "x" };
+      },
+    },
+  };
   const res = await sendProgramMessage({ client, program: { id: "p1", shadowMode: true }, channel: "C1", text: "hi" });
   assert.deepEqual(res, { ok: false, shadowed: true, ts: null });
   assert.equal(called, false);
@@ -157,7 +169,10 @@ test("characterization: send validation rejects missing channel/text/client", as
   const client = { chat: { postMessage: async () => ({ ts: "x" }) } };
   await assert.rejects(() => sendProgramMessage({ client, channel: "", text: "hi" }), /channel required/);
   await assert.rejects(() => sendProgramMessage({ client, channel: "C1" }), /text or blocks required/);
-  await assert.rejects(() => sendProgramMessage({ client: null, channel: "C1", text: "hi" }), /slack client unavailable/);
+  await assert.rejects(
+    () => sendProgramMessage({ client: null, channel: "C1", text: "hi" }),
+    /slack client unavailable/,
+  );
 });
 
 test("characterization: Retry-After 31s is capped at 30s", async () => {
@@ -167,7 +182,7 @@ test("characterization: Retry-After 31s is capped at 30s", async () => {
       postMessage: async () => {
         calls += 1;
         if (calls === 1) {
-        const err = new Error("ratelimited") as SlackTestError;
+          const err = new Error("ratelimited") as SlackTestError;
           err.retryAfter = 31;
           throw err;
         }
@@ -175,7 +190,9 @@ test("characterization: Retry-After 31s is capped at 30s", async () => {
       },
     },
   };
-  const { out, delays } = await withCapturedSleeps(() => sendProgramMessage({ client: flaky, channel: "C1", text: "hi" }));
+  const { out, delays } = await withCapturedSleeps(() =>
+    sendProgramMessage({ client: flaky, channel: "C1", text: "hi" }),
+  );
   assert.equal(out.ts, "capped");
   assert.equal(calls, 2);
   assert.equal(delays[0], 30 * 1000);
@@ -239,7 +256,13 @@ test("characterization: branded ratelimit retry preserves brand", async () => {
 
 test("characterization: ticket action failures stay silent, only public_resolve explains", async () => {
   const tickets = require("./tickets");
-  const probe = { chat: { postMessage: async () => { throw new Error("must not send on auth failure"); } } };
+  const probe = {
+    chat: {
+      postMessage: async () => {
+        throw new Error("must not send on auth failure");
+      },
+    },
+  };
   for (const fn of [tickets.claimTicket, tickets.resolveTicket, tickets.closeTicket]) {
     const res = await fn({ ticketId: 9999999, actorId: "U-x", client: probe });
     assert.ok(res && res.error);
@@ -272,8 +295,17 @@ test("regression: missing or empty Retry-After falls to transient backoff", asyn
   ];
   for (const make of makers) {
     let calls = 0;
-    const broken = { chat: { postMessage: async () => { calls += 1; throw make(); } } };
-    const { delays } = await withCapturedSleeps(() => sendProgramMessage({ client: broken, channel: "C1", text: "hi" }).catch(() => null));
+    const broken = {
+      chat: {
+        postMessage: async () => {
+          calls += 1;
+          throw make();
+        },
+      },
+    };
+    const { delays } = await withCapturedSleeps(() =>
+      sendProgramMessage({ client: broken, channel: "C1", text: "hi" }).catch(() => null),
+    );
     assert.equal(calls, 3);
     assert.deepEqual(delays, [500, 1000]);
   }
@@ -296,7 +328,9 @@ test("regression: Retry-After header lookup ignores case", async () => {
         },
       },
     };
-    const { out, delays } = await withCapturedSleeps(() => sendProgramMessage({ client: flaky, channel: "C1", text: "hi" }));
+    const { out, delays } = await withCapturedSleeps(() =>
+      sendProgramMessage({ client: flaky, channel: "C1", text: "hi" }),
+    );
     assert.equal(out.ts, "ok");
     assert.equal(delays[0], 1000);
   }
@@ -366,7 +400,9 @@ test("regression: duplicate card text carries no stray bracket", () => {
 test("a permanently failing send records slack_send_failure", async () => {
   process.env.PIXIE_DB_PATH = ":memory:";
   const db = require("./db");
-  try { db.open(":memory:"); } catch (_) {}
+  try {
+    db.open(":memory:");
+  } catch (_) {}
   const baseline = db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = 'slack_send_failure'").get().c;
   const dead = {
     chat: {
@@ -377,10 +413,15 @@ test("a permanently failing send records slack_send_failure", async () => {
       },
     },
   };
-  await assert.rejects(() => sendProgramMessage({ client: dead, program: { id: "sf-test" }, channel: "C1", text: "hi" }));
+  await assert.rejects(() =>
+    sendProgramMessage({ client: dead, program: { id: "sf-test" }, channel: "C1", text: "hi" }),
+  );
   const after = db.handle().query("SELECT COUNT(*) c FROM metrics WHERE kind = 'slack_send_failure'").get();
   assert.equal(after.c, baseline + 1);
-  const row = db.handle().query("SELECT detail, program_id FROM metrics WHERE kind = 'slack_send_failure' ORDER BY id DESC LIMIT 1").get();
+  const row = db
+    .handle()
+    .query("SELECT detail, program_id FROM metrics WHERE kind = 'slack_send_failure' ORDER BY id DESC LIMIT 1")
+    .get();
   assert.equal(row.detail, "channel_not_found");
   assert.equal(row.program_id, "sf-test");
 });

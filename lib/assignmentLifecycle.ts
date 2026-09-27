@@ -40,7 +40,7 @@ const RELEASED = "helper_assignment_released";
 const TIMED_OUT = "helper_assignment_timed_out";
 const EVENT_TYPES = [OFFERED, CLAIMED, DECLINED, RELEASED, TIMED_OUT];
 
-// WHY: an accept rate over one or two offers is noise, not a signal. Below this
+// An accept rate over one or two offers is noise, not a signal. Below this
 // the helper's rate is null and the lifecycle is reported "insufficient".
 const MIN_COMPLETED_OFFERS_FOR_RATE = 3;
 
@@ -59,16 +59,22 @@ function parseDetail(value: unknown): EventDetail {
 
 function lifecycleEvents(programId: string, ticketId: number | null = null): DbRow[] {
   const rows = ticketId
-    ? db.handle().query(
-        `SELECT id, ticket_id, actor_id, event_type, detail, created_at FROM ticket_events
+    ? db
+        .handle()
+        .query(
+          `SELECT id, ticket_id, actor_id, event_type, detail, created_at FROM ticket_events
           WHERE program_id = ? AND ticket_id = ? AND event_type IN (${EVENT_TYPES.map(() => "?").join(",")})
           ORDER BY created_at ASC, id ASC`,
-      ).all(programId, ticketId, ...EVENT_TYPES)
-    : db.handle().query(
-        `SELECT id, ticket_id, actor_id, event_type, detail, created_at FROM ticket_events
+        )
+        .all(programId, ticketId, ...EVENT_TYPES)
+    : db
+        .handle()
+        .query(
+          `SELECT id, ticket_id, actor_id, event_type, detail, created_at FROM ticket_events
           WHERE program_id = ? AND event_type IN (${EVENT_TYPES.map(() => "?").join(",")})
           ORDER BY created_at ASC, id ASC`,
-      ).all(programId, ...EVENT_TYPES);
+        )
+        .all(programId, ...EVENT_TYPES);
   return (rows as DbRow[]).map((row) => ({ ...row, detail: parseDetail(row.detail) }));
 }
 
@@ -113,12 +119,23 @@ function openOfferFor(programId: string, ticketId: number): Offer | null {
   return last && last.outcome === "pending" ? last : null;
 }
 
-
 function guardTicket(ticket: TicketLike | null | undefined): ticket is TicketLike {
   return Boolean(ticket && ticket.id && ticket.program_id);
 }
 
-function emit({ ticket, eventType, actorId = null, detail = null, metricDetail = null }: { ticket: TicketLike; eventType: string; actorId?: string | null; detail?: unknown; metricDetail?: unknown }): number | null {
+function emit({
+  ticket,
+  eventType,
+  actorId = null,
+  detail = null,
+  metricDetail = null,
+}: {
+  ticket: TicketLike;
+  eventType: string;
+  actorId?: string | null;
+  detail?: unknown;
+  metricDetail?: unknown;
+}): number | null {
   let eventId = null;
   try {
     const addTicketEvent = db.addTicketEvent as (row: Record<string, unknown>) => number | null;
@@ -142,7 +159,17 @@ function emit({ ticket, eventType, actorId = null, detail = null, metricDetail =
   return eventId;
 }
 
-function recordOffer({ ticket, to = null, source = "queue", actorId = null }: { ticket: TicketLike; to?: string | null; source?: string; actorId?: string | null }): Record<string, unknown> {
+function recordOffer({
+  ticket,
+  to = null,
+  source = "queue",
+  actorId = null,
+}: {
+  ticket: TicketLike;
+  to?: string | null;
+  source?: string;
+  actorId?: string | null;
+}): Record<string, unknown> {
   if (!guardTicket(ticket)) return { recorded: false };
   if (ticket.status !== undefined && CLOSED_TICKET_STATUSES.has(ticket.status)) return { recorded: false };
   const open = openOfferFor(ticket.program_id, ticket.id);
@@ -166,14 +193,24 @@ function recordClaim({ ticket, userId }: { ticket: TicketLike; userId?: string }
   return { recorded: !!eventId, eventId, source };
 }
 
-function recordDecline({ ticket, userId, reason = null }: { ticket: TicketLike; userId?: string; reason?: unknown }): Record<string, unknown> {
+function recordDecline({
+  ticket,
+  userId,
+  reason = null,
+}: {
+  ticket: TicketLike;
+  userId?: string;
+  reason?: unknown;
+}): Record<string, unknown> {
   if (!guardTicket(ticket) || !userId) return { recorded: false };
   if (!openOfferFor(ticket.program_id, ticket.id)) return { recorded: false, noOffer: true };
   const events = lifecycleEvents(ticket.program_id, ticket.id);
   const lastClaimByUser = [...events].reverse().find((e) => e.event_type === CLAIMED && e.actor_id === userId);
   const declineAfter = events.some(
-    (e) => e.event_type === DECLINED && e.actor_id === userId
-      && (!lastClaimByUser || e.created_at > lastClaimByUser.created_at),
+    (e) =>
+      e.event_type === DECLINED &&
+      e.actor_id === userId &&
+      (!lastClaimByUser || e.created_at > lastClaimByUser.created_at),
   );
   if (declineAfter) return { recorded: false, deduped: true };
   const clean = reason ? String(reason).trim().toLowerCase().slice(0, 40) : null;
@@ -193,7 +230,15 @@ function recordRelease({ ticket, userId }: { ticket: TicketLike; userId?: string
   return { recorded: !!eventId, eventId };
 }
 
-function recordTimeout({ ticket, to = null, offeredAt = null }: { ticket: TicketLike; to?: string | null; offeredAt?: number | null }): Record<string, unknown> {
+function recordTimeout({
+  ticket,
+  to = null,
+  offeredAt = null,
+}: {
+  ticket: TicketLike;
+  to?: string | null;
+  offeredAt?: number | null;
+}): Record<string, unknown> {
   if (!guardTicket(ticket)) return { recorded: false };
   const open = openOfferFor(ticket.program_id, ticket.id);
   if (!open) return { recorded: false, deduped: true };
@@ -206,7 +251,6 @@ function recordTimeout({ ticket, to = null, offeredAt = null }: { ticket: Ticket
   });
   return { recorded: !!eventId, eventId };
 }
-
 
 function helperAcceptStats(programId: string, userId: string): Record<string, unknown> {
   const events = lifecycleEvents(programId);
@@ -266,8 +310,15 @@ function programAcceptStats(programId: string): Record<string, unknown> {
   };
 }
 
-
-function pendingTimeoutOffers({ programId, timeoutMs, now = Date.now() }: { programId: string; timeoutMs: number; now?: number }): Array<{ ticketId: number; to: string | null; offeredAt: number }> {
+function pendingTimeoutOffers({
+  programId,
+  timeoutMs,
+  now = Date.now(),
+}: {
+  programId: string;
+  timeoutMs: number;
+  now?: number;
+}): Array<{ ticketId: number; to: string | null; offeredAt: number }> {
   if (!timeoutMs || timeoutMs <= 0) return [];
   const events = lifecycleEvents(programId);
   const byTicket = new Map<number, DbRow[]>();
@@ -310,7 +361,6 @@ function sweepProgramTimeouts({ programId, now = Date.now() }: { programId: stri
   return { swept };
 }
 
-
 function helpersWhoPassed(programId: string, ticketId: number): Set<string> {
   const passed = new Set<string>();
   for (const event of lifecycleEvents(programId, ticketId)) {
@@ -320,7 +370,19 @@ function helpersWhoPassed(programId: string, ticketId: number): Set<string> {
   return passed;
 }
 
-function nextEligibleHelper({ programId, ticketId, category = null, exclude = [], expertiseRouting = true }: { programId: string; ticketId: number; category?: string | null; exclude?: string[]; expertiseRouting?: boolean }): Record<string, unknown> | null {
+function nextEligibleHelper({
+  programId,
+  ticketId,
+  category = null,
+  exclude = [],
+  expertiseRouting = true,
+}: {
+  programId: string;
+  ticketId: number;
+  category?: string | null;
+  exclude?: string[];
+  expertiseRouting?: boolean;
+}): Record<string, unknown> | null {
   const helperRoute = require("./helperRoute");
   const skip = helpersWhoPassed(programId, ticketId);
   for (const id of exclude) skip.add(id);

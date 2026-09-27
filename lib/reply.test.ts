@@ -20,7 +20,6 @@ type TestClient = {
   };
 };
 
-
 test("an em dash becomes a comma", () => {
   assert.equal(
     reply.plainDashes("PS5 is 11,400 px — that's about 202h at T4"),
@@ -66,7 +65,6 @@ test("empty and missing text survive", () => {
   assert.equal(reply.plainDashes(null), "");
   assert.equal(reply.plainDashes(undefined), "");
 });
-
 
 function fakeClient(): TestClient {
   const calls: { posts: MessagePayload[]; updates: MessagePayload[] } = { posts: [], updates: [] };
@@ -156,7 +154,12 @@ test("muting mid-stream suppresses further edits and the final post", async () =
       },
     },
   };
-  const writer = reply.makeStreamWriter({ client, channel: "C1", ensurePlaceholder: async () => "ph-1", threadTs: "mute-stream-1" });
+  const writer = reply.makeStreamWriter({
+    client,
+    channel: "C1",
+    ensurePlaceholder: async () => "ph-1",
+    threadTs: "mute-stream-1",
+  });
   writer.write("partial answer");
   await new Promise<void>((resolve) => setTimeout(resolve, reply.STREAM_UPDATE_MS + 50));
   assert.equal(updates.length, 1);
@@ -260,18 +263,25 @@ test("finalize strips reasoning and instruction leak from text and blocks", asyn
   assert.equal(posted.blocks?.[0]?.text?.text, "real answer");
 });
 
-
-test("CHAR: stream re-checks takeover per edit, not just mute", async () => {
+test("stream re-checks takeover per edit, not just mute", async () => {
   const db = require("./db");
   const updates: MessagePayload[] = [];
   const client = {
     chat: {
       postMessage: async () => ({ ts: "ph-take" }),
-      update: async (args: MessagePayload) => { updates.push(args); return {}; },
+      update: async (args: MessagePayload) => {
+        updates.push(args);
+        return {};
+      },
       delete: async () => ({}),
     },
   };
-  const writer = reply.makeStreamWriter({ client, channel: "C1", ensurePlaceholder: async () => "ph-take", threadTs: "take-stream-1" });
+  const writer = reply.makeStreamWriter({
+    client,
+    channel: "C1",
+    ensurePlaceholder: async () => "ph-take",
+    threadTs: "take-stream-1",
+  });
   writer.write("first fragment");
   await new Promise<void>((resolve) => setTimeout(resolve, reply.STREAM_UPDATE_MS + 50));
   assert.equal(updates.length, 1);
@@ -286,28 +296,38 @@ test("CHAR: stream re-checks takeover per edit, not just mute", async () => {
   }
 });
 
-test("CHAR: finalize with no placeholder posts fresh instead of dropping", async () => {
+test("finalize with no placeholder posts fresh instead of dropping", async () => {
   const client = fakeClient();
   const ts = await reply.finalize(client, "C1", "t-fresh", Promise.resolve(null), "fresh answer here");
   assert.ok(ts, "null placeholder falls back to a fresh post");
   assert.match(client.calls.posts[0].text, /fresh answer here/);
 });
 
-test("CHAR: finalize in shadow mode sends nothing and discards the placeholder", async () => {
+test("finalize in shadow mode sends nothing and discards the placeholder", async () => {
   const deletes: number[] = [];
   const posts: MessagePayload[] = [];
   const client = {
     chat: {
-      update: async (args: MessagePayload) => { posts.push(args); return {}; },
-      delete: async () => { deletes.push(1); return {}; },
-      postMessage: async (args: MessagePayload) => { posts.push(args); return { ts: "x" }; },
+      update: async (args: MessagePayload) => {
+        posts.push(args);
+        return {};
+      },
+      delete: async () => {
+        deletes.push(1);
+        return {};
+      },
+      postMessage: async (args: MessagePayload) => {
+        posts.push(args);
+        return { ts: "x" };
+      },
     },
   };
-  const ts = await reply.finalize(client, "C1", "t-shadow", Promise.resolve("ph-s"), "should not send", { program: { shadowMode: true } });
+  const ts = await reply.finalize(client, "C1", "t-shadow", Promise.resolve("ph-s"), "should not send", {
+    program: { shadowMode: true },
+  });
   assert.equal(ts, null);
   assert.equal(posts.length, 0, "shadow suppresses all sends and updates");
 });
-
 
 test("finalize keeps an answer to a ping in a thread that was already taken over", async () => {
   const db = require("./db");
@@ -315,15 +335,23 @@ test("finalize keeps an answer to a ping in a thread that was already taken over
   const updates: MessagePayload[] = [];
   const client = {
     chat: {
-      update: async (args: MessagePayload) => { updates.push(args); return {}; },
-      delete: async () => { deletes.push(1); return {}; },
+      update: async (args: MessagePayload) => {
+        updates.push(args);
+        return {};
+      },
+      delete: async () => {
+        deletes.push(1);
+        return {};
+      },
       postMessage: async () => ({ ts: "x" }),
     },
   };
   db.markTakeover("take-before-1", "C1", "U-helper");
   try {
     const before = reply.silenceState("take-before-1");
-    const ts = await reply.finalize(client, "C1", "take-before-1", Promise.resolve("ph-1"), "the answer", { silencedBefore: before });
+    const ts = await reply.finalize(client, "C1", "take-before-1", Promise.resolve("ph-1"), "the answer", {
+      silencedBefore: before,
+    });
     assert.equal(ts, "ph-1");
     assert.equal(deletes.length, 0, "the thinking message is overwritten, not deleted");
     assert.match(updates[0].text, /the answer/);
@@ -338,14 +366,19 @@ test("finalize still drops the answer when the thread goes quiet mid-answer", as
   const client = {
     chat: {
       update: async () => ({}),
-      delete: async () => { deletes.push(1); return {}; },
+      delete: async () => {
+        deletes.push(1);
+        return {};
+      },
       postMessage: async () => ({ ts: "x" }),
     },
   };
   const before = reply.silenceState("take-during-1");
   db.markTakeover("take-during-1", "C1", "U-helper");
   try {
-    const ts = await reply.finalize(client, "C1", "take-during-1", Promise.resolve("ph-2"), "late answer", { silencedBefore: before });
+    const ts = await reply.finalize(client, "C1", "take-during-1", Promise.resolve("ph-2"), "late answer", {
+      silencedBefore: before,
+    });
     assert.equal(ts, null);
     assert.equal(deletes.length, 1);
   } finally {

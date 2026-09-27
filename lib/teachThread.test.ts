@@ -80,7 +80,10 @@ test("summarizeThread skips the model call on a thread with no text", async () =
   };
 
   const parsed = await teachThread.summarizeThread({
-    client: stubClient([{ ts: "1", user: "U1" }, { ts: "2", bot_id: "B1" }]),
+    client: stubClient([
+      { ts: "1", user: "U1" },
+      { ts: "2", bot_id: "B1" },
+    ]),
     channel: "C1",
     threadTs: "4.1",
   });
@@ -133,8 +136,7 @@ What is show and tell? :: Participants showcase their projects in a huddle, and 
   });
 });
 
-
-test("char: teachThread is read-only — fetch-only client, no db writes", async () => {
+test("teachThread is read-only — fetch-only client, no db writes", async () => {
   const fs = require("fs");
   const path = require("path");
   const src = readSource("teachThread.js");
@@ -145,7 +147,14 @@ test("char: teachThread is read-only — fetch-only client, no db writes", async
   assert.equal(/DELETE\s+FROM/i.test(src), false);
   assert.equal(teachThread.THREAD_FETCH_LIMIT, 50);
   const seen: any[] = [];
-  const client = { conversations: { replies: async (args: any) => { seen.push(args); return { messages: [{ text: "how do i join pixl", user: "U1" }] }; } } };
+  const client = {
+    conversations: {
+      replies: async (args: any) => {
+        seen.push(args);
+        return { messages: [{ text: "how do i join pixl", user: "U1" }] };
+      },
+    },
+  };
   const parsed = await teachThread.summarizeThread({ client, channel: "C1", threadTs: "char-tt-1" });
   assert.equal(seen.length, 1);
   assert.equal(seen[0].limit, 50);
@@ -154,40 +163,60 @@ test("char: teachThread is read-only — fetch-only client, no db writes", async
   assert.ok(!("programId" in parsed), "teachThread returns pure Q&A — the caller attaches the program");
 });
 
-test("char: teachThread output feeds program-scoped capture without cross-writing", async () => {
+test("teachThread output feeds program-scoped capture without cross-writing", async () => {
   const learn = require("./learn");
   const db = require("./db");
   const parsed = await teachThread.summarizeThread({
-    client: stubClient([{ text: "char how do i join", user: "U1" }, { bot_id: "B1", text: "char post in #pixl-help" }]),
+    client: stubClient([
+      { text: "char how do i join", user: "U1" },
+      { bot_id: "B1", text: "char post in #pixl-help" },
+    ]),
     channel: "C1",
     threadTs: "char-tt-scope",
   });
   assert.ok(parsed && parsed.question && parsed.answer);
-  const idA = learn.captureFromThread({ ...parsed, authorId: "U1", threadTs: "char-tt-scope-a", channel: "C1", programId: "char-tt-prog-a" });
-  const idB = learn.captureFromThread({ ...parsed, authorId: "U1", threadTs: "char-tt-scope-b", channel: "C1", programId: "char-tt-prog-b" });
+  const idA = learn.captureFromThread({
+    ...parsed,
+    authorId: "U1",
+    threadTs: "char-tt-scope-a",
+    channel: "C1",
+    programId: "char-tt-prog-a",
+  });
+  const idB = learn.captureFromThread({
+    ...parsed,
+    authorId: "U1",
+    threadTs: "char-tt-scope-b",
+    channel: "C1",
+    programId: "char-tt-prog-b",
+  });
   assert.ok(idA && idB && idA !== idB);
   const rowA = db.getLearnedFactById(idA);
   const rowB = db.getLearnedFactById(idB);
   assert.equal(rowA.program_id, "char-tt-prog-a");
   assert.equal(rowB.program_id, "char-tt-prog-b");
   assert.equal(rowA.status, "pending");
-  assert.doesNotMatch(learn.corpusSection("char-tt-prog-a"), new RegExp(parsed.question.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.doesNotMatch(
+    learn.corpusSection("char-tt-prog-a"),
+    new RegExp(parsed.question.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+  );
   assert.equal(learn.approve(idA), true);
   assert.equal(db.getLearnedFactById(idA).status, "approved");
 });
 
-test("char: buildTranscript is pure and labels senders deterministically", () => {
+test("buildTranscript is pure and labels senders deterministically", () => {
   assert.equal(teachThread.buildTranscript([]), "");
   assert.equal(teachThread.buildTranscript([{ user: "U1" }, { bot_id: "B1" }]), "");
   assert.equal(teachThread.buildTranscript([{ text: "q", user: "U9" }]), "user: q");
 });
 
-
 test("registry: teach output lands as a program-scoped auditable fact", async () => {
   const learn = require("./learn");
   const db = require("./db");
   const parsed = await teachThread.summarizeThread({
-    client: stubClient([{ text: "registry how do i join", user: "U1" }, { bot_id: "B1", text: "registry post in #pixl-help" }]),
+    client: stubClient([
+      { text: "registry how do i join", user: "U1" },
+      { bot_id: "B1", text: "registry post in #pixl-help" },
+    ]),
     channel: "C-REG",
     threadTs: "reg-teach-1",
   });

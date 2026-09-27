@@ -55,7 +55,8 @@ const answerFallbackWithHeadroom = config.answer.fallback
   ? { ...config.answer.fallback, maxTokens: FALLBACK_MAX_TOKENS }
   : null;
 
-const CASUAL_EMOJI = ":yay: :hii: :byee: :thumbs-up: :yesyes: :hehehe: :awww: :lets-fucking-gooo: :upvote: :3c: :nyan: :shocked: :loll:";
+const CASUAL_EMOJI =
+  ":yay: :hii: :byee: :thumbs-up: :yesyes: :hehehe: :awww: :lets-fucking-gooo: :upvote: :3c: :nyan: :shocked: :loll:";
 const UNCLOSED_EMOJI = /:3c(?!:)/g;
 const MD_BOLD = /\*\*([^*\n]+)\*\*/g;
 const MD_UNDERSCORE_BOLD = /__([^_\n]+)__/g;
@@ -90,14 +91,17 @@ function normalizeEmoji(text: string, program: ProgramRef = null) {
 }
 
 const CODE_BLOCK = /```[\s\S]*?```|`[^`\n]{12,}`/;
-const STACK_TRACE = /\b(?:Traceback \(most recent call last\)|at [\w$.]+\s*\(.*:\d+:\d+\)|[\w.]+Error:|[\w.]+Exception:|SyntaxError|ReferenceError|TypeError|NullPointerException|panic:|segmentation fault)/i;
+const STACK_TRACE =
+  /\b(?:Traceback \(most recent call last\)|at [\w$.]+\s*\(.*:\d+:\d+\)|[\w.]+Error:|[\w.]+Exception:|SyntaxError|ReferenceError|TypeError|NullPointerException|panic:|segmentation fault)/i;
 
 function looksLikeCode(text: string) {
   return CODE_BLOCK.test(text || "") || STACK_TRACE.test(text || "");
 }
 
 function isExplicitIdeasRequest(text: string) {
-  return /\b(?:give|share|suggest|brainstorm|list|any)\b[^?.!\n]{0,50}\b(?:ideas?|project ideas?|things to build|examples?)\b/i.test(String(text || ""));
+  return /\b(?:give|share|suggest|brainstorm|list|any)\b[^?.!\n]{0,50}\b(?:ideas?|project ideas?|things to build|examples?)\b/i.test(
+    String(text || ""),
+  );
 }
 
 function resolveProgram(program: ProgramRef): ProgramLike | null {
@@ -213,7 +217,7 @@ function timelineAuthorityRule(marker: string, alwaysLabel = "covered", program:
 
 function shopAuthorityRule() {
   return (
-    '- If a shop section is present it is the only source of reward thresholds, and the hours printed beside an item are the only hours you may give. ' +
+    "- If a shop section is present it is the only source of reward thresholds, and the hours printed beside an item are the only hours you may give. " +
     "Never estimate a reward threshold from another item's hours or invent a payout rate. If a requested threshold is not shown, say you'll need to check."
   );
 }
@@ -224,7 +228,12 @@ const VOICE = [
   `You can sprinkle in these custom Slack emoji where they genuinely fit — use 0-2 per reply, never force one in: ${CASUAL_EMOJI}`,
 ];
 
-function systemPrompt(corpus: string, additionalContext = "", program: ProgramRef = null, channel: string | null = null) {
+function systemPrompt(
+  corpus: string,
+  additionalContext = "",
+  program: ProgramRef = null,
+  channel: string | null = null,
+) {
   // Keep retrieved evidence after the behavioral rules so instructions remain visible during truncation.
   const p = resolveProgram(program);
   const requireGrounded = process.env.PIXIE_REQUIRE_GROUNDED_ANSWER === "1" || p?.requireGroundedAnswer;
@@ -252,7 +261,8 @@ function systemPrompt(corpus: string, additionalContext = "", program: ProgramRe
 
   if (requireGrounded) {
     parts.push(
-      "- STRICT 1:1 GROUNDING: ONLY answer if the documentation explicitly provides the factual answer as confirmed in the documentation. If the docs do not contain the answer, or if the topic is unknown/unconfirmed, you must reply with: " + NONE_MARKER,
+      "- STRICT 1:1 GROUNDING: ONLY answer if the documentation explicitly provides the factual answer as confirmed in the documentation. If the docs do not contain the answer, or if the topic is unknown/unconfirmed, you must reply with: " +
+        NONE_MARKER,
       "- NEVER mention, link, or suggest any Slack channels (never use #channel or <#channel>). Never redirect users to other channels.",
       "- Never output non-answers like 'I am not sure', 'I don't know', or suggestions to ask elsewhere.",
     );
@@ -279,10 +289,12 @@ function stripLeadingSafety(text: string) {
   if (!text) return "";
   let clean = text.trim();
   while (true) {
-    const next = clean.replace(
-      /^(?:User\s+Safety|Safety\s+Assessment|Safety|Content\s+Filter|Safety\s+Category|Safety\s+Verdict):\s*[^\n]+\s*\n*/i,
-      "",
-    ).trim();
+    const next = clean
+      .replace(
+        /^(?:User\s+Safety|Safety\s+Assessment|Safety|Content\s+Filter|Safety\s+Category|Safety\s+Verdict):\s*[^\n]+\s*\n*/i,
+        "",
+      )
+      .trim();
     if (next === clean) break;
     clean = next;
   }
@@ -301,18 +313,25 @@ function sanitizeAnswer(text: string) {
     .trim();
 
   clean = clean.replace(/^<(?:a\s+|the\s+|exact\s+)[^>\n]+>\s*/i, "").trim();
-  const produceQuotedMatch = clean.match(/(?:let'?s produce|here(?:'s| is) (?:the )?(?:answer|reply)|output|final answer):\s*["“]([\s\S]+?)["”]/i);
+  const produceQuotedMatch = clean.match(
+    /(?:let'?s produce|here(?:'s| is) (?:the )?(?:answer|reply)|output|final answer):\s*["“]([\s\S]+?)["”]/i,
+  );
   if (produceQuotedMatch) {
     clean = produceQuotedMatch[1].trim();
   } else {
-    const produceBlockMatch = clean.match(/(?:let'?s produce|here(?:'s| is) (?:the )?(?:answer|reply)|output|final answer):\s*([\s\S]+?)(?:\n\s*Proceed\.?\s*$|$)/i);
+    const produceBlockMatch = clean.match(
+      /(?:let'?s produce|here(?:'s| is) (?:the )?(?:answer|reply)|output|final answer):\s*([\s\S]+?)(?:\n\s*Proceed\.?\s*$|$)/i,
+    );
     if (produceBlockMatch && /^(?:we should|we must|i need to|planning)/i.test(clean)) {
       clean = produceBlockMatch[1].trim();
     }
   }
 
   clean = clean
-    .replace(/^(?:your\s+|my\s+)?(?:short,?\s*casual\s+answer|answer\s+in\s+your\s+voice)(?:,?\s*1-3\s+sentences)?[:\s-]*/i, "")
+    .replace(
+      /^(?:your\s+|my\s+)?(?:short,?\s*casual\s+answer|answer\s+in\s+your\s+voice)(?:,?\s*1-3\s+sentences)?[:\s-]*/i,
+      "",
+    )
     .trim();
 
   clean = clean.replace(/\n\s*Proceed\.?\s*$/i, "").trim();
@@ -384,7 +403,10 @@ function parseReply(raw: unknown, program: ProgramRef = null): ParsedAnswer | nu
     .trim();
 
   rawAnswer = rawAnswer
-    .replace(/^(?:your\s+|my\s+)?(?:short,?\s*casual\s+answer|answer\s+in\s+your\s+voice)(?:,?\s*1-3\s+sentences)?[:\s-]*/i, "")
+    .replace(
+      /^(?:your\s+|my\s+)?(?:short,?\s*casual\s+answer|answer\s+in\s+your\s+voice)(?:,?\s*1-3\s+sentences)?[:\s-]*/i,
+      "",
+    )
     .trim();
 
   if (looksLikeInstructionEcho(rawAnswer)) return null;
@@ -398,7 +420,13 @@ function parseReply(raw: unknown, program: ProgramRef = null): ParsedAnswer | nu
   };
 }
 
-function answerOrChatPrompt(corpus: string, additionalContext = "", inHelpChannel = false, program: ProgramRef = null, channel: string | null = null) {
+function answerOrChatPrompt(
+  corpus: string,
+  additionalContext = "",
+  inHelpChannel = false,
+  program: ProgramRef = null,
+  channel: string | null = null,
+) {
   const p = resolveProgram(program);
   const name = programName(program);
   const helpChan = helpChannelRef(program);
@@ -506,7 +534,8 @@ function answerOrChatPrompt(corpus: string, additionalContext = "", inHelpChanne
   return parts.join("\n");
 }
 
-const DANGLING_END_WORDS = /\b(?:and|or|but|the|a|an|to|for|with|in|on|at|by|of|from|that|which|who|after|before|because|if|when|as|while|so|than|you|your|their|its|our|my|his|her|this|these|those|is|are|was|were|be|been|have|has|had|will|would|should|could|can|cannot|do|does|did)\s*$/i;
+const DANGLING_END_WORDS =
+  /\b(?:and|or|but|the|a|an|to|for|with|in|on|at|by|of|from|that|which|who|after|before|because|if|when|as|while|so|than|you|your|their|its|our|my|his|her|this|these|those|is|are|was|were|be|been|have|has|had|will|would|should|could|can|cannot|do|does|did)\s*$/i;
 const DANGLING_CONTRACTION = /\b(?:i|you|we|they|he|she|it|that|there|what|who)(?:'ll|'re|'ve|'d|'m|n't)\s*$/i;
 
 function looksTruncated(text: string) {
@@ -567,7 +596,9 @@ function ownedSourceName(program: ProgramRef) {
       }
     }
   }
-  const sources = Array.isArray(record?.sources) ? record.sources.filter((s): s is { name: string } => Boolean(s && typeof s === "object" && "name" in s && s.name)) : [];
+  const sources = Array.isArray(record?.sources)
+    ? record.sources.filter((s): s is { name: string } => Boolean(s && typeof s === "object" && "name" in s && s.name))
+    : [];
   return sources.length === 1 ? sources[0].name : null;
 }
 
@@ -578,11 +609,17 @@ function selectAnswerTier({ isPing = false, inHelpChannel = false }: AnswerOptio
   return (config.helpAnswer || config.answer) as AnswerTier;
 }
 
-function answerRequest(question: string, corpus: string, additionalContext: string, inHelpChannel = false, program: ProgramRef = null, channel: string | null = null, { isPing = false }: AnswerOptions = {}): AnswerRequest {
+function answerRequest(
+  question: string,
+  corpus: string,
+  additionalContext: string,
+  inHelpChannel = false,
+  program: ProgramRef = null,
+  channel: string | null = null,
+  { isPing = false }: AnswerOptions = {},
+): AnswerRequest {
   const tier = selectAnswerTier({ isPing, inHelpChannel });
-  const fallbackWithHeadroom = tier.fallback
-    ? { ...tier.fallback, maxTokens: FALLBACK_MAX_TOKENS }
-    : null;
+  const fallbackWithHeadroom = tier.fallback ? { ...tier.fallback, maxTokens: FALLBACK_MAX_TOKENS } : null;
 
   return {
     baseUrl: tier.baseUrl,
@@ -600,7 +637,15 @@ function answerRequest(question: string, corpus: string, additionalContext: stri
   };
 }
 
-async function getAnswerOrChat(question: string, corpus: string, additionalContext = "", inHelpChannel = false, program: ProgramRef = null, channel: string | null = null, { isPing = false }: AnswerOptions = {}) {
+async function getAnswerOrChat(
+  question: string,
+  corpus: string,
+  additionalContext = "",
+  inHelpChannel = false,
+  program: ProgramRef = null,
+  channel: string | null = null,
+  { isPing = false }: AnswerOptions = {},
+) {
   if (!corpus || !corpus.trim()) return null;
 
   const req = answerRequest(question, corpus, additionalContext, inHelpChannel, program, channel, { isPing });
@@ -610,7 +655,12 @@ async function getAnswerOrChat(question: string, corpus: string, additionalConte
   return retryIfTruncated(parsed, req, program);
 }
 
-async function getAnswerOrChatStream(question: string, corpus: string, additionalContext = "", { onText, inHelpChannel = false, program = null, channel = null, isPing = false }: AnswerOptions = {}) {
+async function getAnswerOrChatStream(
+  question: string,
+  corpus: string,
+  additionalContext = "",
+  { onText, inHelpChannel = false, program = null, channel = null, isPing = false }: AnswerOptions = {},
+) {
   if (!corpus || !corpus.trim()) return null;
 
   let sent = "";
@@ -633,7 +683,9 @@ async function getAnswerOrChatStream(question: string, corpus: string, additiona
     }
 
     if (/^(?:we should|we must|planning:|let's produce|let's draft|scratchpad:)/i.test(answer.trimStart())) {
-      const produceMatch = answer.match(/(?:let'?s produce|here(?:'s| is) (?:the )?(?:answer|reply)|output|final answer):\s*["“]([\s\S]+?)(?:["”]|$)/i);
+      const produceMatch = answer.match(
+        /(?:let'?s produce|here(?:'s| is) (?:the )?(?:answer|reply)|output|final answer):\s*["“]([\s\S]+?)(?:["”]|$)/i,
+      );
       if (produceMatch) {
         answer = produceMatch[1].trimEnd();
       } else {
@@ -642,7 +694,10 @@ async function getAnswerOrChatStream(question: string, corpus: string, additiona
     }
 
     answer = answer
-      .replace(/^(?:your\s+|my\s+)?(?:short,?\s*casual\s+answer|answer\s+in\s+your\s+voice)(?:,?\s*1-3\s+sentences)?[:\s-]*/i, "")
+      .replace(
+        /^(?:your\s+|my\s+)?(?:short,?\s*casual\s+answer|answer\s+in\s+your\s+voice)(?:,?\s*1-3\s+sentences)?[:\s-]*/i,
+        "",
+      )
       .trimStart();
 
     if (looksLikeInstructionEcho(answer)) return undefined;
@@ -658,17 +713,18 @@ async function getAnswerOrChatStream(question: string, corpus: string, additiona
   };
 
   const req = answerRequest(question, corpus, additionalContext, inHelpChannel, program, channel, { isPing });
-  const { text } = await llm.completeStream(
-    req,
-    emit,
-    "answer",
-  );
+  const { text } = await llm.completeStream(req, emit, "answer");
 
   const parsed = parseAnswerOrChat(text, program);
   return retryIfTruncated(parsed, req, program, { onText });
 }
 
-async function retryIfTruncated(parsed: ParsedAnswerOrChat | null, req: AnswerRequest, program: ProgramRef, { onText = null }: Pick<AnswerOptions, "onText"> = {}) {
+async function retryIfTruncated(
+  parsed: ParsedAnswerOrChat | null,
+  req: AnswerRequest,
+  program: ProgramRef,
+  { onText = null }: Pick<AnswerOptions, "onText"> = {},
+) {
   // Retry a truncated response before exposing its incomplete claim to Slack.
   if (!parsed?.answer || !looksTruncated(parsed.answer)) return parsed;
   const fallbackTier = req.fallback || answerFallbackWithHeadroom;
@@ -690,13 +746,18 @@ async function retryIfTruncated(parsed: ParsedAnswerOrChat | null, req: AnswerRe
   return parsed;
 }
 
-async function getGroundedAnswer(question: string, corpus: string, additionalContext = "", program: ProgramRef = null, channel: string | null = null, { isPing = false, inHelpChannel = false }: AnswerOptions = {}) {
+async function getGroundedAnswer(
+  question: string,
+  corpus: string,
+  additionalContext = "",
+  program: ProgramRef = null,
+  channel: string | null = null,
+  { isPing = false, inHelpChannel = false }: AnswerOptions = {},
+) {
   if (!corpus || !corpus.trim()) return null;
 
   const tier = selectAnswerTier({ isPing, inHelpChannel });
-  const fallbackWithHeadroom = tier.fallback
-    ? { ...tier.fallback, maxTokens: FALLBACK_MAX_TOKENS }
-    : null;
+  const fallbackWithHeadroom = tier.fallback ? { ...tier.fallback, maxTokens: FALLBACK_MAX_TOKENS } : null;
 
   const { text } = await llm.complete(
     {

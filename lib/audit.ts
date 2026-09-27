@@ -7,7 +7,6 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-
 function packMetadata(metadata: unknown) {
   // Store one predictable TEXT shape so every caller gets the same serialization behavior.
   if (metadata === null || metadata === undefined) return null;
@@ -24,7 +23,14 @@ function packEntityId(entityId: unknown) {
   return String(entityId);
 }
 
-function record({ programId = null, actorId = null, action, entityType = null, entityId = null, metadata = null }: Record<string, unknown>) {
+function record({
+  programId = null,
+  actorId = null,
+  action,
+  entityType = null,
+  entityId = null,
+  metadata = null,
+}: Record<string, unknown>) {
   if (!action) return null;
   try {
     return db.recordAuditEvent({
@@ -36,8 +42,6 @@ function record({ programId = null, actorId = null, action, entityType = null, e
       metadata: packMetadata(metadata),
     });
   } catch (e: unknown) {
-
-
     log.warn("audit", `record failed (${action}): ${errorMessage(e)}`);
     return null;
   }

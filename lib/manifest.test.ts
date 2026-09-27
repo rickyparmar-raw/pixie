@@ -58,7 +58,6 @@ test("commands and the shortcut id follow the bot's slug", () => {
   });
 });
 
-
 test("no unprefixed command is advertised", () => {
   withBrand({ PIXIE_BOT_NAME: "Sol", PIXIE_BOT_SLUG: "sol" }, () => {
     const advertised = manifest().features.slash_commands.map((c: TestAny) => c.command);
@@ -79,7 +78,6 @@ test("with nothing set the manifest is pixie's own", () => {
     assert.ok(advertised.includes("/pixie-teach"));
   });
 });
-
 
 test("socket mode, interactivity and the home tab stay enabled", () => {
   const m = manifest();

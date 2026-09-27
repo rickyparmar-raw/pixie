@@ -30,7 +30,9 @@ interface ProviderAnswer {
   choice?: unknown;
   probabilities?: Record<string, unknown>;
 }
-interface ProviderResponse { answers?: { intent?: ProviderAnswer; shouldEngage?: ProviderAnswer } }
+interface ProviderResponse {
+  answers?: { intent?: ProviderAnswer; shouldEngage?: ProviderAnswer };
+}
 interface Decision {
   intent: string | null;
   shouldEngage: boolean;
@@ -38,7 +40,10 @@ interface Decision {
   probabilities: { shouldEngage?: number };
   source: string;
 }
-interface BoolResult { value: boolean; confidence?: number }
+interface BoolResult {
+  value: boolean;
+  confidence?: number;
+}
 interface JevError {
   name?: string;
   message?: string;
@@ -48,7 +53,12 @@ interface JevError {
   jevErrorKind?: string;
   response?: { status?: number | string };
 }
-interface EvaluationArgs { state: JevState | unknown; questions: object | unknown; timeoutMs?: number; model: string }
+interface EvaluationArgs {
+  state: JevState | unknown;
+  questions: object | unknown;
+  timeoutMs?: number;
+  model: string;
+}
 type EvaluateFn = (args: EvaluationArgs) => Promise<unknown>;
 interface EvaluationDeps {
   config?: JevConfig;
@@ -105,10 +115,17 @@ function isFreeModel(model: unknown): boolean {
   return typeof model === "string" && /[:-]free$/.test(model.trim());
 }
 
-function buildJevState({ message, conversationContext = "", program, channelPosture = "main", addressed = false }: JevStateInput): JevState {
-  const prog = program && typeof program === "object"
-    ? { id: program.id || null, name: program.name || null }
-    : { id: typeof program === "string" ? program : null, name: null };
+function buildJevState({
+  message,
+  conversationContext = "",
+  program,
+  channelPosture = "main",
+  addressed = false,
+}: JevStateInput): JevState {
+  const prog =
+    program && typeof program === "object"
+      ? { id: program.id || null, name: program.name || null }
+      : { id: typeof program === "string" ? program : null, name: null };
   const posture = channelPosture === "help" || channelPosture === "dm" ? channelPosture : "main";
   return {
     message: truncate(message!, MAX_MESSAGE_CHARS),
@@ -121,12 +138,15 @@ function buildJevState({ message, conversationContext = "", program, channelPost
 
 const INTENT_CHOICES = {
   support_question: "A clear request for program help or a factual program/support question.",
-  direct_program_question: "A clear question about the program, its process, policy, grants, shipping, submissions, or participation.",
-  addressed_general_request: "Addressed to Pixie but not about the program, e.g. a recipe, a joke, or a general question.",
+  direct_program_question:
+    "A clear question about the program, its process, policy, grants, shipping, submissions, or participation.",
+  addressed_general_request:
+    "Addressed to Pixie but not about the program, e.g. a recipe, a joke, or a general question.",
   addressed_smalltalk: "The sender directly addresses Pixie for greeting, thanks, or light conversation.",
   ambiguous_followup: "A follow-up whose meaning depends on a clear recent or thread referent.",
   unrelated_chatter: "A reaction, joke, unrelated chat, or message Pixie should not enter.",
-  human_conversation: "Humans talking to each other rather than asking Pixie for help, including a statement that replies to or continues an earlier member message.",
+  human_conversation:
+    "Humans talking to each other rather than asking Pixie for help, including a statement that replies to or continues an earlier member message.",
 };
 
 function buildJevQuestions() {
@@ -147,8 +167,12 @@ function buildJevQuestions() {
     },
     shouldEngage: {
       type: "boolean",
-      instructions: "Should Pixie look this up in the program's docs? True for program questions and support requests (including unfamiliar program terms), for any request addressed to Pixie, and for a follow-up whose referent is clear from state.conversationContext. False for banter, reactions, members talking to each other, statements that reply to an earlier member message, and vague follow-ups with no clear referent. Do not consider whether the docs contain the answer.",
-      criteria: { true: "Program/support question, addressed request, or follow-up with a clear referent.", false: "Chatter, human conversation, or a vague follow-up without a referent." },
+      instructions:
+        "Should Pixie look this up in the program's docs? True for program questions and support requests (including unfamiliar program terms), for any request addressed to Pixie, and for a follow-up whose referent is clear from state.conversationContext. False for banter, reactions, members talking to each other, statements that reply to an earlier member message, and vague follow-ups with no clear referent. Do not consider whether the docs contain the answer.",
+      criteria: {
+        true: "Program/support question, addressed request, or follow-up with a clear referent.",
+        false: "Chatter, human conversation, or a vague follow-up without a referent.",
+      },
     },
   };
 }
@@ -168,8 +192,10 @@ function parseEvaluationResult(result: ProviderResponse): Decision {
   const answers = (result && result.answers) || {};
   const engage = boolFrom(answers.shouldEngage);
   const engageProbability = probOf(answers.shouldEngage);
-  const intent = answers.intent && typeof answers.intent.choice === "string" && Object.hasOwn(INTENT_CHOICES, answers.intent.choice)
-    ? answers.intent.choice : null;
+  const intent =
+    answers.intent && typeof answers.intent.choice === "string" && Object.hasOwn(INTENT_CHOICES, answers.intent.choice)
+      ? answers.intent.choice
+      : null;
   return {
     intent,
     shouldEngage: engage.value,
@@ -202,13 +228,19 @@ const PROGRAM_INTENT = new Set(["support_question", "direct_program_question"]);
 const ADDRESSED_INTENT = new Set(["addressed_general_request", "addressed_smalltalk"]);
 const SILENT_INTENT = new Set(["unrelated_chatter", "human_conversation"]);
 
-function decideAction(decision: Decision, cfg: JevConfig = effectiveConfig(), state: Partial<JevState> = {}): { action: string; reason: string } {
+function decideAction(
+  decision: Decision,
+  cfg: JevConfig = effectiveConfig(),
+  state: Partial<JevState> = {},
+): { action: string; reason: string } {
   if (!decision || decision.source === "existing") return { action: "existing", reason: "jev_disabled" };
   const engageP = decision.probabilities?.shouldEngage;
   const intent = decision.intent;
   if (intent && PROGRAM_INTENT.has(intent)) return { action: "engage", reason: "jev_program_intent" };
   if (intent && ADDRESSED_INTENT.has(intent)) {
-    return state.addressed ? { action: "engage", reason: "jev_addressed" } : { action: "silence", reason: "jev_unaddressed_general" };
+    return state.addressed
+      ? { action: "engage", reason: "jev_addressed" }
+      : { action: "silence", reason: "jev_unaddressed_general" };
   }
   if (intent && SILENT_INTENT.has(intent)) return { action: "silence", reason: "jev_chatter" };
   if (intent === "ambiguous_followup") {
@@ -217,12 +249,23 @@ function decideAction(decision: Decision, cfg: JevConfig = effectiveConfig(), st
       ? { action: "engage", reason: "jev_followup_with_referent" }
       : { action: "silence", reason: "jev_followup_no_referent" };
   }
-  const threshold = Number.isFinite(cfg.engageThreshold) ? cfg.engageThreshold as number : 0.7;
-  if (decision.shouldEngage && engageP !== undefined && engageP >= threshold) return { action: "engage", reason: "jev_engage" };
+  const threshold = Number.isFinite(cfg.engageThreshold) ? (cfg.engageThreshold as number) : 0.7;
+  if (decision.shouldEngage && engageP !== undefined && engageP >= threshold)
+    return { action: "engage", reason: "jev_engage" };
   return { action: "silence", reason: "jev_deny" };
 }
 
-const ERROR_KINDS = new Set(["auth", "quota", "rate_limit", "timeout", "bad_response", "unavailable", "network", "config", "unknown"]);
+const ERROR_KINDS = new Set([
+  "auth",
+  "quota",
+  "rate_limit",
+  "timeout",
+  "bad_response",
+  "unavailable",
+  "network",
+  "config",
+  "unknown",
+]);
 
 function classifyError(err: JevError | null | undefined): string {
   // Provider failures collapse into stable metric labels instead of leaking transport-specific details.
@@ -281,7 +324,27 @@ function clearDecisionCache() {
   inflightEvaluations.clear();
 }
 
-function logDecision({ intent, shouldEngageP, action, reason, latencyMs, errorKind, enabled, model, keyHash }: { intent: string | null; shouldEngageP: number | null; action: string; reason: string; latencyMs: number; errorKind: string | null; enabled: boolean; model: string; keyHash?: string | null }): void {
+function logDecision({
+  intent,
+  shouldEngageP,
+  action,
+  reason,
+  latencyMs,
+  errorKind,
+  enabled,
+  model,
+  keyHash,
+}: {
+  intent: string | null;
+  shouldEngageP: number | null;
+  action: string;
+  reason: string;
+  latencyMs: number;
+  errorKind: string | null;
+  enabled: boolean;
+  model: string;
+  keyHash?: string | null;
+}): void {
   const fmt = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v.toFixed(2) : "?");
   log.info(
     "jev",
@@ -311,7 +374,16 @@ async function evaluateSupportDecision(
   // Billing is fail-closed: paid models are never reached through this adapter.
   if (!isFreeModel(model)) {
     const latencyMs = Date.now() - startedAt;
-    logDecision({ intent: null, shouldEngageP: null, action: "error", reason: "jev_error_config", latencyMs, errorKind: "config", enabled: true, model });
+    logDecision({
+      intent: null,
+      shouldEngageP: null,
+      action: "error",
+      reason: "jev_error_config",
+      latencyMs,
+      errorKind: "config",
+      enabled: true,
+      model,
+    });
     return {
       action: "error",
       intent: null,
@@ -323,18 +395,20 @@ async function evaluateSupportDecision(
   }
   const state = buildJevState({ message, conversationContext, program, channelPosture, addressed });
   const questions = deps.questions || buildJevQuestions();
-  const evaluateFn: EvaluateFn = deps.evaluateFn || ((args: EvaluationArgs) =>
-    require("./jevExperiential").experientialEvaluate(
-      {
-        baseUrl: cfg.baseUrl || JEV_BASE_URL_DEFAULT,
-        apiKey: experientialApiKey(),
-        model: args.model,
-        state: args.state,
-        questions: args.questions,
-        timeoutMs: args.timeoutMs,
-      },
-      { httpPost: deps.httpPost },
-    ));
+  const evaluateFn: EvaluateFn =
+    deps.evaluateFn ||
+    ((args: EvaluationArgs) =>
+      require("./jevExperiential").experientialEvaluate(
+        {
+          baseUrl: cfg.baseUrl || JEV_BASE_URL_DEFAULT,
+          apiKey: experientialApiKey(),
+          model: args.model,
+          state: args.state,
+          questions: args.questions,
+          timeoutMs: args.timeoutMs,
+        },
+        { httpPost: deps.httpPost },
+      ));
   const cacheable = !deps.evaluateFn && !deps.questions;
   const key = cacheable ? cacheKeyFor({ model, state }) : null;
   const keyHash = key ? key.slice(0, 12) : null;
@@ -346,7 +420,10 @@ async function evaluateSupportDecision(
       try {
         require("./db").recordMetric("jev_cache_hit", 0, hit.result.action || null, state.program?.id || null);
       } catch (_) {}
-      log.info("jev", `[jev] cached=true action=${hit.result.action} reason=${hit.result.reason}${keyHash ? ` key=${keyHash}` : ""}`);
+      log.info(
+        "jev",
+        `[jev] cached=true action=${hit.result.action} reason=${hit.result.reason}${keyHash ? ` key=${keyHash}` : ""}`,
+      );
       return { ...hit.result, latencyMs: 0, cached: true };
     }
     // Identical concurrent evaluations share one provider promise and one cached side-effect path.
@@ -365,7 +442,17 @@ async function evaluateSupportDecision(
       const latencyMs = Date.now() - startedAt;
       const probability = decision.probabilities?.shouldEngage;
       const shouldEngageP = typeof probability === "number" && Number.isFinite(probability) ? probability : null;
-      logDecision({ intent: decision.intent, shouldEngageP, action, reason, latencyMs, errorKind: null, enabled: true, model, keyHash });
+      logDecision({
+        intent: decision.intent,
+        shouldEngageP,
+        action,
+        reason,
+        latencyMs,
+        errorKind: null,
+        enabled: true,
+        model,
+        keyHash,
+      });
       try {
         require("./db").recordMetric("jev_decision", latencyMs, `${action}:${reason}`, state.program?.id || null);
       } catch (_) {}
@@ -388,7 +475,17 @@ async function evaluateSupportDecision(
     const errorKind = classifyError(err as JevError);
     const latencyMs = Date.now() - startedAt;
     const reason = `jev_error_${errorKind}`;
-    logDecision({ intent: null, shouldEngageP: null, action: "error", reason, latencyMs, errorKind, enabled: true, model, keyHash });
+    logDecision({
+      intent: null,
+      shouldEngageP: null,
+      action: "error",
+      reason,
+      latencyMs,
+      errorKind,
+      enabled: true,
+      model,
+      keyHash,
+    });
     try {
       require("./db").recordMetric("jev_error", latencyMs, errorKind, state.program?.id || null);
     } catch (_) {}
@@ -396,7 +493,10 @@ async function evaluateSupportDecision(
   }
 }
 
-async function evaluateCustomDecision({ state, questions }: { state?: unknown; questions?: object } = {}, deps: EvaluationDeps = {}): Promise<{ status: string; latencyMs: number; result?: unknown; errorKind?: string }> {
+async function evaluateCustomDecision(
+  { state, questions }: { state?: unknown; questions?: object } = {},
+  deps: EvaluationDeps = {},
+): Promise<{ status: string; latencyMs: number; result?: unknown; errorKind?: string }> {
   const cfg = deps.config || effectiveConfig();
   const startedAt = Date.now();
   if (!isEnabled(cfg)) return { status: "disabled", latencyMs: Date.now() - startedAt };
@@ -406,18 +506,20 @@ async function evaluateCustomDecision({ state, questions }: { state?: unknown; q
     return { status: "error", errorKind: "config", latencyMs: Date.now() - startedAt };
   }
 
-  const evaluateFn: EvaluateFn = deps.evaluateFn || ((args: EvaluationArgs) =>
-    require("./jevExperiential").experientialEvaluate(
-      {
-        baseUrl: cfg.baseUrl || JEV_BASE_URL_DEFAULT,
-        apiKey: experientialApiKey(),
-        model: args.model,
-        state: args.state,
-        questions: args.questions,
-        timeoutMs: args.timeoutMs,
-      },
-      { httpPost: deps.httpPost },
-    ));
+  const evaluateFn: EvaluateFn =
+    deps.evaluateFn ||
+    ((args: EvaluationArgs) =>
+      require("./jevExperiential").experientialEvaluate(
+        {
+          baseUrl: cfg.baseUrl || JEV_BASE_URL_DEFAULT,
+          apiKey: experientialApiKey(),
+          model: args.model,
+          state: args.state,
+          questions: args.questions,
+          timeoutMs: args.timeoutMs,
+        },
+        { httpPost: deps.httpPost },
+      ));
 
   try {
     const result = await evaluateFn({
