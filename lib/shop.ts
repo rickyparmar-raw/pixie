@@ -1,0 +1,583 @@
+// Shop prices are deterministic answers: economy math and item matching stay in code
+// so the model does not guess a payout tier or a catalogue price.
+import axios = require("axios");
+import log = require("./log");
+
+type UntypedInput = any;
+const CATALOGUE_URL = "https://server.pixl.hackclub.com/api/shop/items";
+const ECONOMY_URL = "https://raw.githubusercontent.com/hackclub/pixl/main/packages/config/pixl.json";
+
+
+const DEFAULT_ECONOMY = {
+  pixelValueUsd: 0.07,
+  basePayoutUsd: 4.0,
+  maxPayoutUsd: 6.0,
+  reForMaxPayout: 3750,
+  payoutSteps: [
+    { re: 0, usd: 4.0 },
+    { re: 625, usd: 4.33 },
+    { re: 1250, usd: 4.67 },
+    { re: 1875, usd: 5.0 },
+    { re: 2500, usd: 5.33 },
+    { re: 3125, usd: 5.67 },
+    { re: 3750, usd: 6.0 },
+  ],
+  tierRePerHour: [12.5, 15, 18.75, 25],
+};
+
+const TIER_NAMES = ["Spark", "Signal", "Grid", "Nexus"];
+
+
+function rePerHour(tier: UntypedInput, economy = DEFAULT_ECONOMY) {
+  // Clamp unknown tiers to the supported table instead of throwing or inventing a rate.
+  const table = economy.tierRePerHour || DEFAULT_ECONOMY.tierRePerHour;
+  const t = Math.min(Math.max(Math.trunc(tier) || 1, 1), table.length);
+  return table[t - 1];
+}
+
+
+function payoutUsdPerHour(re: UntypedInput, economy = DEFAULT_ECONOMY) {
+  const steps = economy.payoutSteps || DEFAULT_ECONOMY.payoutSteps;
+  const r = Math.max(Number(re) || 0, 0);
+  let usd = steps[0].usd;
+  for (const step of steps) {
+    if (r < step.re) break;
+    usd = step.usd;
+  }
+  return usd;
+}
+
+function pxPerHour(re: UntypedInput, economy = DEFAULT_ECONOMY) {
+  return payoutUsdPerHour(re, economy) / (economy.pixelValueUsd || DEFAULT_ECONOMY.pixelValueUsd);
+}
+
+
+function hoursRange(px: UntypedInput, economy = DEFAULT_ECONOMY) {
+  const floorUsd = economy.basePayoutUsd ?? DEFAULT_ECONOMY.basePayoutUsd;
+  const capUsd = economy.maxPayoutUsd ?? DEFAULT_ECONOMY.maxPayoutUsd;
+  const value = economy.pixelValueUsd || DEFAULT_ECONOMY.pixelValueUsd;
+  return {
+    floorUsd,
+    capUsd,
+    floorHours: px / (floorUsd / value),
+    capHours: px / (capUsd / value),
+  };
+}
+
+
+function hoursForPixels(px: UntypedInput, { tier = 4, startingRe = 0, economy = DEFAULT_ECONOMY }: Record<string, UntypedInput> = {}) {
+  // Walk payout steps segment by segment because each shipped hour can raise the rate.
+  const target = Math.max(Number(px) || 0, 0);
+  if (target === 0) return 0;
+
+  const steps = economy.payoutSteps || DEFAULT_ECONOMY.payoutSteps;
+  const perHour = rePerHour(tier, economy);
+  let remaining = target;
+  let hours = 0;
+  let re = Math.max(Number(startingRe) || 0, 0);
+
+
+  for (let guard = 0; guard <= steps.length; guard += 1) {
+    const rate = pxPerHour(re, economy);
+    const next = steps.find((s: UntypedInput) => s.re > re);
+    if (!next) return hours + remaining / rate;
+
+    const hoursToNext = (next.re - re) / perHour;
+    const pxInSegment = hoursToNext * rate;
+    if (remaining <= pxInSegment) return hours + remaining / rate;
+
+    hours += hoursToNext;
+    remaining -= pxInSegment;
+    re = next.re;
+  }
+  return hours + remaining / pxPerHour(re, economy);
+}
+
+
+function parseTier(text: UntypedInput) {
+  const t = String(text || "").toLowerCase();
+  const numbered = t.match(/\b(?:t|tier)\s*-?\s*([1-4])\b/);
+  if (numbered) return Number(numbered[1]);
+  for (let i = 0; i < TIER_NAMES.length; i += 1) {
+    if (new RegExp(`\\b${TIER_NAMES[i].toLowerCase()}\\b`).test(t)) return i + 1;
+  }
+  return null;
+}
+
+const PIXEL_AMOUNT = /\b(\d[\d,]*)\s*(?:px|pixels?|pixls?|pixl)\b/i;
+
+function parsePixelAmount(text: UntypedInput) {
+  const m = PIXEL_AMOUNT.exec(String(text || ""));
+  if (!m) return null;
+  const n = Number(m[1].replace(/,/g, ""));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+const ASKS_EVERY_TIER = /\b(?:each|every|all|per)\s+tiers?\b|\btiers?\s+by\s+tiers?\b|\ball\s+(?:four|4)\b/i;
+
+function normalize(text: UntypedInput) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const WEAK_TOKENS = new Set([
+  "the", "a", "an", "and", "or", "of", "for", "with", "plus", "new",
+  "pro", "max", "mini", "air", "neo", "ultimate", "standard", "edition", "limited",
+  "license", "licence", "grant", "grants", "kit", "kits", "starter", "set", "pack",
+  "digital", "wireless", "controller", "stackable", "gen", "small", "large",
+  "tb", "gb", "diy", "only", "your", "choice", "series",
+  "hardware", "software", "project", "projects", "code", "part", "parts",
+  "component", "components", "design", "designs", "item", "items", "build",
+  "board", "boards", "submission", "bom",
+  "pixl", "pixel", "pixels",
+]);
+
+const ALIASES = [
+  [/\bplay\s*station\s*(\d)\b/g, "ps$1"],
+  [/\braspberry\s*pi\b/g, "raspberry pi"],
+  [/\brpi\b/g, "raspberry pi"],
+  [/\bmac\s*book\b/g, "macbook"],
+  [/\bair\s*pods\b/g, "airpods"],
+];
+
+function applyAliases(normalized: UntypedInput) {
+  return ALIASES.reduce((acc, [pattern, replacement]) => acc.replace(pattern, replacement), normalized);
+}
+
+function priceOf(item: UntypedInput) {
+  const base = item?.config_options?.base_price;
+  return Number(base != null ? base : item?.price) || 0;
+}
+
+function isTrophy(item: UntypedInput) {
+  return Number(item?.unlock_xp || 0) > 0;
+}
+
+function isUnpriced(item: UntypedInput) {
+  return priceOf(item) <= 0;
+}
+
+function itemPhrases(item: UntypedInput, frequencies: UntypedInput) {
+  const tokens = normalize(item.name).split(" ").filter(Boolean);
+  if (tokens.length === 0) return [];
+
+  const phrases = [];
+  for (let size = tokens.length; size >= 2; size -= 1) {
+    for (let i = 0; i + size <= tokens.length; i += 1) {
+      phrases.push(tokens.slice(i, i + size).join(" "));
+    }
+  }
+  for (const [i, token] of tokens.entries()) {
+    if (WEAK_TOKENS.has(token)) continue;
+    const isHead = i === 0;
+    const isDistinctive = token.length >= 4 && (frequencies.get(token) || 0) === 1;
+    if (isHead || isDistinctive) phrases.push(token);
+  }
+  return phrases;
+}
+
+function tokenFrequencies(items: UntypedInput) {
+  const counts = new Map();
+  for (const item of items) {
+    for (const token of new Set(normalize(item.name).split(" ").filter(Boolean))) {
+      counts.set(token, (counts.get(token) || 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function findItems(text: UntypedInput, items: UntypedInput) {
+  // Return ties rather than guessing; ambiguity is the case worth asking about.
+  const haystack = ` ${applyAliases(normalize(text))} `;
+  if (haystack.trim() === "" || !Array.isArray(items) || items.length === 0) return [];
+
+  const frequencies = tokenFrequencies(items);
+  const scored = [];
+  for (const item of items) {
+    let best = 0;
+    for (const phrase of itemPhrases(item, frequencies)) {
+      if (!haystack.includes(` ${phrase} `)) continue;
+      best = Math.max(best, phrase.split(" ").length);
+    }
+    if (best > 0) scored.push({ item, score: best });
+  }
+  if (scored.length === 0) return [];
+
+  const top = Math.max(...scored.map((s: UntypedInput) => s.score));
+  return scored.filter((s: UntypedInput) => s.score === top).map((s: UntypedInput) => s.item);
+}
+
+const TIER_REPLY_FILLER =
+  /\b(?:at|on|in|im|i|m|its|it|is|are|the|a|an|for|to|do|doing|ship|shipping|shipped|my|our|project|projects|would|be|say|maybe|probably|guess|think|reckon|prob|all|mostly|usually|mine|yeah|yea|ok|okay)\b/g;
+
+function isBareTierReply(text: UntypedInput) {
+  // A bare tier can continue a shop follow-up, but filler is not an item name.
+  const stripped = normalize(text)
+    .replace(/\b(?:t|tier)\s*-?\s*[1-4]\b/g, " ")
+    .replace(new RegExp(`\\b(?:${TIER_NAMES.join("|").toLowerCase()})\\b`, "g"), " ")
+    .replace(TIER_REPLY_FILLER, " ");
+  return stripped.split(/\s+/).filter(Boolean).length === 0;
+}
+
+function lastMentionedItems(history: UntypedInput, items: UntypedInput) {
+  // Walk backward because the latest priced item is the only safe thread referent.
+  const lines = String(history || "").split("\n");
+  if (!lines.some((l: UntypedInput) => asksAboutPrice(l) || /\bpx\b/i.test(l))) return [];
+
+  for (let i = lines.length - 1; i >= 0; i -= 1) {
+    const found = findItems(lines[i], items);
+    if (found.length > 0) return found;
+  }
+  return [];
+}
+
+const SHOP_WORD = /\b(?:shop|catalog(?:ue)?|store|shelves)\b/i;
+
+const ASKS_PRICE = /\b(?:price|prices|pricing|cost|costs|how much|afford)\b/i;
+const ASKS_QUANTITY = /\b(?:how many|how much)\b/i;
+const CURRENCY_WORD = /\b(?:px|pixel|pixels|hour|hours|hr|hrs)\b/i;
+const NON_PRICE_ATTRIBUTES = /\b(?:storage|space|capacity|gigabytes?|terabytes?|gb|tb|fps|hz|resolution|ram|memory|weight|color|controller drift|battery|specs|features|play|played|gameplay)\b/i;
+const EXPLICIT_PRICE_QUERY = /\b(?:how much (?:is|does|to (?:buy|get|earn|redeem|order)|for|in (?:the )?shop)|how many (?:pixels?|px|hours? (?:to (?:buy|get|earn|redeem|reach|unlock)|for|do i need|needed|require|required))|what(?:'s|s|\s+(?:is|are)) (?:the )?(?:price|prices|pricing|cost|costs)(?: of)?|(?:price|prices|cost|costs) of|what does .+ cost|in the shop|on the shelf|can i afford|how do i buy)\b/i;
+
+function asksAboutPrice(text: UntypedInput) {
+  const t = String(text || "");
+  if (NON_PRICE_ATTRIBUTES.test(t) && !/\b(?:price|cost|in (?:the )?shop|pixels?|px)\b/i.test(t)) {
+    return false;
+  }
+  return EXPLICIT_PRICE_QUERY.test(t) || (ASKS_PRICE.test(t) && (CURRENCY_WORD.test(t) || SHOP_WORD.test(t)));
+}
+
+function isShopQuestion(text: UntypedInput) {
+  return SHOP_WORD.test(String(text || "")) || asksAboutPrice(text);
+}
+
+
+function fmtPx(n: UntypedInput) {
+  return Math.round(n).toLocaleString("en-US");
+}
+
+function fmtHours(h: UntypedInput) {
+  const r = Math.round(h * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+}
+
+function fmtUsd(usd: UntypedInput) {
+  return `$${Number.isInteger(usd) ? usd : usd.toFixed(2)}`;
+}
+
+const REGION_NOTE = "These are the US catalogue prices; the shop page shows your own region's if you're somewhere else.";
+
+function priceLine(item: UntypedInput) {
+  if (isTrophy(item)) {
+    return `${item.name} is a trophy, not something you buy. Trophies unlock at a level and you claim them free once you get there. This one is at ${fmtPx(item.unlock_xp)} XP.`;
+  }
+  if (isUnpriced(item)) {
+    return `${item.name} is in the catalogue but has no price on it, which is the "not available" state: it isn't stocked for your region yet. Nothing to work hours out for until it is.`;
+  }
+  const px = fmtPx(priceOf(item));
+  return item.config_options
+    ? `${item.name} starts at ${px} px, and it's configurable, so the final price depends on the options you pick.`
+    : `${item.name} is ${px} px.`;
+}
+
+function rangeLine(px: UntypedInput, economy: UntypedInput) {
+  const r = hoursRange(px, economy);
+  return (
+    `Every price is set at the payout floor, so that's ${fmtHours(r.floorHours)}h at the ${fmtUsd(r.floorUsd)}/h base rate, ` +
+    `down to ${fmtHours(r.capHours)}h once your Restoration Energy (RE) brings your rate to the ${fmtUsd(r.capUsd)}/h cap.`
+  );
+}
+
+function tierLine(px: UntypedInput, tier: UntypedInput, economy: UntypedInput) {
+  const hours = hoursForPixels(px, { tier, economy });
+  return (
+    `At T${tier} ${TIER_NAMES[tier - 1]} (${rePerHour(tier, economy)} RE/h) starting from no banked RE, ` +
+    `that's about ${fmtHours(hours)}h of shipped time. You start earning at ${fmtPx(pxPerHour(0, economy))} px/h ($4/h), and your hourly rate increases as your lifetime RE climbs.`
+  );
+}
+
+
+function amountAnswer(px: UntypedInput, tier: UntypedInput, economy: UntypedInput, everyTier: UntypedInput) {
+  const r = hoursRange(px, economy);
+  const opening =
+    `${fmtPx(px)} px is ${fmtHours(r.floorHours)}h at the floor rate of ${fmtPx(pxPerHour(0, economy))} px an hour.`;
+  const ceiling =
+    `Once your lifetime RE has you at the ${fmtUsd(r.capUsd)}/h cap it's ${fmtHours(r.capHours)}h instead.`;
+
+  if (tier && !everyTier) {
+    const hours = hoursForPixels(px, { tier, economy });
+    return [
+      opening,
+      `At T${tier} ${TIER_NAMES[tier - 1]} that's ${fmtHours(hours)}h from a standing start. Tier sets how fast you bank Restoration Energy, ${rePerHour(tier, economy)} RE an hour here, not what an hour pays.`,
+      ceiling,
+    ].join("\n\n");
+  }
+
+  const perTier = TIER_NAMES.map((name, i) => ({
+    tier: i + 1,
+    name,
+    hours: hoursForPixels(px, { tier: i + 1, economy }),
+  }));
+  const allSame = perTier.every((t: UntypedInput) => Math.abs(t.hours - perTier[0].hours) < 0.05);
+  const steps = economy.payoutSteps || DEFAULT_ECONOMY.payoutSteps;
+  const firstStep = steps.find((st: UntypedInput) => st.re > 0);
+
+  if (allSame) {
+    const banked = perTier[perTier.length - 1].hours * rePerHour(4, economy);
+    return [
+      opening,
+      `The tier makes no difference at that size, it's the same on all four. Tier decides how fast you bank Restoration Energy, not what an hour pays, and your rate only steps up once lifetime RE passes ${fmtPx(firstStep.re)} RE. ${fmtHours(perTier[0].hours)}h banks at most ${fmtPx(banked)} RE even at T4 ${TIER_NAMES[3]}.`,
+      ceiling,
+    ].join("\n\n");
+  }
+
+  return [
+    opening,
+    `That's enough hours to start banking Restoration Energy and lift your own rate, so the tier does change it here, from a standing start: ${perTier
+      .map((t: UntypedInput) => `T${t.tier} ${fmtHours(t.hours)}h`)
+      .join(", ")}. Tier sets how fast RE banks, not what an hour pays.`,
+    ceiling,
+  ].join("\n\n");
+}
+
+
+function directAnswer(question: UntypedInput, data: UntypedInput, { history = "" }: Record<string, UntypedInput> = {}) {
+  // Matching decides whether this is a shop ask; formatting below only writes the answer.
+  const items = data?.items || [];
+  const economy = data?.economy || DEFAULT_ECONOMY;
+  if (items.length === 0) return null;
+
+  const source = "Pixl Shop";
+
+
+  const direct = true;
+  const tier = parseTier(question);
+  let matches = findItems(question, items);
+
+  const asksPrice = asksAboutPrice(question);
+
+
+  const bareTier = tier !== null && isBareTierReply(question);
+
+  if (matches.length > 0) {
+
+
+    if (!asksPrice) return null;
+  } else if (bareTier && history) {
+
+
+    matches = lastMentionedItems(history, items);
+  }
+
+
+  const amount = parsePixelAmount(question);
+  if (matches.length === 0 && amount !== null && (asksPrice || /\bhow long\b/i.test(question))) {
+    return { source, direct, answer: amountAnswer(amount, tier, economy, ASKS_EVERY_TIER.test(question)) };
+  }
+
+
+  if (matches.length === 0 && (tier === null || !asksPrice)) return null;
+
+  if (matches.length > 1) {
+
+
+    const SHOWN = 4;
+    const named = matches
+      .slice(0, SHOWN)
+      .map((i: UntypedInput) => (isUnpriced(i) ? `${i.name} (not priced yet)` : `${i.name} at ${fmtPx(priceOf(i))} px`))
+      .join(", ");
+    const rest = matches.length - SHOWN;
+    const tail = rest > 0 ? `, and ${rest} more` : "";
+    return {
+      source,
+      direct,
+      clarify: true,
+      answer: `${matches.length} things in the shop match that: ${named}${tail}. Which one do you mean?`,
+    };
+  }
+
+  if (matches.length === 0) {
+    if (tier === null) return null;
+    return {
+      source,
+      direct,
+      clarify: true,
+      answer:
+        `T${tier} ${TIER_NAMES[tier - 1]} banks ${rePerHour(tier, economy)} RE an hour, but the hours depend on what you're saving for, and ` +
+        `every item in the shop has its own price. Which one did you have in mind?`,
+    };
+  }
+
+  const item = matches[0];
+  return { source, direct, answer: answerForSingleItem(item, tier, economy) };
+}
+
+
+function answerForSingleItem(item: UntypedInput, tier: UntypedInput, economy: UntypedInput) {
+  const lines = [priceLine(item)];
+  if (!isTrophy(item) && !isUnpriced(item)) {
+    const px = priceOf(item);
+    if (tier) {
+      lines.push(tierLine(px, tier, economy));
+      lines.push(
+        `${rangeLine(px, economy)} If you've already banked some RE, say roughly how much and I'll redo it from there. ${REGION_NOTE}`,
+      );
+    } else {
+      lines.push(rangeLine(px, economy));
+      lines.push(
+        `Which tier your projects land on decides how fast your hourly rate climbs: T1 ${TIER_NAMES[0]} banks ${rePerHour(1, economy)} RE/h, up to T4 ${TIER_NAMES[3]} banking ${rePerHour(4, economy)} RE/h. (Note: Pixels are the spendable currency; RE is the progression XP that increases your hourly payout rate from $4 to $6). Tell me your tier or banked RE and I'll calculate your exact hours! ${REGION_NOTE}`,
+      );
+    }
+  }
+  return lines.join("\n\n");
+}
+
+
+function corpusText(data: UntypedInput) {
+  const items = data?.items || [];
+  const economy = data?.economy || DEFAULT_ECONOMY;
+  if (items.length === 0) return "";
+
+  const steps = economy.payoutSteps || DEFAULT_ECONOMY.payoutSteps;
+  const header = [
+    "Live prices from the Pixl shop, in pixels (px), as the US catalogue lists them. Other regions get different stock and different prices. These are current; the docs do not list prices.",
+    "",
+    "Rate table, by lifetime Restoration Energy, showing what an hour of shipped work pays:",
+    ...steps.map((s: UntypedInput) => `- ${fmtPx(s.re)} RE: ${fmtUsd(s.usd)} an hour = ${fmtPx(s.usd / (economy.pixelValueUsd || 0.07))} px an hour`),
+    "",
+    `Tier decides how fast RE banks: ${(economy.tierRePerHour || DEFAULT_ECONOMY.tierRePerHour)
+      .map((re: number, i: number) => `T${i + 1} ${TIER_NAMES[i]} ${re} RE/hour`)
+      .join(", ")}.`,
+    "",
+    "RE an hour is not pixels an hour, and the two must never be mixed up. To get hours from a pixel amount, divide by the PIXELS per hour in the rate table above, never by a tier's RE per hour. A tier only changes the hours once enough RE has banked to cross a rate step, so for small amounts every tier gives the same answer.",
+    `Worked example: 275 px at the floor rate is 275 / ${fmtPx(pxPerHour(0, economy))} = ${fmtHours(275 / pxPerHour(0, economy))} hours, and that is the answer on all four tiers, because ${fmtHours(275 / pxPerHour(0, economy))} hours banks well under the first ${fmtPx((economy.payoutSteps || DEFAULT_ECONOMY.payoutSteps).find((st: UntypedInput) => st.re > 0).re)} RE step.`,
+    "",
+    "Every price is set at the payout floor, so each item costs the most hours at the floor rate and the fewest at the cap.",
+    "",
+    "Catalogue:",
+  ];
+
+  const describe = (item: UntypedInput) => {
+    if (isTrophy(item)) return `- ${item.name}: a trophy, claimed free at ${fmtPx(item.unlock_xp)} XP`;
+    if (isUnpriced(item)) return `- ${item.name}: not priced for this region yet, not buyable`;
+    const px = priceOf(item);
+    const r = hoursRange(px, economy);
+    const from = item.config_options ? "from " : "";
+    return `- ${item.name}: ${from}${fmtPx(px)} px (${fmtHours(r.floorHours)}h at the floor rate, ${fmtHours(r.capHours)}h at the cap)`;
+  };
+
+  const ITEMS_PER_PARAGRAPH = 4;
+  const byCategory = new Map();
+  for (const item of [...items].sort((a, b) => priceOf(a) - priceOf(b))) {
+    const key = item.category || "other";
+    if (!byCategory.has(key)) byCategory.set(key, []);
+    byCategory.get(key).push(item);
+  }
+
+  const sections = [];
+  for (const [category, group] of byCategory) {
+    sections.push(`## ${category[0].toUpperCase()}${category.slice(1)}`);
+    for (let i = 0; i < group.length; i += ITEMS_PER_PARAGRAPH) {
+      sections.push(group.slice(i, i + ITEMS_PER_PARAGRAPH).map(describe).join("\n"));
+    }
+  }
+
+  return [header.join("\n"), ...sections].join("\n\n");
+}
+
+
+let snapshot = { items: [], economy: DEFAULT_ECONOMY, fetchedAt: 0 };
+const STORE_KEY = "Pixl Shop Data";
+
+let restoreTried = false;
+
+function current() {
+  if (snapshot.items.length === 0 && !restoreTried) {
+    restoreTried = true;
+    restoreFromDisk();
+  }
+  return snapshot;
+}
+
+function restoreFromDisk() {
+  try {
+    const stored = require("./db").loadSourceText(STORE_KEY);
+    if (!stored?.text) return false;
+    const parsed = JSON.parse(stored.text);
+    if (!Array.isArray(parsed.items) || parsed.items.length === 0) return false;
+    snapshot = { items: parsed.items, economy: parsed.economy || DEFAULT_ECONOMY, fetchedAt: stored.fetchedAt };
+    log.info("shop", `restored ${parsed.items.length} items from disk`);
+    return true;
+  } catch (e: UntypedInput) {
+    log.debug("shop", `no stored catalogue: ${e.message}`);
+    return false;
+  }
+}
+
+async function refresh() {
+  // Keep the last good economy until the live fetch supplies a valid replacement.
+  let economy = snapshot.economy || DEFAULT_ECONOMY;
+  try {
+    const res = await require("./sourceGuard").fetchSourceUrl(ECONOMY_URL, { timeout: 10000 });
+    const data = typeof res.data === "string" ? JSON.parse(res.data) : res.data;
+    if (data?.economy && typeof data.economy.basePayoutUsd === "number") {
+      economy = { ...DEFAULT_ECONOMY, ...data.economy };
+    }
+  } catch (e: UntypedInput) {
+    log.warn("shop", `economy config fetch failed, keeping current rates: ${e.message}`);
+  }
+
+  const res = await require("./sourceGuard").fetchSourceUrl(CATALOGUE_URL, { timeout: 10000 });
+  const items = Array.isArray(res.data?.items) ? res.data.items : [];
+  if (items.length === 0) throw new Error("shop returned an empty catalogue");
+
+  snapshot = { items, economy, fetchedAt: Date.now() };
+  try {
+    require("./db").saveSourceText(STORE_KEY, JSON.stringify({ items, economy }));
+  } catch (e: UntypedInput) {
+    log.warn("shop", `could not persist catalogue: ${e.message}`);
+  }
+  return snapshot;
+}
+
+async function refreshText() {
+  try {
+    return corpusText(await refresh());
+  } catch (e: UntypedInput) {
+    if (snapshot.items.length === 0 && !restoreFromDisk()) throw e;
+    log.warn("shop", `catalogue fetch failed: ${e.message} — serving last good copy`);
+    return corpusText(snapshot);
+  }
+}
+
+export = {
+  DEFAULT_ECONOMY,
+  TIER_NAMES,
+  CATALOGUE_URL,
+  ECONOMY_URL,
+  rePerHour,
+  payoutUsdPerHour,
+  pxPerHour,
+  hoursRange,
+  hoursForPixels,
+  parseTier,
+  parsePixelAmount,
+  findItems,
+  isShopQuestion,
+  asksAboutPrice,
+  isBareTierReply,
+  lastMentionedItems,
+  priceOf,
+  isTrophy,
+  isUnpriced,
+  directAnswer,
+  answerForSingleItem,
+  corpusText,
+  current,
+  refresh,
+  refreshText,
+  restoreFromDisk,
+};
