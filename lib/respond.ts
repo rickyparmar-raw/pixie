@@ -1,7 +1,6 @@
 const lookup = require("./lookup");
 const reply = require("./reply");
 const context = require("./context");
-const guides = require("./guides");
 const rateLimit = require("./rateLimit");
 const db = require("./db");
 const log = require("./log");
@@ -27,12 +26,6 @@ interface UserContext {
   recentTopics?: string[];
   helpfulAnswers?: string[];
 }
-interface GuideResult {
-  message: string;
-  checkNext?: string;
-  completed?: boolean;
-  cancelled?: boolean;
-}
 interface CacheReplyArgs {
   client: SlackClient;
   channel: string;
@@ -41,15 +34,6 @@ interface CacheReplyArgs {
   question: string;
   result: AnswerResult;
   startedAt: number;
-  program?: ProgramLike | null;
-}
-interface GuideArgs {
-  client: SlackClient;
-  channel: string;
-  threadTs: string;
-  question: string;
-  userId: string;
-  workspaceId?: string | null;
   program?: ProgramLike | null;
 }
 interface TextPostArgs {
@@ -175,7 +159,7 @@ function isGroundedAnswer(result: AnswerResult | null) {
     /\bno official\b/i,
     /\bask in\b/i,
     /\bsuggest asking\b/i,
-    /\bcheck (?:with|in|the shop|the site)\b/i,
+    /\bcheck (?:with|in|the site)\b/i,
     /<#[a-z0-9]+(?:\|[^>]+)?>/i,
     /#[-a-z0-9_]+/i,
   ];
@@ -259,69 +243,6 @@ async function replyFromCache({
   return true;
 }
 
-function formatGuideText(result: GuideResult) {
-  if (!result.checkNext) return result.message;
-  const question = result.checkNext.replace(/\s*\(yes\/no\)\s*$/i, "");
-  return `${result.message}\n\n${question}`;
-}
-
-async function postGuideStep({
-  client,
-  channel,
-  threadTs,
-  result,
-  isFirstStep = false,
-  program = null,
-  workspaceId = null,
-}: TextPostArgs & { result: GuideResult; isFirstStep?: boolean }) {
-  const text = formatGuideText(result);
-  const blocks = guides.buildGuideBlocks(result, config.web.baseUrl, { showReactionHint: isFirstStep });
-  const prog = program || programs.forChannel(channel, workspaceId);
-  const slackMessages = require("./slackMessages");
-  const posted = await slackMessages.sendProgramMessage({
-    client,
-    program: prog,
-    channel,
-    threadTs,
-    text: reply.plainDashes(text),
-    blocks: reply.plainDashesInBlocks(blocks),
-  });
-  context.addToThread(threadTs, "assistant", text, null, channel);
-
-  if (!result.completed && !result.cancelled) {
-    db.setGuideMessageTs(threadTs, posted.ts);
-  }
-  return posted.ts;
-}
-
-async function handleActiveGuide({ client, channel, threadTs, question, userId, workspaceId = null }: GuideArgs) {
-  if (!guides.isInGuide(threadTs)) return false;
-
-  const result = await guides.continueGuide(threadTs, question, userId, channel === config.slack.helpChannel);
-  if (!result) return false;
-
-  await postGuideStep({ client, channel, threadTs, result, workspaceId });
-  return true;
-}
-
-function isGuideMenuRequest(text: string) {
-  const clean = (text || "")
-    .trim()
-    .toLowerCase()
-    .replace(/^<@[^>]+>\s*/, "");
-  const slug = brand.slug();
-  const names = new Set([slug, brand.name().toLowerCase(), brand.DEFAULT_SLUG]);
-
-  for (const n of names) {
-    for (const sep of ["-", " "]) {
-      if (clean === `${n}${sep}guide` || clean === `${n}${sep}guides`) return true;
-    }
-    if (clean === `/${n}-guide` || clean === `/${n}-guides`) return true;
-  }
-
-  return clean === "!guide" || clean === "!guides" || clean === "/guide";
-}
-
 function isMuteRequest(text: string) {
   const clean = (text || "")
     .trim()
@@ -358,7 +279,6 @@ async function handleMute({
   if (!isMuteRequest(question)) return false;
   if (threadTs) {
     db.muteThread(threadTs, channel);
-    guides.cancelGuide(threadTs);
   }
 
   const prog = program || programs.forChannel(channel, workspaceId);
@@ -370,55 +290,6 @@ async function handleMute({
   if (threadTs) {
     context.addToThread(threadTs, "assistant", text, null, channel);
   }
-  return true;
-}
-
-async function handleGuideMenu({ client, channel, threadTs, userId, question, workspaceId = null }: GuideArgs) {
-  if (!isGuideMenuRequest(question)) return false;
-
-  const prog = programs.forChannel(channel, workspaceId);
-  const allGuides = guides.availableFor(prog);
-
-  const blocks = guides.guideMenuBlocks({
-    heading: `📖 *Interactive Walkthrough Guides* (${prog ? prog.name : "YSWS"})\nSelect a guide below to start the step-by-step walkthrough in this thread:`,
-    entries: allGuides,
-  });
-
-  const text = `📖 *Interactive Walkthrough Guides* (${prog ? prog.name : "YSWS"})\nSelect a guide below to start:`;
-  const slackMessages = require("./slackMessages");
-  const posted = await slackMessages.sendProgramMessage({
-    client,
-    program: prog,
-    channel,
-    threadTs,
-    text: reply.plainDashes(text),
-    blocks: reply.plainDashesInBlocks(blocks),
-  });
-  context.addToThread(threadTs, "assistant", text, null, channel);
-  return true;
-}
-
-async function handleNewGuide({ client, channel, threadTs, userId, question, workspaceId = null }: GuideArgs) {
-  const q = (question || "").trim().replace(/^<@[^>]+>\s*/, "");
-  const names = [...new Set([brand.slug(), brand.name().toLowerCase(), brand.DEFAULT_SLUG])]
-    .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-    .join("|");
-  const prefixMatch = q.match(
-    new RegExp(`^(?:(?:${names})[-_\\s]?guides?|!guides?|/(?:${names})[-_\\s]?guides?|/guides?)\\s+(.+)$`, "i"),
-  );
-  if (!prefixMatch) return false;
-
-  const target = prefixMatch[1].trim();
-  const guideId =
-    (guides.GUIDES[target] ? target : null) ||
-    guides.detectGuideByKeyword(target) ||
-    (await guides.detectGuideIntent(target));
-  if (!guideId || !guides.isAvailable(programs.forChannel(channel, workspaceId), guideId)) return false;
-
-  const result = guides.startGuide(guideId, threadTs, userId);
-  if (!result) return false;
-
-  await postGuideStep({ client, channel, threadTs, result, isFirstStep: true, workspaceId });
   return true;
 }
 
@@ -579,7 +450,7 @@ async function handleLookupFailure({
 }
 
 function uncertaintyText(prog: ProgramLike | null, { escalated = false }: { escalated?: boolean } = {}) {
-  const name = prog?.name && prog.id !== "ysws-global" ? `the ${prog.name} docs` : "the program docs";
+  const name = prog?.name ? `the ${prog.name} docs` : "the program docs";
   return escalated
     ? `I couldn't verify that from ${name}, so I won't guess — I've flagged it for a helper :hii:`
     : `I couldn't verify that from ${name}, so I won't guess. A helper or organizer can confirm it :hii:`;
@@ -761,9 +632,6 @@ async function respond({
   const silencedBefore = isAddressed ? reply.silenceState(threadTs) : null;
 
   if (await handleMute({ client, channel, threadTs, question: trimmed, program: prog, workspaceId })) return true;
-  if (await handleActiveGuide({ client, channel, threadTs, question: trimmed, userId, workspaceId })) return true;
-  if (await handleGuideMenu({ client, channel, threadTs, userId, question: trimmed, workspaceId })) return true;
-  if (await handleNewGuide({ client, channel, threadTs, userId, question: trimmed, workspaceId })) return true;
 
   const REFERENTIAL_QUERY = /^(?:\^+|above|see above|this|what about (?:this|that)|answer this|look above)\s*$/i;
   let effectiveQuestion = trimmed;
@@ -1213,7 +1081,6 @@ export = {
   buildChatContext,
   isRecallQuestion,
   isClarifyingQuestion,
-  isGuideMenuRequest,
   isMuteRequest,
   handleMute,
   handleSensitiveMatch,
@@ -1222,8 +1089,6 @@ export = {
   uncertaintyText,
   publishReply,
   recordSpokenReply,
-  postGuideStep,
-  formatGuideText,
   DOCS_ONLY,
   HELP_ONLY,
   ALWAYS,

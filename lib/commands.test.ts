@@ -71,7 +71,7 @@ test("teachThreadShortcut queues a summary and confirms ephemerally", async () =
   const { client, posted } = stubEphemeralClient();
   const savedSummarize = teachThread.summarizeThread;
   const savedCapture = learn.captureFromThread;
-  teachThread.summarizeThread = async () => ({ question: "how do i join", answer: "post in #pixl-help" });
+  teachThread.summarizeThread = async () => ({ question: "how do i join", answer: "post in #acme-help" });
   learn.captureFromThread = () => 42;
 
   try {
@@ -189,21 +189,6 @@ test("programCommand tickets on|off is reachable by a program's own helper, not 
   });
   assert.match(responses[2], /back \*on\*/);
   assert.equal(programs.get("cmd-tix").publicTicketsEnabled, true);
-});
-
-test("guideCommand returns interactive picker blocks when no text passed", async () => {
-  const responses: any[] = [];
-  const sendEphemeral = async (msg: any) => responses.push(msg);
-
-  await commands.guideCommand({
-    command: { text: "", channel_id: "C1", user_id: "U1" },
-    ack: async () => {},
-    respond: sendEphemeral,
-  });
-
-  assert.equal(responses.length, 1);
-  assert.equal(responses[0].text, "Interactive Walkthrough Guides");
-  assert.ok(responses[0].blocks.length >= 2);
 });
 
 test("every registered command has its ephemeral replies de-dashed", async () => {
@@ -341,13 +326,12 @@ test("/pixie ask parity — docs hit answers ephemerally, miss chats, error fall
   }
 });
 
-test("/pixie-check and /pixie-calc dispatch to their deterministic paths", async () => {
+test("/pixie-check dispatches to the deterministic path", async () => {
   const validator = require("./validator");
   const respond = require("./respond");
   const sent: any[] = [];
   const sendEphemeral = async (m: any) => sent.push(m.text);
   const origValidate = validator.validateRepository;
-  const origLookup = respond.lookupAnswer;
   try {
     validator.validateRepository = async () => ({
       ok: true,
@@ -364,65 +348,8 @@ test("/pixie-check and /pixie-calc dispatch to their deterministic paths", async
       respond: sendEphemeral,
     });
     assert.match(sent[0], /Ready for submission/);
-
-    sent.length = 0;
-    respond.lookupAnswer = async () => ({ source: "Pixl Shop", direct: true, answer: "calc answer" });
-    await commands.calcCommand({
-      command: { text: "20 hours", user_id: "U1", channel_id: "C1" },
-      ack: async () => {},
-      respond: sendEphemeral,
-    });
-    assert.match(sent[0], /calc answer/);
   } finally {
     validator.validateRepository = origValidate;
-    respond.lookupAnswer = origLookup;
   }
-});
-
-test("start_guide action posts dedashed blocks like every other guide entry", async () => {
-  const handlers: Record<string, any> = {};
-  const app = {
-    command: () => {},
-    action: (pattern: any, handler: any) => {
-      handlers[pattern] = handler;
-    },
-    shortcut: () => {},
-    event: () => {},
-    view: () => {},
-  };
-  commands.register(app);
-  const actionHandler =
-    handlers[/^start_guide_.+$/.toString()] ||
-    Object.values(handlers).find((h: any) => typeof h === "function" && h !== undefined);
-  assert.ok(actionHandler, "start_guide action registered");
-
-  const guides = require("./guides");
-  const origAvail = guides.isAvailable;
-  const origStart = guides.startGuide;
-  guides.isAvailable = () => true;
-  guides.startGuide = () => ({ message: "wire it up — press W to start", checkNext: "wired? (yes/no)" });
-  const posted: any[] = [];
-  const client = {
-    chat: {
-      update: async () => ({}),
-      postMessage: async (m: any) => {
-        posted.push(m);
-        return { ts: "9.9" };
-      },
-    },
-  };
-  try {
-    await actionHandler({
-      action: { value: "create-hackpad" },
-      body: { channel: { id: "C1" }, message: { ts: "1.1" }, user: { id: "U1" } },
-      ack: async () => {},
-      client,
-    });
-  } finally {
-    guides.isAvailable = origAvail;
-    guides.startGuide = origStart;
-  }
-  assert.equal(posted.length, 1);
-  assert.doesNotMatch(posted[0].blocks[0].text.text, /—/, "button-started guides dedash blocks like /guide does");
 });
 export {};

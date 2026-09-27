@@ -49,9 +49,7 @@ const BOT_EVENTS = [
 // null is the bare ask command.
 const COMMANDS = [
   [null, "Private answer — help without cluttering the channel", "[question]"],
-  ["guide", "Interactive step-by-step walkthrough guides", "[guide-name]"],
-  ["check", "Check GitHub repository readiness for YSWS submission", "<github_repo_url>"],
-  ["calc", "Calculate build hours, RE progression, and shop item goals", "<hours/re/item>"],
+  ["check", "Check GitHub repository readiness for program submission", "<github_repo_url>"],
   ["sources", "What's loaded and when it last refreshed"],
   ["stats", "Answer rate, cache hits, feedback, latency"],
   ["gaps", "Top questions the docs didn't cover"],

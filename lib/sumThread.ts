@@ -21,7 +21,7 @@ const THREAD_FETCH_LIMIT = 50;
 const SUMMARY_MAX_TOKENS = 1000;
 
 const HELPER_SUMMARY_SYSTEM_PROMPT = [
-  "You are an assistant for helpers and mentors in a Hack Club technical support channel.",
+  "You are an assistant for helpers and mentors in a technical support channel.",
   "Your task is to summarize a Slack discussion/support thread so a helper can jump in and understand the situation immediately without reading through every message.",
   "Output your summary cleanly in Slack mrkdwn format using the following structure:",
   "• *Asker:* <@user_id>",

@@ -1,6 +1,5 @@
 import knowledge = require("./knowledge");
 import reply = require("./reply");
-import guides = require("./guides");
 import learn = require("./learn");
 import db = require("./db");
 import cache = require("./cache");
@@ -131,7 +130,7 @@ function reviewBlocks(userId: string): KnownBlock[] {
 
 function programSummary(): string {
   const named = allProgramNames().filter((n: string) => n);
-  if (named.length === 0) return "Hack Club YSWS programs";
+  if (named.length === 0) return "configured programs";
   if (named.length === 1) return named[0];
   return `${named.slice(0, -1).join(", ")} and ${named[named.length - 1]}`;
 }
@@ -140,7 +139,7 @@ function allProgramNames(): string[] {
   try {
     return programs
       .all()
-      .filter((p: { id: string; name: string }) => p.id !== "ysws-global")
+      .filter((p: { id: string; name: string }) => p.id !== programs.shared().id)
       .map((p: { id: string; name: string }) => p.name);
   } catch (e) {
     log.warn("home", `failed to get all program names: ${e instanceof Error ? e.message : String(e)}`);
@@ -178,16 +177,6 @@ function homeBlocks(userId: string): KnownBlock[] {
       text: {
         type: "mrkdwn",
         text: `*what i know*\n${sources.map((s) => `• ${s.name}`).join("\n") || "_no sources loaded_"}\n\n_refreshed ${relativeTime(knowledge.lastBuiltAt?.getTime())}_`,
-      },
-    },
-    {
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*what i can walk you through*\n${guides
-          .availableFor(programs.all()[0])
-          .map(([, g]: [string, { name: string }]) => `• ${g.name}`)
-          .join("\n")}`,
       },
     },
     ...coverageBlocks(),

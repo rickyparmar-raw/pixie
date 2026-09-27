@@ -13,17 +13,17 @@ const programs = require("../lib/programs");
 db.open(":memory:");
 
 const CASES = [
-  { name: "answerable", message: "when is the deadline?", docs: "### Pixl Docs\nThe deadline is August 18." },
-  { name: "missing-docs", message: "what is the exact payout amount in dollars?", docs: "### Pixl Docs\nWelcome to the program." },
-  { name: "chatter", message: "lmao that deploy was wild gg", docs: "### Pixl Docs\nThe deadline is August 18." },
-  { name: "ambiguous", message: "how do i do this?", docs: "### Pixl Docs\nSubmit through the portal." },
+  { name: "answerable", message: "when is the deadline?", docs: "### Acme Docs\nThe deadline is August 18." },
+  { name: "missing-docs", message: "what is the exact payout amount in dollars?", docs: "### Acme Docs\nWelcome to the program." },
+  { name: "chatter", message: "lmao that deploy was wild gg", docs: "### Acme Docs\nThe deadline is August 18." },
+  { name: "ambiguous", message: "how do i do this?", docs: "### Acme Docs\nSubmit through the portal." },
   { name: "conflicting", message: "when is the deadline?", docs: "### A\nDeadline Aug 18.\n### B\nDeadline Sept 1." },
-  { name: "review-timing", message: "how long does review take?", docs: "### Pixl Docs\nProjects are reviewed by humans." },
+  { name: "review-timing", message: "how long does review take?", docs: "### Acme Docs\nProjects are reviewed by humans." },
 ];
 
 async function main() {
   await knowledge.refreshCorpus().catch(() => {});
-  const prog = programs.forChannel("C0B6STY9G5N") || { id: "pixl", name: "Pixl" };
+  const prog = programs.forChannel("C0B6STY9G5N") || { id: "acme", name: "Acme" };
   console.log(`program=${prog.id} jev_enabled=${jevDecision.isEnabled()}`);
   for (const c of CASES) {
     let existing = null;

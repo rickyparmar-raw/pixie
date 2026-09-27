@@ -4,7 +4,6 @@ import intent = require("./intent");
 import contextModule = require("./context");
 import respondModule = require("./respond");
 import replyText = require("./reply");
-import guidesModule = require("./guides");
 import learnModule = require("./learn");
 import teachThreadModule = require("./teachThread");
 import sumThreadModule = require("./sumThread");
@@ -77,17 +76,9 @@ interface ThreadCrowd {
   othersPresent: boolean;
   pixieIn: boolean;
 }
-interface GuideStepResult {
-  message: string;
-  checkNext?: string | null;
-  screenshot?: string | null;
-  [key: string]: unknown;
-}
 interface HandlerDb {
   claimMessage(ts: string, channel?: string | null): boolean;
   clearTakeover(threadTs: string): void;
-  getGuide(threadTs: string): { thread_ts: string; user_id?: string | null } | null;
-  getGuideByMessageTs(messageTs: string): { thread_ts: string; user_id?: string | null } | null;
   getTicketByThreadTs(
     threadTs?: string,
     workspaceId?: string | null,
@@ -131,14 +122,7 @@ interface HandlerRespond {
   ALWAYS: string;
   ERROR_FALLBACK: string;
   HELP_ONLY: string;
-  postGuideStep(args: object): Promise<unknown>;
   respond(args: object): Promise<unknown>;
-}
-interface HandlerGuides {
-  advanceGuideByReaction(
-    message: string | { messageTs: string; userId: string },
-    userId?: string,
-  ): GuideStepResult | null;
 }
 interface HandlerPrograms {
   forChannel(channel: string | null | undefined, workspaceId?: string | null, options?: object): Program;
@@ -199,7 +183,6 @@ function errorData(error: unknown): Record<string, unknown> | undefined {
 const context = contextModule as HandlerContext;
 const vision = visionModule as HandlerVision;
 const respond = respondModule as HandlerRespond;
-const guides = guidesModule as HandlerGuides;
 const learn = learnModule as HandlerLearn;
 const teachThread = teachThreadModule as HandlerTeachThread;
 const sumThread = sumThreadModule as HandlerSumThread;
@@ -210,7 +193,7 @@ const macros: HandlerMacros = macrosModule as HandlerMacros;
 const channelPolicy = channelPolicyModule as HandlerPolicy;
 const workspace = workspaceModule as HandlerWorkspace;
 
-const DELETE_REACTIONS = new Set(["pixl-delete", "x", "heavy_multiplication_x"]);
+const DELETE_REACTIONS = new Set(["x", "heavy_multiplication_x"]);
 const UP_REACTIONS = new Set([
   "yay",
   "thumbs-up",
@@ -224,8 +207,6 @@ const UP_REACTIONS = new Set([
   "heart_eyes",
 ]);
 const DOWN_REACTIONS = new Set(["nono", "-1", "thumbsdown", "sad-pf"]);
-const GUIDE_ADVANCE_REACTION = "upvote";
-
 // event.item channel
 
 function escapeRegex(value: string): string {
@@ -466,7 +447,6 @@ function shouldConsiderThreadReply(event: HandlerEvent, prog: Program | null = n
     return mentionsPixieDirectly(event.text);
   }
   if (mentionsPixieByName(event.text) || mentionsPixieDirectly(event.text)) return true;
-  if (db.getGuide(event.thread_ts)) return true;
   if (threadRequiresMention(prog)) return false;
   return context.hasSpokenInThread(event.thread_ts);
 }
@@ -905,7 +885,7 @@ async function onMessage({ event, client }: HandlerArgs): Promise<void> {
   let productionProgramMatch = null;
   try {
     const candidate = programs.forChannel(event.channel, workspaceId);
-    if (candidate && candidate.id && candidate.id !== "ysws-global") productionProgramMatch = candidate.id;
+    if (candidate && candidate.id && candidate.id !== programs.shared().id) productionProgramMatch = candidate.id;
   } catch (error: unknown) {
     log.debug("draft", `production channel lookup failed: ${errorMessage(error)}`);
   }
@@ -1151,10 +1131,9 @@ async function onMessage({ event, client }: HandlerArgs): Promise<void> {
       return;
     }
 
-    const inActiveGuide = !!db.getGuide(threadTs);
-    const turn = event.thread_ts && !inActiveGuide ? await untaggedThreadTurn({ event, client }) : "ambient";
+    const turn = event.thread_ts ? await untaggedThreadTurn({ event, client }) : "ambient";
     if (turn === "humans_talking") return stayOutOfHumanThread({ event, threadTs, question, prog });
-    const toPixie = inActiveGuide || turn === "addressed";
+    const toPixie = turn === "addressed";
     if (!db.claimMessage(event.ts, event.channel)) return;
     await respond.respond({
       workspaceId,
@@ -1166,7 +1145,7 @@ async function onMessage({ event, client }: HandlerArgs): Promise<void> {
       messageTs: event.ts,
       mode: toPixie ? respond.ALWAYS : respond.HELP_ONLY,
       addressed: toPixie,
-      addressedHow: inActiveGuide ? "guide" : toPixie ? "thread" : undefined,
+      addressedHow: toPixie ? "thread" : undefined,
       seedClient: client,
     });
     return;
@@ -1187,8 +1166,7 @@ async function onMessage({ event, client }: HandlerArgs): Promise<void> {
       return;
     }
 
-    const inActiveGuide = !!db.getGuide(threadTs);
-    const turn = inActiveGuide ? "addressed" : await untaggedThreadTurn({ event, client });
+    const turn = await untaggedThreadTurn({ event, client });
     if (turn === "humans_talking") return stayOutOfHumanThread({ event, threadTs, question, prog });
     const toPixie = turn === "addressed";
     if (!db.claimMessage(event.ts, event.channel)) return;
@@ -1203,7 +1181,7 @@ async function onMessage({ event, client }: HandlerArgs): Promise<void> {
       mode: toPixie ? respond.ALWAYS : respond.HELP_ONLY,
       seedClient: client,
       addressed: toPixie,
-      addressedHow: inActiveGuide ? "guide" : toPixie ? "thread" : undefined,
+      addressedHow: toPixie ? "thread" : undefined,
     });
     return;
   }
@@ -1353,35 +1331,6 @@ async function onReactionAdded({ event, client }: { event: ReactionEvent; client
       log.warn("handlers", `could not delete ${event.item.ts}: ${errorData(e)?.error || errorMessage(e)}`);
     }
     return;
-  }
-
-  if (normReaction === GUIDE_ADVANCE_REACTION) {
-    try {
-      const guideState = db.getGuideByMessageTs(event.item.ts) || db.getGuide(event.item.ts);
-      if (guideState && (db.isThreadMuted(guideState.thread_ts) || db.isTakeover(guideState.thread_ts))) {
-        log.debug("guides", `guide parked in silenced thread ${guideState.thread_ts}`);
-        return;
-      }
-      if (guideState) {
-        const nextStepResult = await guides.advanceGuideByReaction({
-          messageTs: event.item.ts,
-          userId: event.user,
-        });
-        if (nextStepResult !== null) {
-          await respond.postGuideStep({
-            client,
-            channel,
-            threadTs: guideState.thread_ts,
-            result: nextStepResult,
-            program: programs.forChannel(channel, workspace.workspaceOf(event)),
-          });
-          log.info("guides", `advanced guide via reaction in thread ${guideState.thread_ts}`);
-          return;
-        }
-      }
-    } catch (e: unknown) {
-      log.debug("guides", `reaction advance failed: ${errorMessage(e)}`);
-    }
   }
 
   const vote = UP_REACTIONS.has(normReaction) ? 1 : DOWN_REACTIONS.has(normReaction) ? -1 : 0;
