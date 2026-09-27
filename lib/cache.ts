@@ -1,68 +1,41 @@
-// The answer cache — both the policy and its storage.
-//
-// The same handful of questions get asked constantly in a help channel ("whats
-// the deadline", "where do i play"), and each one was a full corpus round-trip.
-// Keyed on a normalised question so wording noise doesn't split the key.
-//
-// The SQL lives here rather than in lib/db.js because the retention rules and
-// the queries that implement them are one idea: what counts as a hit, what
-// counts as stale, and what is safe to forget. Splitting them meant reading two
-// files to answer any of those. lib/db.js still owns the connection and the
-// sweep.
+
+
 import crypto = require("node:crypto");
 import db = require("./db");
 import retrieve = require("./retrieve");
 
-// The one source whose answers cannot be served stale. A timeline answer embeds
-// a live countdown — "august 18, in 21 days" — so yesterday's copy is not merely
-// old, it is wrong, and wrong about the single most-asked category. Everything
-// else describes rules and processes that don't change between refreshes.
+interface CacheRow {
+  source: string | null;
+  answer: string;
+  ask_count: number;
+  written_at: number;
+}
+
+
+type UntypedInput = any;
 const VOLATILE_SOURCE = "Program timeline";
 
-// Freshness itself lives in lib/db.js as CACHE_FRESH_MS (6h) — owned there, so
-// it is referenced, not redefined, here. Redefining it here would let the two
-// drift apart and serve stale countdowns or refuse fresh rules.
-function isVolatile(source: any) {
+
+function isVolatile(source: UntypedInput) {
   if (!source) return false;
   return String(source).trim().toLowerCase() === VOLATILE_SOURCE.toLowerCase();
 }
 
-// Only cache context-free lookups — once thread history or user history is in
-// the prompt, the answer is specific to that conversation.
-//
-// The key is a SORTED SET of meaningful words, not the sentence. Keeping word
-// order and filler meant "whats the deadline", "when is the deadline" and
-// "deadline?" were three separate keys for one answer, which is most of why the
-// measured hit rate was 2.6%. retrieve.tokenize already lowercases, strips
-// punctuation and drops the stopwords that carry no meaning; what survives is
-// the words that decide which question this is, so "how do i submit" and "can i
-// submit late" still hash apart.
-function normalize(question: any) {
+
+function normalize(question: UntypedInput) {
   const terms = retrieve.tokenize((question || "").replace(/<@[^>]+>/g, " "));
   return [...new Set(terms)].sort().join(" ");
 }
 
-// Null when nothing meaningful survives normalisation. "hi pixie" and "thanks!"
-// both reduce to the empty string, and sharing one key would serve one of them
-// the other's reply.
-function keyFor(question: any, programId: string | null = null) {
+
+function keyFor(question: UntypedInput, programId: string | null = null) {
   const normalized = normalize(question);
   if (!normalized) return null;
   const input = programId ? `${programId}:${normalized}` : normalized;
   return crypto.createHash("sha1").update(input).digest("hex");
 }
 
-// A hit still counts as a hit past CACHE_FRESH_MS: lib/warm.js regenerates the
-// popular ones in the background, so serving the known-good previous answer
-// costs one Slack round trip instead of making someone wait on the model for an
-// answer that is almost certainly identical. Volatile sources are the exception
-// and fall through to a real lookup once they age out.
-// Strictly tenant-isolated: a hit must come from this program's own key.
-// An earlier revision fell back to ysws-global/pixl/unscoped keys, which let
-// one program's answer serve another's identical question ("when is the
-// deadline?"). In shared mode that is a cross-tenant leak, so the fallbacks
-// are gone: a miss here is a real lookup, not a borrowed answer.
-function get(question: any, programId = null) {
+function get(question: UntypedInput, programId = null) {
   const key = keyFor(question, programId);
   if (!key) return null;
   const hit = getCachedAnswer(key);
@@ -71,12 +44,7 @@ function get(question: any, programId = null) {
   return { source: hit.source, answer: hit.answer };
 }
 
-// Unconditional by design: the !contextPrompt guard lives in lib/lookup.js
-// (cacheHit/lookupAnswer return early when thread context is present), which is
-// out of scope for this module. Adding a second guard here would double-filter
-// and hide caller bugs; removing it there would leak threaded answers. This
-// function stores whatever it is handed.
-function put(question: any, result: any, options: Record<string, any> | string = {}, programId: string | null = null) {
+function put(question: UntypedInput, result: UntypedInput, options: Record<string, UntypedInput> | string = {}, programId: string | null = null) {
   if (typeof options === "string") {
     programId = options;
     options = {};
@@ -86,31 +54,20 @@ function put(question: any, result: any, options: Record<string, any> | string =
   putCachedAnswer(key, question, result, options || {});
 }
 
-/* --------------------------------------------------------------- storage -- */
 
-// Returns the row plus how long ago its answer was written, and records the
-// ask. Deliberately does NOT apply a freshness cutoff itself: an old entry for
-// a question people keep asking is worth serving while a refresh runs behind it
-// (lib/warm.js), and only the caller knows whether this particular answer is
-// safe to serve slightly stale. See lib/cache.js.
-//
-// The bump is what makes pixie faster over time — it is the only record of
-// which questions are worth remembering.
-function cacheRow(hash: any) {
+function cacheRow(hash: UntypedInput) {
   return db.handle()
     .query("SELECT source, answer, ask_count, COALESCE(refreshed_at, created_at) AS written_at FROM answer_cache WHERE question_hash = ?")
-    .get(hash) || null;
+    .get(hash) as CacheRow | null;
 }
 
-// Read-only cache inspection for the web probe. It must not increment ask_count
-// or update last_asked_at: opening the console must not influence cache stats.
-function peekCachedAnswer(hash: any) {
+function peekCachedAnswer(hash: UntypedInput) {
   const row = cacheRow(hash);
   if (!row) return null;
   return { source: row.source, answer: row.answer, askCount: row.ask_count, ageMs: db.now() - row.written_at };
 }
 
-function getCachedAnswer(hash: any) {
+function getCachedAnswer(hash: UntypedInput) {
   const hit = peekCachedAnswer(hash);
   if (!hit) return null;
   db.handle()
@@ -119,10 +76,7 @@ function getCachedAnswer(hash: any) {
   return hit;
 }
 
-// `refreshed` marks a background rewrite (lib/warm.js) rather than a first
-// answer: it keeps ask_count and last_asked_at intact, because nobody asked —
-// pixie just brought the answer up to date on its own.
-function putCachedAnswer(hash: any, question: any, result: any, { refreshed = false }: Record<string, any> = {}) {
+function putCachedAnswer(hash: UntypedInput, question: UntypedInput, result: UntypedInput, { refreshed = false }: Record<string, UntypedInput> = {}) {
   const t = db.now();
   db.handle()
     .query(
@@ -134,9 +88,7 @@ function putCachedAnswer(hash: any, question: any, result: any, { refreshed = fa
     .run(hash, question, result.source || null, result.answer, t, refreshed ? null : t, t);
 }
 
-// The entries worth spending a background model call on: stale, and ordered by
-// how often people ask them.
-function staleCacheEntries(staleAfterMs: any, limit: any) {
+function staleCacheEntries(staleAfterMs: UntypedInput, limit: UntypedInput) {
   return db.handle()
     .query(
       `SELECT question_hash, question, ask_count FROM answer_cache
@@ -148,7 +100,8 @@ function staleCacheEntries(staleAfterMs: any, limit: any) {
 }
 
 function cachedCount() {
-  return db.handle().query("SELECT COUNT(*) AS n FROM answer_cache").get()?.n || 0;
+  const row = db.handle().query("SELECT COUNT(*) AS n FROM answer_cache").get() as { n: number } | null;
+  return row?.n || 0;
 }
 
 function topCached(limit = 5) {
@@ -161,7 +114,7 @@ function clearCache() {
   db.handle().query("DELETE FROM answer_cache").run();
 }
 
-function forget(hash: any) {
+function forget(hash: UntypedInput) {
   db.handle().query("DELETE FROM answer_cache WHERE question_hash = ?").run(hash);
 }
 

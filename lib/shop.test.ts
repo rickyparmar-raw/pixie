@@ -1,10 +1,9 @@
+type TestAny = any;
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const shop = require("./shop");
 
-// A trimmed copy of the shape server.pixl.hackclub.com/api/shop/items returns,
-// kept small on purpose: these tests are about the maths and the matching, not
-// about the live catalogue, which changes whenever someone restocks.
+
 const ITEMS = [
   { id: 27, name: "Signed Org Photo", price: 100, category: "merch", unlock_xp: 0, config_options: null, description: "" },
   { id: 500, name: "PS5 Digital, 825gb +wireless controller", price: 11400, category: "other", unlock_xp: 0, config_options: null, description: "" },
@@ -17,7 +16,6 @@ const ITEMS = [
 
 const DATA = { items: ITEMS, economy: shop.DEFAULT_ECONOMY };
 
-/* ------------------------------------------------------------- the maths -- */
 
 test("pxPerHour walks the payout step table, not a curve", () => {
   const e = shop.DEFAULT_ECONOMY;
@@ -25,7 +23,7 @@ test("pxPerHour walks the payout step table, not a curve", () => {
   assert.equal(Math.round(shop.pxPerHour(624, e)), 57);
   assert.equal(Math.round(shop.pxPerHour(1875, e)), 71);
   assert.equal(Math.round(shop.pxPerHour(3750, e)), 86);
-  // Nothing above the cap pays more than the cap.
+
   assert.equal(shop.pxPerHour(999999, e), shop.pxPerHour(3750, e));
 });
 
@@ -37,8 +35,7 @@ test("rePerHour clamps the tier to the four that exist", () => {
   assert.equal(shop.rePerHour(0, e), 12.5);
 });
 
-// This is the range the shop page itself prints under every price, so pixie
-// has to produce the same two numbers or it contradicts the site.
+
 test("hoursRange reproduces the floor and cap hours the shop page shows", () => {
   const r = shop.hoursRange(11400, shop.DEFAULT_ECONOMY);
   assert.equal(Math.round(r.floorHours), 200);
@@ -51,8 +48,6 @@ test("hoursForPixels climbs through the rate steps as RE banks up", () => {
   const h = shop.hoursForPixels(11400, { tier: 4, economy: shop.DEFAULT_ECONOMY });
   assert.ok(h > 133 && h < 200, `expected hours between 133 and 200, got ${h}`);
 
-  // A lower tier banks RE slower, so it stays nearer the floor rate for longer
-  // and takes more hours for the same item.
   const t1 = shop.hoursForPixels(11400, { tier: 1, economy: shop.DEFAULT_ECONOMY });
   assert.ok(t1 > h, `T1 (${t1}h) should need more hours than T4 (${h}h)`);
   assert.ok(t1 <= 200, "even T1 beats the flat floor rate once RE banks up");
@@ -62,11 +57,9 @@ test("hoursForPixels starts from the RE you already have", () => {
   const cold = shop.hoursForPixels(11400, { tier: 4, economy: shop.DEFAULT_ECONOMY });
   const warm = shop.hoursForPixels(11400, { tier: 4, startingRe: 3750, economy: shop.DEFAULT_ECONOMY });
   assert.ok(warm < cold);
-  // Already at the cap, so it is flat 86 px/hour the whole way.
   assert.ok(Math.abs(warm - 133) < 0.5, `expected ~133h at the cap, got ${warm}`);
 });
 
-/* ---------------------------------------------------------- what's asked -- */
 
 test("parseTier reads the ways people actually write a tier", () => {
   assert.equal(shop.parseTier("how much hours needed for t4 for ps5"), 4);
@@ -95,7 +88,7 @@ test("findItems matches the short name people type", () => {
 test("findItems returns every candidate when the name is ambiguous", () => {
   const macs = shop.findItems("macbook", ITEMS);
   assert.equal(macs.length, 2);
-  assert.deepEqual(macs.map((i: any) => i.id).sort(), [66, 67]);
+  assert.deepEqual(macs.map((i: TestAny) => i.id).sort(), [66, 67]);
 });
 
 test("findItems finds nothing rather than guessing", () => {
@@ -112,7 +105,6 @@ test("isShopQuestion separates shop maths from everything else", () => {
   assert.equal(shop.isShopQuestion("my hackatime isnt tracking"), false);
 });
 
-/* ------------------------------------------------------------ answering -- */
 
 test("directAnswer works out the hours for a named item at a named tier", () => {
   const r = shop.directAnswer("how much hours needed for t4 for ps5", DATA);
@@ -145,8 +137,6 @@ test("directAnswer does not hijack non-price questions mentioning an item", () =
   assert.equal(shop.directAnswer("my ps5 controller has drift", DATA), null);
 });
 
-// The point of the whole feature: when it can't tell which thing you mean it
-// asks, instead of picking one and quoting a confident wrong number.
 test("directAnswer asks which item when the name matches more than one", () => {
   const r = shop.directAnswer("how many hours for a macbook at t4", DATA);
   assert.ok(r);
@@ -202,7 +192,6 @@ test("directAnswer returns nothing when the catalogue never loaded", () => {
   assert.equal(shop.directAnswer("how much is a ps5", { items: [], economy: shop.DEFAULT_ECONOMY }), null);
 });
 
-/* -------------------------------------------------------------- corpus --- */
 
 test("corpusText lists the catalogue with prices and the rate table", () => {
   const text = shop.corpusText(DATA);
@@ -210,7 +199,6 @@ test("corpusText lists the catalogue with prices and the rate table", () => {
   assert.match(text, /11,400/);
   assert.match(text, /50 px/);
   assert.match(text, /86 px/);
-  // The unpriced one is listed but never with a price.
   assert.match(text, /Huawei MatePad/);
 });
 
@@ -218,10 +206,7 @@ test("corpusText survives an empty catalogue", () => {
   assert.equal(shop.corpusText({ items: [], economy: shop.DEFAULT_ECONOMY }), "");
 });
 
-/* ------------------------------------------------------------ follow-ups -- */
 
-// The conversation the feature exists for: pixie asks which tier, they answer
-// with just "t4", and the item is three lines up rather than in the message.
 test("directAnswer picks the item up from the conversation when the reply is just a tier", () => {
   const history = [
     "user: how many hours for a ps5",
@@ -250,11 +235,6 @@ test("history is only consulted when the message itself names no item", () => {
   assert.doesNotMatch(r.answer, /PS5/);
 });
 
-// "t4" is only pixie's business when pixie just asked. With nothing about a
-// price in the thread it is somebody talking about their project tier, and
-// asking them which shop item they meant is exactly the unprompted reply this
-// whole gate exists to stop. Asking back is still right when the message
-// itself asked something, which the next test covers.
 test("a bare tier with nothing in the thread is left alone", () => {
   assert.equal(shop.directAnswer("t4", DATA, { history: "user: hey\npixie: hey" }), null);
 });
@@ -266,9 +246,6 @@ test("a tier with a real question behind it still asks which item", () => {
   assert.match(r.answer, /which/i);
 });
 
-// Without this, every "t4" anywhere in a thread that once mentioned a price
-// turns into a shop reply — including ones that are plainly about something
-// else by then.
 test("a message that is not asking anything is left alone", () => {
   const history = "user: how much is a ps5\npixie: 11,400 px";
   assert.equal(shop.directAnswer("my t4 project got rejected", DATA, { history }), null);
@@ -289,9 +266,6 @@ test("a clarify names a few candidates and counts the rest rather than listing a
   assert.ok(r.answer.length < 300, `clarify got long: ${r.answer.length} chars`);
 });
 
-// pixie reads the shop the way a logged-out visitor does, and that catalogue
-// is the US one. Quoting those numbers at someone in another region without
-// saying so is how you get a confidently wrong answer.
 test("a priced answer says which catalogue the numbers came from", () => {
   const r = shop.directAnswer("how much hours needed for t4 for ps5", DATA);
   assert.match(r.answer, /region|US catalogue/i);
@@ -302,8 +276,6 @@ test("the corpus says the same thing once, at the top", () => {
   assert.match(head, /US catalogue/i);
 });
 
-// The corpus text is model input, not model output, so lib/reply.js never sees
-// it. Dashes left in here teach the model to write them straight back out.
 test("nothing the shop module produces contains a dash", () => {
   const produced = [
     shop.corpusText(DATA),
@@ -318,11 +290,7 @@ test("nothing the shop module produces contains a dash", () => {
   for (const text of produced) assert.doesNotMatch(text, /[—–]|\s--\s/);
 });
 
-/* ------------------------------------------------- only when actually asked -- */
 
-// Naming something off the shelf is not asking what it costs. Pixie was
-// answering "i wanna buy a ps5 one day" with a price and a source line, which
-// is the bot talking over a conversation nobody invited it into.
 test("naming an item without asking a price gets no reply", () => {
   const quiet = [
     "i wanna buy a ps5 one day fr",
@@ -352,9 +320,6 @@ test("actually asking the price still works", () => {
   }
 });
 
-// A tier on its own only means "the tier you just asked me about" when the
-// thread was actually about a price. Otherwise it's someone saying their
-// project got tiered.
 test("a bare tier only revives an item from a thread that was about prices", () => {
   const priceThread = "user: how much is a ps5\npixie: PS5 Digital, 825gb +wireless controller is 11,400 px.";
   assert.match(shop.directAnswer("t4", DATA, { history: priceThread }).answer, /162/);
@@ -367,19 +332,12 @@ test("isShopQuestion no longer fires on ordinary chat", () => {
   assert.equal(shop.isShopQuestion("is a ps5 worth it"), false);
   assert.equal(shop.isShopQuestion("how long does review take"), false);
   assert.equal(shop.isShopQuestion("i wanna buy a ps5"), false);
-  // Still true for the ones that are genuinely about the shop.
   assert.equal(shop.isShopQuestion("whats in the shop"), true);
   assert.equal(shop.isShopQuestion("whats the price of a ps5"), true);
   assert.equal(shop.isShopQuestion("how many pixels for a macbook"), true);
 });
 
-/* ------------------------------------------------------- retrievable text -- */
 
-// The catalogue was rendered as one unbroken list, which chunks into a single
-// ~4kB block. BM25 penalises a chunk that long hard enough that it lost to
-// every short docs paragraph, so "is there a keyboard in the shop" never saw
-// the shop at all. Verified against production: the section was in the corpus
-// and never once selected.
 test("the catalogue chunks into pieces retrieval can actually pick", () => {
   const retrieve = require("./retrieve");
   const many = Array.from({ length: 60 }, (_, i) => ({
@@ -424,10 +382,6 @@ test("a shop chunk outranks the docs for a question about an item", () => {
   assert.match(top.text, /PS5/);
 });
 
-// The word "shop" appearing in every chunk made them all score alike, and
-// BM25's length bias then handed back whichever was shortest. "is there a
-// keyboard in the shop" came back with the PS5, because PS5 was the only item
-// in its category and so the smallest chunk.
 test("a question that names no item does not surface an arbitrary one", () => {
   const retrieve = require("./retrieve");
   const items = [
@@ -452,7 +406,6 @@ test("a question that names no item does not surface an arbitrary one", () => {
   assert.match(named.text, /PS5/, "naming the item should still find it");
 });
 
-/* -------------------------------------------------- a bare pixel amount -- */
 
 test("parsePixelAmount reads an amount out of the question", () => {
   assert.equal(shop.parsePixelAmount("how much hours for 275 pixl on each tier?"), 275);
@@ -478,7 +431,6 @@ test("a pixel amount is answered in hours, not divided by the RE rate", () => {
 test("when the tier genuinely changes nothing, it says so", () => {
   const r = shop.directAnswer("how many hours for 275 px on each tier", DATA);
   assert.match(r.answer, /same on (?:all|every)|doesn't change|no difference/i);
-  // And explains why, rather than leaving them to wonder.
   assert.match(r.answer, /625 RE|Restoration Energy/);
 });
 
@@ -501,10 +453,9 @@ test("a pixel amount nobody asked about is still left alone", () => {
   assert.equal(shop.directAnswer("275 px for that is mad", DATA), null);
 });
 
-// hoursForPixels was already right; it was the model doing the arithmetic.
 test("the maths itself never depended on the tier at small amounts", () => {
   const e = shop.DEFAULT_ECONOMY;
-  const byTier = [1, 2, 3, 4].map((t: any) => shop.hoursForPixels(275, { tier: t, economy: e }));
+  const byTier = [1, 2, 3, 4].map((t: TestAny) => shop.hoursForPixels(275, { tier: t, economy: e }));
   for (const h of byTier) assert.ok(Math.abs(h - 4.8125) < 0.01, `expected ~4.8h, got ${h}`);
 });
 
@@ -513,7 +464,6 @@ test("the corpus warns the model off the exact mistake it made", () => {
   assert.match(text, /RE (?:per hour|an hour) is not/i);
 });
 
-/* ------------------------------ ANSWER PIPELINE characterization (audit) -- */
 
 test("CHAR: naming an item is not asking its price (no talking over conversations)", () => {
   assert.equal(shop.directAnswer("i finally got a ps5", DATA), null);

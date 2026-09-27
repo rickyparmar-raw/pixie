@@ -1,3 +1,4 @@
+type TestAny = any;
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before } = require("node:test");
@@ -19,7 +20,7 @@ before(() => {
   helperRoute.setExpertise({ programId: "pixl", userId: "U-REVIEW", tags: ["review"] });
 });
 
-function addTicket(programId: any, suffix: any, category = "review") {
+function addTicket(programId: TestAny, suffix: TestAny, category = "review") {
   const createdAt = Date.now();
   const result = db.handle().query(
     `INSERT INTO tickets (program_id, channel, thread_ts, requester_id, question, category, status, created_at, updated_at)
@@ -43,16 +44,15 @@ test("shadow snapshot stores the recommendation and is append-only", () => {
 
 test("shadow snapshots are program-scoped and exclude inactive helpers", () => {
   const ticket = addTicket("other", "shadow-2", "review");
-  // Snapshots are program-agnostic on purpose (no program id is special —
-  // the old pixl-only gate was removed) but stay program-scoped: another
-  // program's helpers never leak into a snapshot.
+
+
   const snap = shadowRouting.snapshotForTicket(ticket);
   assert.ok(snap);
   assert.ok(snap.detail.candidates.length > 0);
-  assert.ok(snap.detail.candidates.every((candidate: any) => candidate.userId === "U-OTHER"));
+  assert.ok(snap.detail.candidates.every((candidate: TestAny) => candidate.userId === "U-OTHER"));
   const pixl = shadowRouting.list("pixl", 10);
-  assert.ok(pixl.every((row: any) => row.programId === "pixl"));
-  assert.ok(pixl[0].candidates.every((candidate: any) => candidate.userId !== "U-GONE"));
+  assert.ok(pixl.every((row: TestAny) => row.programId === "pixl"));
+  assert.ok(pixl[0].candidates.every((candidate: TestAny) => candidate.userId !== "U-GONE"));
 });
 
 test("autoAssign=false records shadow routing without assigning or pinging", () => {
@@ -60,6 +60,6 @@ test("autoAssign=false records shadow routing without assigning or pinging", () 
   const updated = tickets.markWaitingForHelper({ ticketId: ticket.id, program: { id: "pixl", autoAssign: false } });
   assert.equal(updated.assignee_id, null);
   assert.equal(updated.status, "waiting_for_helper");
-  assert.ok(db.listTicketEvents(ticket.id).some((event: any) => event.event_type === shadowRouting.EVENT_TYPE));
+  assert.ok(db.listTicketEvents(ticket.id).some((event: TestAny) => event.event_type === shadowRouting.EVENT_TYPE));
 });
 export {};

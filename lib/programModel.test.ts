@@ -58,7 +58,7 @@ test("statusFor honors explicit status and defaults to live", () => {
   expect(model.statusFor({ status: "bogus" })).toBe("live");
 });
 
-// Channel-role validation
+
 test("the current production shape validates cleanly", () => {
   const r = model.validateChannelRoles({
     programs: [

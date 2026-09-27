@@ -1,6 +1,5 @@
-// STEP 1 characterization pins for lib/workspace.js (PLATFORM FOUNDATION).
-// Thread/channel key scoping: every tenant boundary keys on
-// (workspace, channel/message), never a bare channel or ts.
+
+
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const workspace = require("./workspace");

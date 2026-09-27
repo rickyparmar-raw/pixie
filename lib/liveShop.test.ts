@@ -35,7 +35,6 @@ test("lists rewards unlocked by approved build hours", () => {
   assert.doesNotMatch(result.answer, /Monitor/);
 });
 
-/* ------------------------------ ANSWER PIPELINE characterization (audit) -- */
 
 test("CHAR: liveShop returns null when nothing matches (hands back to docs path)", () => {
   assert.equal(shop.directAnswer("what is the deadline", [{ name: "Keyboard", hours: 15 }], 20), null);

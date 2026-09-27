@@ -1,13 +1,15 @@
-// Counts and timestamps, rendered. Both surfaces that report on pixie — the
-// /pixie-stats command and the App Home tab — read from here, so they can't
-// drift apart and quote different numbers for the same week.
+
+
 import db = require("./db");
 import cache = require("./cache");
 import configModule = require("./config");
 
 const { config } = configModule;
 
-function relativeTime(ms: any) {
+interface MetricCount { kind: string; count: number }
+interface CachedQuestion { question: string; ask_count: number }
+
+function relativeTime(ms: number | null | undefined) {
   if (!ms) return "never";
   const diff = Date.now() - ms;
   const mins = Math.round(diff / 60000);
@@ -18,10 +20,8 @@ function relativeTime(ms: any) {
   return `${Math.round(hours / 24)}d ago`;
 }
 
-// `rate` is the number the docs live or die by: the share of questions pixie
-// answered from the corpus rather than from the model's general knowledge.
 function coverageStats() {
-  const counts = Object.fromEntries(db.metricCounts().map((r: any) => [r.kind, r.count]));
+  const counts = Object.fromEntries((db.metricCounts() as MetricCount[]).map((r) => [r.kind, r.count]));
   const docs = counts.answer_docs || 0;
   const chat = counts.answer_chat || 0;
   const link = counts.answer_link || 0;
@@ -29,10 +29,6 @@ function coverageStats() {
   const silent = counts.silent || 0;
 
   const asked = docs + chat + link + fallback + silent;
-  // What pixie has learned to answer without thinking about it. `known` is how
-  // many questions it now recognises; `instant` is the share of answers that
-  // cost no model call at all — the number that should climb on its own as the
-  // channel keeps asking things.
   const cacheHits = counts.cache_hit || 0;
   const answered = docs + chat + link;
 
@@ -59,7 +55,7 @@ function statsText() {
   const votes = db.feedbackTotals();
   const p50 = db.medianLatency("answer_docs");
   const firstToken = db.medianLatency("first_token");
-  const top = cache.topCached(3).filter((row: any) => row.ask_count > 1);
+  const top = (cache.topCached(3) as CachedQuestion[]).filter((row) => row.ask_count > 1);
 
   return [
     "*pixie stats* (last 7d)",
@@ -73,7 +69,7 @@ function statsText() {
     `• feedback: :${config.feedbackReactions[0] || "thumbs-up"}: ${votes.up || 0} / :nono: ${votes.down || 0}`,
     p50 ? `• median answer latency: *${(p50 / 1000).toFixed(1)}s*` : "• median answer latency: _no data_",
     firstToken ? `• median time to first word: *${(firstToken / 1000).toFixed(1)}s*` : null,
-    top.length > 0 ? `• asked most: ${top.map((r: any) => `_${r.question}_ (${r.ask_count}x)`).join(", ")}` : null,
+    top.length > 0 ? `• asked most: ${top.map((r) => `_${r.question}_ (${r.ask_count}x)`).join(", ")}` : null,
   ]
     .filter(Boolean)
     .join("\n");

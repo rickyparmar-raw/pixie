@@ -2,14 +2,14 @@ import brand = require("./brand");
 import configModule = require("./config");
 import guides = require("./guides");
 
+type UntypedInput = any;
 const { isAdmin } = configModule;
 
-// This is the runtime source of truth for the slash-command help surface. Keep
-// entries here only when commands.register() binds the corresponding command.
+
 const CAPABILITIES = Object.freeze([
   { suffix: "", label: "ask", description: "Private answer — help without cluttering the channel", usage: "[question]" },
   { suffix: "", label: "help", description: "Show commands available to you", usage: "help" },
-  { suffix: "guide", label: "guide", description: "Interactive step-by-step walkthrough guides", usage: "[guide-name]", available: ({ program } : Record<string, any>) => !program || guides.availableFor(program).length > 0 },
+  { suffix: "guide", label: "guide", description: "Interactive step-by-step walkthrough guides", usage: "[guide-name]", available: ({ program } : Record<string, UntypedInput>) => !program || guides.availableFor(program).length > 0 },
   { suffix: "check", label: "check", description: "Check GitHub repository readiness for YSWS submission", usage: "<github_repo_url>" },
   { suffix: "calc", label: "calc", description: "Calculate build hours, RE progression, and shop item goals", usage: "<hours/re/item>" },
   { suffix: "sources", label: "sources", description: "What's loaded and when it last refreshed" },
@@ -24,16 +24,16 @@ const CAPABILITIES = Object.freeze([
   { suffix: "program", label: "program", description: "Manage program channels and posture", usage: "[list|add|set|remove]", helperOnly: true },
 ]);
 
-function availableCapabilities({ actorId = null, program = null }: Record<string, any> = {}) {
-  return CAPABILITIES.filter((capability: any) => {
+function availableCapabilities({ actorId = null, program = null }: Record<string, UntypedInput> = {}) {
+  return CAPABILITIES.filter((capability: UntypedInput) => {
     if (capability.helperOnly && !isAdmin(actorId)) return false;
     return !capability.available || capability.available({ actorId, program });
   });
 }
 
-function formatHelp({ actorId = null, program = null }: Record<string, any> = {}) {
+function formatHelp({ actorId = null, program = null }: Record<string, UntypedInput> = {}) {
   const title = program ? `*${program.name} commands*` : `*${brand.name()} commands*`;
-  const lines = availableCapabilities({ actorId, program }).map((capability: any) => {
+  const lines = availableCapabilities({ actorId, program }).map((capability: UntypedInput) => {
     const command = brand.cmd(capability.suffix);
     return `• \`${command}${capability.usage ? ` ${capability.usage}` : ""}\` — ${capability.description}`;
   });

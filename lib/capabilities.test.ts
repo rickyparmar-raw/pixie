@@ -1,3 +1,4 @@
+type TestAny = any;
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
@@ -36,7 +37,7 @@ test("registry contains only commands registered by the command module", () => {
   const registered = new Set();
   const commands = require("./commands");
   const app = {
-    command: (name: any) => registered.add(name),
+    command: (name: TestAny) => registered.add(name),
     action: () => {}, shortcut: () => {}, event: () => {}, view: () => {},
   };
   commands.register(app);

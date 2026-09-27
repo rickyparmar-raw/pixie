@@ -4,13 +4,13 @@ type ShopItem = { name: string; hours: number };
 
 let items: ShopItem[] = [];
 
-function parseCatalogue(html: any) {
+function parseCatalogue(html: string | null | undefined): ShopItem[] {
   const text = String(html || "");
   const patterns = [
     /\\"name\\":\\"((?:\\\\.|[^"\\])*)\\",\\"price\\":(\d+(?:\.\d+)?)/g,
     /"name":"((?:\\.|[^"\\])*)","price":(\d+(?:\.\d+)?)/g,
   ];
-  const found = new Map();
+  const found = new Map<string, ShopItem>();
 
   for (const pattern of patterns) {
     for (const match of text.matchAll(pattern)) {
@@ -28,7 +28,7 @@ function parseCatalogue(html: any) {
   return Array.from(found.values());
 }
 
-async function refresh(url: any) {
+async function refresh(url: string) {
   const res = await require("./sourceGuard").fetchSourceUrl(url, { timeout: 15000 });
   const parsed = parseCatalogue(res.data);
   if (parsed.length === 0) throw new Error("Live shop catalogue had no reward thresholds");
@@ -36,20 +36,20 @@ async function refresh(url: any) {
   return items;
 }
 
-async function refreshText(url: any) {
+async function refreshText(url: string) {
   const catalogue = await refresh(url);
   return [
     "Live rewards unlock after approved build hours.",
-    ...catalogue.map((item: any) => `Q: How many approved build hours unlock ${item.name}?\nA: About ${item.hours} approved build hours.`),
+    ...catalogue.map((item) => `Q: How many approved build hours unlock ${item.name}?\nA: About ${item.hours} approved build hours.`),
   ].join("\n\n");
 }
 
-function parseHours(question: any) {
+function parseHours(question: string | null | undefined) {
   const match = String(question || "").match(/\b(\d+(?:\.\d+)?)\s*(?:approved\s*)?(?:build\s*)?(?:hours?|hrs?|h)\b/i);
   return match ? Number(match[1]) : null;
 }
 
-function formatMinutes(minutes: any) {
+function formatMinutes(minutes: number) {
   const rounded = Math.round(minutes);
   const hours = Math.floor(rounded / 60);
   const remaining = rounded % 60;
@@ -58,16 +58,16 @@ function formatMinutes(minutes: any) {
   return `${remaining} minute${remaining === 1 ? "" : "s"}`;
 }
 
-function matchingItem(question: any, catalogue: any) {
+function matchingItem(question: string, catalogue: ShopItem[]) {
   const lower = String(question || "").toLowerCase();
-  const matches = catalogue.filter((item: any) => {
-    const words = item.name.toLowerCase().split(/\W+/).filter((word: any) => word.length > 2);
-    return words.length > 0 && words.some((word: any) => lower.includes(word));
+  const matches = catalogue.filter((item) => {
+    const words = item.name.toLowerCase().split(/\W+/).filter((word) => word.length > 2);
+    return words.length > 0 && words.some((word) => lower.includes(word));
   });
   return matches.length === 1 ? matches[0] : null;
 }
 
-function directAnswer(question: any, catalogue = items, minutesPerHour = 20) {
+function directAnswer(question: string, catalogue = items, minutesPerHour = 20) {
   const text = String(question || "");
   const hours = parseHours(text);
   const item = matchingItem(text, catalogue);
@@ -79,9 +79,7 @@ function directAnswer(question: any, catalogue = items, minutesPerHour = 20) {
   );
 }
 
-// "how much stream time does N approved hours add" — arithmetic over the
-// per-hour minute rate, worked out in code so the model never invents it.
-function answerForStreamTime({ text, hours, minutesPerHour }: Record<string, any>) {
+function answerForStreamTime({ text, hours, minutesPerHour }: { text: string; hours: number | null; minutesPerHour: number }) {
   if (hours === null || !/\b(?:stream|time|minutes?|hours? added)\b/i.test(text)) return null;
   return {
     source: "Live rewards",
@@ -90,9 +88,7 @@ function answerForStreamTime({ text, hours, minutesPerHour }: Record<string, any
   };
 }
 
-// "how many hours for <named reward>" — a single catalogue match only; zero
-// or several matches hand back to the docs path instead of guessing.
-function answerForThreshold({ text, item }: Record<string, any>) {
+function answerForThreshold({ text, item }: { text: string; item: ShopItem | null }) {
   if (!item || !/\b(?:how many|hours?|hrs?|need|unlock|for)\b/i.test(text)) return null;
   return {
     source: "Live Shop",
@@ -101,15 +97,14 @@ function answerForThreshold({ text, item }: Record<string, any>) {
   };
 }
 
-// "what unlocks with N hours" — the top few thresholds at or under N.
-function answerForUnlockable({ text, hours, catalogue }: Record<string, any>) {
+function answerForUnlockable({ text, hours, catalogue }: { text: string; hours: number | null; catalogue: ShopItem[] }) {
   if (hours === null || !/\b(?:what (?:can i|get)|rewards?|unlock|afford)\b/i.test(text) || catalogue.length === 0) return null;
   const unlocked = catalogue.filter((candidate: ShopItem) => candidate.hours <= hours).sort((a: ShopItem, b: ShopItem) => b.hours - a.hours).slice(0, 5);
   if (unlocked.length === 0) return null;
   return {
     source: "Live Shop",
     direct: true,
-    answer: `With *${hours} approved build hours*, you can unlock:\n${unlocked.map((candidate: any) => `• *${candidate.name}* (~${candidate.hours}h)`).join("\n")}`,
+    answer: `With *${hours} approved build hours*, you can unlock:\n${unlocked.map((candidate) => `• *${candidate.name}* (~${candidate.hours}h)`).join("\n")}`,
   };
 }
 

@@ -1,5 +1,6 @@
-// STEP 1 characterization pins for lib/rateLimit.js (PLATFORM FOUNDATION).
-// Per-user throttle: generous for humans, closed for scripts.
+
+
+type TestAny = any;
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
@@ -55,7 +56,7 @@ test("reservations are atomic at the limit", () => {
   const user = `char-rl-${Date.now()}-atomic`;
   const max = 4;
   const results = Array.from({ length: 20 }, () => rateLimit.check(user, { windowMs: 60000, max }));
-  assert.equal(results.filter((result: any) => result.allowed).length, max);
+  assert.equal(results.filter((result: TestAny) => result.allowed).length, max);
   assert.equal(db.countRecentRequests(user, 60000), max);
 });
 

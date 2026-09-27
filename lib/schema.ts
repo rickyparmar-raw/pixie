@@ -1,10 +1,4 @@
-// Table definitions and migrations, split out of db.js to keep that file about
-// queries rather than DDL.
-//
-// Ordering matters: SCHEMA runs first, then MIGRATIONS adds columns that
-// predate nothing, then POST_MIGRATION_SCHEMA creates anything that references
-// a just-added column. Indexing a column before its migration lands aborts the
-// whole schema on an existing database.
+
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS answered_messages (
@@ -214,53 +208,39 @@ CREATE TABLE IF NOT EXISTS answered_threads (
   created_at  INTEGER NOT NULL
 );
 `;
-// CREATE TABLE IF NOT EXISTS can't add a column to a table that already
-// exists, so columns introduced after a database is in the wild need this.
-// Each entry is idempotent — a duplicate-column error just means it's applied.
+
+
 const MIGRATIONS = [
   ["doc_gaps", "message_ts", "ALTER TABLE doc_gaps ADD COLUMN message_ts TEXT"],
-  // What pixie has learned about which questions matter. The cache used to be
-  // swept wholesale on a 6h clock, so an answer worked out forty times was
-  // discarded on the same schedule as one worked out once and the table never
-  // accumulated anything. Retention is by popularity now, which needs to know
-  // how often and how recently each entry was actually wanted.
+
+
   ["answer_cache", "ask_count", "ALTER TABLE answer_cache ADD COLUMN ask_count INTEGER NOT NULL DEFAULT 1"],
   ["answer_cache", "last_asked_at", "ALTER TABLE answer_cache ADD COLUMN last_asked_at INTEGER"],
   ["answer_cache", "refreshed_at", "ALTER TABLE answer_cache ADD COLUMN refreshed_at INTEGER"],
-  // Whether a missed question is actually a hole in the documentation. A gap
-  // row only ever meant "pixie couldn't answer this", which is a much weaker
-  // claim: an outage, someone's broken laptop and a half-typed fragment all
-  // landed in the same to-do list as the real gaps. NULL means not yet judged —
-  // see lib/report.js.
+
+
   ["doc_gaps", "kind", "ALTER TABLE doc_gaps ADD COLUMN kind TEXT"],
   ["metrics", "detail", "ALTER TABLE metrics ADD COLUMN detail TEXT"],
-  // The Slack ts of the most recently posted step for this guide, so a
-  // :upvote: reaction on that specific message can be matched back to the
-  // guide it belongs to (see db.getGuideByMessageTs, lib/handlers.js).
+
+
   ["active_guides", "message_ts", "ALTER TABLE active_guides ADD COLUMN message_ts TEXT"],
-  // Whether an unaddressed message has to be ABOUT this program for pixie to
-  // answer it. 'any' keeps the original behaviour (general coding and tooling
-  // questions get answered too); 'program' means she stays out of everything
-  // else unless someone addresses her. See lib/intent.js.
+
+
   ["programs", "scope", "ALTER TABLE programs ADD COLUMN scope TEXT DEFAULT 'any'"],
   ["learned_facts", "program_id", "ALTER TABLE learned_facts ADD COLUMN program_id TEXT"],
   ["doc_gaps", "program_id", "ALTER TABLE doc_gaps ADD COLUMN program_id TEXT"],
-  // Human-rejected questions. topGaps excludes these for the same window the
-  // rank itself covers; a maintainer re-approving one (rare, manual) clears it.
-  // Keyed on the normalized question so phrasing variations collapse onto one row.
+
+
   ["gap_rejections", "table", "CREATE TABLE IF NOT EXISTS gap_rejections (question TEXT NOT NULL PRIMARY KEY, created_at INTEGER NOT NULL)"],
   ["answered_threads", "table", "CREATE TABLE IF NOT EXISTS answered_threads (id INTEGER PRIMARY KEY AUTOINCREMENT, question TEXT NOT NULL, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, created_at INTEGER NOT NULL)"],
-  // Unified hosted platform: every tenant boundary carries the Slack workspace
-  // identity, since channel IDs alone are only unique within one workspace.
+
+
   ["programs", "workspace_id", "ALTER TABLE programs ADD COLUMN workspace_id TEXT"],
   ["programs", "deployment_mode", "ALTER TABLE programs ADD COLUMN deployment_mode TEXT DEFAULT 'dedicated_legacy'"],
   ["programs", "support_name", "ALTER TABLE programs ADD COLUMN support_name TEXT"],
   ["programs", "icon_url", "ALTER TABLE programs ADD COLUMN icon_url TEXT"],
-  // A fixed line a program appends to its genuine AI/FAQ answers only — a
-  // per-tenant catchphrase (Hardwire: "stay wired :hardwire:"). Never added to
-  // escalations, incidents, errors or system copy. NULL for every program that
-  // has not set one, so default behaviour is unchanged. See lib/reply.js
-  // withReplySignature.
+
+
   ["programs", "reply_signature", "ALTER TABLE programs ADD COLUMN reply_signature TEXT"],
   ["programs", "ai_answers", "ALTER TABLE programs ADD COLUMN ai_answers INTEGER NOT NULL DEFAULT 1"],
   ["programs", "tickets_enabled", "ALTER TABLE programs ADD COLUMN tickets_enabled INTEGER NOT NULL DEFAULT 1"],
@@ -268,9 +248,8 @@ const MIGRATIONS = [
   ["programs", "sensitive_categories", "ALTER TABLE programs ADD COLUMN sensitive_categories TEXT"],
   ["programs", "support_active", "ALTER TABLE programs ADD COLUMN support_active INTEGER NOT NULL DEFAULT 1"],
   ["programs", "created_at", "ALTER TABLE programs ADD COLUMN created_at INTEGER"],
-  // Explicit channel claims. The UNIQUE(workspace_id, channel_id) constraint is
-  // the atomic guard behind program activation: two programs can never own the
-  // same channel, and double-submit Activate collapses onto one row.
+
+
   ["program_channels", "table", "CREATE TABLE IF NOT EXISTS program_channels (workspace_id TEXT NOT NULL, channel_id TEXT NOT NULL, program_id TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'help', claimed_by TEXT, created_at INTEGER NOT NULL, PRIMARY KEY (workspace_id, channel_id))"],
   ["tickets", "workspace_id", "ALTER TABLE tickets ADD COLUMN workspace_id TEXT"],
   ["tickets", "category", "ALTER TABLE tickets ADD COLUMN category TEXT"],
@@ -290,17 +269,17 @@ const MIGRATIONS = [
   ["tickets", "reopen_count", "ALTER TABLE tickets ADD COLUMN reopen_count INTEGER NOT NULL DEFAULT 0"],
   ["tickets", "snoozed_until", "ALTER TABLE tickets ADD COLUMN snoozed_until INTEGER"],
   ["tickets", "updated_at", "ALTER TABLE tickets ADD COLUMN updated_at INTEGER"],
-  // Per-ticket timeline (status changes, replies, notes refs) and helper-only
-  // internal notes. Notes never enter the requester thread.
+
+
   ["ticket_events", "table", "CREATE TABLE IF NOT EXISTS ticket_events (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL, program_id TEXT NOT NULL, actor_id TEXT, event_type TEXT NOT NULL, detail TEXT, created_at INTEGER NOT NULL)"],
   ["ticket_notes", "table", "CREATE TABLE IF NOT EXISTS ticket_notes (id INTEGER PRIMARY KEY AUTOINCREMENT, ticket_id INTEGER NOT NULL, program_id TEXT NOT NULL, author_id TEXT NOT NULL, body TEXT NOT NULL, created_at INTEGER NOT NULL)"],
-  // Append-only platform audit. Rows are never updated or deleted by app code;
-  // retention sweeps may archive them but must not rewrite history.
+
+
   ["audit_events", "table", "CREATE TABLE IF NOT EXISTS audit_events (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT, actor_id TEXT, action TEXT NOT NULL, entity_type TEXT, entity_id TEXT, metadata TEXT, created_at INTEGER NOT NULL)"],
-  // Helper membership with provenance so reconciliation can add AND remove.
+
   ["program_helpers", "table", "CREATE TABLE IF NOT EXISTS program_helpers (program_id TEXT NOT NULL, user_id TEXT NOT NULL, helper_source TEXT NOT NULL DEFAULT 'manual', role TEXT NOT NULL DEFAULT 'helper', active INTEGER NOT NULL DEFAULT 1, added_at INTEGER NOT NULL, removed_at INTEGER, PRIMARY KEY (program_id, user_id))"],
-  // Verified resolution memory reuses learned_facts: which category the
-  // resolution belongs to, which ticket it came from, who verified it, when.
+
+
   ["learned_facts", "category", "ALTER TABLE learned_facts ADD COLUMN category TEXT"],
   ["learned_facts", "ticket_id", "ALTER TABLE learned_facts ADD COLUMN ticket_id INTEGER"],
   ["learned_facts", "resolver_id", "ALTER TABLE learned_facts ADD COLUMN resolver_id TEXT"],
@@ -310,88 +289,73 @@ const MIGRATIONS = [
   ["learned_facts", "support_count", "ALTER TABLE learned_facts ADD COLUMN support_count INTEGER NOT NULL DEFAULT 1"],
   ["learned_facts", "last_supported_at", "ALTER TABLE learned_facts ADD COLUMN last_supported_at INTEGER"],
   ["learned_facts", "auto_learned", "ALTER TABLE learned_facts ADD COLUMN auto_learned INTEGER NOT NULL DEFAULT 0"],
-  // Program-scoped support macros (?shipping). Templates interpolate a fixed
-  // safe value set only — no expression evaluation, no nested lookups.
+
+
   ["program_macros", "table", "CREATE TABLE IF NOT EXISTS program_macros (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, trigger TEXT NOT NULL, name TEXT NOT NULL, description TEXT, content TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, allowed_roles TEXT, on_send_transition TEXT, created_by TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, UNIQUE (program_id, trigger))"],
-  // Helper routing: declared expertise tags plus auto-counted resolutions.
+
   ["helper_expertise", "table", "CREATE TABLE IF NOT EXISTS helper_expertise (program_id TEXT NOT NULL, user_id TEXT NOT NULL, tag TEXT NOT NULL, solved_count INTEGER NOT NULL DEFAULT 0, updated_at INTEGER NOT NULL, PRIMARY KEY (program_id, user_id, tag))"],
   ["programs", "auto_assign", "ALTER TABLE programs ADD COLUMN auto_assign INTEGER NOT NULL DEFAULT 0"],
   ["programs", "shadow_mode", "ALTER TABLE programs ADD COLUMN shadow_mode INTEGER NOT NULL DEFAULT 0"],
-  // Incident candidates from burst detection. Announcements are drafts only.
+
   ["program_incidents", "table", "CREATE TABLE IF NOT EXISTS program_incidents (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, title TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'candidate', reason TEXT, confidence REAL, started_at INTEGER NOT NULL, created_at INTEGER NOT NULL, confirmed_at INTEGER, resolved_at INTEGER)"],
   ["incident_tickets", "table", "CREATE TABLE IF NOT EXISTS incident_tickets (incident_id INTEGER NOT NULL, ticket_id INTEGER NOT NULL, program_id TEXT NOT NULL, linked_at INTEGER NOT NULL, PRIMARY KEY (incident_id, ticket_id))"],
-  // Per-program SLA thresholds (ms) and notification channel. Unset (NULL)
-  // means the rule is off for that program — the checker is a no-op then.
+
+
   ["programs", "sla_unassigned_ms", "ALTER TABLE programs ADD COLUMN sla_unassigned_ms INTEGER"],
   ["programs", "sla_assigned_ms", "ALTER TABLE programs ADD COLUMN sla_assigned_ms INTEGER"],
   ["programs", "sla_waiting_ms", "ALTER TABLE programs ADD COLUMN sla_waiting_ms INTEGER"],
   ["programs", "sla_target_ms", "ALTER TABLE programs ADD COLUMN sla_target_ms INTEGER"],
   ["programs", "sla_notify_channel", "ALTER TABLE programs ADD COLUMN sla_notify_channel TEXT"],
-  // Per-program retention windows (days). Audit has a platform floor enforced
-  // in code; knowledge defaults to keep (approved facts survive ticket deletion).
+
+
   ["programs", "retention_context_days", "ALTER TABLE programs ADD COLUMN retention_context_days INTEGER"],
   ["programs", "retention_tickets_days", "ALTER TABLE programs ADD COLUMN retention_tickets_days INTEGER"],
   ["programs", "retention_notes_days", "ALTER TABLE programs ADD COLUMN retention_notes_days INTEGER"],
   ["programs", "retention_traces_days", "ALTER TABLE programs ADD COLUMN retention_traces_days INTEGER"],
   ["programs", "retention_analytics_days", "ALTER TABLE programs ADD COLUMN retention_analytics_days INTEGER"],
   ["programs", "retention_audit_days", "ALTER TABLE programs ADD COLUMN retention_audit_days INTEGER"],
-  // Metrics gain tenant scope so analytics and retention can attribute them.
+
   ["metrics", "program_id", "ALTER TABLE metrics ADD COLUMN program_id TEXT"],
-  // Single-flight leases so periodic jobs never run twice across replicas.
+
   ["job_leases", "table", "CREATE TABLE IF NOT EXISTS job_leases (name TEXT PRIMARY KEY, owner TEXT NOT NULL, expires_at INTEGER NOT NULL)"],
   ["history_import_progress", "table", "CREATE TABLE IF NOT EXISTS history_import_progress (program_id TEXT NOT NULL, channel_id TEXT NOT NULL, cursor TEXT, newest_ts_done TEXT, status TEXT NOT NULL DEFAULT 'pending', messages_scanned INTEGER NOT NULL DEFAULT 0, tickets_created INTEGER NOT NULL DEFAULT 0, tickets_enriched INTEGER NOT NULL DEFAULT 0, resolved INTEGER NOT NULL DEFAULT 0, closed INTEGER NOT NULL DEFAULT 0, queued_for_judge INTEGER NOT NULL DEFAULT 0, last_error TEXT, started_at INTEGER, completed_at INTEGER, updated_at INTEGER NOT NULL, PRIMARY KEY (program_id, channel_id))"],
   ["history_import_progress", "rules_version", "ALTER TABLE history_import_progress ADD COLUMN rules_version INTEGER NOT NULL DEFAULT 1"],
-  // Human-takeover marks: a helper/owner cue claims the thread and Pixie goes
-  // quiet publicly until explicitly invited back. Sticky like mutes — the
-  // sweeper never expires these; only reactivation or manual clear removes them.
+
+
   ["thread_takeover", "table", "CREATE TABLE IF NOT EXISTS thread_takeover (thread_ts TEXT PRIMARY KEY, channel TEXT, by_user TEXT, created_at INTEGER NOT NULL)"],
   ["sla_notifications", "table", "CREATE TABLE IF NOT EXISTS sla_notifications (program_id TEXT NOT NULL, ticket_id INTEGER NOT NULL, rule TEXT NOT NULL, sent_at INTEGER NOT NULL, PRIMARY KEY (program_id, ticket_id, rule))"],
 
-  // Support Radar: deterministic actionable signals computed from existing
-  // telemetry (tickets, gaps, incidents, sources). One row per live signal —
-  // re-detection updates the same row (see idx_radar_program_type_fingerprint)
-  // instead of piling up duplicates for the same ongoing condition.
+
   ["radar_signals", "table", "CREATE TABLE IF NOT EXISTS radar_signals (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, type TEXT NOT NULL, severity TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'active', title TEXT NOT NULL, summary TEXT, evidence TEXT, fingerprint TEXT NOT NULL, first_detected_at INTEGER NOT NULL, last_detected_at INTEGER NOT NULL, acknowledged_at INTEGER, acknowledged_by TEXT, resolved_at INTEGER, suppressed_until INTEGER, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)"],
-  // Incident lifecycle: candidates from burst detection gain a human-facing
-  // description, a declare-time public message (what Pixie tells askers while
-  // it's active), and who declared it — audited, RBAC-checked by the caller.
+
+
   ["program_incidents", "description", "ALTER TABLE program_incidents ADD COLUMN description TEXT"],
   ["program_incidents", "declared_by", "ALTER TABLE program_incidents ADD COLUMN declared_by TEXT"],
   ["program_incidents", "public_message", "ALTER TABLE program_incidents ADD COLUMN public_message TEXT"],
-  // Per-program default for how an ACTIVE incident affects new matching
-  // questions. NORMAL_TICKET disables incident-aware answering entirely.
+
+
   ["programs", "incident_mode", "ALTER TABLE programs ADD COLUMN incident_mode TEXT NOT NULL DEFAULT 'ANSWER_AND_TRACK'"],
-  // Affected-report tracking for an active incident: one row per distinct
-  // thread that got the "known issue" answer instead of a ticket, so a
-  // resolved incident can offer an idempotent "notify affected users" pass.
+
+
   ["incident_reports", "table", "CREATE TABLE IF NOT EXISTS incident_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, incident_id INTEGER NOT NULL, program_id TEXT NOT NULL, ticket_id INTEGER, requester_id TEXT, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, created_at INTEGER NOT NULL, notified_at INTEGER)"],
-  // Source freshness, for the SOURCE_FAILURE detector: consecutive-failure
-  // count and the last time a fetch actually succeeded, alongside the
-  // existing fetched_at (which source.js already bumps on every attempt).
+
+
   ["source_cache", "last_error", "ALTER TABLE source_cache ADD COLUMN last_error TEXT"],
   ["source_cache", "fail_count", "ALTER TABLE source_cache ADD COLUMN fail_count INTEGER NOT NULL DEFAULT 0"],
   ["source_cache", "last_success_at", "ALTER TABLE source_cache ADD COLUMN last_success_at INTEGER"],
 
-  // Independent kill switch for auto-opening tickets from a program's public
-  // help channel specifically — distinct from tickets_enabled (which turns
-  // off ticket creation everywhere) and posture=passive (which only skips
-  // *unprompted* tickets). Toggleable live via /pixie-program tickets on|off
-  // run in the help channel, or from the Wizard settings page.
+
   ["programs", "public_tickets_enabled", "ALTER TABLE programs ADD COLUMN public_tickets_enabled INTEGER NOT NULL DEFAULT 1"],
-  // The requester-facing acknowledgement's own message ts, so its Resolve
-  // button can be updated (disabled/relabeled) once the ticket is actually
-  // resolved — the same reason card_ts exists for the organizer-channel card.
+
+
   ["tickets", "public_ack_ts", "ALTER TABLE tickets ADD COLUMN public_ack_ts TEXT"],
-  // Who pressed the thread's Resolve / Reopen button, so the confirmation can
-  // name them without walking the events table on every render.
+
+
   ["tickets", "resolved_by", "ALTER TABLE tickets ADD COLUMN resolved_by TEXT"],
   ["tickets", "resolved_credit_id", "ALTER TABLE tickets ADD COLUMN resolved_credit_id TEXT"],
   ["tickets", "reopened_by", "ALTER TABLE tickets ADD COLUMN reopened_by TEXT"],
-  // How long an unclaimed helper offer may sit before the lifecycle sweep
-  // records helper_assignment_timed_out for it. NULL (the default, and every
-  // program's starting state) means the timeout is off — the sweep is a no-op,
-  // so no production routing is automated by adding this column. Set per
-  // program the same way the sla_*_ms thresholds are.
+
+
   ["programs", "helper_offer_timeout_ms", "ALTER TABLE programs ADD COLUMN helper_offer_timeout_ms INTEGER"],
   ["llm_usage", "provider", "ALTER TABLE llm_usage ADD COLUMN provider TEXT"],
   ["llm_usage", "event_id", "ALTER TABLE llm_usage ADD COLUMN event_id TEXT"],
@@ -399,28 +363,28 @@ const MIGRATIONS = [
   ["llm_usage", "rate_limited", "ALTER TABLE llm_usage ADD COLUMN rate_limited INTEGER NOT NULL DEFAULT 0"],
   ["llm_usage", "latency_ms", "ALTER TABLE llm_usage ADD COLUMN latency_ms INTEGER"],
   ["llm_usage", "cached_prompt_tokens", "ALTER TABLE llm_usage ADD COLUMN cached_prompt_tokens INTEGER"],
-  // Replies, counted apart from resolutions.
+
   ["helper_expertise", "reply_count", "ALTER TABLE helper_expertise ADD COLUMN reply_count INTEGER NOT NULL DEFAULT 0"],
-  // Helper @-mentions, opt-in.
+
   ["programs", "helper_ping_enabled", "ALTER TABLE programs ADD COLUMN helper_ping_enabled INTEGER NOT NULL DEFAULT 0"],
-  // Classification rules (JSON).
+
   ["programs", "categories", "ALTER TABLE programs ADD COLUMN categories TEXT"],
-  // One mention per thread.
+
   ["threads", "helper_pinged", "ALTER TABLE threads ADD COLUMN helper_pinged INTEGER NOT NULL DEFAULT 0"],
-  // thread | organizer | dashboard.
+
   ["programs", "ticket_visibility", "ALTER TABLE programs ADD COLUMN ticket_visibility TEXT"],
-  // Per-channel-role behavior settings (lib/programModel.js) and lifecycle.
-  // NULL means "derive from legacy flags" so existing rows keep behaving.
+
+
   ["programs", "behavior", "ALTER TABLE programs ADD COLUMN behavior TEXT"],
   ["programs", "status", "ALTER TABLE programs ADD COLUMN status TEXT"],
   ["programs", "learning", "ALTER TABLE programs ADD COLUMN learning TEXT NOT NULL DEFAULT 'auto'"],
-  // A helper who stays on the roster (commands, manual assignment) but is
-  // never auto-offered or pinged. Default eligible, so nobody changes.
+
+
   ["program_helpers", "ping_eligible", "ALTER TABLE program_helpers ADD COLUMN ping_eligible INTEGER NOT NULL DEFAULT 1"],
   ["ticket_metrics_migrations", "table", "CREATE TABLE IF NOT EXISTS ticket_metrics_migrations (version TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)"],
 ];
 
-// Anything that references a column a migration may have just added.
+
 const POST_MIGRATION_SCHEMA = `
 CREATE INDEX IF NOT EXISTS idx_doc_gaps_ts ON doc_gaps(message_ts);
 CREATE INDEX IF NOT EXISTS idx_doc_gaps_kind ON doc_gaps(kind, created_at);

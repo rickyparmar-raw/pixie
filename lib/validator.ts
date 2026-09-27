@@ -1,10 +1,9 @@
-// Public GitHub repository validator for Hack Club YSWS submissions.
-// Checks LICENSE presence, README completeness (build instructions, demo/screenshots),
-// and project readiness.
+
 
 import axios = require("axios");
 import log = require("./log");
 
+type UntypedInput = any;
 const GITHUB_URL_REGEX = /(?:https?:\/\/)?(?:www\.)?github\.com\/([a-zA-Z0-9_.-]+)\/([a-zA-Z0-9_.-]+)(?:\/|\.git|\/tree\/[a-zA-Z0-9_.-]+)?/i;
 
 const OPEN_SOURCE_LICENSES = [
@@ -19,7 +18,7 @@ const OPEN_SOURCE_LICENSES = [
   { id: "unlicense", name: "The Unlicense", regex: /\bThis is free and unencumbered software released into the public domain/i },
 ];
 
-function parseGithubUrl(text: any) {
+function parseGithubUrl(text: UntypedInput) {
   if (!text) return null;
   const match = String(text).match(GITHUB_URL_REGEX);
   if (!match) return null;
@@ -29,7 +28,7 @@ function parseGithubUrl(text: any) {
   return { owner, repo, fullName: `${owner}/${repo}`, url: `https://github.com/${owner}/${repo}` };
 }
 
-async function fetchRawFile(owner: any, repo: any, filename: any) {
+async function fetchRawFile(owner: UntypedInput, repo: UntypedInput, filename: UntypedInput) {
   const branches = ["main", "master"];
   for (const branch of branches) {
     try {
@@ -38,14 +37,13 @@ async function fetchRawFile(owner: any, repo: any, filename: any) {
       if (res.status === 200 && typeof res.data === "string") {
         return res.data;
       }
-    } catch (e: any) {
-      // Try next branch or filename
+    } catch (e: UntypedInput) {
     }
   }
   return null;
 }
 
-function detectLicense(content: any) {
+function detectLicense(content: UntypedInput) {
   if (!content || !content.trim()) return null;
   for (const lic of OPEN_SOURCE_LICENSES) {
     if (lic.regex.test(content)) return lic.name;
@@ -53,7 +51,7 @@ function detectLicense(content: any) {
   return "Custom / Unknown Open Source License";
 }
 
-function analyzeReadme(readmeText: any) {
+function analyzeReadme(readmeText: UntypedInput) {
   if (!readmeText || !readmeText.trim()) {
     return {
       hasReadme: false,
@@ -78,7 +76,7 @@ function analyzeReadme(readmeText: any) {
   };
 }
 
-async function validateRepository(ownerOrUrl: any, repoName = null) {
+async function validateRepository(ownerOrUrl: UntypedInput, repoName = null) {
   let owner = ownerOrUrl;
   let repo: string | null = repoName;
 
@@ -127,10 +125,8 @@ async function validateRepository(ownerOrUrl: any, repoName = null) {
   };
 }
 
-// WHY: one fetch loop, not two pasted branch lists. Tries each filename on
-// main then master and returns the first hit — a repo needs exactly one
-// LICENSE and one README, and the loop shape is identical for both.
-async function fetchFirstHit(owner: any, repo: any, filenames: any) {
+
+async function fetchFirstHit(owner: UntypedInput, repo: UntypedInput, filenames: UntypedInput) {
   for (const fn of filenames) {
     const text = await fetchRawFile(owner, repo, fn);
     if (text) return { text, file: fn };
@@ -138,10 +134,9 @@ async function fetchFirstHit(owner: any, repo: any, filenames: any) {
   return { text: null, file: null };
 }
 
-// Pure classify step: license/README findings in, readiness verdict out. No
-// I/O, so the "what counts as ready" rule reads as one block.
-function assessReadiness({ licenseName, matchedLicenseFile, readmeAnalysis }: Record<string, any>) {
-  // Determine readiness score
+
+function assessReadiness({ licenseName, matchedLicenseFile, readmeAnalysis }: Record<string, UntypedInput>) {
+
   const issues = [];
   const passes = [];
   const tips = [];
@@ -177,7 +172,7 @@ function assessReadiness({ licenseName, matchedLicenseFile, readmeAnalysis }: Re
   return { isReady: issues.length === 0, passes, issues, tips };
 }
 
-function formatValidationReport(result: any) {
+function formatValidationReport(result: UntypedInput) {
   if (!result || !result.ok) {
     return result?.error || "Could not inspect GitHub repository.";
   }

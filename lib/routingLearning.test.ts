@@ -1,3 +1,4 @@
+type TestAny = any;
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test, before } = require("node:test");
@@ -12,7 +13,7 @@ before(() => {
   db.open(":memory:");
 });
 
-function setup(id: any) {
+function setup(id: TestAny) {
   db.saveProgram({ id, name: id, posture: "active", helpChannel: `C-${id}`, channels: [`C-${id}`] });
   for (const userId of ["U-alice", "U-bob", "U-cara"]) {
     db.syncHelper({ programId: id, userId, source: "test", role: "helper" });
@@ -22,7 +23,7 @@ function setup(id: any) {
   helperRoute.setExpertise({ programId: id, userId: "U-cara", tags: ["hardware"] });
 }
 
-function createTicket(programId: any, suffix: any, category = "review") {
+function createTicket(programId: TestAny, suffix: TestAny, category = "review") {
   const id = db.createTicket({
     programId,
     channel: `C-${programId}`,
@@ -34,7 +35,7 @@ function createTicket(programId: any, suffix: any, category = "review") {
   return db.getTicket(id);
 }
 
-function resolve(ticket: any, actorId: any) {
+function resolve(ticket: TestAny, actorId: TestAny) {
   const result = actorId === "U-requester"
     ? tickets.publicResolveTicket({ ticketId: ticket.id, actorId })
     : tickets.resolveTicket({ ticketId: ticket.id, actorId, programId: ticket.program_id });
@@ -52,8 +53,8 @@ test("assigned handoff credits the replying helper and changes recommendation", 
   const resolved = resolve(ticket, "U-bob");
 
   assert.equal(resolved.resolved_by, "U-bob");
-  assert.equal(helperRoute.getExpertise(programId, "U-alice").find((row: any) => row.tag === "review").solved_count, 0);
-  assert.equal(helperRoute.getExpertise(programId, "U-bob").find((row: any) => row.tag === "review").solved_count, 1);
+  assert.equal(helperRoute.getExpertise(programId, "U-alice").find((row: TestAny) => row.tag === "review").solved_count, 0);
+  assert.equal(helperRoute.getExpertise(programId, "U-bob").find((row: TestAny) => row.tag === "review").solved_count, 1);
   assert.equal(helperRoute.recommend({ programId, category: "review", limit: 1 })[0].userId, "U-bob");
 
   const bobStats = helperStats(programId, "U-bob");
@@ -72,8 +73,8 @@ test("assigned ticket without a helper reply falls back to the assignee", () => 
 
   resolve(ticket, "U-requester");
 
-  assert.equal(helperRoute.getExpertise(programId, "U-alice").find((row: any) => row.tag === "review").solved_count, 1);
-  assert.equal(helperRoute.getExpertise(programId, "U-bob").find((row: any) => row.tag === "review"), undefined);
+  assert.equal(helperRoute.getExpertise(programId, "U-alice").find((row: TestAny) => row.tag === "review").solved_count, 1);
+  assert.equal(helperRoute.getExpertise(programId, "U-bob").find((row: TestAny) => row.tag === "review"), undefined);
   assert.equal(helperStats(programId, "U-alice").totals.resolved, 1);
   assert.equal(helperStats(programId, "U-bob").totals.resolved, 0);
 
@@ -92,8 +93,8 @@ test("requester resolution after a helper reply credits the helper, not the requ
   const resolved = resolve(ticket, "U-requester");
 
   assert.equal(resolved.resolved_by, "U-requester");
-  assert.equal(helperRoute.getExpertise(programId, "U-bob").find((row: any) => row.tag === "review").solved_count, 1);
-  assert.equal(helperRoute.getExpertise(programId, "U-alice").find((row: any) => row.tag === "review").solved_count, 0);
+  assert.equal(helperRoute.getExpertise(programId, "U-bob").find((row: TestAny) => row.tag === "review").solved_count, 1);
+  assert.equal(helperRoute.getExpertise(programId, "U-alice").find((row: TestAny) => row.tag === "review").solved_count, 0);
   assert.equal(helperStats(programId, "U-bob").totals.resolved, 1);
 });
 

@@ -1,5 +1,6 @@
-// STEP 1 characterization pins for lib/log.js (PLATFORM FOUNDATION).
-// Leveled logger: debug gated, warn/error always, subscribers never throw.
+
+
+type TestAny = any;
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { config } = require("./config");
@@ -12,9 +13,9 @@ test("char: subscribers see every level with scope and args", () => {
     log.info("char", "hello", 42);
     log.warn("char", "careful");
     log.error("char", "broken");
-    assert.ok(seen.some(([k, s]: any) => k === "info" && s === "char"));
-    assert.ok(seen.some(([k]: any) => k === "warn"));
-    assert.ok(seen.some(([k]: any) => k === "error"));
+    assert.ok(seen.some(([k, s]: TestAny) => k === "info" && s === "char"));
+    assert.ok(seen.some(([k]: TestAny) => k === "warn"));
+    assert.ok(seen.some(([k]: TestAny) => k === "error"));
   } finally {
     unsub();
   }
@@ -42,7 +43,7 @@ test("char: debug notifies even when console output is gated", () => {
   const saved = config.debug;
   config.debug = false;
   const seen: string[] = [];
-  const unsub = log.subscribe((kind: any) => seen.push(kind));
+  const unsub = log.subscribe((kind: TestAny) => seen.push(kind));
   try {
     log.debug("char", "quiet");
     assert.ok(seen.includes("debug"));

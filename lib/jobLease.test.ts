@@ -1,6 +1,6 @@
-// STEP 1 characterization pins for lib/jobLease.js (PLATFORM FOUNDATION).
-// Single-flight leases: INSERT OR IGNORE fast path, expiry takeover, and
-// runOnce release-finally so a crashed holder cannot wedge the job.
+
+
+type TestAny = any;
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
@@ -10,7 +10,7 @@ const lease = require("./jobLease");
 
 db.open(":memory:");
 
-function clearLease(name: any) {
+function clearLease(name: TestAny) {
   db.handle().query("DELETE FROM job_leases WHERE name = ?").run(name);
 }
 

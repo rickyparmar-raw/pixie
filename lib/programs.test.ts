@@ -1,3 +1,4 @@
+type TestAny = any;
 process.env.PIXIE_DB_PATH = ":memory:";
 
 const { test } = require("node:test");
@@ -7,10 +8,6 @@ const programs = require("./programs");
 
 db.open(":memory:");
 
-/* ----------------------------------------------------------------- scope -- */
-// What pixie answers when nobody addressed her: everything someone's stuck on,
-// or only this program's questions. Stored per program so one deployment can
-// run a locked-down #pixl next to an open #sprig-help.
 
 test("scope defaults to any, so an existing program keeps answering everything", () => {
   programs.saveProgram({ id: "t-open", name: "Open Program" });
@@ -37,8 +34,7 @@ test("scope can be flipped back without a redeploy", () => {
   assert.equal(programs.scope("t-flip"), "any");
 });
 
-// Anything that isn't the literal string "program" is treated as open. A typo
-// in programs.json should leave pixie answering, not silently mute her.
+
 test("an unrecognised scope value falls back to any", () => {
   programs.saveProgram({ id: "t-typo", name: "Typo", scope: "programme" });
   programs.invalidate();
@@ -51,13 +47,8 @@ test("the shared YSWS program is never scoped", () => {
   assert.equal(programs.scope(null), "any");
 });
 
-/* ------------------------------------------------ PIXIE_PROGRAMS_JSON -- */
-// One engine image serves the whole bot fleet, so the image can't carry any
-// single bot's channels or sources. A provisioned bot gets them as a variable
-// instead, and it has to win over the programs.json baked into the image —
-// otherwise bot #7 boots answering from Pixl's docs.
 
-function withEnvPrograms(value: any, fn: any) {
+function withEnvPrograms(value: TestAny, fn: TestAny) {
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   if (value === undefined) delete process.env.PIXIE_PROGRAMS_JSON;
   else process.env.PIXIE_PROGRAMS_JSON = value;
@@ -109,17 +100,16 @@ test("AI answers default on and honor the legacy snake_case field", () => {
   });
 });
 
-// The whole point: the variable has to beat the repo's programs.json, which in a
-// fleet image holds whichever program it was last built for.
+
 test("PIXIE_PROGRAMS_JSON wins over the repo's programs.json", () => {
   withEnvPrograms(JSON.stringify([{ id: "solvable", name: "Solvable", channels: ["C0SOLVE"] }]), () => {
-    const ids = programs.all().map((p: any) => p.id);
+    const ids = programs.all().map((p: TestAny) => p.id);
     assert.ok(ids.includes("solvable"));
     assert.ok(!ids.includes("pixl"), "the image's own program must not leak into a fleet bot");
   });
 });
 
-// `{ programs: [...] }` is the shape the control plane finds easiest to extend.
+
 test("PIXIE_PROGRAMS_JSON accepts the wrapped object form", () => {
   withEnvPrograms(JSON.stringify({ programs: [{ id: "twisted", name: "Twisted" }] }), () => {
     assert.equal(programs.get("twisted").name, "Twisted");
@@ -132,11 +122,10 @@ test("Hardwire defaults to an isolated corpus when sync omits sharedSources", ()
   });
 });
 
-// A truncated blob must not crash-loop the bot where nobody can reach it — it
-// falls back to the files and logs instead.
+
 test("malformed PIXIE_PROGRAMS_JSON falls back to files instead of throwing", () => {
   withEnvPrograms('[{"id":"solvable"', () => {
-    const ids = programs.all().map((p: any) => p.id);
+    const ids = programs.all().map((p: TestAny) => p.id);
     assert.ok(ids.length > 0);
     assert.ok(!ids.includes("solvable"));
   });
@@ -144,22 +133,20 @@ test("malformed PIXIE_PROGRAMS_JSON falls back to files instead of throwing", ()
 
 test("PIXIE_PROGRAMS_JSON of the wrong type falls back to files", () => {
   withEnvPrograms(JSON.stringify({ solvable: { name: "Solvable" } }), () => {
-    assert.ok(!programs.all().some((p: any) => p.id === "solvable"));
+    assert.ok(!programs.all().some((p: TestAny) => p.id === "solvable"));
   });
 });
 
-// An id is what forChannel/get/posture key off, so a record without one is
-// unaddressable — dropped rather than kept as a program nothing can reach.
+
 test("PIXIE_PROGRAMS_JSON drops records with no id", () => {
   withEnvPrograms(JSON.stringify([{ name: "Nameless" }, { id: "real", name: "Real" }]), () => {
-    const ids = programs.all().map((p: any) => p.id);
-    assert.deepEqual(ids.filter((id: any) => id === "real"), ["real"]);
+    const ids = programs.all().map((p: TestAny) => p.id);
+    assert.deepEqual(ids.filter((id: TestAny) => id === "real"), ["real"]);
     assert.ok(!ids.includes(undefined));
   });
 });
 
-// sources.json in the image is Pixl's shared layer. A fleet bot has to be able
-// to replace it, so ysws-global is overridable through the same variable.
+
 test("a ysws-global entry in PIXIE_PROGRAMS_JSON overrides the shared sources", () => {
   withEnvPrograms(
     JSON.stringify([
@@ -186,15 +173,13 @@ test("Twisted is program-scoped and does not inherit shared program facts", () =
     const twisted = programs.get("twisted");
     assert.equal(twisted.scope, "program");
     assert.equal(twisted.sharedSources, false);
-    assert.ok(twisted.sources.some((source: any) => source.url === "file://./twisted-faq.json"));
-    assert.ok(twisted.pinnedRules.some((rule: any) => /program_id=twisted/.test(rule)));
-    assert.ok(!twisted.sources.some((source: any) => source.url === "file://./quick-links.json"));
+    assert.ok(twisted.sources.some((source: TestAny) => source.url === "file://./twisted-faq.json"));
+    assert.ok(twisted.pinnedRules.some((rule: TestAny) => /program_id=twisted/.test(rule)));
+    assert.ok(!twisted.sources.some((source: TestAny) => source.url === "file://./quick-links.json"));
   });
 });
 
-// sources.json holds Pixl's quick links. A fleet bot that didn't ask for them
-// must not get them — they'd show up as an extra source and answer Pixl questions
-// in another program's channel.
+
 test("a fleet bot gets an empty shared layer rather than Pixl's quick links", () => {
   withEnvPrograms(JSON.stringify([{ id: "solvable", name: "Solvable" }]), () => {
     const sharedProg = programs.shared();
@@ -205,17 +190,13 @@ test("a fleet bot gets an empty shared layer rather than Pixl's quick links", ()
   });
 });
 
-// the shared program stays unscoped even if the blob says otherwise
+
 test("the shared program stays unscoped even if the blob says otherwise", () => {
   withEnvPrograms(JSON.stringify([{ id: "ysws-global", name: "Shared", scope: "program" }]), () => {
     assert.equal(programs.shared().scope, "any");
   });
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
-// Tenant resolution precedence + claim atomicity/rollback, config precedence
-// + validation, branding-adjacent normalization. Append-only: pins current
-// behavior before the PLATFORM FOUNDATION rewrite.
 
 test("char: forChannel prefers an explicit workspace-scoped claim over config lists", () => {
   withEnvPrograms(undefined, () => {

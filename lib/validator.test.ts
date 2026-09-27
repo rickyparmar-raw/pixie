@@ -51,7 +51,6 @@ Check out the playable demo at https://play.pixl.hackclub.com/
   assert.ok(res.wordCount > 15);
 });
 
-/* ------------------------------ ANSWER PIPELINE characterization (audit) -- */
 
 test("CHAR: validator fires only on check-queries with a github URL", () => {
   assert.ok(validator.parseGithubUrl("can you check https://github.com/u/cool-game for submission"));

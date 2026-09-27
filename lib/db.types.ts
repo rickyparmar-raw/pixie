@@ -7,26 +7,7 @@ export interface ThreadRow {
   updated_at: number;
 }
 
-export interface TicketRow {
-  id: number;
-  program_id: string;
-  workspace_id: string | null;
-  channel: string;
-  thread_ts: string;
-  card_ts: string | null;
-  requester_id: string;
-  question: string;
-  status: string;
-  assignee_id: string | null;
-  resolution: string | null;
-  created_at: number;
-  claimed_at: number | null;
-  resolved_at: number | null;
-  category: string | null;
-  priority: string | null;
-  summary: string | null;
-  [column: string]: unknown;
-}
+export type TicketRow = Ticket;
 
 export interface ProgramRow {
   id: string;
@@ -34,7 +15,6 @@ export interface ProgramRow {
   workspace_id: string | null;
   behavior: string | null;
   status: string | null;
-  [column: string]: unknown;
 }
 
 export interface ChannelClaimRow {
@@ -76,5 +56,5 @@ export interface LearnedFactRow {
   category: string | null;
   created_at: number;
   updated_at: number | null;
-  [column: string]: unknown;
 }
+import type { Ticket } from "./types";

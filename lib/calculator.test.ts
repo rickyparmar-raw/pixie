@@ -60,7 +60,6 @@ test("directAnswer calculates general payout", () => {
   assert.match(r.answer, /Restoration Energy/);
 });
 
-/* ------------------------------ ANSWER PIPELINE characterization (audit) -- */
 
 test("CHAR: calculator only fires on calculator-shaped queries (hands back otherwise)", () => {
   assert.equal(calculator.isCalculatorQuery("how much is a PS5"), false);

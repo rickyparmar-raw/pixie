@@ -1,3 +1,4 @@
+type TestAny = any;
 process.env.PIXIE_DB_PATH = ":memory:";
 process.env.PIXIE_INTERNAL_TOKEN = "test-internal-token";
 
@@ -14,7 +15,7 @@ before(() => {
 });
 
 function authed() {
-  return { headers: { get: (k: any) => (k === "authorization" ? "Bearer test-internal-token" : "") } };
+  return { headers: { get: (k: TestAny) => (k === "authorization" ? "Bearer test-internal-token" : "") } };
 }
 
 function anon() {
@@ -48,7 +49,7 @@ test("program sync claims channels atomically and bootstraps the creator", () =>
     claimedBy: "U-other",
     programChannels: [{ id: "C-hwy-help", kind: "help" }],
   });
-  // Rejected by pre-save role validation (409) or by the claim itself.
+
   assert.match(conflict.error, /already owned by program hwy|hosted claim makes C-hwy-help help of hwy/);
 });
 
@@ -69,22 +70,22 @@ test("ticket actions enforce actor membership and tenant match", () => {
   const ok = api.internalTicketAction(id, "claim", { programId: "hwy", actorId: "U-org" });
   assert.equal(ok.ok, true);
   assert.equal(ok.ticket.ticket.status, "claimed");
-  // Claim race: second claim loses.
+
   db.syncHelper({ programId: "hwy", userId: "U-org2", source: "manual" });
   const race = api.internalTicketAction(id, "claim", { programId: "hwy", actorId: "U-org2" });
   assert.match(race.error, /not open/);
 });
 
 test("dashboard reply posts as program identity and lands in the timeline", async () => {
-  const posted: Array<Record<string, any>> = [];
-  const client = { chat: { postMessage: async (p: any) => { posted.push(p); return { ts: "2.0" }; } } };
+  const posted: Array<Record<string, TestAny>> = [];
+  const client = { chat: { postMessage: async (p: TestAny) => { posted.push(p); return { ts: "2.0" }; } } };
   const id = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "t-h3", requesterId: "U1", question: "help" });
   const res = await tickets.replyToTicket({ ticketId: id, authorId: "U-org", text: "try rebooting", client });
   assert.equal(res.ok, true);
   assert.equal(posted.length, 1);
   assert.equal(posted[0].thread_ts, "t-h3");
   const events = db.listTicketEvents(id);
-  assert.ok(events.some((e: any) => e.event_type === "helper_reply"));
+  assert.ok(events.some((e: TestAny) => e.event_type === "helper_reply"));
 });
 
 test("internal notes never touch Slack and require membership", () => {
@@ -134,12 +135,6 @@ test("ticket search bounds pagination and requires a tenant", () => {
   assert.ok(res.rows.length <= 200);
 });
 
-/* ------------------------------------------------------------------ */
-/* STEP 1 characterization pins (INTERNAL mutating paths): every       */
-/* ticket/copilot/knowledge/macro/routing/incident/radar write         */
-/* re-checks tenant + helper membership; retention stays               */
-/* organizer/owner + confirm. Append-only — existing tests untouched.  */
-/* ------------------------------------------------------------------ */
 
 test("char: workspace mismatch denied on reply/note even with right program", async () => {
   const id = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "char-ws-1", requesterId: "U1", question: "q" });
@@ -152,9 +147,9 @@ test("char: knowledge propose + candidate action resolve tenant from stored rows
   const a = db.createTicket({ programId: "hwy", workspaceId: "TW", channel: "C1", threadTs: "char-k1", requesterId: "U1", question: "how do rebates work" });
   const cross = await api.internalKnowledgePropose("pixl", { actorId: "U-org", ticketId: a });
   assert.match(cross.error, /not found in this program|not a helper/);
-  // Candidate action with an unknown id is not-found (never 500).
+
   assert.match(api.internalKnowledgeCandidateAction(999999999, { actorId: "U-org", action: "approve" }).error, /not found/);
-  // Unknown review action is a validation error.
+
   db.syncHelper({ programId: "hwy", userId: "U-org", source: "manual" });
   const fakeRow = db.handle().query("SELECT id, program_id FROM learned_facts LIMIT 1").get();
   if (fakeRow) {
@@ -167,10 +162,10 @@ test("char: macro update/delete/send scope to the macro's own program", async ()
   const created = api.internalMacroCreate("hwy", { actorId: "U-org", trigger: "?charpin", name: "Pin", content: "hello {helper}" });
   assert.equal(created.ok, true);
   const mid = created.macro.id;
-  // Stranger cannot update/delete even knowing the id.
+
   assert.match(api.internalMacroUpdate(mid, { actorId: "U-stranger", name: "Evil" }).error, /not a helper/);
   assert.match(api.internalMacroDelete(mid, { actorId: "U-stranger" }).error, /not a helper/);
-  // Send without a ticket is a validation error, not a tenant bypass.
+
   assert.match((await api.internalMacroSend(mid, { actorId: "U-org" })).error, /ticketId required/);
 });
 

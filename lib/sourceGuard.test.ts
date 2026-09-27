@@ -38,7 +38,6 @@ test("ingestion rejects blocked URLs before any fetch", async () => {
   );
 });
 
-/* ------------------------------------------- STEP 1 characterization pins -- */
 
 test("redirect budget pins at five hops", () => {
   assert.equal(guard.MAX_REDIRECTS, 5);

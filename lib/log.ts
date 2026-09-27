@@ -1,13 +1,12 @@
-// Minimal leveled logger. `debug` is the per-message firehose that used to run
-// unconditionally — it's what grew pixie.log to 218KB — so it's behind
-// PIXIE_DEBUG now. warn/error always print.
+
+
 import configModule = require("./config");
 
 const { config } = configModule;
 
 const subscribers: Array<(kind: string, scope: string, args: unknown[]) => void> = [];
 
-function subscribe(fn: any) {
+function subscribe(fn: (kind: string, scope: string, args: unknown[]) => void) {
   subscribers.push(fn);
   return () => {
     const idx = subscribers.indexOf(fn);
@@ -15,14 +14,13 @@ function subscribe(fn: any) {
   };
 }
 
-// A throwing subscriber must never break the caller — logging is observability,
-// not control flow.
-function notify(kind: any, scope: any, args: any) {
+
+function notify(kind: string, scope: string, args: unknown[]) {
   if (subscribers.length === 0) return;
   for (const fn of subscribers) {
     try {
       fn(kind, scope, args);
-    } catch (_: any) {}
+    } catch (_: unknown) {}
   }
 }
 

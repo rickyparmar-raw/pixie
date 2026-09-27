@@ -1,25 +1,19 @@
-// Single place where every environment variable is read, defaulted and
-// validated. Everything else imports the frozen `config` object instead of
-// touching process.env, so a missing value fails loudly at startup with the
-// full list of what's absent — rather than degrading into an ERROR_FALLBACK on
-// every question, or a console.error nobody reads.
+
+
 import dotenv = require("dotenv");
 import type { WebClient } from "@slack/web-api";
 
+type UntypedInput = any;
 dotenv.config();
 
 const ZEN_BASE_URL = "https://opencode.ai/zen/v1";
 const DEFAULT_MODEL = "deepseek-v4-flash-free";
-// Both defaults must be names Zen actually serves, since ZEN_BASE_URL is where
-// an unconfigured deployment points. This used to be "kr/claude-sonnet-4.5" — a
-// name only a local 9Router gateway understands — so the built-in vision default
-// was dead on arrival anywhere else. mimo-v2.5-free is the one free Zen model
-// that accepts an image.
+
+
 const DEFAULT_VISION_MODEL = "mimo-v2.5-free";
 const DEFAULT_REFRESH_INTERVAL_MIN = 30;
 
-// Where answers land when the whole Zen key pool is out of quota. Same
-// endpoint intent already runs on in production.
+
 const NINE_ROUTER_BASE_URL = "http://pixie.railway.internal:20128/v1";
 const ANSWER_FALLBACK_MODEL = "gc/gemini-3.1-flash-lite-preview";
 
@@ -31,29 +25,25 @@ const GROQ_BASE_URL = "https://api.groq.com/openai/v1";
 const DEFAULT_GROQ_MODEL = "qwen/qwen3.8-27b";
 const DEFAULT_GROQ_INTENT_MODEL = "qwen/qwen3.8-27b";
 
-// Slack credentials are only needed when actually connecting. `--ask` builds
-// the corpus and answers on the console, so it requires the model keys only.
+
 const SLACK_VARS = ["SLACK_BOT_TOKEN", "SLACK_APP_TOKEN", "SLACK_HELP_CHANNEL", "SLACK_FAQ_CHANNELS"];
 const MODEL_VARS = ["OPENCODE_API_KEY"];
 
-function stripTrailingSlash(url: any) {
+function stripTrailingSlash(url: UntypedInput) {
   return url.replace(/\/+$/, "");
 }
 
-// Tolerates a full ".../chat/completions" URL as well as a bare base, since
-// the old README documented OPENCODE_BASE_URL with the path included.
-function normalizeBaseUrl(url: any, fallback: any) {
+
+function normalizeBaseUrl(url: UntypedInput, fallback: UntypedInput) {
   if (!url) return fallback;
   return stripTrailingSlash(url).replace(/\/chat\/completions$/, "");
 }
 
-// A key that just returned 429 is known-bad for a while; handing it to the very
-// next caller wastes an attempt. Parked briefly instead, so rotation lands on a
-// key with quota left.
+
 const KEY_COOLDOWN_MS = 60 * 1000;
 const coolingUntil = new Map();
 
-function penalizeZenKey(key: any, ms = KEY_COOLDOWN_MS) {
+function penalizeZenKey(key: UntypedInput, ms = KEY_COOLDOWN_MS) {
   if (!key) return;
   if (ms <= 0) {
     coolingUntil.delete(key);
@@ -62,10 +52,8 @@ function penalizeZenKey(key: any, ms = KEY_COOLDOWN_MS) {
   }
 }
 
-// Round-robin scan shared by every key pool: at most one full lap, so an
-// all-cooling pool can't spin. Returns the first non-cooling key, or null when
-// every key is cooling (the caller then falls back to soonest-recovery).
-function scanPool(keys: any, coolingUntil: any, state: any) {
+
+function scanPool(keys: UntypedInput, coolingUntil: UntypedInput, state: UntypedInput) {
   for (let i = 0; i < keys.length; i++) {
     const idx = state.index % keys.length;
     state.index += 1;
@@ -75,8 +63,7 @@ function scanPool(keys: any, coolingUntil: any, state: any) {
   return null;
 }
 
-// Every key is cooling. Return the one that recovers soonest — a doomed attempt
-// still beats sending no key at all and turning a 429 into a 401.
+
 function soonestRecovery(keys: string[], coolingUntil: Map<string, number>): string | undefined {
   return keys.reduce((best: string, k: string) => ((coolingUntil.get(k) || 0) < (coolingUntil.get(best) || 0) ? k : best), keys[0]);
 }
@@ -96,7 +83,7 @@ function nextZenApiKey() {
 const OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1";
 const DEFAULT_OPENROUTER_MODEL = "google/gemini-2.5-flash";
 
-function zenStandby(baseUrl: any, model = DEFAULT_MODEL) {
+function zenStandby(baseUrl: UntypedInput, model = DEFAULT_MODEL) {
   if (baseUrl === ZEN_BASE_URL) return null;
   return {
     baseUrl: ZEN_BASE_URL,
@@ -105,8 +92,8 @@ function zenStandby(baseUrl: any, model = DEFAULT_MODEL) {
   };
 }
 
-// Fallback standby tier: prefers OpenRouter when configured, then falls back to Zen
-function standbyFallback(baseUrl: any, defaultZenModel = DEFAULT_MODEL) {
+
+function standbyFallback(baseUrl: UntypedInput, defaultZenModel = DEFAULT_MODEL) {
   if (baseUrl === OPENROUTER_BASE_URL) return zenStandby(baseUrl, defaultZenModel);
   if (baseUrl === ZEN_BASE_URL && !process.env.OPENROUTER_API_KEY) return null;
 
@@ -122,34 +109,29 @@ function standbyFallback(baseUrl: any, defaultZenModel = DEFAULT_MODEL) {
   return zenStandby(baseUrl, defaultZenModel);
 }
 
-function parseChannels(raw: any) {
+function parseChannels(raw: UntypedInput) {
   return (raw || "")
     .split(",")
-    .map((c: any) => c.trim())
+    .map((c: UntypedInput) => c.trim())
     .filter(Boolean);
 }
 
-function positiveNumber(raw: any, fallback: any) {
+function positiveNumber(raw: UntypedInput, fallback: UntypedInput) {
   const n = Number(raw);
   return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
-function envFlag(raw: any, fallback = false) {
+function envFlag(raw: UntypedInput, fallback = false) {
   if (raw === undefined || raw === null || raw === "") return fallback;
   return raw === "1" || String(raw).toLowerCase() === "true";
 }
 
-function probability(raw: any, fallback: any) {
+function probability(raw: UntypedInput, fallback: UntypedInput) {
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 && n <= 1 ? n : fallback;
 }
 
-// Jev: the engagement classifier (lib/jevDecision.js). One configured
-// systemone-compatible endpoint (OpenCode Zen or Experiential Labs, set by
-// JEV_BASE_URL), free model only, one bounded request, no provider or model
-// fallback.
-// Where Pixie engages is a per-program setting (lib/programModel.js), not a
-// Jev channel list.
+
 const JEV_BASE_URL = "https://api.experientiallabs.ai/v1/systemone";
 const JEV_FREE_MODEL = "jev-latest:free";
 
@@ -161,27 +143,21 @@ function jevConfig() {
     baseUrl: (process.env.JEV_BASE_URL || JEV_BASE_URL).trim() || JEV_BASE_URL,
     timeoutMs: positiveNumber(process.env.JEV_TIMEOUT_MS, 8000),
     engageThreshold: probability(process.env.JEV_ENGAGE_THRESHOLD, 0.7),
-    // Booleans only — key material itself never enters the config object, so
-    // no log or metric writer can ever print it.
-    // JEV_API_KEY is the provider-neutral name (OpenCode Zen or Experiential);
-    // EXPERIENTIAL_API_KEY remains for existing deployments.
+
+
     experientialApiKeyPresent: Boolean((process.env.JEV_API_KEY || process.env.EXPERIENTIAL_API_KEY || "").trim()),
   };
 }
 
 const faqChannels = parseChannels(process.env.SLACK_FAQ_CHANNELS);
-// Staging guardrail: when set (comma-separated channel IDs), the process
-// drops every Slack event outside those channels before any handling —
-// answers, tickets, reactions, and jobs never touch other channels. This is
-// what lets a staging Core share workspace credentials without disturbing
-// production traffic. Unset means no restriction (production behavior).
+
+
 const stagingOnlyChannels = parseChannels(process.env.PIXIE_STAGING_ONLY_CHANNELS);
-// Who may teach pixie and approve what it learned. Empty means nobody — the
-// learning commands refuse rather than falling open, since anything approved
-// goes straight into the corpus every answer is grounded in.
+
+
 const adminUserIds = parseChannels(process.env.PIXIE_ADMIN_USER_IDS);
 
-// Resolved up front so each call site can hand its own URL to zenStandby().
+
 const intentBaseUrl = normalizeBaseUrl(
   process.env.INTENT_CLASSIFIER_BASE_URL,
   process.env.GROQ_API_KEY ? GROQ_BASE_URL : ZEN_BASE_URL,
@@ -191,40 +167,32 @@ const visionBaseUrl = normalizeBaseUrl(
   ZEN_BASE_URL,
 );
 
-// Ordinal so the pool is deterministic: bare key first, then _2, _3, ... Gaps are
-// fine — someone deleting OPENCODE_API_KEY_3 must not renumber the rest.
-function zenKeyOrder(name: any) {
+
+function zenKeyOrder(name: UntypedInput) {
   const m = name.match(/_(\d+)$/);
   return m ? Number(m[1]) : 1;
 }
 
-// One scanner for every numbered-key pool (Zen, HCAI, Groq): bare key first,
-// then _2, _3, blanks dropped. Scanned rather than listed, so adding a key is
-// a Railway variable and never a code change.
-function collectNumberedKeys(env: any, prefix: any) {
+
+function collectNumberedKeys(env: UntypedInput, prefix: UntypedInput) {
   const pattern = new RegExp(`^${prefix}(_\\d+)?$`);
   return Object.keys(env)
-    .filter((k: any) => pattern.test(k))
+    .filter((k: UntypedInput) => pattern.test(k))
     .sort((a, b) => zenKeyOrder(a) - zenKeyOrder(b))
-    .map((k: any) => (env[k] || "").trim())
+    .map((k: UntypedInput) => (env[k] || "").trim())
     .filter(Boolean);
 }
 
-// Every Zen account currently in play. Scanned rather than listed, so adding a
-// key is a Railway variable and never a code change.
 function collectZenKeys(env = process.env) {
   return collectNumberedKeys(env, "OPENCODE_API_KEY");
 }
 
 const zenApiKeys = collectZenKeys();
 
-// Same round-robin-plus-cooldown shape as Zen's pool above, kept as an
-// independent copy rather than a shared helper: different provider, different
-// keys, and one pool cooling down must never block rotation on the other.
 const hcaiCoolingUntil = new Map();
 let hcaiKeyIndex = 0;
 
-function penalizeHcaiKey(key: any, ms = KEY_COOLDOWN_MS) {
+function penalizeHcaiKey(key: UntypedInput, ms = KEY_COOLDOWN_MS) {
   if (!key) return;
   if (ms <= 0) {
     hcaiCoolingUntil.delete(key);
@@ -244,14 +212,13 @@ function nextHcaiApiKey() {
   return soonestRecovery(keys, hcaiCoolingUntil);
 }
 
-// Same shape as collectZenKeys — HCAI_API_KEY, HCAI_API_KEY_2, ...
 function collectHcaiKeys(env = process.env) {
   return collectNumberedKeys(env, "HCAI_API_KEY");
 }
 
 const hcaiApiKeys = collectHcaiKeys();
 
-function hcaiTier(model: any) {
+function hcaiTier(model: UntypedInput) {
   return {
     apiKey: () => process.env.HCAI_API_KEY,
     baseUrl: HCAI_BASE_URL,
@@ -259,7 +226,6 @@ function hcaiTier(model: any) {
     onRateLimited: penalizeHcaiKey,
   };
 }
-
 
 
 function collectGroqKeys(env = process.env) {
@@ -270,7 +236,7 @@ const groqApiKeys = collectGroqKeys();
 const groqCoolingUntil = new Map();
 let groqKeyIndex = 0;
 
-function penalizeGroqKey(key: any, ms = KEY_COOLDOWN_MS) {
+function penalizeGroqKey(key: UntypedInput, ms = KEY_COOLDOWN_MS) {
   if (!key) return;
   if (ms <= 0) {
     groqCoolingUntil.delete(key);
@@ -290,23 +256,6 @@ function nextGroqApiKey() {
   return soonestRecovery(keys, groqCoolingUntil);
 }
 
-// 9Router/Gemini answers — the operator's preferred primary model, ahead of
-// Zen's deepseek-v4-flash-free. Same PIXIE_ANSWER_BASE_URL/PIXIE_MODEL/
-// PIXIE_ANSWER_API_KEY vars this tier has always used when it was configured
-// as Zen's standby; no Railway variable has to move for this to keep working.
-//
-// zenStandby() gives it a REAL fallback: Zen's own rotating key pool, used
-// only when 9Router itself errors. Before this, primary being pointed
-// straight at 9Router made the old answerFallback() (which refused to hand
-// back a fallback pointed at wherever primary already was) return null —
-// a single 9Router hiccup had nothing to catch it and every question hit
-// ERROR_FALLBACK. zenStandby() has no such self-reference problem: Zen is
-// never wherever 9Router already is.
-//
-// Briefly flipped to Zen-primary/9Router-fallback when 9Router's free quota
-// was getting rate-limited hard, but that made replies noticeably slower
-// overall (Zen's deepseek-v4-flash-free is the slower model day-to-day) —
-// reverted back to this.
 const DEFAULT_PRIMARY_MODEL = "kr/claude-sonnet-4.5";
 const DEFAULT_FALLBACK_MODEL = "ag/gemini-3.6-flash-low";
 
@@ -362,10 +311,7 @@ const config = {
     helpChannel: process.env.SLACK_HELP_CHANNEL,
     faqChannels,
     stagingOnlyChannels,
-    // The first FAQ channel (#pixl) is the one that gets intent-based
-    // auto-replies without needing a mention.
     autoReplyChannel: faqChannels[0] || null,
-    // Filled in at startup from auth.test — see resolveBotUserId().
     botUserId: null,
     adminUserIds,
   },
@@ -402,56 +348,40 @@ const config = {
     onRateLimited: penalizeZenKey,
   },
 
-  // Where the weekly report gets posted. Defaults to the help channel, since
-  // that's where the people who'd act on it already are. Unset with no help
-  // channel either, and the scheduled post stays off — /pixie-report still
-  // works, so this is a "where", not an "whether".
   reportChannel: process.env.PIXIE_REPORT_CHANNEL || null,
 
   refreshIntervalMin: positiveNumber(process.env.REFRESH_INTERVAL_MIN, DEFAULT_REFRESH_INTERVAL_MIN),
   debug: process.env.PIXIE_DEBUG === "1" || process.env.PIXIE_DEBUG === "true",
 
-  // Web server base URL for constructing absolute URLs (screenshot serving, etc.)
   web: {
     baseUrl: process.env.PIXIE_WEB_BASE_URL || `http://localhost:${process.env.PIXIE_WEB_PORT || 4100}`,
   },
 
-  // Emoji pixie reacts with in the help channel when the docs can't answer a
-  // question — the marker helpers (and Pixorpheus's ticket flow) look for.
-  // Empty disables the handoff. Stored without colons.
+
   escalateReaction: (process.env.PIXIE_ESCALATE_REACTION || "").replace(/:/g, "").trim() || null,
 
-  // Emoji pixie places on the requester's message when a support ticket opens,
-  // so the collapsed channel view shows at a glance that it's been picked up —
-  // swapped for a check when the ticket resolves. Set PIXIE_TICKET_REACTION=""
-  // to turn the markers off. Stored without colons.
+
   ticketOpenReaction:
     process.env.PIXIE_TICKET_REACTION === "" ? null : (process.env.PIXIE_TICKET_REACTION || "ticket").replace(/:/g, "").trim() || null,
   ticketResolvedReaction:
     process.env.PIXIE_TICKET_REACTION === "" ? null : (process.env.PIXIE_TICKET_RESOLVED_REACTION || "white_check_mark").replace(/:/g, "").trim() || null,
 
-  // Emojis pixie pre-places on its own answers so voting is one click. Off by
-  // default — pixie reacting to itself reads as self-congratulation, and votes
-  // from people who add a reaction themselves still count either way. Set
-  // PIXIE_FEEDBACK_REACTIONS (e.g. "sparkling_heart") to turn seeding back on.
-  // Every name here must be in UP_REACTIONS/DOWN_REACTIONS (lib/handlers.js) or
-  // the reaction is decorative and records nothing.
+
   feedbackReactions: (process.env.PIXIE_FEEDBACK_REACTIONS ?? "")
     .split(",")
-    .map((r: any) => r.replace(/:/g, "").trim())
+    .map((r: UntypedInput) => r.replace(/:/g, "").trim())
     .filter(Boolean),
 
   jev: jevConfig(),
 };
 
-// Returns the list of missing variable names for the given mode, so callers
-// can report all of them at once instead of one per restart.
-function missingVars({ needsSlack }: Record<string, any>) {
+
+function missingVars({ needsSlack }: Record<string, UntypedInput>) {
   const required = needsSlack ? [...MODEL_VARS, ...SLACK_VARS] : MODEL_VARS;
-  return required.filter((name: any) => !process.env[name]);
+  return required.filter((name: UntypedInput) => !process.env[name]);
 }
 
-function validate({ needsSlack = true }: Record<string, any> = {}) {
+function validate({ needsSlack = true }: Record<string, UntypedInput> = {}) {
   const missing = missingVars({ needsSlack });
   if (missing.length > 0) {
     throw new Error(
@@ -462,19 +392,13 @@ function validate({ needsSlack = true }: Record<string, any> = {}) {
   return config;
 }
 
-// Slack only tells us our own user ID at runtime. Resolving it once here means
-// mention detection can compare against a real ID everywhere, instead of the
-// `undefined` it used to build into `<@undefined>`.
-async function resolveBotUserId(client: any) {
+async function resolveBotUserId(client: UntypedInput) {
   const auth = await client.auth.test();
   config.slack.botUserId = auth.user_id;
   return auth.user_id;
 }
 
-// Guard for the commands that mutate what pixie knows. Fails closed on an
-// empty allowlist — an unconfigured deployment must not let anyone rewrite the
-// corpus.
-function isAdmin(userId: any) {
+function isAdmin(userId: UntypedInput) {
   return !!userId && config.slack.adminUserIds.includes(userId);
 }
 

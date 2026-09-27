@@ -1,3 +1,4 @@
+type TestAny = any;
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const {
@@ -23,8 +24,7 @@ const {
   DEFAULT_GROQ_MODEL,
 } = require("./config");
 
-// The allowlist gates everything that rewrites the corpus, so an unconfigured
-// deployment must fail closed rather than letting anyone teach pixie.
+
 test("isAdmin denies everyone when no allowlist is configured", () => {
   const saved = config.slack.adminUserIds;
   config.slack.adminUserIds = [];
@@ -49,8 +49,7 @@ test("isAdmin allows only listed users", () => {
   }
 });
 
-// Retrying Zen after Zen just failed buys nothing but latency, so the standby
-// only exists for call sites actually pointed somewhere else.
+
 test("zenStandby is null when the call site already targets Zen", () => {
   assert.equal(zenStandby(ZEN_BASE_URL, "any-model"), null);
 });
@@ -61,10 +60,7 @@ test("zenStandby names Zen and the given model for a self-hosted gateway", () =>
   assert.equal(standby.model, "deepseek-v4-flash-free");
 });
 
-// Every built-in default has to be a name Zen actually serves, since Zen is
-// where an unconfigured deployment points. "kr/claude-sonnet-4.5" was baked in
-// as the vision default and only ever resolved on a local 9Router — a provider
-// prefix is a sign the name came from a gateway's catalogue, not Zen's.
+
 test("the built-in model defaults are names Zen serves", () => {
   assert.ok(!DEFAULT_MODEL.includes("/"), `${DEFAULT_MODEL} is gateway-only`);
   assert.ok(!DEFAULT_VISION_MODEL.includes("/"), `${DEFAULT_VISION_MODEL} is gateway-only`);
@@ -79,8 +75,6 @@ test("normalizeBaseUrl strips a trailing slash", () => {
   assert.equal(normalizeBaseUrl("https://example.com/v1/", ZEN_BASE_URL), "https://example.com/v1");
 });
 
-// The old README documented OPENCODE_BASE_URL with the full path included, so
-// existing .env files in the wild have it that way.
 test("normalizeBaseUrl tolerates a full chat/completions URL", () => {
   assert.equal(
     normalizeBaseUrl("https://opencode.ai/zen/v1/chat/completions", ZEN_BASE_URL),
@@ -106,9 +100,6 @@ test("missingVars reports every absent required var at once", () => {
   }
 });
 
-// `--ask` runs the whole pipeline offline, so requiring Slack tokens there
-// would block the one workflow that needs no Slack at all.
-/* --------------------------------------------------------- zen key pool -- */
 
 test("collectZenKeys finds bare and numbered keys in order, filtering blanks", () => {
   const mockEnv = {
@@ -161,10 +152,6 @@ test("penalizeZenKey ignores non-pool keys", () => {
   }
 });
 
-// Order-independent on purpose: other test files also read config.answer.apiKey
-// (the calling code builds that options object even with llm.complete stubbed),
-// which silently advances the shared rotation counter across the whole suite.
-// These assert relative rotation behaviour, never an absolute starting key.
 test("nextZenApiKey returns undefined with no keys configured", () => {
   const saved = config.zenApiKeys;
   config.zenApiKeys = [];
@@ -201,15 +188,11 @@ test("nextZenApiKey round-robins across every configured key", () => {
   }
 });
 
-// config.answer is 9Router/Gemini primary, so its own apiKey must NOT touch
-// the Zen pool — only config.answer.fallback (a zenStandby()) should. Mixing
-// the two would mean a 9Router-key rate limit incorrectly cools down a Zen
-// key, or vice versa.
 test("config.answer.apiKey does not draw from the Zen key pool", () => {
   const saved = config.zenApiKeys;
   config.zenApiKeys = ["key-a", "key-b"];
   try {
-    const getApiKey = (fnOrStr: any) => (typeof fnOrStr === "function" ? fnOrStr() : fnOrStr);
+    const getApiKey = (fnOrStr: TestAny) => (typeof fnOrStr === "function" ? fnOrStr() : fnOrStr);
     assert.ok(!["key-a", "key-b"].includes(getApiKey(config.answer.apiKey)));
   } finally {
     config.zenApiKeys = saved;
@@ -224,7 +207,6 @@ test("pingAnswer has a real fallback, not null", () => {
   assert.notEqual(config.pingAnswer.fallback, null);
 });
 
-/* -------------------------------------------------------------- hcai pool -- */
 
 test("collectHcaiKeys finds bare and numbered keys in order, filtering blanks", () => {
   const mockEnv = {
@@ -248,7 +230,6 @@ test("nextHcaiApiKey round-robins independently of the Zen pool", () => {
     const second = nextHcaiApiKey();
     assert.notEqual(first, second);
     assert.ok(["hc-a", "hc-b"].includes(first));
-    // Drawing from the HCAI pool must never advance or return a Zen key.
     assert.equal(nextZenApiKey(), "zen-a");
   } finally {
     config.hcaiApiKeys = savedHcai;
@@ -260,12 +241,11 @@ test("penalizeHcaiKey skips a cooling key without touching the Zen pool's cooldo
   const savedHcai = config.hcaiApiKeys;
   const savedZen = config.zenApiKeys;
   config.hcaiApiKeys = ["hc-a", "hc-b"];
-  config.zenApiKeys = ["hc-a"]; // same string, different pool — must cool independently
+  config.zenApiKeys = ["hc-a"];
   try {
     penalizeHcaiKey("hc-a", 10000);
     assert.equal(nextHcaiApiKey(), "hc-b");
     assert.equal(nextHcaiApiKey(), "hc-b");
-    // The Zen pool's own copy of "hc-a" was never penalized.
     assert.equal(nextZenApiKey(), "hc-a");
   } finally {
     config.hcaiApiKeys = savedHcai;
@@ -337,8 +317,6 @@ test("missingVars ignores Slack vars when Slack is not needed", () => {
   }
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
-// Config precedence + validation, secret hygiene. Append-only.
 
 test("char: validate fails closed listing every missing var at once", () => {
   const saved = { ...process.env };

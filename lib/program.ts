@@ -1,47 +1,38 @@
-// Program timeline. "When does X close" is the most-asked category for a YSWS
-// program, and a date written into a doc goes stale silently — it still reads
-// as correct long after it's passed. These are computed on every corpus
-// refresh instead, so pixie says "in 4 days" and says "closed" once it has.
+
+
 import fs = require("node:fs");
 import path = require("node:path");
 import log = require("./log");
 
+type UntypedInput = any;
 const PROGRAM_PATH = path.join(__dirname, "..", "program.json");
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-// programTerms and isTimingQuestion both need the "not really about the
-// program" guard: hackatime/sync/code words mean the question is about
-// tooling output, not about when something happens — unless it names a
-// release/launch date explicitly.
+
 const NON_TIMING_RE = /\b(?:hackatime|wakatime|hours?|storage|tracking|tracked|shows|sync|discrepancy|drift|error|why|how do i|how to|npm|code)\b/i;
 const TIMING_DATE_WORDS_RE = /\b(?:deadline|release date|launch date)\b/i;
-// "how long does review take" is a duration question about a process, not a
-// date question about a milestone.
+
+
 const NON_PROGRAM_DURATION_RE = /how long (?:does|do|is|will) (?:review|quest|sidequest|building|approval|processing|take)/i;
 
-// Words that are program names or generic should not count as milestone matchers
+
 const IGNORED_MILESTONE_WORDS = new Set(["pixl", "ysws", "official", "program", "the", "hack", "club"]);
 
 function load(filePath = PROGRAM_PATH) {
   try {
     return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch (e: any) {
+  } catch (e: UntypedInput) {
     if (e.code !== "ENOENT") log.warn("program", `could not read program.json: ${e.message}`);
     return null;
   }
 }
 
-// UTC explicitly: entry.date strings parse as UTC midnight, so rendering in the
-// process's local zone can drift a full calendar day off — a Railway container
-// with TZ=America/New_York rendered "2026-08-18" as "August 17, 2026".
-function formatDate(date: any) {
+function formatDate(date: UntypedInput) {
   return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: "UTC" });
 }
 
-// Whole-day granularity: "in 1 day" reads better than "in 23 hours" for a
-// deadline, and avoids implying a precision the dates don't have.
-function describeWhen(target: any, now: any) {
-  const startOfDay = (d: any) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+function describeWhen(target: UntypedInput, now: UntypedInput) {
+  const startOfDay = (d: UntypedInput) => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
   const days = Math.round((startOfDay(target) - startOfDay(now)) / MS_PER_DAY);
 
   if (days === 0) return "today";
@@ -51,7 +42,7 @@ function describeWhen(target: any, now: any) {
   return `${Math.abs(days)} days ago`;
 }
 
-function describeEntry(entry: any, now: any) {
+function describeEntry(entry: UntypedInput, now: UntypedInput) {
   const date = parseDate(entry.date);
   if (!date) return null;
 
@@ -64,11 +55,7 @@ function describeEntry(entry: any, now: any) {
   return parts.join("\n");
 }
 
-// The rest of the corpus is Q/A pairs, and the grounded prompt matches that
-// shape far more reliably than prose. Without this, "is pixl released yet?"
-// declined even though the date was right there in the timeline — the model
-// didn't recognise it as a question the section covered.
-function questionPairs(entry: any, now: any) {
+function questionPairs(entry: UntypedInput, now: UntypedInput) {
   const date = parseDate(entry.date);
   if (!date) return [];
 
@@ -84,8 +71,6 @@ function questionPairs(entry: any, now: any) {
     ],
   ];
 
-  // "Has it happened yet" is a different question from "when is it", and gets
-  // asked at least as often in the run-up to a launch.
   pairs.push([
     `Has ${entry.name} happened yet? / Is it out yet? / Is ${entry.name} done?`,
     passed
@@ -93,19 +78,19 @@ function questionPairs(entry: any, now: any) {
       : `Not yet — ${entry.name} is ${pretty}, ${when}.`,
   ]);
 
-  return pairs.map(([q, a]: any) => `Q: ${q}\nA: ${a}`);
+  return pairs.map(([q, a]: UntypedInput) => `Q: ${q}\nA: ${a}`);
 }
 
-function escapeRegex(str: any) {
+function escapeRegex(str: UntypedInput) {
   return String(str).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function parseDate(value: any) {
+function parseDate(value: UntypedInput) {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function buildNamesRegexPattern(metadata: any) {
+function buildNamesRegexPattern(metadata: UntypedInput) {
   if (metadata === null || metadata === undefined) {
     return "pixl";
   }
@@ -128,7 +113,7 @@ function buildNamesRegexPattern(metadata: any) {
   return names.map(escapeRegex).join("|");
 }
 
-function buildTimingPattern(metadata: any) {
+function buildTimingPattern(metadata: UntypedInput) {
   const namesPattern = buildNamesRegexPattern(metadata);
   if (namesPattern === null) return null;
   return new RegExp(
@@ -139,7 +124,7 @@ function buildTimingPattern(metadata: any) {
   );
 }
 
-function isTimingQuestion(text: any, metadata = null) {
+function isTimingQuestion(text: UntypedInput, metadata = null) {
   const t = String(text || "");
   if (NON_TIMING_RE.test(t) && !TIMING_DATE_WORDS_RE.test(t)) return false;
   const pattern = buildTimingPattern(metadata);
@@ -147,25 +132,23 @@ function isTimingQuestion(text: any, metadata = null) {
   return pattern.test(t);
 }
 
-function extractMilestones(dataOrMilestones: any) {
+function extractMilestones(dataOrMilestones: UntypedInput) {
   if (!dataOrMilestones) return [];
   if (Array.isArray(dataOrMilestones)) return dataOrMilestones;
   if (Array.isArray(dataOrMilestones.milestones)) return dataOrMilestones.milestones;
   return [];
 }
 
-// Returns "" when there's no milestones or no usable dates, so the section
-// is omitted entirely rather than inviting the model to guess.
 function corpusSection(now = new Date(), dataOrMilestones = load(), metadata = null) {
   const entries = extractMilestones(dataOrMilestones);
   if (entries.length === 0) return "";
 
-  const sorted = entries.slice().sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const sorted = entries.slice().sort((a: UntypedInput, b: UntypedInput) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const lines = sorted.map((entry: any) => describeEntry(entry, now)).filter(Boolean);
+  const lines = sorted.map((entry: UntypedInput) => describeEntry(entry, now)).filter(Boolean);
   if (lines.length === 0) return "";
 
-  const pairs = sorted.flatMap((entry: any) => questionPairs(entry, now));
+  const pairs = sorted.flatMap((entry: UntypedInput) => questionPairs(entry, now));
 
   const header = [
     `Today's date is ${formatDate(now)}.`,
@@ -180,26 +163,22 @@ function corpusSection(now = new Date(), dataOrMilestones = load(), metadata = n
   return [...header, ...lines, "", ...pairs, "", ...footer].join("\n");
 }
 
-// Returns { source, answer } shaped like a grounded answer, or null when this
-// isn't a timing question, there are no dates, or which milestone is meant is
-// ambiguous — in which case the normal fallback path takes over.
-function directAnswer(question: any, now = new Date(), dataOrMilestones = load(), metadata = null) {
+function directAnswer(question: UntypedInput, now = new Date(), dataOrMilestones = load(), metadata = null) {
   if (!isTimingQuestion(question, metadata)) return null;
 
   const milestones = extractMilestones(dataOrMilestones);
-  const entries = milestones.filter((e: any) => e && e.date && parseDate(e.date));
+  const entries = milestones.filter((e: UntypedInput) => e && e.date && parseDate(e.date));
   if (entries.length === 0) return null;
 
   const asked = (question || "").toLowerCase();
 
-  // Exclude non-program timing queries like "how long does review take", "how long is a quest", etc.
   if (NON_PROGRAM_DURATION_RE.test(asked)) return null;
 
-  const named = entries.filter((e: any) =>
+  const named = entries.filter((e: UntypedInput) =>
     e.name
       .toLowerCase()
       .split(/\s+/)
-      .some((word: any) => word.length > 3 && !IGNORED_MILESTONE_WORDS.has(word) && asked.includes(word)),
+      .some((word: UntypedInput) => word.length > 3 && !IGNORED_MILESTONE_WORDS.has(word) && asked.includes(word)),
   );
 
   const namesPattern = buildNamesRegexPattern(metadata);

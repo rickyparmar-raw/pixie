@@ -15,7 +15,6 @@ after(() => {
   programs.invalidate();
 });
 
-/* STEP 1 characterization pins (SUPPORT retention): floor/keep/confirm + per-table. */
 
 test("char: retention validatePolicy enforces the audit floor and knowledge keep", () => {
   assert.equal(retention.AUDIT_MIN_DAYS, 365);
@@ -129,7 +128,7 @@ test("char: retention sweep deletes per-table, tenant-scoped, spares open/audit/
   assert.equal(db.handle().query("SELECT COUNT(*) AS n FROM metrics WHERE program_id = ?").get("char-ret-sweep").n, 0);
   assert.equal(db.handle().query("SELECT COUNT(*) AS n FROM doc_gaps WHERE program_id = ?").get("char-ret-sweep").n, 0);
   assert.equal(db.handle().query("SELECT COUNT(*) AS n FROM sla_notifications WHERE program_id = ?").get("char-ret-sweep").n, 0);
-  // Audit floor: rows survive even past the window; sweep only audits counts.
+
   assert.ok(db.handle().query("SELECT * FROM audit_events WHERE id = ?").get(auditId), "audit never deleted");
   assert.ok(db.getLearnedFactById(factId), "approved knowledge survives its source ticket");
 });

@@ -1,60 +1,50 @@
-// Single-flight leases for periodic jobs. Concurrent replicas must never run
-// the same destructive sweep twice: the winner holds the lease row until it
-// expires, losers skip. Takeover happens only after expiry, so a crashed
-// holder cannot wedge the job forever.
+
+
 import db = require("./db");
 import log = require("./log");
 import crypto = require("node:crypto");
 
-// Ten minutes: longer than any sweep takes, shorter than any outage that
-// matters. Callers pass their own interval as TTL (see radar/sla loops), so
-// this is only the default for ad-hoc uses.
+
 const DEFAULT_TTL_MS = 10 * 60 * 1000;
 
 const INSERT_LEASE_SQL = "INSERT OR IGNORE INTO job_leases (name, owner, expires_at) VALUES (?, ?, ?)";
 const TAKEOVER_SQL = "UPDATE job_leases SET owner = ?, expires_at = ? WHERE name = ? AND expires_at < ?";
 const RELEASE_SQL = "DELETE FROM job_leases WHERE name = ? AND owner = ?";
 
+type Lease = { held: true; owner: string } | { held: false };
+
 function ownerId() {
   return `${process.pid}-${crypto.randomBytes(4).toString("hex")}`;
 }
 
-function tryInsert(name: any, owner: any, expiresAt: any) {
+function tryInsert(name: string, owner: string, expiresAt: number) {
   return db.handle().query(INSERT_LEASE_SQL).run(name, owner, expiresAt).changes > 0;
 }
 
-function tryTakeover(name: any, owner: any, expiresAt: any, now: any) {
+function tryTakeover(name: string, owner: string, expiresAt: number, now: number) {
   return db.handle().query(TAKEOVER_SQL).run(owner, expiresAt, name, now).changes > 0;
 }
 
-function acquire(name: any, ttlMs = DEFAULT_TTL_MS) {
+function acquire(name: string, ttlMs = DEFAULT_TTL_MS): Lease {
   const now = Date.now();
   const owner = ownerId();
   try {
-    // Fast path: nobody holds it.
     if (tryInsert(name, owner, now + ttlMs)) return { held: true, owner };
-    // Slow path: take over only an expired lease, atomically.
     if (tryTakeover(name, owner, now + ttlMs, now)) return { held: true, owner };
     return { held: false };
-  } catch (e: any) {
-    log.debug("jobLease", `acquire ${name} failed: ${e.message}`);
+  } catch (e: unknown) {
+    log.debug("jobLease", `acquire ${name} failed: ${e instanceof Error ? e.message : String(e)}`);
     return { held: false };
   }
 }
 
-function release(name: any, owner: any) {
+function release(name: string, owner: string) {
   try {
     db.handle().query(RELEASE_SQL).run(name, owner);
-  } catch (_: any) {}
+  } catch (_: unknown) {}
 }
 
-// Release-finally: the TTL only matters when the holder crashes mid-run.
-// Back-to-back ticks each run exactly once; overlapping ticks (a run
-// outlasting its interval while another replica fires) can double-run —
-// callers with long jobs should pass a TTL comfortably above their runtime,
-// not exactly their interval. Reported, not changed: radar/sla pass
-// interval-as-TTL today and their sweeps are idempotent.
-async function runOnce(name: any, ttlMs: any, fn: any) {
+async function runOnce(name: string, ttlMs: number, fn: () => unknown | Promise<unknown>) {
   const lease = acquire(name, ttlMs);
   if (!lease.held) {
     log.debug("jobLease", `${name} already held — skipping`);

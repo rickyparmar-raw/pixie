@@ -4,9 +4,7 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const brand = require("./brand");
 
-// Every value falls back to today's pixie identity, so a deployment that sets
-// nothing behaves exactly as it did before this module existed. That's what makes
-// the whole fleet change safe to land on the live Pixl bot.
+
 function withEnv(vars: Record<string, string | undefined>, fn: () => void) {
   const saved: Record<string, string | undefined> = {};
   for (const [k, v] of Object.entries(vars)) {
@@ -48,8 +46,7 @@ test("the slug is derived from the name when only the name is set", () => {
   });
 });
 
-// Slack rejects spaces and uppercase in slash command names, so a display name
-// that isn't already a slug must not reach one verbatim.
+
 test("a display name with spaces or caps is slugified before becoming a command", () => {
   withEnv({ PIXIE_BOT_NAME: "Sol Helper Bot", PIXIE_BOT_SLUG: undefined }, () => {
     assert.equal(brand.slug(), "sol-helper-bot");
@@ -63,8 +60,7 @@ test("punctuation is stripped rather than passed into a command name", () => {
   });
 });
 
-// A slug of only punctuation would otherwise produce "/" — a command name Slack
-// won't accept, leaving the bot with no ask command at all.
+
 test("a slug that slugifies to nothing falls back rather than producing '/'", () => {
   withEnv({ PIXIE_BOT_SLUG: "!!!" }, () => {
     assert.equal(brand.slug(), "pixie");
@@ -79,16 +75,14 @@ test("an empty or whitespace value is treated as unset", () => {
   });
 });
 
-// Payload ids aren't slash commands, so they use underscores — and a hyphenated
-// slug must not leak a hyphen into one.
+
 test("payload ids are underscored", () => {
   withEnv({ PIXIE_BOT_SLUG: "sol-helper" }, () => {
     assert.equal(brand.id("teach_thread"), "sol_helper_teach_thread");
   });
 });
 
-// The suite shares one process, so a value captured at require time would freeze
-// whichever test file ran first.
+
 test("brand values are read per call, not captured at require time", () => {
   withEnv({ PIXIE_BOT_SLUG: "first" }, () => {
     assert.equal(brand.cmd(), "/first");
@@ -98,9 +92,6 @@ test("brand values are read per call, not captured at require time", () => {
   });
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
-// Branding fallback + anti-leak: defaults are pixie; a rebrand leaves no
-// /pixie behind and never emits an empty command.
 
 test("char: defaults are the pixie identity", () => {
   withEnv({ PIXIE_BOT_NAME: undefined, PIXIE_BOT_SLUG: undefined }, () => {

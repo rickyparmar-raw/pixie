@@ -1,21 +1,19 @@
-// Read-only observation of routing decisions, one snapshot per ticket. The
-// recommendation is snapshotted once at escalation time so later helper state
-// cannot rewrite it. Program-agnostic on purpose: no program id is special
-// here, and the snapshot never pages anyone — callers gate the actual ping on
-// the channel's helper-ping settings.
+
+
 import db = require("./db");
 import helperRoute = require("./helperRoute");
 
+type UntypedInput = any;
 const EVENT_TYPE = "helper_routing_recommended";
 
-function snapshotForTicket(ticket: any) {
+function snapshotForTicket(ticket: UntypedInput) {
   if (!ticket || !ticket.program_id) return null;
-  if (db.listTicketEvents(ticket.id).some((event: any) => event.event_type === EVENT_TYPE)) return null;
+  if (db.listTicketEvents(ticket.id).some((event: UntypedInput) => event.event_type === EVENT_TYPE)) return null;
   const category = ticket.category || "general";
-  const recommendations: Array<Record<string, any>> = helperRoute.recommend({ programId: ticket.program_id, category, limit: 5 } as Record<string, any>);
-  const candidates = recommendations.map((candidate: Record<string, any>, index: number) => {
+  const recommendations: Array<Record<string, UntypedInput>> = helperRoute.recommend({ programId: ticket.program_id, category, limit: 5 } as Record<string, UntypedInput>);
+  const candidates = recommendations.map((candidate: Record<string, UntypedInput>, index: number) => {
     const expertise = helperRoute.getExpertise(ticket.program_id, candidate.userId);
-    const categoryMatch = expertise.find((entry: any) => entry.tag === String(category).trim().toLowerCase()) || null;
+    const categoryMatch = expertise.find((entry: UntypedInput) => entry.tag === String(category).trim().toLowerCase()) || null;
     return {
       userId: candidate.userId,
       rank: index + 1,
@@ -32,10 +30,10 @@ function snapshotForTicket(ticket: any) {
   return eventId ? { eventId, detail } : null;
 }
 
-function parseDetail(detail: any) {
+function parseDetail(detail: UntypedInput) {
   try {
     return detail ? JSON.parse(detail) : {};
-  } catch (_: any) {
+  } catch (_: UntypedInput) {
     return {};
   }
 }
@@ -47,10 +45,10 @@ function list(programId = "pixl", limit = 20) {
        FROM ticket_events e JOIN tickets t ON t.id = e.ticket_id AND t.program_id = e.program_id
       WHERE e.program_id = ? AND e.event_type = ? ORDER BY e.created_at DESC, e.id DESC LIMIT ?`,
   ).all(programId, EVENT_TYPE, Math.min(Math.max(Number(limit) || 20, 1), 100));
-  return rows.map((row: any) => {
-    const events = db.listTicketEvents(row.ticket_id).filter((event: any) => event.program_id === programId);
-    const replies = events.filter((event: any) => event.event_type === "helper_reply" && event.actor_id);
-    const resolved = events.filter((event: any) => event.event_type === "resolved" && event.actor_id);
+  return rows.map((row: UntypedInput) => {
+    const events = db.listTicketEvents(row.ticket_id).filter((event: UntypedInput) => event.program_id === programId);
+    const replies = events.filter((event: UntypedInput) => event.event_type === "helper_reply" && event.actor_id);
+    const resolved = events.filter((event: UntypedInput) => event.event_type === "resolved" && event.actor_id);
     const detail = parseDetail(row.detail);
     const top = detail.candidates?.[0] || null;
     return {
@@ -65,7 +63,7 @@ function list(programId = "pixl", limit = 20) {
       actualResponder: replies.at(-1)?.actor_id || null,
       actualResolver: resolved.at(-1)?.actor_id || row.resolved_by || null,
       top1MatchedResolver: Boolean(top && (resolved.at(-1)?.actor_id || row.resolved_by) === top.userId),
-      top3ContainsResolver: Boolean((resolved.at(-1)?.actor_id || row.resolved_by) && detail.candidates?.slice(0, 3).some((candidate: any) => candidate.userId === (resolved.at(-1)?.actor_id || row.resolved_by))),
+      top3ContainsResolver: Boolean((resolved.at(-1)?.actor_id || row.resolved_by) && detail.candidates?.slice(0, 3).some((candidate: UntypedInput) => candidate.userId === (resolved.at(-1)?.actor_id || row.resolved_by))),
       resolvedAt: row.resolved_at,
       reopened: (row.reopen_count || 0) > 0,
       status: row.status,

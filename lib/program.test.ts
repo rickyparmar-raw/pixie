@@ -12,8 +12,7 @@ test("describeWhen counts whole days in both directions", () => {
   assert.equal(program.describeWhen(new Date("2026-07-20T00:00:00Z"), NOW), "8 days ago");
 });
 
-// A deadline earlier the same day is still "today", not "1 day ago" — the
-// point is whole-day granularity, not hours.
+
 test("describeWhen ignores time of day", () => {
   assert.equal(program.describeWhen(new Date("2026-07-28T01:00:00Z"), NOW), "today");
 });
@@ -33,8 +32,7 @@ test("describeEntry includes an optional note and rejects a bad date", () => {
   assert.equal(program.describeEntry({ name: "X", date: "not a date" }, NOW), null);
 });
 
-// The section must never appear empty, and must never invite a guess — pixie
-// stating a made-up deadline is worse than saying nothing.
+
 test("corpusSection is empty without usable data", () => {
   assert.equal(program.corpusSection(NOW, null), "");
   assert.equal(program.corpusSection(NOW, { milestones: [] }), "");
@@ -63,9 +61,7 @@ test("corpusSection includes the timezone when configured", () => {
   assert.match(section, /America\/New_York/);
 });
 
-// program.json's dates are date-only strings, which parse as UTC midnight.
-// A container running with e.g. TZ=America/New_York rendered "2026-08-18" as
-// "August 17, 2026" — this reproduces that exact drift and pins the fix.
+
 test("dates render the same regardless of the process timezone", () => {
   const savedTz = process.env.TZ;
   process.env.TZ = "America/New_York";
@@ -92,8 +88,7 @@ test("the shipped program.json parses and carries the real release date", () => 
   assert.match(section, /in 21 days/);
 });
 
-// These are the exact phrasings that fell through to the ungrounded path and
-// got pixie corrected in-channel with a wrong date.
+
 test("the release date is reachable by the phrasings people actually used", () => {
   const section = program.corpusSection(NOW, program.load());
   for (const probe of [/When is Pixl launching\?/i, /Is Pixl released yet\?/i, /What is the release date\?/i]) {
@@ -117,7 +112,6 @@ test("questionPairs folds in the extra phrasings from the milestone", () => {
   assert.match(pairs, /When does it drop\?/);
 });
 
-/* ------------------------------------------------- deterministic fallback -- */
 
 const RELEASE = { milestones: [{ name: "Pixl official release", date: "2026-08-18" }] };
 
@@ -183,8 +177,7 @@ test("directAnswer declines non-timing questions and empty data", () => {
   assert.equal(program.directAnswer("has pixl launched", NOW, null), null);
 });
 
-// With several milestones an unqualified "when is the deadline" is ambiguous —
-// better to let the normal path handle it than to answer about the wrong one.
+
 test("directAnswer needs the question to name a milestone when there are several", () => {
   const many = {
     milestones: [
@@ -196,7 +189,7 @@ test("directAnswer needs the question to name a milestone when there are several
   assert.match(program.directAnswer("when does chapter two start", NOW, many).answer, /September 30/);
 });
 
-// A bare /live/ would answer "where do you live" with a release date.
+
 test("isTimingQuestion does not treat every use of 'live' as a timing question", () => {
   assert.equal(program.isTimingQuestion("where do you live"), false);
   assert.equal(program.isTimingQuestion("i live in canada"), false);
@@ -204,10 +197,7 @@ test("isTimingQuestion does not treat every use of 'live' as a timing question",
   assert.equal(program.isTimingQuestion("has the game gone live"), true);
 });
 
-// Live bug: "how do i start pcb, what is pcb and schematics" got answered
-// with the launch countdown instead of the actual question — a bare
-// \bstarts?\b matched "start" in "how do i start X" with nothing to tell it
-// that's not a question about whether the program itself has started.
+
 test("isTimingQuestion does not treat 'start'/'end'/'close' as timing words on their own", () => {
   assert.equal(program.isTimingQuestion("how do i start pcb, what is pcb and schematics"), false);
   assert.equal(program.isTimingQuestion("how do i start building a macropad"), false);
@@ -225,9 +215,7 @@ test("directAnswer declines the exact live-bug question instead of answering wit
   assert.equal(program.directAnswer("how do i start pcb, what is pcb and schematics", NOW, RELEASE), null);
 });
 
-// programTerms has the same bare-word risk as TIMING_PATTERN, and for the
-// single-milestone branch specifically — a question that doesn't name the
-// milestone falls through to this check alone.
+
 test("directAnswer's single-milestone fallback needs program-referring context for 'start', not a bare mention", () => {
   assert.equal(program.directAnswer("how do i start my own project", NOW, RELEASE), null);
   assert.match(program.directAnswer("has it started yet", NOW, RELEASE).answer, /August 18, 2026/);
@@ -239,7 +227,6 @@ test("directAnswer does not intercept hackatime hours discrepancy queries", () =
   assert.equal(program.isTimingQuestion("my hackatime is not syncing"), false);
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
 
 test("char: corpusSection with unsorted input still renders chronological", () => {
   const section = program.corpusSection(NOW, {

@@ -1,14 +1,15 @@
-// Who this bot is. Built in rather than fetched, because it can't 404 and it
-// isn't going to change with the docs.
-//
-// Two escape hatches, most specific first: PIXIE_IDENTITY_OVERRIDE replaces this
-// block wholesale (the wizard generates one per bot), and failing that the text is
-// assembled from the deployment's own name and commands via lib/brand.js. With
-// neither set it reads exactly as it always has.
+
+
 import brand = require("./brand");
 
-// This deployment's own name, so a bot running for another program doesn't
-// introduce itself as pixie. Read per call — the suite shares one process.
+
+interface IdentityProgram {
+  id: string;
+  name: string;
+  helpChannel?: string | null;
+  scope?: string;
+  supportName?: string | null;
+}
 function botName() {
   return brand.name();
 }
@@ -17,16 +18,12 @@ function isDefaultBot() {
   return brand.slug() === brand.DEFAULT_SLUG;
 }
 
-// "Ricky built me" is true of pixie and of nothing else. For another program's
-// bot it would be a fabricated fact about its own origin, so it degrades to
-// something accurate rather than being repeated.
-function makerLine(programName: any) {
+
+function makerLine(programName: string) {
   if (isDefaultBot()) return "A: Ricky built me to help out around Hack Club YSWS channels.";
   return `A: I'm built on pixie, the helper bot Ricky wrote for Hack Club YSWS channels. This deployment answers for ${programName}.`;
 }
 
-// Pixorpheus is a Pixl-specific sibling bot. A bot for another program has no
-// such sibling, so claiming to know about one would be inventing a fact.
 function pixorpheusPair() {
   if (!isDefaultBot()) return [];
   return [
@@ -43,12 +40,8 @@ function memoryPair() {
   ];
 }
 
-// Fallback for a deployment with no program record at all — the shape a
-// misconfigured bot ends up showing, so it must not assert Pixl-specific facts.
 function defaultIdentity() {
   const name = botName();
-  // pixie's own escalation channel. Naming it for another program's bot would
-  // send that program's users somewhere unrelated.
   const helpChan = isDefaultBot() ? "#pixl-help or the help channel" : "the help channel";
 
   return [
@@ -74,23 +67,20 @@ function defaultIdentity() {
   ].join("\n");
 }
 
-// The other programs pixie covers, by name. Someone asking "do you know about
-// X" in one channel should get a straight answer instead of a guess, and
-// someone asking an X question here should be told it's a different program
-// rather than handed this program's numbers.
-function otherProgramNames(currentId: any) {
+
+function otherProgramNames(currentId: string) {
   try {
     return require("./programs")
       .all()
-      .filter((p: any) => p.id !== "ysws-global" && p.id !== currentId)
-      .map((p: any) => p.name)
+      .filter((p: IdentityProgram) => p.id !== "ysws-global" && p.id !== currentId)
+      .map((p: IdentityProgram) => p.name)
       .filter(Boolean);
-  } catch (e: any) {
+  } catch (_: unknown) {
     return [];
   }
 }
 
-function corpusSection(program: Record<string, any> | null = null) {
+function corpusSection(program: IdentityProgram | null = null) {
   if (process.env.PIXIE_IDENTITY_OVERRIDE) {
     return process.env.PIXIE_IDENTITY_OVERRIDE;
   }
@@ -99,15 +89,10 @@ function corpusSection(program: Record<string, any> | null = null) {
   }
   const name = program.name;
   const helpChan = program.helpChannel ? `<#${program.helpChannel}>` : "the help channel";
-  // A program scoped to its own questions is a walled garden: naming other
-  // programs here, or offering to send someone to their channel, is exactly the
-  // cross-program redirect that must never happen from inside a B2B channel.
   const walled = program.scope === "program";
   const others = otherProgramNames(program.id);
   const othersLine = others.length > 0 ? others.join(", ") : "none right now";
 
-  // The program's own support identity (its Slack display name) when it has
-  // one, so B2B's bot says "I'm B2B Support" rather than the deployment name.
   const bot = (typeof program.supportName === "string" && program.supportName.trim()) || botName();
 
   return [
@@ -126,8 +111,8 @@ function corpusSection(program: Record<string, any> | null = null) {
     "Q: What can you do? / How do I use you?",
     `A: Ping me or say my name anywhere, DM me, or use ${brand.cmd()} <question> for a private answer. I can also walk you through step-by-step build guides, read screenshots, and help debug error messages if you upload them. ${brand.cmd("sources")} shows what docs I've got loaded.`,
     "",
-    // Pixorpheus is a Pixl-ecosystem sibling. A program walled to its own
-    // questions has no business naming it.
+
+
     ...(walled ? [] : pixorpheusPair()),
     ...memoryPair(),
     "",
@@ -144,8 +129,8 @@ function corpusSection(program: Record<string, any> | null = null) {
 export = {
   corpusSection,
   defaultIdentity,
-  // A getter, not a captured string: the text is built from the environment, and
-  // the test suite shares one process.
+
+
   get IDENTITY() {
     return defaultIdentity();
   },
