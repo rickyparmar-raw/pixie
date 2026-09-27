@@ -106,7 +106,7 @@ export function LandingHero({ onExploreClick }: LandingHeroProps) {
     <section
       ref={containerRef}
       className="home-hero relative min-h-screen flex flex-col justify-between pt-28 pb-12 overflow-hidden select-none bg-[#0e100f] text-[#fffce1]"
-      style={{ fontFamily: "'PP Mori', sans-serif" }}
+      style={{ fontFamily: "sans-serif" }}
     >
       {/* Top Banner */}
       <div className="fixed top-0 left-0 right-0 z-50 bg-[#0ae448] text-[#0e100f] px-4 py-2 text-center text-xs sm:text-sm font-semibold tracking-tight shadow-sm flex items-center justify-center gap-2">

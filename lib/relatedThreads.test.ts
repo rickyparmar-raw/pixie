@@ -34,8 +34,8 @@ test("tokenize cleans text and drops stop words", () => {
 });
 
 test("buildSlackPermalink generates clean Slack archive URLs", () => {
-  const url = relatedThreads.buildSlackPermalink("C0B6STY9G5N", "1788107539.615819");
-  assert.equal(url, "https://hackclub.slack.com/archives/C0B6STY9G5N/p1788107539615819");
+  const url = relatedThreads.buildSlackPermalink("C0MAIN00001", "1788107539.615819");
+  assert.equal(url, "https://hackclub.slack.com/archives/C0MAIN00001/p1788107539615819");
 });
 
 test("findRelatedThread finds past thread and ignores current active thread", async () => {
@@ -54,13 +54,13 @@ test("findRelatedThread finds past thread and ignores current active thread", as
 
   const selfMatch = await relatedThreads.findRelatedThread("web export error", {
     currentThreadTs: "1788100100.111111",
-    channel: "C0B6STY9G5N",
+    channel: "C0MAIN00001",
   });
   assert.equal(selfMatch, null);
 
   const match = await relatedThreads.findRelatedThread("how do i fix the web export error on chrome", {
     currentThreadTs: "1788200000.222222",
-    channel: "C0B6STY9G5N",
+    channel: "C0MAIN00001",
   });
   assert.notEqual(match, null);
   assert.equal(match.channel, "C_HELP");

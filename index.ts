@@ -153,7 +153,7 @@ function main() {
   if (askIdx !== -1) {
     const question = process.argv[askIdx + 1];
     if (!question) {
-      console.error('Usage: bun index.js --ask "<question>"');
+      console.error('Usage: bun index.ts --ask "<question>"');
       process.exit(1);
     }
     runAskCli(question)

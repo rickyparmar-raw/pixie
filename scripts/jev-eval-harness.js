@@ -23,7 +23,7 @@ const CASES = [
 
 async function main() {
   await knowledge.refreshCorpus().catch(() => {});
-  const prog = programs.forChannel("C0B6STY9G5N") || { id: "acme", name: "Acme" };
+  const prog = programs.forChannel("C0MAIN00001") || { id: "acme", name: "Acme" };
   console.log(`program=${prog.id} jev_enabled=${jevDecision.isEnabled()}`);
   for (const c of CASES) {
     let existing = null;

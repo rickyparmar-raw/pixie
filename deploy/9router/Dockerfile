@@ -12,12 +12,12 @@
 # pixie reaches it at 9router.railway.internal:20128 either way.
 #
 # DEPLOYING: do NOT run `railway up` from this directory. Railway walks up to the
-# repo root looking for config and finds apps/pixie/railway.json, which builds
-# pixie's Dockerfile and starts `bun index.js` — the service then boots pixie and
+# repo root looking for config and finds railway.json, which builds
+# pixie's Dockerfile and starts `bun index.ts` — the service then boots pixie and
 # crashloops on missing Slack vars. Copy this file and railway.json into an empty
 # directory outside the repo, `railway link --project <id> --service 9router`
 # there, then `railway up`. (Setting the service's Root Directory to
-# apps/pixie/deploy/9router in the dashboard also works and is less fiddly.)
+# deploy/9router in the dashboard also works and is less fiddly.)
 FROM node:22-slim
 
 # Pinned deliberately. The CLI self-updates by default, which in a container

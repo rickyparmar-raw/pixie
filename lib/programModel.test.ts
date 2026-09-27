@@ -78,22 +78,22 @@ test("statusFor honors explicit status and defaults to live", () => {
 test("the current production shape validates cleanly", () => {
   const r = model.validateChannelRoles({
     programs: [
-      { id: "acme", helpChannel: "C0B6STY9G5N", channels: ["C0B6STY9G5N", "C0B5P4N0WHH", "C0BK4F6STFZ"] },
-      { id: "beta", helpChannel: "C0BMHSDL597", channels: ["C0BMHSDL597"] },
+      { id: "acme", helpChannel: "C0MAIN00001", channels: ["C0MAIN00001", "C0CHAN00005", "C0CHAN00002"] },
+      { id: "beta", helpChannel: "C0CHAN00004", channels: ["C0CHAN00004"] },
     ],
-    legacyHelp: "C0B6STY9G5N",
-    legacyMain: ["C0B5P4N0WHH", "C0BK4F6STFZ"],
+    legacyHelp: "C0MAIN00001",
+    legacyMain: ["C0CHAN00005", "C0CHAN00002"],
   });
   expect(r).toEqual({ ok: true, errors: [] });
 });
 
 test("a channel that is main in config but help via env is a conflict", () => {
   const r = model.validateChannelRoles({
-    programs: [{ id: "acme", helpChannel: "CHELP", channels: ["CHELP", "C0BK4F6STFZ"] }],
-    legacyHelp: "C0BK4F6STFZ",
+    programs: [{ id: "acme", helpChannel: "CHELP", channels: ["CHELP", "C0CHAN00002"] }],
+    legacyHelp: "C0CHAN00002",
   });
   expect(r.ok).toBe(false);
-  expect(r.errors[0].channelId).toBe("C0BK4F6STFZ");
+  expect(r.errors[0].channelId).toBe("C0CHAN00002");
 });
 
 test("two programs claiming one channel is a conflict regardless of order", () => {

@@ -1139,7 +1139,7 @@ test("help channel stays quiet when gate returns OFF_TOPIC in thread", async () 
   try {
     const replied = await respond.respond({
       client,
-      channel: "C0B6STY9G5N",
+      channel: "C0MAIN00001",
       threadTs: "t-help-offtopic",
       userId: "U-user-help-3",
       question: "how do i test my custom python script",
@@ -1223,7 +1223,7 @@ test("isGroundedAnswer correctly identifies grounded vs ungrounded answers", () 
 
 test("stripChannelMentions removes Slack channel tags and links", () => {
   const { stripChannelMentions } = respond;
-  assert.equal(stripChannelMentions("ask in <#C0BK4F6STFZ|pixie>"), "ask in");
+  assert.equal(stripChannelMentions("ask in <#C0CHAN00002|pixie>"), "ask in");
   assert.equal(stripChannelMentions("check #help-channel for updates"), "check for updates");
   assert.equal(stripChannelMentions("regular text without channels"), "regular text without channels");
 });
@@ -1244,7 +1244,7 @@ test("a meta source or channel redirect stays unposted in a DM, with uncertainty
   try {
     const replied = await respond.respond({
       client,
-      channel: "C0BU006CTS6",
+      channel: "C0CHAN00006",
       threadTs: "t-help-ai-limit",
       userId: "U-user-ai",
       question: "What is the exact percentage limit of AI code allowed?",

@@ -748,14 +748,14 @@ test("onAppMention reactivates a muted thread only on explicit invitation", asyn
 test("staging allowlist drops non-sandbox channels before any handling", async () => {
   const saved = config.slack.stagingOnlyChannels;
   const savedFaq = config.slack.faqChannels;
-  config.slack.stagingOnlyChannels = ["C0C04LB6VA5"];
-  config.slack.faqChannels = ["C0C04LB6VA5"];
+  config.slack.stagingOnlyChannels = ["C0HELP00001"];
+  config.slack.faqChannels = ["C0HELP00001"];
   try {
     const prod = await routeHelpMessage({ ts: "950.1", channel: "C0PIXEL", text: "pixie how do i submit my project" });
     assert.equal(prod.length, 0, "production channel event must not be handled in staging");
     const sandbox = await routeHelpMessage({
       ts: "950.2",
-      channel: "C0C04LB6VA5",
+      channel: "C0HELP00001",
       text: "pixie how do i submit my project",
     });
     assert.equal(sandbox.length, 1, "sandbox channel event is handled");

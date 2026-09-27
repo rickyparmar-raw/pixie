@@ -81,7 +81,7 @@ export function LandingKinetic() {
   );
 
   return (
-    <div className="kinetic-module bg-[#0e100f] text-[#fffce1]" style={{ fontFamily: "'PP Mori', sans-serif" }}>
+    <div className="kinetic-module bg-[#0e100f] text-[#fffce1]" style={{ fontFamily: "sans-serif" }}>
       {/* 1. Bento Intro: "Answer Anything / That's right, Anything" */}
       <section className="bento-intro-section py-32 border-t border-[#fffce1]/10 relative overflow-hidden">
         <div className="container mx-auto px-6 sm:px-12 max-w-6xl relative z-10">

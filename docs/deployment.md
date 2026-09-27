@@ -4,7 +4,7 @@ One shared Pixie Core serves many programs. One Slack app, one `@Pixie`.
 
 ## What runs
 
-- **Pixie Core** (`bun index.js`): Slack Socket Mode, answer engine, tickets,
+- **Pixie Core** (`bun index.ts`): Slack Socket Mode, answer engine, tickets,
   background jobs (knowledge refresh, gap judging, weekly report, SLA loop,
   SQLite sweeper). Single replica is fine; several can run behind the same
   Slack app for read scale — runtime truth lives in the database, and
@@ -12,7 +12,7 @@ One shared Pixie Core serves many programs. One Slack app, one `@Pixie`.
 - **Pixie Wizard** (Next.js): control plane for programs, tickets, knowledge,
   macros, analytics, incidents, retention. Optional at runtime — Core serves
   Slack from last-synced state while Wizard is down.
-- **Postgres/Supabase**: control-plane authority (programs, channels, helpers,
+- **Postgres**: control-plane authority (programs, channels, helpers,
   audit). **SQLite** (`PIXIE_DB_PATH`, on a persistent volume): runtime state,
   caches, source-cache fallback.
 
@@ -47,10 +47,10 @@ program never touches the manifest.
 
 ## Wizard env
 
-`SUPABASE_URL`, `SUPABASE_SERVICE_KEY` (server-side only, never `NEXT_PUBLIC`),
-`SESSION_SECRET`, `WIZARD_ENCRYPTION_KEY` (base64 32B, AES-256-GCM envelopes),
-`HCA_*` (Hack Club Auth), `PIXIE_CORE_BASE_URL` + `PIXIE_INTERNAL_TOKEN`
-(same token as Core), `PIXIE_WORKSPACE_ID`, `BASE_URL`, `CRON_SECRET`.
+`DATABASE_URL`, `SESSION_SECRET`, `HCA_CLIENT_ID` + `HCA_CLIENT_SECRET` (Hack
+Club Auth), `PIXIE_CORE_BASE_URL` + `PIXIE_INTERNAL_TOKEN` (same token as
+Core), `PIXIE_WORKSPACE_ID`, `BASE_URL`, `CRON_SECRET` (the reconcile cron
+refuses to run without it).
 Wizard database migrations are versioned under `pixie-wizard/db/migrations/` and
 run explicitly with `bun run migrate` from `pixie-wizard/`. The command uses
 `DATABASE_URL`, creates `wizard_schema_migrations`, applies pending numbered SQL
@@ -75,5 +75,5 @@ Wizard-only changes. Required Wizard environment includes `DATABASE_URL`,
   `job_leases` rows stuck with old `expires_at` (a crashed holder self-heals
   by expiry).
 - Backups: SQLite via `VACUUM INTO` (never raw copy under WAL) +
-  `integrity_check`; Supabase via project backups; keep `BACKUP_MANIFEST.md`
+  `integrity_check`; Postgres via your provider's backups; keep `BACKUP_MANIFEST.md`
   style records outside the repo.

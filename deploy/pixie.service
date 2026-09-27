@@ -11,9 +11,7 @@
 #
 # `loginctl enable-linger $USER` makes it survive logout / start at boot.
 #
-# Paths are absolute because systemd runs with a minimal environment and no
-# login shell — a bare `bun` would not resolve. Adjust WorkingDirectory and
-# ExecStart if the checkout lives somewhere else.
+# Set WorkingDirectory to your checkout.
 
 [Unit]
 Description=Pixie program support bot
@@ -29,7 +27,7 @@ StartLimitBurst=5
 [Service]
 Type=simple
 WorkingDirectory=/path/to/pixie
-ExecStart=/home/wizrizz/.bun/bin/bun index.js
+ExecStart=%h/.bun/bin/bun index.ts
 Restart=always
 RestartSec=5
 KillMode=mixed

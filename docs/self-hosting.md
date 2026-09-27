@@ -169,7 +169,7 @@ with no tunnel. Use a scratch channel.
 To check answers without Slack at all:
 
 ```sh
-bun index.js --ask "how do i submit my project"
+bun index.ts --ask "how do i submit my project"
 ```
 
 That builds the corpus and prints what the bot would have said. It's the quickest

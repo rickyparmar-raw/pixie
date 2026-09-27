@@ -40,11 +40,11 @@ test("draft binding resolves across workspaces (production PIXIE_WORKSPACE_ID un
     status: "suspended",
     privateSandboxOnly: true,
     workspaceId: "T0266FRGM",
-    sandboxBindings: [{ channelId: "C0C14QK28LD", role: "help" }],
+    sandboxBindings: [{ channelId: "C0CHAN00003", role: "help" }],
     sourceTexts: { docs: "Demo Program docs" },
   });
-  assert.equal(sandbox.getForChannel("C0C14QK28LD", null)?.draftProgramId, "demo");
-  assert.equal(sandbox.getForChannel("C0C14QK28LD", "T-OTHER")?.draftProgramId, "demo");
+  assert.equal(sandbox.getForChannel("C0CHAN00003", null)?.draftProgramId, "demo");
+  assert.equal(sandbox.getForChannel("C0CHAN00003", "T-OTHER")?.draftProgramId, "demo");
 });
 
 test("suspended draft sandbox answers without production claim; muted posture and tickets_enabled=false do not suppress", async () => {
