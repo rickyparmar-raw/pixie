@@ -1,22 +1,59 @@
-// Support Radar: deterministic actionable signals computed from telemetry
-// already stored by tickets/gapClusters/incidents/sla/source_cache.
-// No LLM ever decides a signal fires — every detector below is a plain
-// query plus an explicit threshold, and every signal carries the evidence
-// that produced it so the UI can show organizers why.
-//
-// One row per ongoing condition: re-running evaluateProgram() updates the
-// same radar_signals row (see idx_radar_program_type_fingerprint) instead of
-// piling up duplicates, and a condition that clears gets auto-resolved.
 const crypto = require("crypto");
 const db = require("./db");
 const audit = require("./audit");
 const gapClusters = require("./gapClusters");
 const incidents = require("./incidents");
 
-type Row = Record<string, any>;
-type Params = Record<string, any>;
-type Finding = { type: string; severity: string; title: string; summary: string; evidence: Row; fingerprint: string };
-type Scoped = { error: string; signal?: never } | { signal: Row; error?: never };
+interface RadarEvidence {
+  count?: number;
+  oldestWaitMs?: number;
+  sampleTicketIds?: number[];
+  statuses?: string[];
+  recentCount?: number;
+  baselinePerWindow?: number;
+  windowMs?: number;
+  askers?: number;
+  askCount?: number;
+  escalated?: number;
+  covered?: boolean;
+  sampleThreads?: Array<{ channel: string; messageTs: string }>;
+  questionCount?: number;
+  meanConfidence?: number;
+  escalatedCount?: number;
+  source?: string;
+  failCount?: number;
+  lastError?: string | null;
+  lastSuccessAt?: number | null;
+  reopenedCount?: number;
+  totalCount?: number;
+  rate?: number;
+  incidentId?: number;
+  linked?: number;
+  startedAt?: number;
+  affectedReports?: number;
+}
+interface RadarSignal {
+  id: number;
+  program_id: string;
+  type: string;
+  severity: string;
+  status: string;
+  title: string;
+  summary: string | null;
+  evidence: string | RadarEvidence | null;
+  fingerprint: string;
+  first_detected_at: number;
+  last_detected_at: number;
+  resolved_at?: number | null;
+  suppressed_until?: number | null;
+}
+interface TicketAgeRow { id: number; status: string; created_at: number; reopen_count?: number; }
+interface ConfidenceRow { category: string; ai_confidence: number; status: string }
+interface SourceHealthRow { name: string; fail_count: number; last_error: string | null; last_success_at: number | null }
+interface IncidentCandidate { title: string; linked: number; incidentId: number }
+interface IncidentRow { id: number; title: string; started_at: number }
+interface RadarFinding { type: string; severity: string; title: string; summary: string; evidence: RadarEvidence; fingerprint: string }
+interface RadarResult { error?: string; signal?: RadarSignal | null; signals?: Array<RadarSignal | null>; baselinePerWindow?: number; severity?: string; ok?: boolean }
 
 const TYPES = [
   "STALE_TICKETS",
@@ -34,55 +71,30 @@ const STATUSES = ["active", "acknowledged", "resolved", "suppressed"];
 const SEVERITY_RANK = Object.fromEntries(SEVERITIES.map((s, i) => [s, i]));
 const SUPPRESS_DURATIONS_MS = { "1h": 3600000, "24h": 86400000, "7d": 7 * 86400000 };
 
-// WHY: a ticket with an owner or a pending state still needs someone to act,
-// so every not-yet-closed state counts as open for staleness.
 const OPEN_STATUSES = ["open", "waiting_for_helper", "assigned", "claimed", "escalated", "reopened"];
-// WHY: 12h is the nudge point (something is waiting), 24h is the escalation
-// point (a whole day with no movement means the requester is stuck).
 const STALE_WARN_MS = 12 * 60 * 60 * 1000;
 const STALE_HIGH_MS = 24 * 60 * 60 * 1000;
-// WHY: fewer than 3 tickets in an hour is normal noise, not a spike; the
-// 6h baseline absorbs time-of-day effects so lunch rushes don't page anyone.
 const ESCALATION_MIN_RECENT = 3;
 const ESCALATION_WINDOW_MS = 60 * 60 * 1000;
 const ESCALATION_BASELINE_WINDOW_MS = 6 * 60 * 60 * 1000;
-// WHY: the recent hour must at least double the baseline rate — a smaller
-// jump is indistinguishable from ordinary variance.
 const ESCALATION_BASELINE_MULTIPLIER = 2;
-// WHY: 4x baseline is paging-worthy, 2.5x deserves eyes, anything above the
-// 2x trigger is still worth a MEDIUM note.
 const ESCALATION_CRITICAL_RATIO = 4;
 const ESCALATION_HIGH_RATIO = 2.5;
-// WHY: a 24h window matches the organizer's daily rhythm; 5 distinct askers
-// filters one-off confusion while still catching a bad morning early.
 const FAQ_WINDOW_MS = 24 * 60 * 60 * 1000;
 const FAQ_MIN_ASKERS = 5;
-// WHY: 15 askers in a day means the docs are actively misleading a crowd.
 const FAQ_HIGH_ASKERS = 15;
-// WHY: a 7d window smooths single bad days; 5 questions is the smallest
-// sample whose mean isn't dominated by one outlier.
 const LOW_CONFIDENCE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const LOW_CONFIDENCE_MIN_QUESTIONS = 5;
-// WHY: below 0.5 the answers are wrong more often than right, so the topic
-// needs human review; below 0.3 they are nearly always wrong.
 const LOW_CONFIDENCE_THRESHOLD = 0.5;
 const LOW_CONFIDENCE_HIGH_MEAN = 0.3;
-// WHY: 3 consecutive refresh failures means the source is down, not
-// flapping — one failure is retried silently.
 const SOURCE_HIGH_FAILS = 3;
-// WHY: 3 reopens in 24h is a pattern, not coincidence; a 20% reopen rate
-// means one in five resolutions fails the requester.
 const REOPEN_WINDOW_MS = 24 * 60 * 60 * 1000;
 const REOPEN_MIN_COUNT = 3;
 const REOPEN_RATE_THRESHOLD = 0.2;
-// WHY: at 40% the resolution path itself is broken, not just unlucky.
 const REOPEN_HIGH_RATE = 0.4;
-// WHY: the radar mirrors at most a screenful of live incidents per program.
 const ACTIVE_INCIDENT_LIST_LIMIT = 20;
-// WHY: 10m keeps signals fresh without hammering the DB on idle programs.
 const RADAR_LOOP_DEFAULT_MIN = 10;
 const RADAR_LEASE_NAME = "radar-eval";
-// WHY: the platform-wide program has no owning organizers to notify.
 const SKIPPED_PROGRAM_ID = "ysws-global";
 
 function assertValid(type: string, severity: string): void {
@@ -90,11 +102,11 @@ function assertValid(type: string, severity: string): void {
   if (!SEVERITIES.includes(severity)) throw new Error(`invalid radar severity: ${severity}`);
 }
 
-function row(id: number): Row | null {
-  return db.handle().query("SELECT * FROM radar_signals WHERE id = ?").get(id) || null;
+function row(id: number): RadarSignal | null {
+  return db.handle().query("SELECT * FROM radar_signals WHERE id = ?").get(id) as RadarSignal | null;
 }
 
-function listSignals(programId: string, { status = null, severity = null, limit = 100 }: { status?: string | null; severity?: string | null; limit?: number } = {}): Row[] | Row {
+function listSignals(programId: string, { status = null, severity = null, limit = 100 }: { status?: string | null; severity?: string | null; limit?: number } = {}): RadarSignal[] | { error: string } {
   if (!programId) return { error: "programId required" };
   const clauses = ["program_id = ?"];
   const params: Array<string | number> = [programId];
@@ -110,18 +122,12 @@ function listSignals(programId: string, { status = null, severity = null, limit 
     .handle()
     .query(`SELECT * FROM radar_signals WHERE ${clauses.join(" AND ")} ORDER BY last_detected_at DESC LIMIT ?`)
     .all(...params, Math.min(Math.max(Number(limit) || 100, 1), 500));
-  return (rows as Row[])
-    .map((r: Row) => ({ ...r, evidence: r.evidence ? JSON.parse(r.evidence) : null }))
-    .sort((a: Row, b: Row) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || b.last_detected_at - a.last_detected_at);
+  return (rows as RadarSignal[])
+    .map((r: RadarSignal) => ({ ...r, evidence: r.evidence ? JSON.parse(r.evidence as string) as RadarEvidence : null }))
+    .sort((a: RadarSignal, b: RadarSignal) => SEVERITY_RANK[b.severity] - SEVERITY_RANK[a.severity] || b.last_detected_at - a.last_detected_at);
 }
 
-// Insert-or-update by (program_id, type, fingerprint). A signal already
-// suppressed stays suppressed until its window expires — even if the
-// underlying condition worsens — because a deterministic radar that
-// overrides an organizer's own suppression on every noisy re-check is not
-// actually less noisy than the alert it was built to replace. Documented
-// trade-off, not an oversight.
-function upsertSignal({ programId, type, severity, title, summary, evidence, fingerprint, now = Date.now() }: { programId: string; type: string; severity: string; title: string; summary?: string; evidence: Row; fingerprint: string; now?: number }): Row | null {
+function upsertSignal({ programId, type, severity, title, summary, evidence, fingerprint, now = Date.now() }: { programId: string; type: string; severity: string; title: string; summary?: string; evidence: RadarEvidence; fingerprint: string; now?: number }): RadarSignal | null {
   assertValid(type, severity);
   if (!programId || !fingerprint) throw new Error("programId and fingerprint required");
   const existing = db
@@ -148,10 +154,6 @@ function upsertSignal({ programId, type, severity, title, summary, evidence, fin
     return row(existing.id);
   }
 
-  // A resolved/expired-suppression/acknowledged signal re-firing is treated
-  // as a fresh occurrence of the same condition: status returns to active
-  // and the detection clock restarts, but the row (and its history) is reused
-  // rather than duplicated.
   const wasClosed = existing.status === "resolved" || (existing.status === "suppressed" && existing.suppressed_until && existing.suppressed_until <= now);
   const nextStatus = existing.status === "acknowledged" ? "acknowledged" : "active";
   const firstDetectedAt = wasClosed ? now : existing.first_detected_at;
@@ -164,10 +166,6 @@ function upsertSignal({ programId, type, severity, title, summary, evidence, fin
   return row(existing.id);
 }
 
-// Conditions that cleared: any active/acknowledged signal of `type` whose
-// fingerprint wasn't re-detected this pass gets auto-resolved. Manual
-// resolutions and suppressions are left alone — this only closes out
-// signals the detector itself would otherwise leave stale.
 function autoResolveMissing(programId: string, type: string, seenFingerprints: Set<string>, now = Date.now()): void {
   const stale = db
     .handle()
@@ -179,14 +177,14 @@ function autoResolveMissing(programId: string, type: string, seenFingerprints: S
   }
 }
 
-function programScoped(id: number, actorId: string | null, requireHelper: ((programId: string, actorId: string | null) => boolean) | null): Scoped {
+function programScoped(id: number, actorId: string | null, requireHelper: ((programId: string, actorId: string | null) => boolean) | null): { error: string } | { signal: RadarSignal } {
   const inc = row(id);
   if (!inc) return { error: "signal not found" };
   if (requireHelper && !requireHelper(inc.program_id, actorId)) return { error: "actor is not a helper of this program" };
   return { signal: inc };
 }
 
-function acknowledgeSignal({ id, actorId = null, requireHelper = null }: { id: number; actorId?: string | null; requireHelper?: ((programId: string, actorId: string | null) => boolean) | null } = { id: 0 }): Row {
+function acknowledgeSignal({ id, actorId = null, requireHelper = null }: { id: number; actorId?: string | null; requireHelper?: ((programId: string, actorId: string | null) => boolean) | null } = { id: 0 }): RadarResult {
   const scoped = programScoped(id, actorId, requireHelper);
   if ("error" in scoped) return scoped;
   const now = Date.now();
@@ -195,7 +193,7 @@ function acknowledgeSignal({ id, actorId = null, requireHelper = null }: { id: n
   return { ok: true, signal: row(id) };
 }
 
-function resolveSignal({ id, actorId = null, requireHelper = null }: { id: number; actorId?: string | null; requireHelper?: ((programId: string, actorId: string | null) => boolean) | null } = { id: 0 }): Row {
+function resolveSignal({ id, actorId = null, requireHelper = null }: { id: number; actorId?: string | null; requireHelper?: ((programId: string, actorId: string | null) => boolean) | null } = { id: 0 }): RadarResult {
   const scoped = programScoped(id, actorId, requireHelper);
   if ("error" in scoped) return scoped;
   const now = Date.now();
@@ -204,7 +202,7 @@ function resolveSignal({ id, actorId = null, requireHelper = null }: { id: numbe
   return { ok: true, signal: row(id) };
 }
 
-function suppressSignal({ id, actorId = null, duration, requireHelper = null }: { id: number; actorId?: string | null; duration?: string; requireHelper?: ((programId: string, actorId: string | null) => boolean) | null } = { id: 0 }): Row {
+function suppressSignal({ id, actorId = null, duration, requireHelper = null }: { id: number; actorId?: string | null; duration?: string; requireHelper?: ((programId: string, actorId: string | null) => boolean) | null } = { id: 0 }): RadarResult {
   const scoped = programScoped(id, actorId, requireHelper);
   if ("error" in scoped) return scoped;
   const durationMs = duration ? SUPPRESS_DURATIONS_MS[duration as keyof typeof SUPPRESS_DURATIONS_MS] : undefined;
@@ -215,13 +213,12 @@ function suppressSignal({ id, actorId = null, duration, requireHelper = null }: 
   return { ok: true, signal: row(id) };
 }
 
-/* ------------------------------------------------------------- detectors -- */
 
 function staleSeverity(oldestMs: number): string {
   return oldestMs > STALE_HIGH_MS ? "HIGH" : "MEDIUM";
 }
 
-function fetchOpenTickets(programId: string): Row[] {
+function fetchOpenTickets(programId: string): TicketAgeRow[] {
   return db
     .handle()
     .query(
@@ -231,9 +228,9 @@ function fetchOpenTickets(programId: string): Row[] {
     .all(programId, ...OPEN_STATUSES);
 }
 
-function decideStaleTickets(openRows: Row[], now: number): Finding | null {
+function decideStaleTickets(openRows: TicketAgeRow[], now: number): RadarFinding | null {
   if (openRows.length === 0) return null;
-  const stale = openRows.filter((t: Row) => now - t.created_at > STALE_WARN_MS).sort((a: Row, b: Row) => a.created_at - b.created_at);
+  const stale = openRows.filter((t: TicketAgeRow) => now - t.created_at > STALE_WARN_MS).sort((a: TicketAgeRow, b: TicketAgeRow) => a.created_at - b.created_at);
   if (stale.length === 0) return null;
   const oldestMs = now - stale[0].created_at;
   const hours = Math.round(oldestMs / 3600000);
@@ -246,13 +243,13 @@ function decideStaleTickets(openRows: Row[], now: number): Finding | null {
     evidence: {
       count: stale.length,
       oldestWaitMs: oldestMs,
-      sampleTicketIds: stale.slice(0, 5).map((t: Row) => t.id),
-      statuses: [...new Set(stale.map((t: Row) => t.status))],
+      sampleTicketIds: stale.slice(0, 5).map((t: TicketAgeRow) => t.id),
+      statuses: [...new Set(stale.map((t: TicketAgeRow) => t.status))],
     },
   };
 }
 
-function detectStaleTickets(programId: string, now: number): Finding | null {
+function detectStaleTickets(programId: string, now: number): RadarFinding | null {
   return decideStaleTickets(fetchOpenTickets(programId), now);
 }
 
@@ -262,7 +259,7 @@ function escalationSeverity(ratio: number): string {
   return "MEDIUM";
 }
 
-function decideEscalationSpike(recent: number, baselineTotal: number): Row | null {
+function decideEscalationSpike(recent: number, baselineTotal: number): { baselinePerWindow: number; severity: string } | null {
   if (recent < ESCALATION_MIN_RECENT) return null;
   const baselineBuckets = ESCALATION_BASELINE_WINDOW_MS / ESCALATION_WINDOW_MS;
   const baselinePerWindow = baselineTotal / baselineBuckets;
@@ -272,7 +269,7 @@ function decideEscalationSpike(recent: number, baselineTotal: number): Row | nul
   return { baselinePerWindow, severity: escalationSeverity(ratio) };
 }
 
-function detectEscalationSpike(programId: string, now: number): Finding | null {
+function detectEscalationSpike(programId: string, now: number): RadarFinding | null {
   const recentCutoff = now - ESCALATION_WINDOW_MS;
   const baselineCutoff = now - ESCALATION_BASELINE_WINDOW_MS;
   const recent = db.handle().query("SELECT COUNT(*) AS n FROM tickets WHERE program_id = ? AND created_at > ?").get(programId, recentCutoff).n;
@@ -297,10 +294,10 @@ function faqFingerprint(representative: string): string {
   return crypto.createHash("sha1").update(representative.toLowerCase()).digest("hex").slice(0, 16);
 }
 
-function detectFaqClusters(programId: string): Finding[] {
+function detectFaqClusters(programId: string): RadarFinding[] {
   const { clusters, error } = gapClusters.clusterGaps({ programId, sinceMs: FAQ_WINDOW_MS, minAskers: FAQ_MIN_ASKERS });
   if (error || !clusters) return [];
-  return clusters.map((c: Row) => ({
+  return clusters.map((c: { askers: number; representative: string; askCount: number; covered: boolean; escalated: number; threads: Array<{ channel: string; messageTs: string }> }) => ({
     type: "FAQ_CLUSTER",
     severity: faqSeverity(c.askers),
     title: `${c.askers} askers about "${c.representative.slice(0, 80)}"`,
@@ -314,11 +311,11 @@ function lowConfidenceSeverity(mean: number): string {
   return mean < LOW_CONFIDENCE_HIGH_MEAN ? "HIGH" : "MEDIUM";
 }
 
-function decideLowConfidenceFinding(category: string, group: Row[]): Finding | null {
+function decideLowConfidenceFinding(category: string, group: ConfidenceRow[]): RadarFinding | null {
   if (group.length < LOW_CONFIDENCE_MIN_QUESTIONS) return null;
-  const mean = group.reduce((sum: number, r: Row) => sum + r.ai_confidence, 0) / group.length;
+  const mean = group.reduce((sum: number, r: ConfidenceRow) => sum + r.ai_confidence, 0) / group.length;
   if (mean >= LOW_CONFIDENCE_THRESHOLD) return null;
-  const escalated = group.filter((r: Row) => r.status === "escalated" || r.status === "reopened").length;
+  const escalated = group.filter((r: ConfidenceRow) => r.status === "escalated" || r.status === "reopened").length;
   return {
     type: "LOW_CONFIDENCE_TOPIC",
     severity: lowConfidenceSeverity(mean),
@@ -329,7 +326,7 @@ function decideLowConfidenceFinding(category: string, group: Row[]): Finding | n
   };
 }
 
-function detectLowConfidenceTopics(programId: string, now: number): Finding[] {
+function detectLowConfidenceTopics(programId: string, now: number): RadarFinding[] {
   const cutoff = now - LOW_CONFIDENCE_WINDOW_MS;
   const rows = db
     .handle()
@@ -338,8 +335,8 @@ function detectLowConfidenceTopics(programId: string, now: number): Finding[] {
        WHERE program_id = ? AND created_at > ? AND ai_confidence IS NOT NULL`,
     )
     .all(programId, cutoff);
-  const byCategory = new Map<string, Row[]>();
-  for (const r of rows as Row[]) {
+  const byCategory = new Map<string, ConfidenceRow[]>();
+  for (const r of rows as ConfidenceRow[]) {
     const group = byCategory.get(r.category);
     if (group) group.push(r);
     else byCategory.set(r.category, [r]);
@@ -358,21 +355,22 @@ function sourceSeverity(failCount: number, neverSucceeded: boolean): string {
   return "LOW";
 }
 
-function detectSourceFailures(programId: string): Finding[] {
+function detectSourceFailures(programId: string): RadarFinding[] {
   const programs = require("./programs");
   const prog = programs.get(programId);
   const sources = prog && Array.isArray(prog.sources) ? prog.sources : [];
   if (sources.length === 0) return [];
   const knowledge = require("./knowledge");
-  const keyed = sources.map((s: Row) => ({ source: s, key: knowledge.sourceCacheKey(s) || s.name })).filter((x: Row) => x.key);
+  const keyed = sources.map((s: { name: string }) => ({ source: s, key: knowledge.sourceCacheKey(s) || s.name })).filter((x: { key: string }) => x.key);
   const health = db.getSourceHealth(keyed.map((x: { key: string }) => x.key));
-  const byKey = new Map((health as Row[]).map((h: Row) => [h.name, h]));
+  const byKey = new Map((health as SourceHealthRow[]).map((h: SourceHealthRow) => [h.name, h]));
   const out = [];
   for (const { source, key } of keyed) {
     const h = byKey.get(key);
     if (!h || h.fail_count === 0) continue;
     const neverSucceeded = !h.last_success_at;
-    const staleness = neverSucceeded ? "never had a successful refresh" : `last succeeded ${Math.round((Date.now() - h.last_success_at) / 3600000)}h ago`;
+    const lastSuccessAt = h.last_success_at;
+    const staleness = neverSucceeded ? "never had a successful refresh" : `last succeeded ${Math.round((Date.now() - (lastSuccessAt || 0)) / 3600000)}h ago`;
     out.push({
       type: "SOURCE_FAILURE",
       severity: sourceSeverity(h.fail_count, neverSucceeded),
@@ -389,9 +387,9 @@ function reopenSeverity(rate: number): string {
   return rate >= REOPEN_HIGH_RATE ? "HIGH" : "MEDIUM";
 }
 
-function decideReopenSpike(rows: Row[]): Finding | null {
+function decideReopenSpike(rows: TicketAgeRow[]): RadarFinding | null {
   if (rows.length === 0) return null;
-  const reopened = rows.filter((r: Row) => (r.reopen_count || 0) > 0).length;
+  const reopened = rows.filter((r: TicketAgeRow) => (r.reopen_count || 0) > 0).length;
   if (reopened < REOPEN_MIN_COUNT) return null;
   const rate = reopened / rows.length;
   if (rate < REOPEN_RATE_THRESHOLD) return null;
@@ -405,21 +403,21 @@ function decideReopenSpike(rows: Row[]): Finding | null {
   };
 }
 
-function detectReopenSpike(programId: string, now: number): Finding | null {
+function detectReopenSpike(programId: string, now: number): RadarFinding | null {
   const cutoff = now - REOPEN_WINDOW_MS;
   const rows = db.handle().query("SELECT reopen_count FROM tickets WHERE program_id = ? AND created_at > ?").all(programId, cutoff);
   return decideReopenSpike(rows);
 }
 
-function detectIncidentSignals(programId: string): Finding[] {
-  const out: Finding[] = [];
+function detectIncidentSignals(programId: string): RadarFinding[] {
+  const out: RadarFinding[] = [];
   let detected;
   try {
     detected = incidents.detectBursts({ programId });
   } catch (_) {
     detected = { candidates: [] };
   }
-  for (const c of (detected.candidates || []) as Row[]) {
+  for (const c of (detected.candidates || []) as IncidentCandidate[]) {
     out.push({
       type: "INCIDENT_CANDIDATE",
       severity: "MEDIUM",
@@ -430,7 +428,7 @@ function detectIncidentSignals(programId: string): Finding[] {
     });
   }
   const active = incidents.listIncidents(programId, "confirmed", ACTIVE_INCIDENT_LIST_LIMIT);
-  for (const inc of active as Row[]) {
+  for (const inc of active as IncidentRow[]) {
     const affected = db.handle().query("SELECT COUNT(*) AS n FROM incident_reports WHERE incident_id = ?").get(inc.id).n;
     const startedAgoMin = Math.round((Date.now() - inc.started_at) / 60000);
     out.push({
@@ -445,10 +443,7 @@ function detectIncidentSignals(programId: string): Finding[] {
   return out;
 }
 
-// Runs every detector for one program, upserts the resulting signals, and
-// auto-resolves anything a detector no longer finds. Cheap and idempotent —
-// safe to call from a background loop or an on-demand "refresh" button.
-function evaluateProgram(programId: string): Row {
+function evaluateProgram(programId: string): { error: string } | { signals: Array<RadarSignal | null> } {
   if (!programId) return { error: "programId required" };
   const now = Date.now();
   const findings = [
@@ -459,10 +454,10 @@ function evaluateProgram(programId: string): Row {
     ...detectSourceFailures(programId),
     detectReopenSpike(programId, now),
     ...detectIncidentSignals(programId),
-  ].filter(Boolean) as Finding[];
+  ].filter(Boolean) as RadarFinding[];
 
   const seenByType = new Map<string, Set<string>>();
-  const signals: Array<Row | null> = [];
+  const signals: Array<RadarSignal | null> = [];
   for (const f of findings) {
     const seen = seenByType.get(f.type);
     if (seen) seen.add(f.fingerprint);
@@ -475,8 +470,6 @@ function evaluateProgram(programId: string): Row {
   return { signals };
 }
 
-// Single-flight background loop, same shape as lib/sla.js's startSlaLoop:
-// leased across replicas, quiet unless a program actually has activity.
 function startRadarLoop(intervalMin = Number(process.env.PIXIE_RADAR_CHECK_MIN || RADAR_LOOP_DEFAULT_MIN)): ReturnType<typeof setInterval> | null {
   if (!intervalMin || intervalMin <= 0) return null;
   const log = require("./log");
@@ -511,7 +504,6 @@ export = {
   evaluateProgram,
   startRadarLoop,
   getSignal: row,
-  // Exposed for targeted testing of one detector without a full evaluate pass.
   detectStaleTickets,
   detectEscalationSpike,
   detectFaqClusters,

@@ -1,10 +1,3 @@
-// Deterministic Program Support Health score. No LLM, no invented precision:
-// every component is a plain ratio of stored counts, clamped to [0, 100], and
-// a program without enough recent activity reports "not enough data" rather
-// than a fake 100%.
-//
-// SCORE_VERSION exists so a future change to the formula can be told apart
-// from an actual change in program health when reading historical scores.
 const supportAnalytics = require("./supportAnalytics");
 const db = require("./db");
 
@@ -14,6 +7,10 @@ const OPEN_STATUSES = ["open", "waiting_for_helper", "assigned", "claimed", "esc
 
 type Analytics = { byStatus: Record<string, number>; stale48h: number; created: number; reopenRate: number; windowDays: number };
 type SourceHealth = { name: string; fail_count: number };
+interface SourceRef { name: string; type?: string; url?: string }
+interface GapCluster { covered: boolean }
+interface HealthComponents { ticketBacklog: number; sourceHealth: number; knowledgeCoverage: number; resolutionQuality: number }
+interface HealthScore { error?: string; programId?: string; version?: number; score?: number | null; label?: string | null; components?: HealthComponents | null; windowDays?: number; questionsInWindow?: number }
 
 function clamp(n: number): number {
   return Math.max(0, Math.min(100, Math.round(n)));
@@ -31,7 +28,7 @@ function sourceHealthComponent(programId: string): number {
   const prog = programs.get(programId);
   const sources = prog && Array.isArray(prog.sources) ? prog.sources : [];
   if (sources.length === 0) return 100;
-  const keyed = sources.map((s: Record<string, any>) => knowledge.sourceCacheKey(s) || s.name).filter(Boolean) as string[];
+  const keyed = sources.map((s: SourceRef) => knowledge.sourceCacheKey(s) || s.name).filter(Boolean) as string[];
   const health = db.getSourceHealth(keyed);
   const byKey = new Map((health as SourceHealth[]).map((h) => [h.name, h]));
   const scores = keyed.map((key: string) => {
@@ -46,19 +43,16 @@ function knowledgeCoverageComponent(programId: string): number {
   const gapClusters = require("./gapClusters");
   const { clusters, error } = gapClusters.clusterGaps({ programId, sinceMs: 30 * 24 * 60 * 60 * 1000, minAskers: 2 });
   if (error || !clusters || clusters.length === 0) return 100;
-  const covered = clusters.filter((c: Record<string, any>) => c.covered).length;
+  const covered = clusters.filter((c: GapCluster) => c.covered).length;
   return clamp((covered / clusters.length) * 100);
 }
 
-// Reopens double-count against quality (a reopen means the first resolution
-// failed the requester); escalations count once, since routing to a human is
-// often the correct outcome, not a defect.
 function resolutionQualityComponent(analytics: Analytics): number {
   const escalationRate = analytics.created > 0 ? (analytics.byStatus.escalated || 0) / analytics.created : 0;
   return clamp(100 - analytics.reopenRate * 150 - escalationRate * 50);
 }
 
-function computeHealthScore(programId: string, { sinceMs = 30 * 24 * 60 * 60 * 1000 }: { sinceMs?: number } = {}): Record<string, any> {
+function computeHealthScore(programId: string, { sinceMs = 30 * 24 * 60 * 60 * 1000 }: { sinceMs?: number } = {}): HealthScore {
   if (!programId) return { error: "programId required" };
   const analytics = supportAnalytics.overview(programId, sinceMs);
   if (analytics.created < MIN_QUESTIONS_FOR_SCORE) {

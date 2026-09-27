@@ -1,11 +1,3 @@
-// The weekly report: what the docs should answer and don't, what was never a
-// docs problem, and what went well.
-//
-// `/pixie-gaps` already listed every question pixie missed, but a miss is a much
-// weaker claim than "the docs should cover this". The live table had an outage,
-// somebody's broken laptop and a half-typed fragment sitting next to the real
-// gaps, so the list read as noise and nobody worked through it. Everything here
-// exists to make one short list that is actually worth acting on.
 const db = require("./db");
 const reply = require("./reply");
 const learn = require("./learn");
@@ -13,39 +5,41 @@ const knowledge = require("./knowledge");
 const answer = require("./answer");
 const teachThread = require("./teachThread");
 const { config } = require("./config");
-// Module object rather than destructured, so the judge can be stubbed — see the
-// note in lib/respond.js.
 const llm = require("./llm");
 const log = require("./log");
 const brand = require("./brand");
 const { coverageStats, relativeTime } = require("./stats");
+import type { Program, SlackClient } from "./types";
 
-type Row = Record<string, any>;
-type SlackClient = Record<string, any>;
+interface GapSummary { id: number; question: string; ask_count: number }
+interface MetricRow { kind: string; count: number }
+interface AnsweredCounts { docs: number; chat: number; linked: number; total: number }
+interface ReportCollection {
+  until: number;
+  counts: Record<string, number>;
+  answered: AnsweredCounts;
+  coverage: number;
+  gaps: GapSummary[];
+  gapKinds: Record<string, number>;
+}
+interface ReportBlock { type: string; text: { type: string; text: string } }
 
-// Which program these prompts are about. A single-program deployment has exactly
-// one, which is the fleet case; the multi-program Pixl deployment falls back to
-// "Pixl" as before, since the gap log there isn't split per program.
 function programName() {
   try {
     const progs = require("./programs")
       .all()
-      .filter((p: Row) => p.id !== "ysws-global");
+      .filter((p: Program) => p.id !== "ysws-global");
     if (progs.length === 1 && progs[0].name) return progs[0].name;
   } catch (e) {
-    // Registry unavailable (no database yet) — fall through to the default.
   }
   return "Pixl";
 }
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
-// One word out, same as the capture judge in lib/learn.js.
 const JUDGE_MAX_TOKENS = 5;
 const JUDGE_TIMEOUT_MS = 10000;
 
-// Paced like lib/warm.js: this is unattended background work and must never be
-// the reason a real question queues behind it on a free tier.
 const JUDGE_PER_PASS = 5;
 const JUDGE_SPACING_MS = 4000;
 const JUDGE_CYCLE_MS = 10 * 60 * 1000;
@@ -56,8 +50,6 @@ const NOISE = "noise";
 
 const GAP_LIMIT = 10;
 const PENDING_CAP = 100;
-// Monday, 09:00 local — a to-do list lands better at the start of a week than
-// at the end of one.
 const REPORT_DAY = 1;
 const REPORT_HOUR = 9;
 
@@ -69,21 +61,7 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/* ----------------------------------------------------------------- judge -- */
 
-// The three verdicts, described by what they cost if you get them wrong. A
-// transient issue promoted to a docs gap wastes someone's afternoon writing
-// documentation for an outage; a real gap demoted to noise means the question
-// keeps getting asked forever; a piece of pure noise promoted to docs has the
-// same cost as a transient promoted to docs AND leaves a maintainer with the
-// distinct feeling of "you want me to write documentation about THIS?".
-//
-// The examples are lifted from the live table rather than invented, because
-// those are the shapes that actually turn up.
-//
-// Program and bot names come from the registry, not from literals: this prompt
-// used to describe Pixl by name in every deployment, so a bot for a 3D-printing
-// YSWS was judging its gaps against a description of a different program.
 function judgePrompt() {
   const program = programName();
   const botName = brand.name();
@@ -126,9 +104,6 @@ function judgePrompt() {
   ].join("\n");
 }
 
-// Returns a verdict, or null when the call failed or came back unreadable.
-// Null leaves the row unjudged, which keeps it OUT of the to-do list — the same
-// fail-closed shape as the capture judge in lib/learn.js.
 async function judgeGap(question: string): Promise<string | null> {
   try {
     const { text } = await llm.complete(
@@ -158,8 +133,6 @@ async function judgeGap(question: string): Promise<string | null> {
   }
 }
 
-// One pass over the unjudged backlog. Newest first, so today's questions are
-// classified before three-week-old ones.
 async function classifyGaps({ limit = JUDGE_PER_PASS, spacingMs = JUDGE_SPACING_MS }: { limit?: number; spacingMs?: number } = {}): Promise<number> {
   const pending = db.unclassifiedGaps(limit);
   if (pending.length === 0) return 0;
@@ -179,43 +152,18 @@ async function classifyGaps({ limit = JUDGE_PER_PASS, spacingMs = JUDGE_SPACING_
   return judged;
 }
 
-/* ---------------------------------------------------------------- draft -- */
 
-// Drafting is generative, not classification, so it runs on the answer model
-// rather than the cheap classifier one — a maintainer reviewing this deserves
-// the same quality bar as a real reply.
 const DRAFT_MAX_TOKENS = 400;
 const DRAFT_TIMEOUT_MS = 15000;
 
-// Same pacing shape as the gap judge above, for the same reason: unattended
-// background work that must never queue behind a real question on a free tier.
 const DRAFT_PER_PASS = 3;
 
-// Marks a synthetic draft in learned_facts.source_ts so it can't be mistaken
-// for a real Slack ts, while still riding that column's unique index — one
-// draft per gap, ever, even across restarts.
 const DRAFT_SOURCE_PREFIX = "gap-draft:";
 
-// How many of the real Slack threads behind a question get pulled in as
-// grounding, and how far back to look for them.
 const THREAD_REFS_PER_GAP = 2;
 const THREAD_LOOKBACK_MS = 30 * 24 * 60 * 60 * 1000;
 const THREAD_CONTEXT_CHAR_CAP = 4000;
 
-// A first version of this asked the model to write a doc entry from the bare
-// question alone, with no source material at all — the LLM equivalent of
-// asking a stranger "how many orgs does pixl have?" and expecting an honest
-// "no idea" instead of a confident guess. It doesn't have that instinct: with
-// nothing to check itself against, every one of 27 drafts confidently
-// invented fake emails, URLs and prices rather than saying UNKNOWN, and it got
-// worse than usual because Zen's 429 sent every one of those calls to the
-// weaker fallback model.
-//
-// The fix is the same rule the real answer path already lives by (see
-// PIXL_GUARDRAIL in lib/answer.js): only ever speak from what's actually in
-// front of it. Corpus and thread transcript are both real source material —
-// same as judgePrompt, when in doubt this reaches for UNKNOWN, because a wrong
-// or invented answer in the review queue does more damage than a missing one.
 function draftPrompt(corpus: string): string {
   const program = programName();
 
@@ -239,9 +187,6 @@ function draftPrompt(corpus: string): string {
   ].join("\n");
 }
 
-// Returns drafted doc text, or null when the call failed or the model didn't
-// actually know the answer. Null leaves the gap undrafted — same fail-closed
-// shape as judgeGap and learn.judgeAnswer.
 async function draftDoc(question: string, corpus = "", threadContext = ""): Promise<string | null> {
   try {
     const userContent = threadContext ? `${question}\n\n=== SLACK THREAD(S) ===\n${threadContext}` : question;
@@ -276,12 +221,6 @@ function draftSourceTs(gapId: number): string {
   return `${DRAFT_SOURCE_PREFIX}${gapId}`;
 }
 
-// The real Slack thread(s) this question was asked in, so drafting can pick up
-// an answer a human already gave that auto-capture missed — too short, too
-// long, or lib/learn.js's own judge said no. A second, more thorough look at
-// a thread that already has a real answer in it beats asking the model to
-// invent one from nothing. No client (tests, or a run with nothing to fetch
-// with) means no thread context, not an error.
 async function gatherThreadContext(client: SlackClient | null, question: string): Promise<string> {
   if (!client) return "";
 
@@ -304,19 +243,10 @@ async function gatherThreadContext(client: SlackClient | null, question: string)
   return transcripts.join("\n\n---\n\n").slice(0, THREAD_CONTEXT_CHAR_CAP);
 }
 
-// Turns this week's recurring DOCS gaps into review-queue candidates — the
-// same PENDING row shape lib/learn.js already produces from a human reply, so
-// the existing Home tab Approve/Drop buttons and corpusSection() need no
-// changes to pick these up. topGaps groups by normalized question, so "how do
-// i join" asked by five people drafts once, not five times.
 async function draftGaps(client: SlackClient | null, { limit = DRAFT_PER_PASS, spacingMs = JUDGE_SPACING_MS, sinceMs = WEEK_MS }: { limit?: number; spacingMs?: number; sinceMs?: number } = {}): Promise<number> {
   const candidates = db
-    // Drafts run as a maintainer background task: a single asker may still
-    // surface a real one-off gap, and the draft itself has to be reviewed
-    // before it lands. The 2-asker floor is the user-facing one (commands.js,
-    // home.js) where the troll problem was.
     .topGaps(GAP_LIMIT, sinceMs, { kind: DOCS, minAskers: 1 })
-    .filter((gap: Row) => !db.hasCapturedSource(draftSourceTs(gap.id)))
+    .filter((gap: GapSummary) => !db.hasCapturedSource(draftSourceTs(gap.id)))
     .slice(0, limit);
   if (candidates.length === 0) return 0;
 
@@ -344,33 +274,29 @@ async function draftGaps(client: SlackClient | null, { limit = DRAFT_PER_PASS, s
   return drafted;
 }
 
-/* ---------------------------------------------------------------- report -- */
 
 function pct(part: number, whole: number): number {
   return whole > 0 ? Math.round((part / whole) * 100) : 0;
 }
 
-// Signed, so "coverage 41% (+18)" reads as movement rather than a bare number.
 function delta(current: number, previous: number): string {
   const diff = current - previous;
   if (diff === 0) return "no change";
   return `${diff > 0 ? "+" : ""}${diff}`;
 }
 
-function answeredFrom(counts: Record<string, number>): Row {
+function answeredFrom(counts: Record<string, number>): AnsweredCounts {
   const docs = counts.answer_docs || 0;
   const chat = counts.answer_chat || 0;
   const linked = counts.answer_link || 0;
   return { docs, chat, linked, total: docs + chat + linked };
 }
 
-// Everything the report needs, for one week-long window. `weeksAgo` of 1 gives
-// the week before, which is where the trend comes from.
-function collect(weeksAgo = 0, programId: string | null = null): Row {
+function collect(weeksAgo = 0, programId: string | null = null): ReportCollection {
   const until = Date.now() - weeksAgo * WEEK_MS;
   const sinceMs = (weeksAgo + 1) * WEEK_MS;
 
-  const counts = Object.fromEntries(db.metricCounts(sinceMs, until).map((r: Row) => [r.kind, r.count])) as Record<string, number>;
+  const counts = Object.fromEntries(db.metricCounts(sinceMs, until).map((r: MetricRow) => [r.kind, r.count])) as Record<string, number>;
   const answered = answeredFrom(counts);
 
   return {
@@ -452,11 +378,10 @@ function reportText(weeksAgo = 0, programId: string | null = null): string {
   return reportLines(weeksAgo, programId).join("\n");
 }
 
-function reportBlocks(weeksAgo = 0, programId: string | null = null): Row[] {
+function reportBlocks(weeksAgo = 0, programId: string | null = null): ReportBlock[] {
   return [{ type: "section", text: { type: "mrkdwn", text: reportText(weeksAgo, programId) } }];
 }
 
-/* -------------------------------------------------------------- schedule -- */
 
 const programs = require("./programs");
 
@@ -467,9 +392,6 @@ function reportChannel(programId: string | null = null): string | null {
   return programs.helpChannelName(programId);
 }
 
-// The most recent Monday 09:00 at or before `at`. A report is due when nothing
-// has been sent since that boundary — which makes the check idempotent, so a
-// restart mid-week can't trigger a second post.
 function lastBoundary(at = new Date()) {
   const boundary = new Date(at);
   boundary.setHours(REPORT_HOUR, 0, 0, 0);
@@ -477,7 +399,6 @@ function lastBoundary(at = new Date()) {
   const daysSinceMonday = (boundary.getDay() - REPORT_DAY + 7) % 7;
   boundary.setDate(boundary.getDate() - daysSinceMonday);
 
-  // Before this week's boundary — the one that counts is last week's.
   if (boundary.getTime() > at.getTime()) boundary.setDate(boundary.getDate() - 7);
   return boundary.getTime();
 }
@@ -497,8 +418,6 @@ async function postWeekly(client: SlackClient, programId: string | null = null):
     text: `${brand.name()} weekly report`,
     blocks: reply.plainDashesInBlocks(reportBlocks(0, programId)),
   });
-  // Recorded only after Slack accepted it, so a failed post is retried on the
-  // next tick rather than silently skipped for a week.
   db.recordMetric(SENT_METRIC);
   log.info("report", `weekly report posted to ${channel}`);
   return true;

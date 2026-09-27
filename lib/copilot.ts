@@ -1,12 +1,3 @@
-// Helper copilot: AI assistance for humans working tickets. Every function is
-// a pure read + optional model call that RETURNS text for a human to review.
-// Nothing here posts to Slack, mutates tickets, or teaches the corpus —
-// sending is always an explicit human action through tickets.replyToTicket.
-//
-// Grounding reuses the exact requester pipeline (lookup.answerOrChat), so a
-// draft cites the same sources a direct answer would. Verdicts that must not
-// depend on model self-confidence (fact check, similar tickets) are computed
-// deterministically from retrieval scores and stored state instead.
 const lookup = require("./lookup");
 const retrieve = require("./retrieve");
 const knowledge = require("./knowledge");
@@ -17,51 +8,64 @@ const audit = require("./audit");
 const rateLimit = require("./rateLimit");
 const { config } = require("./config");
 const respond = require("./respond");
+import type { Program, Ticket } from "./types";
 
-type Row = Record<string, any>;
-type ProgramRef = { id: string };
+interface ProgramRef extends Pick<Program, "id"> {}
+interface AnswerResult { source: string | null; answer: string | null }
+interface TranscriptMessage { role?: string; user_id?: string; content?: string }
+interface TicketEvent { event_type: string; actor_id: string | null }
+interface RetrievalIndex { docs: Array<{ chunk: { source: string; heading?: string; text: string }; length: number }> }
+interface Verdict { sentence: string; verdict: string; evidence: Evidence[]; contradiction?: { against: Evidence } }
+interface Evidence { source: string; heading: string | null; excerpt: string; score: number }
+interface SimilarCandidate { ticketId: number; question: string; summary: string | null | undefined; resolution: string | null; category: string | null | undefined; resolvedAt: number | null; similarity: number }
+interface CopilotResponse {
+  error?: string;
+  draft?: string | null;
+  source?: string | null;
+  sourceUrl?: string | null;
+  grounded?: boolean;
+  confidence?: number;
+  verification?: string;
+  programId?: string | null;
+  improved?: string;
+  notes?: string[];
+  changed?: boolean;
+  summary?: string;
+  aiPolished?: boolean;
+  verdicts?: Verdict[];
+  counts?: Record<string, number>;
+  candidates?: SimilarCandidate[];
+}
 type RankedChunk = { chunk: { source: string; heading?: string; text: string }; value: number };
 
-// One burst of drafts per minute per helper: generous for real triage,
-// tight enough that a stuck retry loop cannot burn the model budget.
 const COPILOT_WINDOW_MS = 60 * 1000;
 const COPILOT_MAX_PER_WINDOW = 20;
-// Grounded drafts read as confident, ungrounded ones as flagged — the helper
-// decides in both cases, so the numbers only rank, never certify.
 const GROUNDED_CONFIDENCE = 0.8;
 const UNGROUNDED_CONFIDENCE = 0.2;
-// Numbers, dates, URLs, channel refs, quoted literals: the tokens an edit
-// must not silently gain or lose.
 const FACTUAL_TOKEN_RE = /\b\d[\d.,]*\b|https?:\/\/\S+|<#[A-Z0-9]+(?:\|[^>]+)?>|#[a-z0-9_-]+|"[^"]+"/gi;
-// Only the tail matters for a handoff; older turns repeat the same attempts.
 const SUMMARY_TAIL = 12;
 const SUMMARY_LINE_CHARS = 300;
 const SUMMARY_PROMPT_CHARS = 3000;
 const SUMMARY_POLISH_TOKENS = 300;
-// Only opposing cues on the same claim shape count as contradiction —
-// anything subtler stays unsupported, never a confident accusation.
 const OPPOSITION = [
   [/\bcan\b/i, /\b(can't|cannot|not allowed|isn't allowed)\b/i],
   [/\bsupported\b/i, /\b(not supported|unsupported)\b/i],
   [/\bmust\b/i, /\b(must not|mustn't|never)\b/i],
 ];
-// Similar-ticket search stays bounded: 200 recent resolutions in, 10 out.
 const SIMILAR_SCAN_LIMIT = 200;
 const SIMILAR_RETURN_MAX = 10;
 
-function checkBudget(actorId: string): Row | null {
+function checkBudget(actorId: string): { error: string } | null {
   const res = rateLimit.check(`copilot:${actorId}`, { windowMs: COPILOT_WINDOW_MS, max: COPILOT_MAX_PER_WINDOW });
   if (res.allowed) return null;
   return { error: "copilot rate limited — try again in a minute" };
 }
 
-function auditCopilot(programId: string, actorId: string | null, action: string, metadata: Row | null = null): void {
+function auditCopilot(programId: string, actorId: string | null, action: string, metadata: Record<string, unknown> | null = null): void {
   audit.record({ programId, actorId, action: `copilot.${action}`, entityType: "copilot", entityId: null, metadata });
 }
 
-// Groundedness uses the same predicate as requester answers: a draft that is
-// not grounded is still returned (the helper decides), but flagged.
-function draftVerdict(result: Row | null): Row {
+function draftVerdict(result: AnswerResult | null): CopilotResponse {
   const grounded = respond.isGroundedAnswer(result);
   return {
     draft: result && result.answer ? result.answer : null,
@@ -84,16 +88,13 @@ function threadContextFor(threadTs: string | null): string {
   }
 }
 
-async function draftReply({ program, question, threadTs = null }: { program: ProgramRef | null; question: string; threadTs?: string | null }): Promise<Row> {
+async function draftReply({ program, question, threadTs = null }: { program: ProgramRef | null; question: string; threadTs?: string | null }): Promise<CopilotResponse> {
   const programId = program ? program.id : null;
-  // Same pipeline, same corpus, same program scope as a requester answer —
-  // including its silence rules. A null result means "no grounded answer",
-  // which is itself the signal to escalate rather than improvise.
   const result = await lookup.answerOrChat(question, threadContextFor(threadTs), { program });
   return { ...draftVerdict(result), programId };
 }
 
-async function ask({ program, question, threadTs = null }: { program: ProgramRef | null; question: string; threadTs?: string | null }): Promise<Row> {
+async function ask({ program, question, threadTs = null }: { program: ProgramRef | null; question: string; threadTs?: string | null }): Promise<CopilotResponse> {
   const result = await lookup.answerOrChat(question, threadContextFor(threadTs), { program });
   return { ...draftVerdict(result), programId: program ? program.id : null };
 }
@@ -135,7 +136,7 @@ function tokenNotes(before: Set<string>, after: Set<string>): string[] {
   return notes;
 }
 
-async function improveReply({ text }: { text: string }): Promise<Row> {
+async function improveReply({ text }: { text: string }): Promise<CopilotResponse> {
   const clean = String(text || "").trim();
   if (!clean) return { error: "reply text required" };
   const before = factualTokens(clean);
@@ -152,7 +153,7 @@ async function improveReply({ text }: { text: string }): Promise<Row> {
   return { improved, notes: tokenNotes(before, factualTokens(improved)), changed: improved !== clean };
 }
 
-function loadTranscript(messages: Row[] | null, threadTs: string | null): Row[] {
+function loadTranscript(messages: TranscriptMessage[] | null, threadTs: string | null): TranscriptMessage[] {
   if (Array.isArray(messages) && messages.length > 0) return messages;
   if (!threadTs) return [];
   try {
@@ -163,12 +164,12 @@ function loadTranscript(messages: Row[] | null, threadTs: string | null): Row[] 
   }
 }
 
-function formatTranscriptLine(m: Row): string {
+function formatTranscriptLine(m: TranscriptMessage): string {
   const who = m.role === "assistant" ? "pixie" : m.user_id || m.role || "user";
   return `${who}: ${(m.content || "").slice(0, SUMMARY_LINE_CHARS)}`;
 }
 
-function extractiveSummary(ticket: Row | null, transcript: Row[], timeline: Row[]): string {
+function extractiveSummary(ticket: Ticket | null, transcript: TranscriptMessage[], timeline: TicketEvent[]): string {
   const parts = [];
   if (ticket) {
     parts.push(`Question: ${ticket.question}`);
@@ -178,12 +179,12 @@ function extractiveSummary(ticket: Row | null, transcript: Row[], timeline: Row[
   const lines = transcript.slice(-SUMMARY_TAIL).map(formatTranscriptLine);
   if (lines.length > 0) parts.push(`Recent thread:\n${lines.join("\n")}`);
   if (timeline.length > 0) {
-    parts.push(`Events: ${timeline.map((e: Row) => `${e.event_type}${e.actor_id ? ` by <@${e.actor_id}>` : ""}`).join(", ")}`);
+    parts.push(`Events: ${timeline.map((e: TicketEvent) => `${e.event_type}${e.actor_id ? ` by <@${e.actor_id}>` : ""}`).join(", ")}`);
   }
   return parts.join("\n\n") || "No thread context available.";
 }
 
-async function summarizeThread({ program, ticket = null, threadTs = null, messages = null }: { program: ProgramRef | null; ticket?: Row | null; threadTs?: string | null; messages?: Row[] | null }): Promise<Row> {
+async function summarizeThread({ program, ticket = null, threadTs = null, messages = null }: { program: ProgramRef | null; ticket?: Ticket | null; threadTs?: string | null; messages?: TranscriptMessage[] | null }): Promise<CopilotResponse> {
   const transcript = loadTranscript(messages, threadTs);
   const timeline = ticket ? db.listTicketEvents(ticket.id, 50) : [];
   const extractive = extractiveSummary(ticket, transcript, timeline);
@@ -206,7 +207,7 @@ function splitSentences(text: string): string[] {
     .filter((s) => s.length > 3);
 }
 
-function evidenceFor(ranked: RankedChunk[]): Row[] {
+function evidenceFor(ranked: RankedChunk[]): Evidence[] {
   return ranked.slice(0, 2).map((r: RankedChunk) => ({
     source: r.chunk.source,
     heading: r.chunk.heading || null,
@@ -222,23 +223,20 @@ function findContradiction(sentence: string, excerpt: string): boolean {
   return false;
 }
 
-function checkSentence(index: Row, sentence: string): Row | null {
+function checkSentence(index: RetrievalIndex, sentence: string): Verdict | null {
   const terms = retrieve.tokenize(sentence);
   if (terms.length === 0) return null;
   const ranked = retrieve.score(index, terms).slice(0, 3);
   const top = ranked[0];
   if (!top) return { sentence, verdict: "unsupported", evidence: [] };
   const evidence = evidenceFor(ranked);
-  // Narrow contradiction signal only: the sentence and its best evidence
-  // carrying opposing cues on the same claim shape. Anything subtler is
-  // "unsupported", never a confident contradiction.
   if (!findContradiction(sentence, evidence[0].excerpt)) {
     return { sentence, verdict: "supported", evidence };
   }
   return { sentence, verdict: "contradiction", evidence, contradiction: { against: evidence[0] } };
 }
 
-async function factCheck({ program, text }: { program: ProgramRef | null; text: string }): Promise<Row> {
+async function factCheck({ program, text }: { program: ProgramRef | null; text: string }): Promise<CopilotResponse> {
   const programId = program ? program.id : null;
   let index = null;
   try {
@@ -251,7 +249,7 @@ async function factCheck({ program, text }: { program: ProgramRef | null; text: 
     const verdict = checkSentence(index, sentence);
     if (verdict) verdicts.push(verdict);
   }
-  const counts = verdicts.reduce((acc: Record<string, number>, v: Row) => {
+  const counts = verdicts.reduce((acc: Record<string, number>, v: Verdict) => {
     acc[v.verdict] = (acc[v.verdict] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -262,7 +260,7 @@ function clampLimit(limit: number): number {
   return Math.min(Math.max(limit, 1), SIMILAR_RETURN_MAX);
 }
 
-function findSimilar({ programId, question, limit = 5 }: { programId: string; question: string; limit?: number }): Row {
+function findSimilar({ programId, question, limit = 5 }: { programId: string; question: string; limit?: number }): CopilotResponse {
   if (!programId || !question) return { error: "programId and question required" };
   let resolved = [];
   try {
@@ -271,8 +269,8 @@ function findSimilar({ programId, question, limit = 5 }: { programId: string; qu
     return { error: e instanceof Error ? e.message : String(e) };
   }
   const overlap = require("./gapClusters").pairOverlap;
-  const ranked = (resolved as Row[])
-    .map((t: Row) => ({
+  const ranked = (resolved as Ticket[])
+    .map((t: Ticket) => ({
       ticketId: t.id,
       question: t.question,
       summary: t.summary,
@@ -281,8 +279,8 @@ function findSimilar({ programId, question, limit = 5 }: { programId: string; qu
       resolvedAt: t.resolved_at,
       similarity: Number(overlap(question, `${t.question} ${t.summary || ""}`).toFixed(3)),
     }))
-    .filter((c: Row) => c.similarity > 0)
-    .sort((a: Row, b: Row) => b.similarity - a.similarity)
+    .filter((c: SimilarCandidate) => c.similarity > 0)
+    .sort((a: SimilarCandidate, b: SimilarCandidate) => b.similarity - a.similarity)
     .slice(0, clampLimit(limit));
   return { candidates: ranked, programId };
 }

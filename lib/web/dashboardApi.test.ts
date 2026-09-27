@@ -1,6 +1,21 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-type TestRow = Record<string, any>;
+interface TestRow {
+  createdAt?: number;
+  updatedAt?: number;
+  firstResponseAt?: number;
+  firstHumanResponseAt?: number;
+  resolvedAt?: number;
+  resolvedBy?: string;
+  requesterId?: string;
+  question?: string;
+  summary?: string;
+  status?: string;
+  assigneeId?: string;
+  category?: string;
+  [key: string]: unknown;
+}
+interface VolumeRow { questions: number; }
 
 const { test, before } = require("node:test");
 const assert = require("node:assert/strict");
@@ -117,21 +132,17 @@ test("scoped detail returns the thread and 404s cross-program", () => {
 test("metrics overview counts ops figures from stored rows only", () => {
   seedProgram("dash-metrics");
   const base = Date.now() - 20 * 86400000;
-  // Pixie-answered: first response, no human touch. Resolved in 5s.
   seedTicket("dash-metrics", {
     status: "resolved", createdAt: base, firstResponseAt: base + 1000, resolvedAt: base + 5000,
   });
-  // Human-handled: resolved in 9s by U-H.
   seedTicket("dash-metrics", {
     status: "resolved", createdAt: base + 1000, firstResponseAt: base + 2000,
     firstHumanResponseAt: base + 3000, resolvedAt: base + 10000, resolvedBy: "U-H", assigneeId: "U-H",
   });
-  // Still waiting, assigned to U-H.
   seedTicket("dash-metrics", { status: "waiting_for_helper", createdAt: base + 2000, assigneeId: "U-H" });
   db.recordMetric("answer_docs", 10, null, "dash-metrics");
   db.recordMetric("silent", 5, "ungrounded", "dash-metrics");
   db.recordMetric("jev_downstream_block", 7, "gap_escalated", "dash-metrics");
-  // Another program's rows must not leak in.
   seedProgram("dash-metrics-other");
   seedTicket("dash-metrics-other", { status: "open", createdAt: base });
   db.recordMetric("silent", 5, "ungrounded", "dash-metrics-other");
@@ -154,7 +165,7 @@ test("metrics overview counts ops figures from stored rows only", () => {
   assert.equal(m.grounding.answered, 1);
   assert.equal(m.grounding.blockRate, 0.667);
   assert.ok(Array.isArray(m.volumeByDay) && m.volumeByDay.length >= 30);
-  assert.equal(m.volumeByDay.reduce((sum: number, d: TestRow) => sum + d.questions, 0), 3);
+  assert.equal(m.volumeByDay.reduce((sum: number, d: VolumeRow) => sum + d.questions, 0), 3);
   const helper = m.helpers.find((h: TestRow) => h.userId === "U-H");
   assert.equal(helper.openAssigned, 1);
   assert.equal(helper.resolved, 1);
@@ -163,7 +174,6 @@ test("metrics overview counts ops figures from stored rows only", () => {
 
 test("knowledge status degrades gracefully and never leaks secrets", () => {
   const knowledge = require("../knowledge");
-  // Exercise the fallback path: as if the status API were unavailable.
   const realStatus = knowledge.sourceStatus;
   const realRefresh = knowledge.refreshProgramSources;
   delete knowledge.sourceStatus;
@@ -240,7 +250,6 @@ test("helper roster and availability toggle are program-scoped", () => {
   assert.equal(roster.helpers.find((h: TestRow) => h.userId === "U-R1").openAssigned, 1);
   assert.equal(dash.helperRoster("no-such-program").error, "unknown program");
 
-  // A stranger — or a helper from another program — cannot flip availability.
   assert.equal(dash.helperSetActive("dash-roster", { actorId: "U-stranger", userId: "U-R1", active: false }).error, "actor is not a helper of this program");
   assert.equal(dash.helperSetActive("dash-roster", { actorId: "U-X", userId: "U-R1", active: false }).error, "actor is not a helper of this program");
   assert.equal(dash.helperSetActive("dash-roster", { actorId: "U-R2", userId: "U-ghost", active: false }).error, "helper not found");

@@ -1,7 +1,3 @@
-// Glass-box answer for the web console. Calls the layer BELOW lookup so it
-// records nothing — no cache_hit metric, no cache.put, no gap. The playground
-// must be invisible to the stats or every test question would silently corrupt
-// the coverage rate.
 
 const answer = require("./answer");
 const knowledge = require("./knowledge");
@@ -11,28 +7,42 @@ const intent = require("./intent");
 
 type Chunk = { source: string; heading?: string; text: string };
 type Rank = { chunk: Chunk; value: number };
+interface CacheEntry { source: string; answer: string; askCount: number; ageMs: number }
+interface CacheVerdict { cacheKey: string | null; cacheHit: CacheEntry | null; wouldHit: boolean; wouldMiss: boolean }
+interface AnswerResult { source: string | null; answer: string | null }
+interface ProbeResult {
+  error?: string;
+  question?: string;
+  source?: string | null;
+  answer?: string | null;
+  latencyMs?: number;
+  firstTokenMs?: number | null;
+  cacheWouldHit?: boolean;
+  cacheWouldMiss?: boolean;
+  cacheKey?: string | null;
+  cacheEntry?: { source: string; answer: string; askCount: number; ageMs: number } | null;
+  queryTerms?: string[];
+  retrievalTrace?: Array<{ source: string; heading: string | null; snippet: string; length: number }>;
+  bm25Trace?: Array<{ source: string; heading: string | null; snippet: string; bm25: number }>;
+  citationOk?: boolean | null;
+  gateVerdict?: string | null;
+  generatedSections?: Array<{ name: string; length: number }>;
+  corpusSize?: number;
+  chunkCount?: number;
+}
 
-// Date.now() has 1ms granularity, which is coarse for the one panel whose whole
-// job is reporting how long things took — a cache hit or a stubbed call lands on
-// exactly 0ms and reads as "unmeasured". performance.now() is sub-millisecond.
 function elapsedMs(since: number): number {
   return Math.round((performance.now() - since) * 1000) / 1000;
 }
 
-// What the cache would have done — reported, never acted on. Note a stale
-// volatile entry reports BOTH wouldHit and wouldMiss: the key exists, but the
-// answer path would refuse to serve it.
-function cacheVerdict(question: string): Record<string, any> {
+function cacheVerdict(question: string): CacheVerdict {
   const cacheKey = cache.keyFor(question);
   const cacheHit = cacheKey ? cache.peekCachedAnswer(cacheKey) : null;
   if (!cacheHit) return { cacheKey, cacheHit: null, wouldHit: false, wouldMiss: true };
-  // Only volatile entries past freshness are forced misses.
   const forcedMiss = cache.isVolatile(cacheHit.source) && cacheHit.ageMs > require("./db").CACHE_FRESH_MS;
   return { cacheKey, cacheHit, wouldHit: true, wouldMiss: forcedMiss };
 }
 
-// Does the cited source appear in the retrieved chunks? Null when there is no
-// citation to check — absence of evidence, not evidence of absence.
 function citationCheck(source: string | null, chunks: Chunk[]): boolean | null {
   if (!source) return null;
   return new Set(chunks.map((c) => c.source)).has(source);
@@ -47,7 +57,7 @@ function traceChunk(c: Chunk, snippetLen: number) {
   };
 }
 
-async function probe(question: string): Promise<Record<string, any>> {
+async function probe(question: string): Promise<ProbeResult> {
   const startedAt = performance.now();
   const q = (question || "").trim();
   if (!q) return { error: "empty question" };
@@ -57,14 +67,11 @@ async function probe(question: string): Promise<Record<string, any>> {
 
   const { cacheKey, cacheHit, wouldHit: cacheWouldHit, wouldMiss: cacheWouldMiss } = cacheVerdict(q);
 
-  // Query terms that survived stopword stripping.
   const queryTerms = retrieve.tokenize(q);
 
-  // Retrieval trace.
   const chunks = retrieve.selectChunks(index, q, retrieve.DEFAULT_BUDGET);
   const retrievalTrace = chunks.map((c: Chunk) => traceChunk(c, 200));
 
-  // Full retrieval ranking for inspection.
   const ranking = retrieve.score(index, queryTerms);
   const bm25Trace = ranking.map((r: Rank) => ({
     source: r.chunk.source,
@@ -73,11 +80,10 @@ async function probe(question: string): Promise<Record<string, any>> {
     bm25: Math.round(r.value * 1000) / 1000,
   }));
 
-  // Model answer.
   let firstTokenMs: number | null = null;
-  let answerText = null;
-  let source = null;
-  let result = null;
+  let answerText: string | null = null;
+  let source: string | null = null;
+  let result: AnswerResult | null = null;
 
   try {
     result = await answer.getAnswerOrChatStream(q, corpus, "", {
@@ -106,11 +112,9 @@ async function probe(question: string): Promise<Record<string, any>> {
     answerText = result.answer;
   }
 
-  // Citation check: does the cited source appear in the retrieved chunks?
   const citationOk = citationCheck(source, chunks);
 
-  // Intent gate.
-  let gateVerdict = null;
+  let gateVerdict: string | null = null;
   try {
     gateVerdict = await intent.classifyIntent(q);
   } catch (_) {}

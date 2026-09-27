@@ -1,7 +1,11 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-type TestRow = Record<string, any>;
-type TestFn = (...args: any[]) => any;
+interface LlmMessage { content: string; }
+interface LlmOptions { model: string; messages: LlmMessage[]; }
+interface ThreadReply { channel: string; ts: string; }
+interface PostedMessage { channel?: string; text?: string; username?: string; }
+type JudgeReply = (question: string) => string | Promise<string>;
+type JudgeCheck = (asked: string[]) => unknown | Promise<unknown>;
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
@@ -13,13 +17,11 @@ const learn = require("./learn");
 
 db.open(":memory:");
 
-// Every test drives the judge, so the model is stubbed throughout — otherwise
-// the suite would spend a real call per gap.
-async function withJudge(reply: string | TestFn, fn: TestFn) {
+async function withJudge(reply: string | JudgeReply, fn: JudgeCheck) {
   const original = llm.complete;
   const asked: string[] = [];
-  llm.complete = async (options: TestRow) => {
-    const question = options.messages.at(-1).content;
+  llm.complete = async (options: LlmOptions) => {
+    const question = (options.messages.at(-1) as LlmMessage).content;
     asked.push(question);
     if (typeof reply === "function") return { text: await reply(question) };
     return { text: reply };
@@ -31,7 +33,6 @@ async function withJudge(reply: string | TestFn, fn: TestFn) {
   }
 }
 
-/* ----------------------------------------------------------------- judge -- */
 
 test("judgeGap maps each verdict, however the model pads it", async () => {
   await withJudge("DOCS", async () => assert.equal(await report.judgeGap("who are pixl orgs"), report.DOCS));
@@ -39,8 +40,6 @@ test("judgeGap maps each verdict, however the model pads it", async () => {
   await withJudge("NOISE.", async () => assert.equal(await report.judgeGap("marketing as in?"), report.NOISE));
 });
 
-// Fails closed like the capture judge: an unreadable verdict leaves the row
-// unjudged, which keeps it OUT of the to-do list rather than guessing it in.
 test("judgeGap returns null when the model says something unusable", async () => {
   await withJudge("i think probably yes?", async () => assert.equal(await report.judgeGap("anything"), null));
   await withJudge("", async () => assert.equal(await report.judgeGap("anything"), null));
@@ -61,7 +60,7 @@ test("judgeGap returns null when the call throws", async () => {
 test("the judge uses the cheap classifier model, not the answer model", async () => {
   const original = llm.complete;
   let used: string | null = null;
-  llm.complete = async (options: TestRow) => {
+  llm.complete = async (options: LlmOptions) => {
     used = options.model;
     return { text: "DOCS" };
   };
@@ -73,7 +72,6 @@ test("the judge uses the cheap classifier model, not the answer model", async ()
   }
 });
 
-/* ------------------------------------------------------------- classify -- */
 
 test("classifyGaps writes a verdict per gap and leaves unreadable ones alone", async () => {
   db.handle().query("DELETE FROM doc_gaps").run();
@@ -81,7 +79,7 @@ test("classifyGaps writes a verdict per gap and leaves unreadable ones alone", a
   db.recordGap("and my pc crashed -_-", "U2", "C1");
   db.recordGap("even sp[aces failed me", "U3", "C1");
 
-  const verdicts: TestRow = {
+  const verdicts: Record<string, string> = {
     "who are pixl orgs": "DOCS",
     "and my pc crashed -_-": "TRANSIENT",
     "even sp[aces failed me": "???",
@@ -118,7 +116,6 @@ test("classifyGaps is a no-op with nothing pending", async () => {
   });
 });
 
-/* ------------------------------------------------------------------ draft -- */
 
 test("draftDoc returns the drafted text, trimmed", async () => {
   await withJudge("  export as PNG at native size, no upscaling  ", async () => {
@@ -126,8 +123,6 @@ test("draftDoc returns the drafted text, trimmed", async () => {
   });
 });
 
-// Fails closed like the gap judge and learn's capture judge: no answer means
-// no draft, never an invented one.
 test("draftDoc returns null when the model doesn't know or says nothing usable", async () => {
   await withJudge("UNKNOWN", async () => assert.equal(await report.draftDoc("anything"), null));
   await withJudge("unknown.", async () => assert.equal(await report.draftDoc("anything"), null));
@@ -149,7 +144,7 @@ test("draftDoc returns null when the call throws", async () => {
 test("draftDoc uses the answer model, not the cheap classifier", async () => {
   const original = llm.complete;
   let used: string | null = null;
-  llm.complete = async (options: TestRow) => {
+  llm.complete = async (options: LlmOptions) => {
     used = options.model;
     return { text: "an answer" };
   };
@@ -161,17 +156,10 @@ test("draftDoc uses the answer model, not the cheap classifier", async () => {
   }
 });
 
-// The bug that shipped: a first version asked the model to write documentation
-// from the bare question alone, with nothing to check itself against, and it
-// fabricated fake emails, URLs and prices rather than admitting it didn't
-// know. The fix is grounding — same rule the real answer path already lives
-// by — so this locks in that the corpus and any thread transcript actually
-// reach the prompt, and that the guardrail against inventing Pixl facts rides
-// along with them.
 test("draftDoc grounds the prompt in the corpus, the thread transcript, and the anti-invention guardrail", async () => {
   const original = llm.complete;
   let system: string | null = null;
-  llm.complete = async (options: TestRow) => {
+  llm.complete = async (options: LlmOptions) => {
     system = options.messages[0].content;
     return { text: "an answer" };
   };
@@ -191,7 +179,7 @@ test("draftDoc grounds the prompt in the corpus, the thread transcript, and the 
 test("draftDoc passes the thread transcript alongside the question", async () => {
   const original = llm.complete;
   let userContent: string | null = null;
-  llm.complete = async (options: TestRow) => {
+  llm.complete = async (options: LlmOptions) => {
     userContent = options.messages[1].content;
     return { text: "an answer" };
   };
@@ -207,17 +195,14 @@ test("gatherThreadContext returns nothing without a client — not an error", as
   assert.equal(await report.gatherThreadContext(null, "anything"), "");
 });
 
-// Auto-capture can miss a real answer (too short, too long, or lib/learn.js's
-// judge said no) — gatherThreadContext gives drafting a second, more thorough
-// look at the same thread instead of asking the model to invent one.
 test("gatherThreadContext pulls the real thread(s) behind a question", async () => {
   db.handle().query("DELETE FROM doc_gaps").run();
   db.recordGap("how do i unlock the next region", "U1", "C1", "100.1");
 
-  const fetched: TestRow[] = [];
+  const fetched: ThreadReply[] = [];
   const client = {
     conversations: {
-      replies: async ({ channel, ts }: TestRow) => {
+      replies: async ({ channel, ts }: ThreadReply) => {
         fetched.push({ channel, ts });
         return {
           messages: [
@@ -266,9 +251,6 @@ test("draftGaps queues a PENDING learned fact per unclassified DOCS gap", async 
   assert.equal(rows[0].author_id, null, "a draft has no human author");
 });
 
-// topGaps groups by normalized question, so five people asking the same thing
-// drafts once — draftGaps must not draft it again once queued, even across a
-// fresh pass.
 test("draftGaps does not re-draft a gap already queued for review", async () => {
   db.handle().query("DELETE FROM doc_gaps").run();
   db.handle().query("DELETE FROM learned_facts").run();
@@ -284,8 +266,6 @@ test("draftGaps does not re-draft a gap already queued for review", async () => 
   });
 });
 
-// A model that genuinely doesn't know must not leave a hole where drafted
-// content ought to be.
 test("draftGaps leaves a gap undrafted when the model doesn't know", async () => {
   db.handle().query("DELETE FROM doc_gaps").run();
   db.handle().query("DELETE FROM learned_facts").run();
@@ -320,8 +300,6 @@ test("draftGaps is a no-op with no DOCS gaps", async () => {
   });
 });
 
-// A drafted candidate rides the same queue lib/learn.js fills from human
-// replies, so approving it puts it straight into what pixie cites.
 test("an approved draft lands in the corpus like any other learned fact", async () => {
   db.handle().query("DELETE FROM doc_gaps").run();
   db.handle().query("DELETE FROM learned_facts").run();
@@ -336,9 +314,7 @@ test("an approved draft lands in the corpus like any other learned fact", async 
   assert.match(learn.corpusSection(), /unlock the next region/);
 });
 
-/* ---------------------------------------------------------------- report -- */
 
-// Seeds a gap already carrying its verdict, at a chosen age.
 function seedGap(question: string, kind: string, agoMs = 0) {
   db.recordGap(question, "U1", "C1");
   const id = db.handle().query("SELECT MAX(id) AS id FROM doc_gaps").get().id;
@@ -373,7 +349,6 @@ test("the report lists docs gaps and never the ones that aren't docs problems", 
   assert.doesNotMatch(text, /server down/, "a transient problem is not a docs gap");
   assert.doesNotMatch(text, /pfp is bugged/);
   assert.doesNotMatch(text, /sp\[aces/);
-  // But it says how many it kept out, so the filter is visible.
   assert.match(text, /\*3\* were one-off problems or chatter/);
 });
 
@@ -381,7 +356,6 @@ test("the report shows the week-on-week change in coverage", () => {
   db.handle().query("DELETE FROM doc_gaps").run();
   db.handle().query("DELETE FROM metrics").run();
 
-  // Last week: 1 of 4 from the docs (25%). This week: 3 of 4 (75%).
   const lastWeek = 10 * 24 * 60 * 60 * 1000;
   seedMetric("answer_docs", lastWeek);
   for (let i = 0; i < 3; i++) seedMetric("answer_chat", lastWeek);
@@ -406,17 +380,14 @@ test("an unjudged backlog is reported as unsorted rather than silently dropped",
   assert.match(report.reportText(0), /\*1\* not sorted yet/);
 });
 
-/* -------------------------------------------------------------- schedule -- */
 
 test("lastBoundary lands on the most recent Monday 09:00", () => {
-  // Wednesday 2026-07-29, 14:30 local -> Monday 2026-07-27 09:00.
   const boundary = new Date(report.lastBoundary(new Date(2026, 6, 29, 14, 30)));
   assert.equal(boundary.getDay(), 1);
   assert.equal(boundary.getHours(), 9);
   assert.equal(boundary.getDate(), 27);
 });
 
-// Monday before 09:00 belongs to the previous week's report, not this one.
 test("lastBoundary rolls back a week when the boundary hasn't passed yet", () => {
   const boundary = new Date(report.lastBoundary(new Date(2026, 6, 27, 8, 0)));
   assert.equal(boundary.getDate(), 20);
@@ -425,15 +396,13 @@ test("lastBoundary rolls back a week when the boundary hasn't passed yet", () =>
 
 test("a report is due once per week and not twice after a restart", async () => {
   db.handle().query("DELETE FROM metrics").run();
-  // tick() classifies before it posts; an empty backlog keeps this test about
-  // the schedule rather than about the judge.
   db.handle().query("DELETE FROM doc_gaps").run();
   assert.equal(report.isReportDue(), true, "never sent — due");
 
-  const posts: TestRow[] = [];
+  const posts: PostedMessage[] = [];
   const client = {
     chat: {
-      postMessage: async (payload: TestRow) => {
+      postMessage: async (payload: PostedMessage) => {
         posts.push(payload);
         return { ts: "1" };
       },
@@ -444,17 +413,13 @@ test("a report is due once per week and not twice after a restart", async () => 
   assert.equal(posts.length, 1);
   assert.equal(report.isReportDue(), false, "just sent — not due again");
 
-  // A restart re-reads the marker from SQLite rather than from memory.
   await report.tick(client);
   assert.equal(posts.length, 1, "a restart must not repost the same week");
 
-  // Once the next boundary passes, it is due again.
   db.handle().query("UPDATE metrics SET created_at = ? WHERE kind = ?").run(Date.now() - 30 * 24 * 60 * 60 * 1000, report.SENT_METRIC);
   assert.equal(report.isReportDue(), true);
 });
 
-// A failed post must not mark the week as done, or the report is lost until the
-// next one.
 test("a post that throws leaves the report due", async () => {
   db.handle().query("DELETE FROM metrics").run();
   const client = {
@@ -484,8 +449,6 @@ test("with no channel configured the weekly post is skipped, not attempted", asy
   }
 });
 
-// A first report has nothing to compare against; claiming a triumphant "+43"
-// against a week of silence is an artefact, not a trend.
 test("no trend is shown when the previous week has no data", () => {
   db.handle().query("DELETE FROM doc_gaps").run();
   db.handle().query("DELETE FROM metrics").run();
@@ -498,8 +461,6 @@ test("no trend is shown when the previous week has no data", () => {
   assert.doesNotMatch(text, /against 0 the week before/);
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
-// Report cadence + gap-judge fail-closed + channel precedence. Append-only.
 
 test("char: reportChannel prefers explicit config over the help channel", () => {
   const savedReport = config.reportChannel;

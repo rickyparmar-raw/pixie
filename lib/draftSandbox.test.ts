@@ -1,7 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 process.env.PIXIE_PROGRAMS_JSON = "[]";
 
-type TestRow = Record<string, any>;
+interface PostedMessage { channel?: string; [key: string]: unknown; }
 
 const { test, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
@@ -43,7 +43,6 @@ test("canonical Jame Gam draft docs are persisted as owned source rows", () => {
 
 test("draft binding resolves across workspaces (production PIXIE_WORKSPACE_ID unset)", () => {
   sandbox.register({ id: "jame-gam", status: "suspended", privateSandboxOnly: true, workspaceId: "T0266FRGM", sandboxBindings: [{ channelId: "C0C14QK28LD", role: "help" }], sourceTexts: { docs: "Jame Gam docs" } });
-  // Production event resolves to default workspace; binding was stored under T0266FRGM.
   assert.equal(sandbox.getForChannel("C0C14QK28LD", null)?.draftProgramId, "jame-gam");
   assert.equal(sandbox.getForChannel("C0C14QK28LD", "T-OTHER")?.draftProgramId, "jame-gam");
 });
@@ -67,15 +66,14 @@ test("suspended draft sandbox answers without production claim; muted posture an
     { id: "jame-gam", status: "suspended", privateSandboxOnly: true, sandboxBindings: [] },
     { docs: "Jame Gam prize selection DM arrives in Slack." },
   );
-  // Production must not own the sandbox channel.
   assert.equal(db.getChannelOwner("T0266FRGM", "C-DRAFT-HELP"), null);
   const prog = programs.forChannel("C-DRAFT-HELP", null);
   assert.equal(prog.id, "ysws-global");
   const savedAnswer = answer.getGroundedAnswer;
   const savedSend = slackMessages.sendProgramMessage;
-  const posted: TestRow[] = [];
+  const posted: PostedMessage[] = [];
   answer.getGroundedAnswer = async () => ({ answer: "draft answer", source: "docs" });
-  slackMessages.sendProgramMessage = async (args: TestRow) => { posted.push(args); return { ts: "1" }; };
+  slackMessages.sendProgramMessage = async (args: PostedMessage) => { posted.push(args); return { ts: "1" }; };
   try {
     await handlers.onMessage({
       event: { channel: "C-DRAFT-HELP", user: "U-TESTER", text: "where do i get the prize selection dm for jame gam?", ts: "1789202762.605789" },
@@ -114,9 +112,9 @@ test("draft help question creates one sandbox ticket in its bound sink without a
   );
   const savedAnswer = answer.getGroundedAnswer;
   const savedSend = slackMessages.sendProgramMessage;
-  const posted: TestRow[] = [];
+  const posted: PostedMessage[] = [];
   answer.getGroundedAnswer = async () => ({ answer: "draft answer", source: "docs" });
-  slackMessages.sendProgramMessage = async (args: TestRow) => { posted.push(args); return { ts: `post-${posted.length}` }; };
+  slackMessages.sendProgramMessage = async (args: PostedMessage) => { posted.push(args); return { ts: `post-${posted.length}` }; };
   const event = { channel: "C-DRAFT-HELP", user: "U-TESTER", text: "where do i get the prize selection dm?", ts: "draft-ticket-1", team: "T0266FRGM" };
   try {
     await handlers.onMessage({ event, client: {} });
@@ -129,8 +127,8 @@ test("draft help question creates one sandbox ticket in its bound sink without a
   assert.ok(ticket, "a draft help question must create a sandbox ticket");
   assert.equal(ticket.sink_channel, "C-DRAFT-SINK");
   assert.equal(db.getTicketByThreadTs("draft-ticket-1", "T0266FRGM", "jame-gam"), null, "draft tickets must not enter the production tickets table");
-  assert.equal(posted.filter((post: TestRow) => post.channel === "C-DRAFT-SINK").length, 1, "Slack retries must not duplicate the sink card");
-  assert.equal(posted.filter((post: TestRow) => post.channel === "C-DRAFT-HELP").length, 1, "Slack retries must not duplicate the same-thread answer");
+  assert.equal(posted.filter((post: PostedMessage) => post.channel === "C-DRAFT-SINK").length, 1, "Slack retries must not duplicate the sink card");
+  assert.equal(posted.filter((post: PostedMessage) => post.channel === "C-DRAFT-HELP").length, 1, "Slack retries must not duplicate the same-thread answer");
 });
 
 test("unanswerable draft question posts scoped fallback instead of silence", async () => {
@@ -153,9 +151,9 @@ test("unanswerable draft question posts scoped fallback instead of silence", asy
   );
   const savedAnswer = answer.getGroundedAnswer;
   const savedSend = slackMessages.sendProgramMessage;
-  const posted: TestRow[] = [];
+  const posted: PostedMessage[] = [];
   answer.getGroundedAnswer = async () => null;
-  slackMessages.sendProgramMessage = async (args: TestRow) => { posted.push(args); return { ts: "1" }; };
+  slackMessages.sendProgramMessage = async (args: PostedMessage) => { posted.push(args); return { ts: "1" }; };
   try {
     await handlers.onMessage({
       event: { channel: "C-DRAFT-HELP", user: "U-TESTER", text: "something not in draft docs?", ts: "1789203999.000001" },

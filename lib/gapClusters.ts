@@ -1,39 +1,42 @@
-// FAQ gap intelligence: doc_gaps rows are individual misses; organizers need
-// "17 people asked about PCBWay this week". Clustering is deterministic
-// token-overlap (union-find), never embeddings — explainable, stable, and
-// cheap. Drafts flow into the same candidate pipeline as resolution memory,
-// so approval means the same verification stamp and cache invalidation.
 const db = require("./db");
 const retrieve = require("./retrieve");
 const audit = require("./audit");
 const programs = require("./programs");
 const log = require("./log");
 
-type Row = Record<string, any>;
+interface GapRow {
+  question: string;
+  user_id: string | null;
+  channel: string | null;
+  message_ts: string | null;
+  created_at: number;
+}
+
+interface LearnedFactRow { question: string; answer: string }
+interface ClusterSummary {
+  representative: string;
+  variants: number;
+  askCount: number;
+  askers: number;
+  firstSeen: number;
+  lastSeen: number;
+  escalated: number;
+  covered: boolean;
+  threads: Array<{ channel: string; messageTs: string }>;
+}
+interface ClusterResponse { error?: string; clusters?: ClusterSummary[]; ok?: boolean; candidate?: { status: string; answer: string }; grounded?: boolean }
 type QuestionGroup = { question: string; askCount: number; askers: Set<string>; firstSeen: number; lastSeen: number; threads: Array<{ channel: string; messageTs: string }> };
 
-// 0.35 joins clear paraphrases without merging everything that shares "how do i".
 const DEFAULT_THRESHOLD = 0.35;
 
-// Long keywords survive phrasing changes ("pcb way" vs "pcbway") where token
-// overlap goes to zero. Length-gated so everyday words cannot glue unrelated
-// questions together; clustering is a triage suggestion, and organizers can
-// always split what it joins.
 const KEYWORD_MIN_LEN = 6;
 const KEYWORD_SIM = 0.5;
 
-// Thirty days: a triage window long enough to see a trend, short enough that
-// last month's answered gaps age out on their own.
 const DEFAULT_SINCE_MS = 30 * 24 * 60 * 60 * 1000;
-// Two distinct askers before a cluster surfaces: one person's repeat is a
-// ticket, two people's same question is a missing doc.
 const DEFAULT_MIN_ASKERS = 2;
-// 0.6 overlap against an approved fact means the gap is already answered.
 const COVERAGE_THRESHOLD = 0.6;
-// Cap per-question thread samples so one viral thread cannot dominate a cluster.
 const MAX_THREADS_PER_QUESTION = 3;
 const MAX_THREADS_PER_CLUSTER = 3;
-// Cap fact scan for coverage so a huge learned table cannot stall triage.
 const COVERAGE_FACT_LIMIT = 200;
 
 function despace(s: unknown): string {
@@ -59,9 +62,6 @@ function keywordContained(a: string, b: string, cachedSets: ((question: string) 
   return false;
 }
 
-// Token sets are memoized per clustering pass: pairOverlap is called O(n²)
-// times and retokenizing the same questions on every pair dominated burst
-// detection over a few hundred tickets.
 function tokenSetCache(questions: string[]): (q: string) => Set<string> {
   const cache = new Map<string, Set<string>>();
   return (q: string) => {
@@ -121,15 +121,13 @@ function clusterQuestions(questions: string[], threshold = DEFAULT_THRESHOLD): s
   return [...groups.values()];
 }
 
-function fetchGapRows(programId: string, sinceMs: number): Row[] {
-  // Strictly program-scoped: unscoped legacy rows carry other programs'
-  // members' questions and user ids, so they are never shown to a program.
+function fetchGapRows(programId: string, sinceMs: number): GapRow[] {
   return db.handle().query(
     "SELECT question, user_id, channel, message_ts, created_at FROM doc_gaps WHERE created_at > ? AND program_id = ?",
   ).all(Date.now() - sinceMs, programId);
 }
 
-function groupRowsByQuestion(rows: Row[]): QuestionGroup[] {
+function groupRowsByQuestion(rows: GapRow[]): QuestionGroup[] {
   const byQuestion = new Map<string, QuestionGroup>();
   for (const r of rows) {
     const q = String(r.question || "").trim();
@@ -170,14 +168,14 @@ function countEscalated(parts: QuestionGroup[], programId: string): number {
 function isCovered(representative: string, programId: string): boolean {
   try {
     const facts = db.approvedFacts(COVERAGE_FACT_LIMIT, programId);
-    return facts.some((f: Row) => pairOverlap(representative, `${f.question} ${f.answer}`.slice(0, 200)) >= COVERAGE_THRESHOLD);
+    return facts.some((f: LearnedFactRow) => pairOverlap(representative, `${f.question} ${f.answer}`.slice(0, 200)) >= COVERAGE_THRESHOLD);
   } catch (e) {
     log.warn("gapClusters", `failed to check coverage for representative: ${e instanceof Error ? e.message : String(e)}`);
     return false;
   }
 }
 
-function summarizeCluster(members: string[], byQuestion: Map<string, QuestionGroup>, programId: string): Row {
+function summarizeCluster(members: string[], byQuestion: Map<string, QuestionGroup>, programId: string): ClusterSummary {
   const parts = members.map((q) => byQuestion.get(q) as QuestionGroup);
   const askers = new Set();
   for (const p of parts) for (const u of p.askers) askers.add(u);
@@ -195,7 +193,7 @@ function summarizeCluster(members: string[], byQuestion: Map<string, QuestionGro
   };
 }
 
-function clusterGaps({ programId, sinceMs = DEFAULT_SINCE_MS, minAskers = DEFAULT_MIN_ASKERS }: { programId?: string; sinceMs?: number; minAskers?: number } = {}): Row {
+function clusterGaps({ programId, sinceMs = DEFAULT_SINCE_MS, minAskers = DEFAULT_MIN_ASKERS }: { programId?: string; sinceMs?: number; minAskers?: number } = {}): ClusterResponse {
   if (!programId) return { error: "programId required" };
   let rows = [];
   try {
@@ -209,20 +207,16 @@ function clusterGaps({ programId, sinceMs = DEFAULT_SINCE_MS, minAskers = DEFAUL
   const byQuestion = new Map(distinct.map((g: QuestionGroup) => [g.question, g]));
   const clusters = clusterQuestions(distinct.map((g) => g.question))
     .map((members) => summarizeCluster(members, byQuestion, programId))
-    .filter((c: Row) => c.askers >= minAskers)
-    .sort((a: Row, b: Row) => b.askers - a.askers || b.askCount - a.askCount);
+    .filter((c: ClusterSummary) => c.askers >= minAskers)
+    .sort((a: ClusterSummary, b: ClusterSummary) => b.askers - a.askers || b.askCount - a.askCount);
   return { clusters };
 }
 
-async function proposeFaq({ programId, actorId, question }: { programId: string; actorId?: string | null; question: string }): Promise<Row> {
+async function proposeFaq({ programId, actorId, question }: { programId: string; actorId?: string | null; question: string }): Promise<ClusterResponse> {
   const program = programs.get(programId);
   if (!program) return { error: "unknown program" };
   const clean = String(question || "").trim();
   if (!clean) return { error: "question required" };
-  // Draft grounded in current docs where possible; an ungrounded draft is
-  // still useful as a starting point the approver must verify or rewrite.
-  // Copilot stays lazily required: it pulls knowledge->learn at load, and
-  // hoisting it here would harden that chain into a load-time cycle.
   let draft = "";
   let grounded = false;
   try {

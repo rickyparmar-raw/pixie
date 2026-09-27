@@ -1,6 +1,6 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-type TestRow = Record<string, any>;
+interface ClusterRow { representative: string; variants: number; askers: number; askCount: number; covered: boolean; }
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -37,13 +37,12 @@ test("clusterGaps aggregates asks, askers, and coverage per program", () => {
   }
   const res = clusters.clusterGaps({ programId: "gc-hwy", minAskers: 1 });
   assert.ok(!res.error);
-  const pcb = res.clusters.find((c: TestRow) => c.representative.includes("pcbway") || c.variants > 1);
-  assert.ok(pcb, JSON.stringify(res.clusters.map((c: TestRow) => c.representative)));
+  const pcb = res.clusters.find((c: ClusterRow) => c.representative.includes("pcbway") || c.variants > 1);
+  assert.ok(pcb, JSON.stringify(res.clusters.map((c: ClusterRow) => c.representative)));
   assert.equal(pcb.askers, 3);
   assert.equal(pcb.askCount, 3);
   assert.equal(pcb.covered, false);
 
-  // Another program sees none of it.
   const other = clusters.clusterGaps({ programId: "gc-elsewhere", minAskers: 1 });
   assert.equal(other.clusters.length, 0);
 });
@@ -51,7 +50,7 @@ test("clusterGaps aggregates asks, askers, and coverage per program", () => {
 test("coverage flips once an approved fact answers the cluster", async () => {
   db.addLearnedFact({ question: "can pcbway be used", answer: "yes, allowed", status: "approved", programId: "gc-hwy" });
   const res = clusters.clusterGaps({ programId: "gc-hwy", minAskers: 1 });
-  const pcb = res.clusters.find((c: TestRow) => c.variants > 1);
+  const pcb = res.clusters.find((c: ClusterRow) => c.variants > 1);
   assert.equal(pcb.covered, true);
 });
 
@@ -72,7 +71,6 @@ test("proposeFaq stores a candidate without AI when providers are down", async (
   }
 });
 
-/* ------------------------------------------- STEP 1 characterization pins -- */
 
 test("pairOverlap threshold 0.35 separates paraphrases from unrelated questions", () => {
   const same = clusters.clusterQuestions(["how do i submit my project for review", "how do i submit my project for approval"], 0.35);
@@ -84,19 +82,16 @@ test("pairOverlap threshold 0.35 separates paraphrases from unrelated questions"
 test("long-keyword bridging joins pcbway spellings below token overlap", () => {
   const groups = clusters.clusterQuestions(["can pcbway be used", "can i order from pcb way"], 0.35);
   assert.equal(groups.length, 1);
-  // Short everyday words must not glue unrelated questions.
   const short = clusters.clusterQuestions(["is it up yet", "is it down yet"], 0.9);
   assert.ok(short.length >= 1);
 });
 
-// Unscoped rows carry other programs' members' questions and user ids, so
-// they are never shown to a single program (previously "shared by design").
 test("unscoped gaps are never shown to a program", () => {
   db.saveProgram({ id: "gc-shared-pin", name: "SharedPin", helpChannel: "C-SHARED-PIN", channels: ["C-SHARED-PIN"] });
   programs.invalidate();
   db.recordGap("char unscoped shared question", "U9", "C-SHARED-PIN", "char-unscoped-ts-1", null);
   const res = clusters.clusterGaps({ programId: "gc-shared-pin", minAskers: 1 });
   assert.ok(!res.error);
-  assert.ok(!res.clusters.some((c: TestRow) => c.representative.includes("char unscoped shared question")));
+  assert.ok(!res.clusters.some((c: ClusterRow) => c.representative.includes("char unscoped shared question")));
 });
 export {};

@@ -4,7 +4,6 @@ const assert = require("node:assert/strict");
 const auth = require("./auth");
 
 test("parseCookies returns empty object for no header", () => {
-  // parseCookies is internal — tested via getSession returning null with no cookie.
   assert.ok(true);
 });
 
@@ -21,7 +20,6 @@ test("requireSession returns null with no cookie", () => {
 });
 
 test("requireAdmin returns 403 for non-admin when session exists", () => {
-  // Can't test fully without signing a cookie, but the structure checks out.
   assert.ok(auth.requireSession);
   assert.ok(auth.requireAdmin);
 });
@@ -41,11 +39,6 @@ test("handleLogout sets an expired cookie", () => {
   assert.ok(result.headers["Set-Cookie"]?.includes("Max-Age=0"));
 });
 
-/* ------------------------------------------------------------------ */
-/* STEP 1 characterization pins (auth.js): sessionSecret ephemeral,    */
-/* dev-testing bypass, requireAdmin/requireSession matrix. DO NOT      */
-/* weaken — the rewrite must keep every pin green.                     */
-/* ------------------------------------------------------------------ */
 
 test("char: sign/verify roundtrips in-process; tampered or malformed tokens fail", () => {
   const token = auth.signSession("U-char", "Char", "user");
@@ -53,10 +46,8 @@ test("char: sign/verify roundtrips in-process; tampered or malformed tokens fail
   const sess = auth.verifySession(token);
   assert.equal(sess.userId, "U-char");
   assert.equal(sess.role, "user");
-  // Tampered payload fails.
   const [enc] = token.split(".");
   assert.equal(auth.verifySession(`${enc}.deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef`), null);
-  // Malformed tokens fail soft (null, never throw).
   assert.equal(auth.verifySession(null), null);
   assert.equal(auth.verifySession(""), null);
   assert.equal(auth.verifySession("no-dot-here"), null);
@@ -66,9 +57,6 @@ test("char: expired sessions and sessions without userId are rejected", () => {
   const crypto = require("crypto");
   const good = auth.signSession("U-exp", "Exp", "user");
   assert.ok(auth.verifySession(good));
-  // Forge an expired payload by re-signing manually is unnecessary: verify
-  // rejects past expiresAt. Craft via signSession then backdate is internal,
-  // so pin the observable: a token signed with a different secret fails.
   const saved = process.env.PIXIE_SESSION_SECRET;
   try {
     process.env.PIXIE_SESSION_SECRET = "char-secret-a";
@@ -86,7 +74,6 @@ test("char: requireAdmin matrix — 401 no session, 403 non-admin, ok admin", ()
   assert.equal(auth.requireAdmin(noSess).status, 401);
   const userTok = auth.signSession("U-plain-user", "Plain", "user");
   const userReq = { headers: { get: () => `${auth.COOKIE_NAME}=${userTok}` } };
-  // U-plain-user is not an admin: 403 (unless the deployer allowlisted it).
   const res = auth.requireAdmin(userReq);
   assert.ok(res.status === 403 || res.session, "non-admin yields 403 or (if allowlisted) a session — never 401");
   const adminTok = auth.signSession("admin", "Admin", "admin");
@@ -104,7 +91,6 @@ test("char: dev-testing bypass is gated on SLACK_CLIENT_ID=dev-testing only", ()
     const req = { headers: { get: () => `${auth.COOKIE_NAME}=${tok}` } };
     assert.ok(auth.requireAdmin(req).session, "dev-user passes while dev-testing");
     process.env.SLACK_CLIENT_ID = "real-client-id";
-    // A user-role dev-user cookie must NOT pass outside dev-testing (unless allowlisted).
     const userTok = auth.signSession("dev-user", "Developer", "user");
     const userReq = { headers: { get: () => `${auth.COOKIE_NAME}=${userTok}` } };
     const out = auth.requireAdmin(userReq);

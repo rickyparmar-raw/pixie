@@ -1,6 +1,3 @@
-// Slack OAuth for the web console. Signs users in via openid.connect so we get
-// their Slack user ID, then gates every view and every API call through the
-// same isAdmin() function the slash commands use.
 const crypto = require("crypto");
 const { isAdmin } = require("../config");
 const log = require("../log");
@@ -13,10 +10,18 @@ const sessions = new Map();
 type Session = { userId: string; userName: string; role: string };
 type AuthRequest = Request;
 type AuthResult = { status: number; body?: Record<string, unknown>; headers?: Record<string, string> };
+interface SlackTokenResponse {
+  ok: boolean;
+  error?: string;
+  access_token?: string;
+}
+interface SlackUserInfoResponse {
+  ok: boolean;
+  error?: string;
+  name?: string;
+  "https://slack.com/user_id": string;
+}
 
-// Ephemeral fallback for when PIXIE_SESSION_SECRET isn't configured: a random
-// per-process secret keeps dev mode working. Sessions just die on restart
-// instead of signSession() returning null and handing out a broken cookie.
 let ephemeralSecret: string | null = null;
 
 function sessionSecret() {
@@ -82,11 +87,6 @@ function requireAdmin(req: AuthRequest): AuthResult | { session: Session } {
   return { session };
 }
 
-// Single place for "is this session an admin?". Preserved exactly:
-// signed role=admin, legacy userId=admin, the config allowlist, plus the
-// dev-testing bypass which ONLY fires when SLACK_CLIENT_ID=dev-testing (test
-// envs). Production (any other CLIENT_ID, including unset) never takes the
-// bypass — a plain dev-user cookie there still falls through to isAdmin().
 function isAdminSession(session: Session | null): boolean {
   if (!session) return false;
   if (session.role === "admin" || session.userId === "admin") return true;
@@ -147,7 +147,7 @@ async function handleCallback(req: AuthRequest): Promise<AuthResult> {
       }),
     });
 
-    const tokenData = await tokenRes.json() as Record<string, any>;
+    const tokenData = await tokenRes.json() as SlackTokenResponse;
     if (!tokenData.ok) {
       log.error("auth", `token exchange failed: ${tokenData.error}`);
       return { status: 401, body: { error: "auth failed" } };
@@ -156,7 +156,7 @@ async function handleCallback(req: AuthRequest): Promise<AuthResult> {
     const userRes = await fetch("https://slack.com/api/openid.connect.userInfo", {
       headers: { Authorization: `Bearer ${tokenData.access_token}` },
     });
-    const userData = await userRes.json() as Record<string, any>;
+    const userData = await userRes.json() as SlackUserInfoResponse;
     if (!userData.ok) {
       log.error("auth", `userinfo failed: ${userData.error}`);
       return { status: 401, body: { error: "auth failed" } };

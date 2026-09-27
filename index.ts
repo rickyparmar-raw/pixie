@@ -1,5 +1,3 @@
-// Bootstrap. Event routing lives in lib/handlers.js, the answering pipeline in
-// lib/respond.js, slash commands and the home tab in lib/commands.js.
 const { App } = require("@slack/bolt");
 const { config, validate, resolveBotUserId } = require("./lib/config");
 const knowledge = require("./lib/knowledge");
@@ -17,11 +15,6 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-// Measured: the first request after an idle stretch costs ~2000ms against
-// ~1250ms warm — a TLS handshake pixie pays for because a help channel is quiet
-// between questions, which is exactly when the socket gets dropped. GET /models
-// returns 200 and costs no tokens; it exists here only to hold the connection
-// open so the next real question doesn't pay for one.
 const KEEPALIVE_INTERVAL_MS = 60 * 1000;
 
 function startKeepAlive() {
@@ -44,9 +37,6 @@ async function startBot() {
   }
   db.startSweeper();
 
-  // A channel with two roles (main of one program, help of another; or env
-  // and program config disagreeing) makes every routing decision depend on
-  // load order. Refuse to start instead.
   const roles = require("./lib/channelPolicy").validate();
   if (!roles.ok) {
     for (const e of roles.errors) log.error("config", `channel role conflict: ${errorText(e)}`);
@@ -55,9 +45,6 @@ async function startBot() {
 
   try {
     const channelPolicy = require("./lib/channelPolicy");
-    // Rows with no channel at all date from before multi-tenancy, when this
-    // bot served Pixl alone (see scripts/hardwire-isolate-legacy-facts.mjs),
-    // so they belong to Pixl when Pixl is configured, and to nobody otherwise.
     const legacyOwner = require("./lib/programs").get("pixl") ? "pixl" : null;
     const facts = db.assignUnownedLearnedFacts((channel: string | null) => {
       if (!channel) return legacyOwner;
@@ -81,39 +68,28 @@ async function startBot() {
   app.event("reaction_removed", handlers.onReactionRemoved);
   commands.register(app);
 
-  // Bolt swallows listener errors by default; surfacing them keeps a broken
-  // handler from silently making pixie mute.
   app.error(async (error: Error) => {
     log.error("bolt", error.message);
   });
 
-  // The warmer answers the FAQ once the corpus is actually loaded — starting it
-  // first would have it asking questions against an empty knowledge base.
   knowledge
     .refreshCorpus()
     .then(() => warm.start())
     .catch((e: unknown) => log.error("knowledge", "initial corpus build failed:", errorText(e)));
   knowledge.startAutoRefresh(config.refreshIntervalMin);
   startKeepAlive();
-  // Judges the unclassified gap backlog on a slow loop, and posts the weekly
-  // report once it's due. Both are background work — see lib/report.js.
   report.start(app.client);
-  // Stale-ticket watchdog. No-op unless programs set SLA thresholds; one
-  // replica at a time via job lease — see lib/sla.js.
   try {
     require("./lib/sla").startSlaLoop(app.client);
   } catch (e) {
     log.error("sla", "loop failed to start:", errorText(e));
   }
-  // Support Radar detectors, same single-flight-across-replicas shape as the
-  // SLA loop — see lib/radar.js.
   try {
     require("./lib/radar").startRadarLoop();
   } catch (e) {
     log.error("radar", "loop failed to start:", errorText(e));
   }
 
-  // Web console: starts if SLACK_CLIENT_ID is set, silently skipped otherwise.
   const webServer = web.start();
   if (webServer) {
     const api = require("./lib/web/api");
@@ -121,12 +97,9 @@ async function startBot() {
   }
 
   await app.start();
-  // Mention detection compares against this, so it has to be resolved before
-  // the first message is handled in earnest.
   const botUserId = await resolveBotUserId(app.client);
   log.info("bot", `connected via Socket Mode as ${botUserId}`);
 
-  // Automatically join all configured public program channels
   try {
     const programs = require("./lib/programs");
     const channelList = programs.getChannelsList();
@@ -152,8 +125,6 @@ async function startBot() {
   }
 }
 
-// Offline test mode: `bun index.js --ask "how do i join pixl?"` builds the
-// corpus and prints what pixie would reply, no Slack connection needed.
 async function runAskCli(question: string): Promise<void> {
   validate({ needsSlack: false });
   db.open();
@@ -169,9 +140,6 @@ async function runAskCli(question: string): Promise<void> {
     return;
   }
 
-  // Same single call the mention path uses, so what --ask prints is what Slack
-  // would get. A null source means the docs didn't cover it and the reply is
-  // conversational.
   const result = await respond.answerOrChat(question, "");
   if (result?.answer) {
     console.log(`[pixie] source: ${result.source || "(conversational — not in docs)"}`);

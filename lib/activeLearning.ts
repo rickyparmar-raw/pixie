@@ -5,8 +5,53 @@ const programs = require("./programs");
 const retrieve = require("./retrieve");
 const resolutionMemory = require("./resolutionMemory");
 const learn = require("./learn");
+import type { Program, Ticket } from "./types";
 
-type Row = Record<string, any>;
+interface TicketEvent {
+  event_type: string;
+  actor_id: string | null;
+}
+
+interface LearnedFact {
+  id: number;
+  question: string;
+  answer: string;
+  status: string;
+  category: string | null;
+  program_id: string | null;
+  last_supported_at?: number | null;
+  created_at?: number | null;
+}
+
+interface ActiveTicket extends Ticket {
+  program?: Program | null;
+  resolution: string | null;
+  category: string | null;
+}
+
+interface Extraction {
+  problem: string;
+  solution?: string;
+  cause?: string;
+  category?: string;
+}
+
+interface FactDraft {
+  question: string;
+  answer: string;
+  category: string | null;
+}
+
+interface LearningResult {
+  ok: boolean;
+  skipped?: boolean;
+  duplicate?: boolean;
+  refreshed?: boolean;
+  autoLearned?: boolean;
+  superseded?: number[];
+  fact?: LearnedFact | null;
+  error?: string;
+}
 
 const SIMILARITY_THRESHOLD = 0.6;
 const PROGRAM_OBJECT_TOKENS = new Set(["submission", "project", "ysw", "pixl", "review", "payout"]);
@@ -50,19 +95,19 @@ function canSupersede(existingQuestion: string, nextQuestion: string): boolean {
   return informativeShared.length >= 2;
 }
 
-function helperAnswered(ticket: Row): boolean {
+function helperAnswered(ticket: ActiveTicket): boolean {
   const events = db.listTicketEvents(ticket.id, 100);
-  if (events.some((event: Row) => event.event_type === "helper_reply")) return true;
+  if (events.some((event: TicketEvent) => event.event_type === "helper_reply")) return true;
   const requester = ticket.requester_id;
   return [ticket.assignee_id, ticket.resolved_by].some((id) => id && id !== requester);
 }
 
-function excludedTicket(ticket: Row): boolean {
+function excludedTicket(ticket: ActiveTicket): boolean {
   if (!ticket || EXCLUDED.has(ticket.status) || ticket.duplicate_of) return true;
-  return db.listTicketEvents(ticket.id, 100).some((event: Row) => EXCLUDED.has(event.event_type));
+  return db.listTicketEvents(ticket.id, 100).some((event: TicketEvent) => EXCLUDED.has(event.event_type));
 }
 
-function answerFromExtraction(extraction: Row | null, ticket: Row): Row | null {
+function answerFromExtraction(extraction: Extraction | null, ticket: ActiveTicket): FactDraft | null {
   if (!extraction) return null;
   const answer = [extraction.solution, extraction.cause ? `Cause: ${extraction.cause}` : null].filter(Boolean).join("\n").trim();
   if (!answer) return null;
@@ -73,7 +118,7 @@ function answerFromExtraction(extraction: Row | null, ticket: Row): Row | null {
   };
 }
 
-async function extractFact(ticket: Row): Promise<Row> {
+async function extractFact(ticket: ActiveTicket): Promise<FactDraft> {
   let extraction = null;
   try {
     extraction = await resolutionMemory.extractCandidate(ticket, db.listTicketEvents(ticket.id, 50));
@@ -87,7 +132,7 @@ async function extractFact(ticket: Row): Promise<Row> {
   };
 }
 
-async function learnFromResolution({ ticket, workerId = null }: { ticket: Row; workerId?: string | null }): Promise<Row> {
+async function learnFromResolution({ ticket, workerId = null }: { ticket: ActiveTicket; workerId?: string | null }): Promise<LearningResult> {
   if (!ticket || !CLOSED.has(ticket.status) || excludedTicket(ticket) || !helperAnswered(ticket)) {
     return { ok: false, skipped: true };
   }
@@ -105,16 +150,15 @@ async function learnFromResolution({ ticket, workerId = null }: { ticket: Row; w
   const status = mode === "review" ? "candidate" : "approved";
   const overlaps = fact.category
     ? db.learnedFactsForOverlap(ticket.program_id, fact.category)
-      .filter((row: Row) => canSupersede(row.question, fact.question))
+      .filter((row: LearnedFact) => canSupersede(row.question, fact.question))
     : [];
-  const same = overlaps.find((row: Row) => normalizeAnswer(row.answer) === normalizeAnswer(fact.answer));
+  const same = overlaps.find((row: LearnedFact) => normalizeAnswer(row.answer) === normalizeAnswer(fact.answer));
   if (same) {
     db.refreshLearnedFact(same.id);
     learn.invalidateCorpus();
     return { ok: true, fact: db.getLearnedFactById(same.id), refreshed: true };
   }
 
-  // The helper whose reply carried the ticket (see tickets.resolveTicketWorker).
   const helperId = workerId || ticket.assignee_id || ticket.resolved_by || null;
   const id = db.addLearnedFact({
     question: fact.question,
@@ -144,7 +188,7 @@ async function learnFromResolution({ ticket, workerId = null }: { ticket: Row; w
     entityId: id,
     metadata: { ticketId: ticket.id, resolverId: helperId, autoLearned: mode === "auto" },
   });
-  return { ok: true, fact: stored, autoLearned: mode === "auto", superseded: overlaps.map((row: Row) => row.id) };
+  return { ok: true, fact: stored, autoLearned: mode === "auto", superseded: overlaps.map((row: LearnedFact) => row.id) };
 }
 
 export = {

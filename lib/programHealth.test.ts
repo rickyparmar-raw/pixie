@@ -1,6 +1,6 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-type TestRow = Record<string, any>;
+interface ProgramOptions { [key: string]: unknown; }
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -17,7 +17,7 @@ after(() => {
   programs.invalidate();
 });
 
-function seedProgram(id: string, extra: TestRow = {}) {
+function seedProgram(id: string, extra: ProgramOptions = {}) {
   db.saveProgram({ id, name: id, helpChannel: `C-${id}`, channels: [`C-${id}`], ...extra });
   programs.invalidate();
 }

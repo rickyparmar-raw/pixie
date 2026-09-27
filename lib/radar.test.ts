@@ -1,6 +1,11 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-type TestRow = Record<string, any>;
+interface TicketOverrides {
+  status?: string;
+  category?: string;
+  confidence?: number;
+}
+interface SignalRow { suppressed_until: number; type: string; program_id: string; status: string; }
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -17,7 +22,7 @@ after(() => {
   programs.invalidate();
 });
 
-function seedProgram(id: string, extra: TestRow = {}) {
+function seedProgram(id: string, extra: Record<string, unknown> = {}) {
   db.saveProgram({ id, name: id, helpChannel: `C-${id}`, channels: [`C-${id}`], ...extra });
   programs.invalidate();
 }
@@ -37,15 +42,13 @@ test("a suppressed signal stays suppressed through re-detection until it expires
   seedProgram("radar-b");
   const sig = radar.upsertSignal({ programId: "radar-b", type: "REOPEN_SPIKE", severity: "MEDIUM", title: "t", summary: "s", evidence: {}, fingerprint: "reopen", now: 1000 });
   radar.suppressSignal({ id: sig.id, actorId: "U1", duration: "1h" });
-  const suppressed = radar.getSignal(sig.id) as TestRow;
+  const suppressed = radar.getSignal(sig.id) as SignalRow;
   assert.equal(suppressed.status, "suppressed");
 
-  // Worsening re-detection before the window expires does not reactivate it.
   const stillSuppressed = radar.upsertSignal({ programId: "radar-b", type: "REOPEN_SPIKE", severity: "CRITICAL", title: "worse", summary: "s2", evidence: {}, fingerprint: "reopen", now: suppressed.suppressed_until - 1 });
   assert.equal(stillSuppressed.status, "suppressed");
   assert.equal(stillSuppressed.severity, "CRITICAL"); // evidence still updates
 
-  // Re-detection after expiry reactivates it as a fresh occurrence.
   const reactivated = radar.upsertSignal({ programId: "radar-b", type: "REOPEN_SPIKE", severity: "MEDIUM", title: "t3", summary: "s3", evidence: {}, fingerprint: "reopen", now: suppressed.suppressed_until + 1 });
   assert.equal(reactivated.status, "active");
   assert.equal(reactivated.first_detected_at, suppressed.suppressed_until + 1);
@@ -72,8 +75,6 @@ test("acknowledgeSignal and resolveSignal are program-scoped through requireHelp
 test("evaluateProgram auto-resolves a signal whose condition cleared", () => {
   seedProgram("radar-d");
   const stale = radar.upsertSignal({ programId: "radar-d", type: "STALE_TICKETS", severity: "HIGH", title: "old", summary: "s", evidence: {}, fingerprint: "backlog", now: 1000 });
-  // No tickets exist for this program, so this evaluate pass finds nothing —
-  // the stale signal above should be auto-resolved, not left dangling.
   radar.evaluateProgram("radar-d");
   const after = radar.getSignal(stale.id);
   assert.equal(after.status, "resolved");
@@ -103,7 +104,6 @@ test("detectStaleTickets ignores resolved/closed/duplicate/spam tickets", () => 
 test("detectEscalationSpike requires both a minimum count and a real jump over baseline", () => {
   seedProgram("radar-g");
   const now = Date.now();
-  // Two recent tickets only — below the minimum-count noise floor.
   db.createTicket({ programId: "radar-g", channel: "C-radar-g", threadTs: "a", requesterId: "U1", question: "q" });
   db.createTicket({ programId: "radar-g", channel: "C-radar-g", threadTs: "b", requesterId: "U2", question: "q" });
   assert.equal(radar.detectEscalationSpike("radar-g", now), null);
@@ -134,15 +134,11 @@ test("detectSourceFailures reports nothing once a source has since succeeded", (
   assert.deepEqual(radar.detectSourceFailures("radar-i"), []);
 });
 
-/* ------------------------------------------------------------------ */
-/* STEP 1 characterization pins: exact thresholds, fingerprints,      */
-/* lifecycle, and scoping as implemented. No LLM ever decides.        */
-/* ------------------------------------------------------------------ */
 
-function charTicket(programId: string, threadTs: string, ageMs: number, extra: TestRow = {}) {
+function charTicket(programId: string, threadTs: string, ageMs: number, extra: TicketOverrides = {}) {
   const id = db.createTicket({ programId, channel: `C-${programId}`, threadTs, requesterId: "U1", question: "q" });
   const sets = ["created_at = ?"];
-  const params = [Date.now() - ageMs];
+  const params: Array<string | number> = [Date.now() - ageMs];
   if (extra.status) { sets.push("status = ?"); params.push(extra.status); }
   if (extra.category !== undefined) { sets.push("category = ?"); params.push(extra.category); }
   if (extra.confidence !== undefined) { sets.push("ai_confidence = ?"); params.push(extra.confidence); }
@@ -184,9 +180,7 @@ test("char: ESCALATION pins min-3, 1h window, 6h baseline, 2x jump", () => {
   assert.ok(fired);
   assert.equal(fired.fingerprint, "spike");
   assert.equal(fired.evidence.windowMs, 60 * 60 * 1000);
-  // No baseline: ratio falls back to the raw recent count (5) -> CRITICAL.
   assert.equal(fired.severity, "CRITICAL");
-  // Heavy 6h baseline suppresses the same recent count (threshold = max(3, 2x baseline rate)).
   for (let i = 0; i < 30; i++) charTicket("char-esc-base", `cb-old-${i}`, 2 * 60 * 60 * 1000);
   for (const t of ["cb-n1", "cb-n2", "cb-n3"]) {
     db.createTicket({ programId: "char-esc-base", channel: "C-char-esc-base", threadTs: t, requesterId: "U1", question: "q" });
@@ -286,8 +280,6 @@ test("char: suppress rejects unknown durations; evaluate auto-resolves active+ac
   const supp = radar.upsertSignal({ programId: "char-auto", type: "REOPEN_SPIKE", severity: "MEDIUM", title: "t", summary: "s", evidence: {}, fingerprint: "reopen", now: 1000 });
   assert.ok(radar.suppressSignal({ id: supp.id, actorId: "U1", duration: "bogus" }).error);
   radar.suppressSignal({ id: supp.id, actorId: "U1", duration: "24h" });
-  // No tickets exist, so every detector finds nothing: active + acknowledged
-  // auto-resolve, the live suppression is left alone.
   radar.evaluateProgram("char-auto");
   assert.equal(radar.getSignal(active.id).status, "resolved");
   assert.equal(radar.getSignal(acked.id).status, "resolved");
@@ -302,7 +294,7 @@ test("char: evaluateProgram is program-scoped — no cross-program leakage", () 
   assert.deepEqual(resB.signals, []);
   assert.deepEqual(radar.listSignals("char-leak-b"), []);
   const resA = radar.evaluateProgram("char-leak-a");
-  assert.ok(resA.signals.some((s: TestRow) => s.type === "STALE_TICKETS" && s.program_id === "char-leak-a"));
+  assert.ok(resA.signals.some((s: SignalRow) => s.type === "STALE_TICKETS" && s.program_id === "char-leak-a"));
   assert.deepEqual(radar.listSignals("char-leak-b"), []);
 });
 
@@ -310,7 +302,7 @@ test("char: KNOWLEDGE_GAP is a listed type no detector emits", () => {
   assert.ok(radar.TYPES.includes("KNOWLEDGE_GAP"));
   seedProgram("char-kg");
   const { signals } = radar.evaluateProgram("char-kg");
-  assert.ok(!signals.some((s: TestRow) => s.type === "KNOWLEDGE_GAP"));
+  assert.ok(!signals.some((s: SignalRow) => s.type === "KNOWLEDGE_GAP"));
 });
 
 test("char: startRadarLoop guards non-positive intervals", () => {

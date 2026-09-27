@@ -1,6 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-type TestRow = Record<string, any>;
+interface ProbeOptions { onText?: (text: string) => void; }
+interface MetricDetail { detail: string; count: number; }
 
 const { test, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -58,7 +59,6 @@ test("probe handles model errors without crashing", async () => {
   answer.getAnswerOrChatStream = async () => { throw new Error("model down"); };
   intent.classifyIntent = async () => "HELP_NEEDED";
 
-  // Stub getContext so the model is actually called (empty corpus returns null early).
   const knowledge = require("./knowledge");
   const originalContext = knowledge.getContext;
   knowledge.getContext = () => "fake corpus content";
@@ -84,30 +84,22 @@ test("db.metricDetails returns grouped detail counts", () => {
   const details = db.metricDetails("silent", 7 * 24 * 60 * 60 * 1000);
   assert.ok(details.length >= 2);
 
-  const a = details.find((d: TestRow) => d.detail === "test_reason_a");
+  const a = details.find((d: MetricDetail) => d.detail === "test_reason_a");
   assert.ok(a);
   assert.equal(a.count, 2);
 });
 
-// Restore stubs. process.on("exit") used to do this instead — which only
-// fires when the whole test process exits, not between files, so the last
-// stub set here (the "model down" thrower) leaked into every test file that
-// ran afterward and touched answer.getAnswerOrChatStream without setting its
-// own stub first.
 after(() => {
   answer.getAnswerOrChatStream = originalAnswer;
   intent.classifyIntent = originalIntent;
 });
 
-/* ------------------------------------------------ STEP 1 char pins -- */
-// Probe diagnostics: read-only by construction — no cache writes, no metrics,
-// empty input rejected before any model call.
 
 test("char: probe is read-only — it never writes the answer cache", async () => {
   const cache = require("./cache");
   const seen: unknown[][] = [];
   const origPut = cache.put;
-  cache.put = (...args: any[]) => { seen.push(args); return origPut(...args); };
+  cache.put = (...args: never[]) => { seen.push(args); return origPut(...args); };
   answer.getAnswerOrChatStream = async () => ({ source: "Pixl FAQ", answer: "probe answer" });
   intent.classifyIntent = async () => "HELP_NEEDED";
   try {
@@ -128,7 +120,7 @@ test("char: probe reports citation membership against retrieved chunks", async (
 });
 
 test("char: probe surfaces firstTokenMs only when streaming yields text", async () => {
-  answer.getAnswerOrChatStream = async (q: string, corpus: string, ctx: TestRow, opts: TestRow) => {
+  answer.getAnswerOrChatStream = async (q: string, corpus: string, ctx: unknown, opts: ProbeOptions) => {
     if (opts?.onText) opts.onText("partial");
     return { source: "Pixl FAQ", answer: "partial" };
   };

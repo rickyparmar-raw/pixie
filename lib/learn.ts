@@ -1,42 +1,36 @@
-// The learning loop. Pixie can only answer from its corpus, and the corpus is
-// a set of files someone has to edit and redeploy — so every question the docs
-// don't cover stays uncovered forever. This closes that: helpers can teach
-// pixie from inside Slack, and answers helpers give in a thread pixie missed
-// get captured automatically for review.
 const db = require("./db");
 const cache = require("./cache");
 const log = require("./log");
 const programs = require("./programs");
 const retrieve = require("./retrieve");
 const { config } = require("./config");
-// Module object, not a destructured `complete`: destructuring binds at load time
-// and makes the call impossible to stub, which forces every test through the
-// live API. Same reason lib/respond.js holds ./answer this way.
 const llm = require("./llm");
 
-type Fact = Record<string, any>;
+interface Fact {
+  id: number;
+  question: string;
+  answer: string;
+  status: string;
+  author_id?: string | null;
+  source_ts?: string | null;
+  channel?: string | null;
+  program_id?: string | null;
+  created_at?: number | null;
+  last_supported_at?: number | null;
+}
 
 const PENDING = "pending";
 const APPROVED = "approved";
 
-// `/pixie-teach <question> :: <answer>`
 const TEACH_SEPARATOR = "::";
 
-// Auto-capture guards. A reply has to look like an actual answer, not "lol" or
-// "same" — junk in the corpus is worse than a gap, because it gets stated with
-// the same confidence as the real docs.
 const MIN_CAPTURE_LENGTH = 25;
 const MAX_CAPTURE_LENGTH = 1500;
 const MAX_CAPTURES_PER_QUESTION = 2;
 
-// Five output tokens is enough for YES/NO; anything longer is the judge
-// rambling instead of judging.
 const JUDGE_MAX_TOKENS = 5;
-// Ten seconds: the judge must never hold up a reply path.
 const JUDGE_TIMEOUT_MS = 10000;
 
-// How many approved facts reach the corpus. Fifty Q/A pairs stay small enough
-// to pass through whole while covering the long tail helpers actually teach.
 const CORPUS_FACT_LIMIT = 50;
 
 function parseTeach(text: string): { question: string; answer: string } | null {
@@ -52,17 +46,11 @@ function parseTeach(text: string): { question: string; answer: string } | null {
   return { question, answer };
 }
 
-// Changing what pixie knows has to drop two caches, not one: the per-question
-// answer cache, and the memoised corpus string in knowledge.js. Missing the
-// second would leave a newly approved fact out of the corpus until the next
-// scheduled refresh. Required lazily so learn and knowledge don't form a
-// load-time cycle — knowledge.js pulls this module the same way.
 function invalidateCorpus() {
   cache.clearCache();
   require("./knowledge").invalidate();
 }
 
-// Teaching is deliberate, so it skips the queue entirely and enters active memory.
 function teach({ question, answer, authorId, threadTs = null, channel = null, programId = null }: { question: string; answer: string; authorId: string; threadTs?: string | null; channel?: string | null; programId?: string | null }): number | null {
   const id = db.addLearnedFact({
     question,
@@ -77,7 +65,6 @@ function teach({ question, answer, authorId, threadTs = null, channel = null, pr
   return id;
 }
 
-// Same insert path as teach(), but for the "Teach Pixie from thread" message shortcut
 function captureFromThread({ question, answer, authorId, threadTs, channel, programId = null, autoApprove = false }: { question: string; answer: string; authorId: string; threadTs: string; channel: string; programId?: string | null; autoApprove?: boolean }): number | null {
   const status = autoApprove ? APPROVED : PENDING;
   const id = db.addLearnedFact({ question, answer, authorId, status, sourceTs: threadTs, channel, programId });
@@ -96,7 +83,6 @@ function stripNoise(text: string): string {
 function isCaptureWorthy(text: string): boolean {
   const trimmed = (text || "").trim();
   if (trimmed.length < MIN_CAPTURE_LENGTH || trimmed.length > MAX_CAPTURE_LENGTH) return false;
-  // A reply that's only a mention, emoji or link isn't an answer.
   return stripNoise(trimmed).length >= MIN_CAPTURE_LENGTH;
 }
 
@@ -117,15 +103,6 @@ function judgeMessages(question: string, replyText: string): Array<{ role: strin
   ];
 }
 
-// The guards above are all shape checks — length, noise, who wrote it. None of
-// them can tell whether the text answers anything, and that is exactly what went
-// wrong: 96 captured rows where the "answer" was just the next thing said in the
-// thread. "pixie whats my slack id" filed under an answer of "pixie say my name,"
-// passes every cheap guard there is.
-//
-// So ask. Fails closed — a network error or an unparseable reply means no
-// capture, because a wrong fact in the corpus is stated with the same confidence
-// as the real docs, while a missed capture costs nothing but a second chance.
 async function judgeAnswer(question: string, replyText: string): Promise<boolean> {
   try {
     const { text } = await llm.complete(
@@ -150,18 +127,6 @@ async function judgeAnswer(question: string, replyText: string): Promise<boolean
   }
 }
 
-// Called for every human reply in a thread. Captures only when the thread's
-// parent is a question pixie recorded a miss on, and only once per reply.
-// Returns the new row id, or null when nothing was captured.
-//
-// Async because of the judge call, and deliberately not awaited by its caller —
-// this is bookkeeping and must never sit between a person and their reply.
-//
-// Passive thread auto-capture is hard-disabled: the 96-row junk incident proved
-// shape guards cannot tell an answer from the next chat line, so learning stays
-// on explicit /pixie-teach or manual approval. The unreachable history below
-// was the old gap->judge->insert path; it stays deleted, not commented, so no
-// future edit can re-enable it by removing one line.
 async function captureFromReply(_args: unknown): Promise<null> {
   void _args;
   return null;
@@ -177,7 +142,6 @@ function approved(limit = 200, programId: string | null = null): Fact[] {
 
 function approve(id: number): boolean {
   const ok = db.setLearnedStatus(id, APPROVED);
-  // Without this the answer cache keeps serving the pre-learning reply.
   if (ok) invalidateCorpus();
   return ok;
 }
@@ -200,22 +164,12 @@ function forgetRange(fromId: number, toId: number): number {
   return count;
 }
 
-// Rendered into the corpus in the same Q/A shape textFromJsonFaq() produces,
-// so the answer prompt needs no special handling and can cite it like any
-// other source. Returns "" when nothing is approved, so the section is omitted
-// rather than appearing empty.
 function corpusSection(programId: string | null = null): string {
   const facts = db.approvedFacts(CORPUS_FACT_LIMIT, programId);
   if (facts.length === 0) return "";
   return facts.map((f: Fact) => `Q: ${f.question}\nA: ${f.answer}`).join("\n\n");
 }
 
-// The context path never sends the whole taught section: in production it is
-// unbounded (~14k chars) and used to ride outside the retrieval budget,
-// crowding out the retrieved evidence it was meant to supplement. Only the
-// facts sharing vocabulary with the question travel, best first, capped at
-// LEARNED_MAX_FACTS whole facts within LEARNED_BUDGET chars. Program-scoped
-// like corpusSection — another program's facts never rank here.
 function relevantFacts(question: string, programId: string | null = null, { maxFacts = retrieve.LEARNED_MAX_FACTS, maxChars = retrieve.LEARNED_BUDGET }: { maxFacts?: number; maxChars?: number } = {}): Fact[] {
   const questionTokens = retrieve.tokenize(question);
   if (questionTokens.length === 0) return [];
@@ -231,8 +185,6 @@ function relevantFacts(question: string, programId: string | null = null, { maxF
     if (overlap !== 0) return overlap;
     return (b.fact.last_supported_at || b.fact.created_at || 0) - (a.fact.last_supported_at || a.fact.created_at || 0);
   });
-  // Pack whole facts so a citation never points at a severed answer; the
-  // caller (retrieve.selectContext) enforces the section char cap regardless.
   const picked = [];
   let used = 0;
   for (const { fact } of scored.slice(0, maxFacts)) {
@@ -244,9 +196,6 @@ function relevantFacts(question: string, programId: string | null = null, { maxF
   return picked;
 }
 
-// Question-scoped twin of corpusSection for the context path: same Q/A shape,
-// only the relevant facts. Returns "" when none match, so the section is
-// omitted rather than appearing empty.
 function relevantCorpusSection(question: string, programId: string | null = null, opts: { maxFacts?: number; maxChars?: number } = {}): string {
   const facts = relevantFacts(question, programId, opts);
   if (facts.length === 0) return "";

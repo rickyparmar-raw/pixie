@@ -1,7 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-type TestRow = Record<string, any>;
-type TestFn = (...args: any[]) => any;
+interface VerdictRow { sentence: string; verdict: string; }
+interface CandidateRow { ticketId: number; }
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -33,7 +33,7 @@ const BLOB = JSON.stringify([
   },
 ]);
 
-async function withCorpus(fn: TestFn) {
+async function withCorpus(fn: () => unknown) {
   const saved = process.env.PIXIE_PROGRAMS_JSON;
   const axios = require("axios");
   const realGet = axios.get;
@@ -59,9 +59,9 @@ test("factCheck marks supported claims and flags the rest", async () => {
   await withCorpus(async () => {
     const prog = programs.get("cp-hwy");
     const res = await copilot.factCheck({ program: prog, text: "PCBs from PCBWay are allowed for Highway builds. The moon is made of cheese." });
-    const byVerdict = Object.fromEntries(res.verdicts.map((v: TestRow) => [v.sentence.slice(0, 20), v.verdict]));
-    const supported = res.verdicts.find((v: TestRow) => v.verdict === "supported");
-    const unsupported = res.verdicts.find((v: TestRow) => v.verdict === "unsupported");
+    const byVerdict = Object.fromEntries(res.verdicts.map((v: VerdictRow) => [v.sentence.slice(0, 20), v.verdict]));
+    const supported = res.verdicts.find((v: VerdictRow) => v.verdict === "supported");
+    const unsupported = res.verdicts.find((v: VerdictRow) => v.verdict === "unsupported");
     assert.ok(supported, JSON.stringify(byVerdict));
     assert.ok(unsupported, JSON.stringify(byVerdict));
     assert.ok(supported.evidence.length > 0);
@@ -82,7 +82,7 @@ test("findSimilar ranks resolved tickets in-program by wording overlap", () => {
   const res = copilot.findSimilar({ programId: "cp-hwy", question: "can I order my pcb from pcbway" });
   assert.ok(res.candidates.length >= 1);
   assert.equal(res.candidates[0].ticketId, a);
-  assert.ok(!res.candidates.some((x: TestRow) => x.ticketId === c), "other programs never leak");
+  assert.ok(!res.candidates.some((x: CandidateRow) => x.ticketId === c), "other programs never leak");
   assert.ok(res.candidates[0].similarity > 0);
 });
 
@@ -150,23 +150,17 @@ test("copilot API enforces program scope, actors, and budgets", async () => {
   assert.match(limited.error, /rate limited/);
 });
 
-/* ------------------------------------------------------------------ */
-/* STEP 1 characterization pins (SUPPORT copilot): never-sends + scope */
-/* Append-only.                                                        */
-/* ------------------------------------------------------------------ */
 
 test("char: copilot never sends — read-only helper surface", async () => {
   const fs = require("fs");
   const path = require("path");
   const src = readSource("copilot.js");
-  // No Slack send path and no ticket/corpus write path in this module.
   assert.equal(src.includes("postMessage"), false);
   assert.equal(src.includes("postEphemeral"), false);
   assert.equal(src.includes('require("./tickets")'), false);
   assert.equal(src.includes('require("./slackMessages")'), false);
   assert.equal(/INSERT\s+INTO/i.test(src), false);
   assert.equal(/DELETE\s+FROM/i.test(src), false);
-  // The only ticket reference is the doc comment pointing at the human send path.
   assert.ok(!copilot.send && !copilot.post && !copilot.replyToTicket && !copilot.publish);
   assert.ok(typeof copilot.draftReply === "function");
   assert.ok(typeof copilot.improveReply === "function");
@@ -175,7 +169,6 @@ test("char: copilot never sends — read-only helper surface", async () => {
   assert.ok(typeof copilot.findSimilar === "function");
   assert.ok(typeof copilot.ask === "function");
 
-  // Behavioral: helpers return text without mutating tickets.
   const before = db.handle().query("SELECT COUNT(*) AS n FROM tickets").get().n;
   const real = lookup.answerOrChat;
   lookup.answerOrChat = async () => ({ source: "CP Highway Docs", answer: "draft text" });
@@ -191,18 +184,16 @@ test("char: copilot never sends — read-only helper surface", async () => {
 });
 
 test("char: copilot scopes every helper to its program", async () => {
-  // findSimilar never leaks across programs (second pin with fresh ids).
   const a = db.createTicket({ programId: "cp-hwy", workspaceId: "T1", channel: "C-HWY", threadTs: "char-cp-t1", requesterId: "U1", question: "char pcbway order scope" });
   db.resolveTicket(a, "allowed");
   const other = db.createTicket({ programId: "cp-scope-other", workspaceId: "T1", channel: "CX", threadTs: "char-cp-t2", requesterId: "U2", question: "char pcbway order scope" });
   db.resolveTicket(other, "other answer");
   const res = copilot.findSimilar({ programId: "cp-hwy", question: "char pcbway order scope" });
-  assert.ok(res.candidates.some((c: TestRow) => c.ticketId === a));
-  assert.ok(!res.candidates.some((c: TestRow) => c.ticketId === other));
+  assert.ok(res.candidates.some((c: CandidateRow) => c.ticketId === a));
+  assert.ok(!res.candidates.some((c: CandidateRow) => c.ticketId === other));
   assert.equal(res.programId, "cp-hwy");
   assert.equal(copilot.findSimilar({ programId: null, question: "q" }).error, "programId and question required");
 
-  // Every textual helper echoes the program it grounded in.
   const real = lookup.answerOrChat;
   lookup.answerOrChat = async () => ({ source: null, answer: null });
   try {
@@ -224,7 +215,6 @@ test("char: copilot scopes every helper to its program", async () => {
   } finally {
     llm.complete = realComplete;
   }
-  // Budgets are per-actor, not per-program.
   assert.equal(copilot.checkBudget("char-cp-fresh-actor"), null);
   for (let i = 0; i < 25; i++) copilot.checkBudget("char-cp-fresh-actor");
   assert.match(copilot.checkBudget("char-cp-fresh-actor").error, /rate limited/);

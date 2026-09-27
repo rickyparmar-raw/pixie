@@ -1,6 +1,6 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-type TestRow = Record<string, any>;
+interface FactRow { id: number; question: string; }
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -11,8 +11,6 @@ const learn = require("./learn");
 
 db.open(":memory:");
 
-// Capture is gated on the help channel. Set on the config object inside before()
-// and restored in after() so it doesn't pollute other test suites.
 let savedHelpChannel: string | undefined;
 let judgeVerdict = "YES";
 let realComplete: typeof llm.complete;
@@ -29,7 +27,6 @@ after(() => {
   llm.complete = realComplete;
 });
 
-/* ----------------------------------------------------------------- teach -- */
 
 test("parseTeach splits on the separator", () => {
   assert.deepEqual(learn.parseTeach("whats the prize :: a keyboard"), {
@@ -54,7 +51,6 @@ test("parseTeach rejects malformed input", () => {
   assert.equal(learn.parseTeach("Here's a thinking process: 1. analysis :: answer"), null);
 });
 
-// Teaching is deliberate, so it skips review and is usable immediately.
 test("teach stores an approved fact that reaches the corpus", () => {
   learn.teach({ question: "whats the prize for 3rd", answer: "a mechanical keyboard", authorId: "U1" });
 
@@ -67,14 +63,9 @@ test("corpusSection is empty when nothing is approved", () => {
   const fresh = require("./db");
   const before = fresh.approvedFacts().length;
   assert.ok(before >= 1, "previous test should have left an approved fact");
-  // With rows present it must not be empty — the empty case is covered by the
-  // generated-section guard in knowledge.getCorpus().
   assert.notEqual(learn.corpusSection(), "");
 });
 
-// Unlike teach(), a thread summary is LLM-written — it queues for review
-// instead of landing straight in the corpus, and the cache/corpus must be
-// untouched until someone approves it.
 test("captureFromThread queues as pending and does not touch the live corpus", () => {
   const cache = require("./cache");
   cache.put("thread-capture-probe", { source: "x", answer: "old answer" });
@@ -91,12 +82,10 @@ test("captureFromThread queues as pending and does not touch the live corpus", (
   assert.doesNotMatch(learn.corpusSection(), /how do i join pixl/);
   assert.ok(cache.get("thread-capture-probe"), "approving/teaching busts the cache, capture must not");
 
-  const row = learn.pending().find((r: TestRow) => r.id === id);
+  const row = learn.pending().find((r: FactRow) => r.id === id);
   assert.equal(row.status, "pending");
 });
 
-// sourceTs reuses learned_facts' unique index — the same guard captureFromReply
-// relies on to avoid double-capturing one reply.
 test("captureFromThread does not queue the same thread twice", () => {
   const first = learn.captureFromThread({
     question: "how do i deploy",
@@ -117,7 +106,6 @@ test("captureFromThread does not queue the same thread twice", () => {
   assert.equal(second, null);
 });
 
-/* --------------------------------------------------------------- capture -- */
 
 test("isCaptureWorthy rejects short or noise-only replies", () => {
   assert.equal(learn.isCaptureWorthy("lol"), false);
@@ -135,7 +123,6 @@ test("isCaptureWorthy accepts a real explanation", () => {
 });
 
 test("captureFromReply only fires on threads with a recorded gap", async () => {
-  // No gap recorded for this thread.
   assert.equal(
     await learn.captureFromReply({
       threadTs: "no-gap-thread",
@@ -162,9 +149,6 @@ test("captureFromReply is disabled and returns null for thread replies", async (
   assert.equal(id, null);
 });
 
-// The guard the other 96 rows needed. Every cheap check passes here — the reply
-// is long enough, from someone else, first in its thread — and it still isn't an
-// answer, which is precisely the shape of the junk that filled the table.
 test("captureFromReply drops a reply the judge says is not an answer", async () => {
   db.recordGap("pixie whats my slack id", "U1", "C1", "judge-thread-1");
 
@@ -180,12 +164,11 @@ test("captureFromReply drops a reply the judge says is not an answer", async () 
 
   assert.equal(id, null);
   assert.equal(
-    learn.pending(200).some((r: TestRow) => r.question === "pixie whats my slack id"),
+    learn.pending(200).some((r: FactRow) => r.question === "pixie whats my slack id"),
     false,
   );
 });
 
-// An outage must not quietly start trusting whatever was said next.
 test("captureFromReply fails closed when the judge call throws", async () => {
   db.recordGap("how do i rotate my key", "U1", "C1", "judge-thread-2");
 
@@ -205,7 +188,6 @@ test("captureFromReply fails closed when the judge call throws", async () => {
   assert.equal(id, null);
 });
 
-// #pixl threads are people talking to each other, not people being answered.
 test("captureFromReply only captures in the help channel", async () => {
   db.recordGap("how do i export a sprite", "U1", "C-other", "chan-thread-1");
 
@@ -221,7 +203,6 @@ test("captureFromReply only captures in the help channel", async () => {
   );
 });
 
-/* ---------------------------------------------------------------- review -- */
 
 test("approve moves a pending fact into the corpus", async () => {
   const id = learn.captureFromThread({
@@ -273,7 +254,6 @@ test("approve and forget report failure for an unknown id", () => {
   assert.equal(learn.forget(999999), false);
 });
 
-// A stale cached answer would otherwise keep being served after teaching.
 test("teaching clears the answer cache", () => {
   const cache = require("./cache");
   cache.put("some question", { source: "x", answer: "old answer" });
@@ -283,7 +263,6 @@ test("teaching clears the answer cache", () => {
   assert.equal(cache.get("some question"), null);
 });
 
-/* ------------------------------------------- STEP 1 characterization pins -- */
 
 test("teach stores APPROVED and captureFromThread defaults to PENDING", () => {
   const id1 = learn.teach({ question: "char approved q", answer: "char approved a", authorId: "U1" });
@@ -337,10 +316,6 @@ test("corpusSection renders Q/A shape textFromJsonFaq can round-trip", () => {
   }
 });
 
-/* -------------------------------- relevance-filtered learned context -- */
-// Production's taught section is unbounded, so the context path only sends the
-// facts sharing vocabulary with the question — best first, capped, and scoped
-// to the asking program.
 
 test("relevantCorpusSection includes the matching fact and drops the rest", () => {
   const ids = [

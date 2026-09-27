@@ -1,13 +1,35 @@
-// Draft-only runtime. Drafts never enter the production program registry or
-// production channel claims; this module owns their explicit test bindings.
 const db = require("./db");
+import type { SlackClient } from "./types";
 
 const DRAFT_PROGRAMS = new Map();
 const DRAFT_BINDINGS = new Map();
 
-type DraftProgram = Record<string, any>;
-type DraftBinding = Record<string, any>;
-type DraftClient = Record<string, any>;
+interface DraftBinding {
+  channelId?: string;
+  channel_id?: string;
+  role: "help" | "ticket";
+  draftProgramId?: string;
+  program_id?: string;
+  workspaceId?: string;
+  workspace_id?: string;
+  sandboxOnly: boolean;
+  enabled: boolean;
+  id?: number;
+  card_ts?: string | null;
+}
+
+interface DraftProgram {
+  id: string;
+  name?: string;
+  status: string;
+  privateSandboxOnly: boolean;
+  workspaceId?: string | null;
+  sourceTexts?: Record<string, string>;
+  sandboxBindings?: Array<{ channelId: string; role: "help" | "ticket" }>;
+  autoAssign?: boolean;
+  ticketsEnabled?: boolean;
+  lifecycle?: string;
+}
 
 function ensureTables() {
   db.handle().exec(`CREATE TABLE IF NOT EXISTS draft_sandbox_programs (program_id TEXT PRIMARY KEY, payload TEXT NOT NULL, created_at INTEGER NOT NULL); CREATE TABLE IF NOT EXISTS draft_sandbox_sources (program_id TEXT NOT NULL, source_name TEXT NOT NULL, text TEXT NOT NULL, PRIMARY KEY (program_id, source_name)); CREATE TABLE IF NOT EXISTS draft_sandbox_bindings (program_id TEXT NOT NULL, workspace_id TEXT NOT NULL, channel_id TEXT NOT NULL, role TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1, PRIMARY KEY (program_id, workspace_id, channel_id, role)); CREATE TABLE IF NOT EXISTS draft_sandbox_tickets (id INTEGER PRIMARY KEY AUTOINCREMENT, program_id TEXT NOT NULL, workspace_id TEXT NOT NULL, channel TEXT NOT NULL, thread_ts TEXT NOT NULL, sink_channel TEXT NOT NULL, requester_id TEXT NOT NULL, question TEXT NOT NULL, card_ts TEXT, created_at INTEGER NOT NULL, UNIQUE(program_id, workspace_id, thread_ts));`);
@@ -33,15 +55,9 @@ function getForChannel(channelId: string, workspaceId: string | null = null): Dr
   if (!channelId) return null;
   const exact = DRAFT_BINDINGS.get(`${workspaceId || "default"}:${channelId}`);
   if (exact && exact.enabled) return exact;
-  // Workspace-agnostic fallback: production Core runs with PIXIE_WORKSPACE_ID
-  // unset, so event workspace resolves to "default" while bindings were stored
-  // under T0266FRGM. A sandbox binding is explicit by channel, so a channel
-  // match across workspaces is safe (production-claimed channels are rejected
-  // at register/sync time).
   for (const binding of DRAFT_BINDINGS.values()) {
     if (binding.channelId === channelId && binding.enabled) return binding;
   }
-  // Last resort: consult persisted rows (covers in-memory map loss).
   try {
     ensureTables();
     const row = db.handle().query("SELECT * FROM draft_sandbox_bindings WHERE channel_id = ? AND enabled = 1 LIMIT 1").get(channelId) || null;
@@ -91,7 +107,7 @@ function getTicketForThread(programId: string, workspaceId: string | null = null
   return db.handle().query("SELECT * FROM draft_sandbox_tickets WHERE program_id = ? AND workspace_id = ? AND thread_ts = ?").get(programId, workspaceId || "default", threadTs) || null;
 }
 
-async function ensureSupportTicket({ programId, workspaceId = null, channel, threadTs, requesterId, question, client }: { programId: string; workspaceId?: string | null; channel: string; threadTs: string; requesterId: string; question: string; client?: DraftClient | null }): Promise<DraftBinding | null> {
+async function ensureSupportTicket({ programId, workspaceId = null, channel, threadTs, requesterId, question, client }: { programId: string; workspaceId?: string | null; channel: string; threadTs: string; requesterId: string; question: string; client?: SlackClient | null }): Promise<DraftBinding | null> {
   if (!programId || !threadTs || !channel || !requesterId || !question) return null;
   ensureTables();
   const workspace = workspaceId || "default";

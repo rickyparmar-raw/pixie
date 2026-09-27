@@ -1,6 +1,7 @@
 process.env.PIXIE_DB_PATH = ":memory:";
 
-type TestRow = Record<string, any>;
+interface AnalyticsDay { date: string; questions: number; }
+interface SlaViolation { rule: string; ticketId: number; }
 
 const { test, before, after } = require("node:test");
 const assert = require("node:assert/strict");
@@ -69,11 +70,10 @@ test("analytics daily series is zero-filled and splits a day by who answered", (
   assert.equal(daily.length, 31);
   assert.equal(daily.at(-1).date, day(now));
   assert.deepEqual(daily.at(-1), { date: day(now), questions: 2, aiOnly: 1, human: 1 });
-  assert.equal(daily.find((d: TestRow) => d.date === day(threeDaysAgo)).questions, 1);
-  // Quiet days are zeros, never gaps — a chart must not smooth over them.
-  assert.equal(daily.filter((d: TestRow) => d.questions === 0).length, 29);
+  assert.equal(daily.find((d: AnalyticsDay) => d.date === day(threeDaysAgo)).questions, 1);
+  assert.equal(daily.filter((d: AnalyticsDay) => d.questions === 0).length, 29);
 
-  assert.equal(analytics.overview("an-nobody-daily").daily.every((d: TestRow) => d.questions === 0), true);
+  assert.equal(analytics.overview("an-nobody-daily").daily.every((d: AnalyticsDay) => d.questions === 0), true);
 });
 
 test("SLA flags violations, cools down notifications, suggests actions", () => {
@@ -102,7 +102,6 @@ test("retention previews, enforces the audit floor, and deletes tenant-scoped", 
   programs.invalidate();
   assert.equal(retention.validatePolicy({ auditDays: 10 }), `audit retention cannot go below the platform minimum of 365 days`);
   assert.equal(retention.validatePolicy({ ticketsDays: 30 }), null);
-  // Floor wins over the stored 10.
   assert.equal(retention.policyFor("ret-hwy").auditDays, 365);
   assert.equal(retention.policyFor("ret-hwy").ticketsDays, 30);
 
@@ -124,7 +123,6 @@ test("retention previews, enforces the audit floor, and deletes tenant-scoped", 
   assert.equal(db.getTicket(id), null);
   assert.ok(db.getTicket(open), "open tickets survive regardless of age");
 
-  // Other tenants untouched.
   const other = db.createTicket({ programId: "ret-other", workspaceId: "T1", channel: "CX", threadTs: "ret-t3", requesterId: "U1", question: "q" });
   db.resolveTicket(other, "done");
   db.handle().query("UPDATE tickets SET created_at = ? WHERE id = ?").run(ancient, other);
@@ -140,7 +138,6 @@ test("job leases are single-flight with expiry takeover", () => {
   assert.equal(lease.acquire("test-job", 60000).held, true);
   const b = lease.acquire("test-job", 60000);
   void b;
-  // Expired leases can be taken over.
   db.handle().query("UPDATE job_leases SET expires_at = ? WHERE name = 'test-job'").run(Date.now() - 1);
   assert.equal(lease.acquire("test-job", 60000).held, true);
 });
@@ -151,10 +148,6 @@ test("analytics/SLA/retention routes reject unknown programs", () => {
   assert.match(api.internalRetentionPreview("nope").error, /unknown program/);
 });
 
-/* ------------------------------------------------------------------ */
-/* STEP 1 characterization pins (RADAR/ANALYTICS/SLA domain): exact   */
-/* SLA thresholds/cooldown/skip ownership and analytics shapes.       */
-/* ------------------------------------------------------------------ */
 
 function charSlaTicket(programId: string, threadTs: string, ageMs: number, status = "open") {
   const id = db.createTicket({ programId, workspaceId: "T1", channel: `C-${programId}`, threadTs, requesterId: "U1", question: "q" });
@@ -166,14 +159,13 @@ function charSlaTicket(programId: string, threadTs: string, ageMs: number, statu
 test("char: SLA thresholds are per-rule; null means off", () => {
   db.saveProgram({ id: "csla-off", name: "S", helpChannel: "C-csla-off", channels: ["C-csla-off"], sla: { unassignedMs: 60000 } });
   programs.invalidate();
-  // Only the unassigned rule is armed: old waiting/assigned tickets stay clean.
   charSlaTicket("csla-off", "csla-off-w", 3600000, "waiting_for_helper");
   const wid = db.createTicket({ programId: "csla-off", workspaceId: "T1", channel: "C-csla-off", threadTs: "csla-off-a", requesterId: "U1", question: "q" });
   db.assignTicket(wid, "U-helper");
   db.handle().query("UPDATE tickets SET assigned_at = ? WHERE id = ?").run(Date.now() - 3600000, wid);
   const checked = sla.checkProgram({ programId: "csla-off" });
-  assert.ok(checked.violations.every((v: TestRow) => v.rule === "unassigned"));
-  assert.ok(!checked.violations.some((v: TestRow) => v.ticketId === wid));
+  assert.ok(checked.violations.every((v: SlaViolation) => v.rule === "unassigned"));
+  assert.ok(!checked.violations.some((v: SlaViolation) => v.ticketId === wid));
 });
 
 test("char: SLA pins waiting_for_helper, assigned_no_response, and claimed mapping", () => {
@@ -183,13 +175,12 @@ test("char: SLA pins waiting_for_helper, assigned_no_response, and claimed mappi
   const a = db.createTicket({ programId: "csla-rules", workspaceId: "T1", channel: "C-csla-rules", threadTs: "csla-rules-a", requesterId: "U1", question: "q" });
   db.assignTicket(a, "U-helper");
   db.handle().query("UPDATE tickets SET assigned_at = ? WHERE id = ?").run(Date.now() - 3600000, a);
-  // assigned_at NULL falls back to created_at.
   const f = charSlaTicket("csla-rules", "csla-rules-f", 3600000, "assigned");
   db.handle().query("UPDATE tickets SET assignee_id = ?, assigned_at = NULL WHERE id = ?").run("U-helper", f);
   const c = charSlaTicket("csla-rules", "csla-rules-c", 3600000, "claimed");
   db.handle().query("UPDATE tickets SET assignee_id = ? WHERE id = ?").run("U-helper", c);
   const checked = sla.checkProgram({ programId: "csla-rules" });
-  const byId = Object.fromEntries(checked.violations.map((v: TestRow) => [v.ticketId, v.rule]));
+  const byId = Object.fromEntries(checked.violations.map((v: SlaViolation) => [v.ticketId, v.rule]));
   assert.equal(byId[w], "waiting_for_helper");
   assert.equal(byId[a], "assigned_no_response");
   assert.equal(byId[f], "assigned_no_response");
@@ -207,7 +198,6 @@ test("char: SLA cooldown is a strict 24h per (program,ticket,rule)", () => {
   sla.markNotified({ programId: "csla-cd", ticketId: id, rule: "unassigned", now: t0 });
   assert.deepEqual(sla.dueNotifications({ programId: "csla-cd", violations, now: t0 + sla.NOTIFY_COOLDOWN_MS }), []);
   assert.equal(sla.dueNotifications({ programId: "csla-cd", violations, now: t0 + sla.NOTIFY_COOLDOWN_MS + 1 }).length, 1);
-  // Cooldown key includes the rule: another rule for the same ticket is still due.
   assert.equal(sla.dueNotifications({ programId: "csla-cd", violations: [{ ticketId: id, rule: "waiting_for_helper" }], now: t0 }).length, 1);
 });
 
@@ -217,8 +207,6 @@ test("char: SLA loop guards; checkProgram itself never skips shadow/ysws-global"
   const timer = sla.startSlaLoop({}, 100000);
   assert.ok(timer);
   clearInterval(timer);
-  // Skip ownership lives in startSlaLoop, not checkProgram: even a shadow or
-  // ysws-global program still reports violations when checked directly.
   db.saveProgram({ id: "csla-shadow", name: "S", helpChannel: "C-x", channels: ["C-x"], shadowMode: true, sla: { unassignedMs: 60000 } });
   db.saveProgram({ id: "ysws-global", name: "G", helpChannel: "C-g", channels: ["C-g"], sla: { unassignedMs: 60000 } });
   programs.invalidate();
@@ -258,10 +246,6 @@ test("char: analytics overview is tenant-scoped", () => {
   assert.equal(analytics.overview("can-tenant-a").created, 2);
 });
 
-/* ------------------------------------------------------------------ */
-/* STEP 1 pins (platformOps INTERNAL surface): retention sweep gate +  */
-/* analytics/SLA/retention shapes carry no secrets. Append-only.       */
-/* ------------------------------------------------------------------ */
 
 test("char: retention sweep via the internal API needs organizer + confirm", () => {
   const sync = api.internalProgramSync("can-ret-api", { name: "R", workspaceId: "T1", claimedBy: "U-can-org", programChannels: [] });
@@ -270,7 +254,6 @@ test("char: retention sweep via the internal API needs organizer + confirm", () 
   assert.match(api.internalRetentionSweep("can-ret-api", { actorId: "U-can-helper", confirm: true }).error, /organizer/);
   assert.match(api.internalRetentionSweep("can-ret-api", { actorId: "U-can-org" }).error, /confirm required/);
   assert.equal(api.internalRetentionSweep("can-ret-api", { actorId: "U-can-org", confirm: true }).deleted, true);
-  // Retention policy rejects the audit floor and echoes the effective policy.
   assert.match(api.internalRetentionPolicy("can-ret-api", { actorId: "U-can-org", policy: { auditDays: 10 } }).error, /platform minimum/);
   assert.match(api.internalRetentionPolicy("can-ret-api", { actorId: "U-stranger", policy: { ticketsDays: 30 } }).error, /not a helper/);
   const ok = api.internalRetentionPolicy("can-ret-api", { actorId: "U-can-org", policy: { ticketsDays: 30 } });
@@ -302,8 +285,6 @@ test("helper pings are off unless a program turns them on, and the flag survives
   assert.equal(programs.get("hp-off").helperPing, false);
   assert.equal(programs.get("hp-on").helperPing, true);
 
-  // Re-saving without the flag turns it back off — the column is authoritative,
-  // not sticky.
   db.saveProgram({ id: "hp-on", name: "On", helpChannel: "C-hp-on", channels: ["C-hp-on"] });
   programs.invalidate();
   assert.equal(programs.get("hp-on").helperPing, false);
